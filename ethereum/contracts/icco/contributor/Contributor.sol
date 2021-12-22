@@ -88,7 +88,7 @@ contract Contributor is ContributorGovernance, ICCOStructs {
     function attestContributions(uint saleId) public payable returns (uint wormholeSequence) {
         ContributorStructs.Sale memory sale = sales(saleId);
 
-        require(sale.saleID != 0, "sale not initialized");
+        require(sale.tokenAddress != bytes32(0), "sale not initialized");
         require(block.timestamp > sale.saleEnd, "sale has not yet ended");
 
         uint nativeTokens = 0;
@@ -194,36 +194,39 @@ contract Contributor is ContributorGovernance, ICCOStructs {
     }
 
     function claimAllocation(uint saleId, uint tokenIndex) public {
-        (bool isSealed,) = getSaleStatus(saleId);
+        (bool isSealed, bool isAborted) = getSaleStatus(saleId);
 
+        require(!isAborted, "token sale is aborted");
         require(isSealed, "token sale is not yet sealed");
 
         require(allocationIsClaimed(saleId, tokenIndex, msg.sender) == false, "allocation already claimed");
 
-        (uint16 tokenChainId, bytes32 tokenAddressBytes,) = getSaleAcceptedTokenInfo(saleId, tokenIndex);
+        (uint16 contributedTokenChainId,,) = getSaleAcceptedTokenInfo(saleId, tokenIndex);
 
-        require(tokenChainId == chainId(), "allocation needs to be claimed on a different chain");
+        require(contributedTokenChainId == chainId(), "allocation needs to be claimed on a different chain");
 
         setAllocationClaimed(saleId, tokenIndex, msg.sender);
 
         uint thisAllocation = getSaleAllocation(saleId, tokenIndex) * getSaleContribution(saleId, tokenIndex, msg.sender) / getSaleTotalContribution(saleId, tokenIndex);
 
+        ContributorStructs.Sale memory sale = sales(saleId);
+
         address tokenAddress;
-        if (tokenChainId == chainId()) {
+        if (sale.tokenChain == chainId()) {
             // normal token transfer on same chain
-            tokenAddress = address(uint160(uint256(tokenAddressBytes)));
+            tokenAddress = address(uint160(uint256(sale.tokenAddress)));
         } else {
             // identify wormhole token bridge wrapper
-            tokenAddress = tokenBridge().wrappedAsset(tokenChainId, tokenAddressBytes);
+            tokenAddress = tokenBridge().wrappedAsset(sale.tokenChain, sale.tokenAddress);
         }
 
         SafeERC20.safeTransfer(IERC20(tokenAddress), msg.sender, thisAllocation);
     }
 
     function claimRefund(uint saleId, uint tokenIndex) public {
-        (,bool isCanceled) = getSaleStatus(saleId);
+        (,bool isAborted) = getSaleStatus(saleId);
 
-        require(isCanceled, "token sale is not canceled");
+        require(isAborted, "token sale is not aborted");
 
         require(refundIsClaimed(saleId, tokenIndex, msg.sender) == false, "refund already claimed");
 

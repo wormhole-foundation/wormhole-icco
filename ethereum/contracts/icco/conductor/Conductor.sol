@@ -146,7 +146,7 @@ contract Conductor is ConductorGovernance, ICCOStructs {
         uint totalContribution;
         for (uint i = 0; i < sale.contributionsCollected.length; i++) {
             require(sale.contributionsCollected[i], "missing contribution info");
-            totalContribution += sale.contributions[i] * 1e18 / sale.acceptedTokensConversionRates[i];
+            totalContribution += sale.contributions[i] * sale.acceptedTokensConversionRates[i] / 1e18;
         }
 
         SaleSealed memory saleSealed = SaleSealed({
@@ -164,7 +164,7 @@ contract Conductor is ConductorGovernance, ICCOStructs {
 
             // sale succeeded - payout token allocations to contributor contracts
             for(uint i = 0; i < sale.acceptedTokensAddresses.length; i++) {
-                uint allocation = sale.tokenAmount * (sale.contributions[i] * 1e18 / sale.acceptedTokensConversionRates[i]) / totalContribution;
+                uint allocation = sale.tokenAmount * (sale.contributions[i] * sale.acceptedTokensConversionRates[i] / 1e18) / totalContribution;
 
                 saleSealed.allocations[i] = Allocation({
                     tokenIndex : uint8(i),

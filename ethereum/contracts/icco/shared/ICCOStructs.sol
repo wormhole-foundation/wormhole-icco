@@ -262,10 +262,11 @@ contract ICCOStructs {
 
     function encodeSaleAborted(SaleAborted memory ca) public pure returns (bytes memory encoded) {
         return abi.encodePacked(
-            uint8(3),
+            uint8(4),
             ca.saleID
         );
     }
+
     function parseSaleAborted(bytes memory encoded) public pure returns (SaleAborted memory sa) {
         uint index = 0;
         sa.payloadID = encoded.toUint8(index);

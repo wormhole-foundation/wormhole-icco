@@ -205,6 +205,9 @@ contract Conductor is ConductorGovernance, ICCOStructs {
                 value : messageFee
             }(0, encodeSaleSealed(saleSealed), 15);
         } else {
+            // set saleAborted
+            setSaleAborted(sale.saleID);
+
             // attest sale aborted on wormhole
             wormholeSequence = wormhole.publishMessage{
                 value : msg.value

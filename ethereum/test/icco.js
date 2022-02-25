@@ -1,5 +1,6 @@
 const jsonfile = require('jsonfile');
 const elliptic = require('elliptic');
+const { assert } = require('chai');
 
 const Wormhole = artifacts.require("Wormhole");
 const TokenBridge = artifacts.require("TokenBridge");
@@ -233,7 +234,7 @@ contract("ICCO", function (accounts) {
             0,
             "0x00"
         );
-        await soldToken.mint(seller, "1000")
+        await soldToken.mint(seller, "2000")
 
         contributedTokenOne = await TokenImplementation.new()
         await contributedTokenOne.initialize(
@@ -245,7 +246,7 @@ contract("ICCO", function (accounts) {
             0,
             "0x00"
         );
-        await contributedTokenOne.mint(buyerOne, "10000")
+        await contributedTokenOne.mint(buyerOne, "20000")
 
         contributedTokenTwo = await TokenImplementation.new()
         await contributedTokenTwo.initialize(
@@ -257,13 +258,12 @@ contract("ICCO", function (accounts) {
             0,
             "0x00"
         );
-        await contributedTokenTwo.mint(buyerTwo, "10000")
+        await contributedTokenTwo.mint(buyerTwo, "20000")
     })
 
     let saleStart;
     let saleEnd;
-    let saleInitPayload;
-
+    let saleInitPayload;  
     let saleInitSnapshot;
 
     it('create a sale correctly and attest over wormhole', async function () {
@@ -289,8 +289,8 @@ contract("ICCO", function (accounts) {
                 "0x000000000000000000000000" + contributedTokenTwo.address.substr(2),
                 "2000000000000000000" // multiplier 2
             ]],
-            accounts[0],
-            accounts[0]
+            accounts[0], // sale recipient 
+            accounts[0] // refund recipient 
         ).send({
             value : "0",
             from : seller,
@@ -405,7 +405,11 @@ contract("ICCO", function (accounts) {
         })
 
         // TODO: verify getter
+        // compare saleInit payload with ContributrStructs.Sale?
     })
+
+    let tokenOneIndex = 0;
+    let tokenTwoIndex = 1;
 
     it('should accept contributions in the contributor during the sale timeframe', async function () {
         await timeout(5000)
@@ -419,15 +423,19 @@ contract("ICCO", function (accounts) {
 
         const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
 
-        let tx = await initialized.methods.contribute(0,0,10000).send({
+        let tx = await initialized.methods.contribute(0,tokenOneIndex,10000).send({
             from : buyerOne,
             gasLimit : "2000000"
         })
 
-        let tx2 = await initialized.methods.contribute(0,1,5000).send({
+        let tx2 = await initialized.methods.contribute(0,tokenTwoIndex,5000).send({
             from : buyerTwo,
             gasLimit : "2000000"
         })
+
+        // verify getters
+        // need to check if the amounts are right in the storage?
+        // call getSaleContribution and check againnst amount added
     })
 
     it('should not accept contributions after the sale has ended', async function () {
@@ -437,7 +445,7 @@ contract("ICCO", function (accounts) {
 
         let failed = false
         try {
-            await initialized.methods.contribute(0,1,5000).send({
+            await initialized.methods.contribute(0,tokenTwoIndex,5000).send({
                 from : buyerTwo,
                 gasLimit : "2000000"
             })
@@ -583,6 +591,7 @@ contract("ICCO", function (accounts) {
     })
 
     let oneClaimSnapshot
+
     it('contributor should distribute tokens correctly', async function () {
         const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
 
@@ -628,6 +637,429 @@ contract("ICCO", function (accounts) {
             })
         } catch(e) {
             assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert allocation already claimed")
+            failed = true
+        }
+
+        assert.ok(failed)
+    })
+
+    let saleInitPayload2;
+    let saleId2;
+
+    it('create a second sale correctly and attest over wormhole', async function () {
+        saleStart = Math.floor(Date.now() / 1000) + 5;
+        saleEnd = saleStart + 8;
+
+        const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+
+        await soldToken.approve(TokenSaleConductor.address, "1000")
+
+        let tx = await initialized.methods.createSale(
+            soldToken.address,
+            "1000",
+            "2000",
+            saleStart,
+            saleEnd,
+            [[
+                testChainId,
+                "0x000000000000000000000000" + contributedTokenOne.address.substr(2),
+                "1000000000000000000" // multiplier 1
+            ],[
+                testChainId,
+                "0x000000000000000000000000" + contributedTokenTwo.address.substr(2),
+                "2000000000000000000" // multiplier 2
+            ]],
+            accounts[0], // sale recipient 
+            accounts[0] // refund recipient 
+        ).send({
+            value : "0",
+            from : seller,
+            gasLimit : "2000000"
+        })
+
+        const wormhole = new web3.eth.Contract(WormholeImplementationFullABI, Wormhole.address);
+
+        const log = (await wormhole.getPastEvents('LogMessagePublished', {
+            fromBlock: 'latest'
+        }))[0].returnValues
+
+        assert.equal(log.sender, TokenSaleConductor.address)
+
+        // payload id
+        let index = 2
+        assert.equal(log.payload.substr(index, 2), "01")
+        index += 2
+
+        // sale id, should == 1 since it's the second sale
+        saleId2 = 1;
+        assert.equal(parseInt(log.payload.substr(index, 64), 16), saleId2); 
+        index += 64
+
+        // token address
+        assert.equal(log.payload.substr(index, 64), web3.eth.abi.encodeParameter("address", soldToken.address).substring(2));
+        index += 64
+
+        // token chain
+        assert.equal(log.payload.substr(index, 4), web3.eth.abi.encodeParameter("uint16", testChainId).substring(2 + 64 - 4))
+        index += 4
+
+        // token amount
+        assert.equal(parseInt(log.payload.substr(index, 64), 16), 1000);
+        index += 64
+
+        // min raise amount
+        assert.equal(parseInt(log.payload.substr(index, 64), 16), 2000);
+        index += 64
+
+        // timestamp start
+        assert.equal(parseInt(log.payload.substr(index, 64), 16), saleStart);
+        index += 64
+
+        // timestamp end
+        assert.equal(parseInt(log.payload.substr(index, 64), 16), saleEnd);
+        index += 64
+
+        // accepted tokens length
+        assert.equal(parseInt(log.payload.substr(index, 2), 16), 2);
+        index += 2
+
+        // token address
+        assert.equal(log.payload.substr(index, 64), web3.eth.abi.encodeParameter("address", contributedTokenOne.address).substring(2));
+        index += 64
+
+        // token chain
+        assert.equal(log.payload.substr(index, 4), web3.eth.abi.encodeParameter("uint16", testChainId).substring(2 + 64 - 4))
+        index += 4
+
+        // conversion rate
+        assert.equal(parseInt(log.payload.substr(index, 64), 16), 1000000000000000000);
+        index += 64
+
+        // token address
+        assert.equal(log.payload.substr(index, 64), web3.eth.abi.encodeParameter("address", contributedTokenTwo.address).substring(2));
+        index += 64
+
+        // token chain
+        assert.equal(log.payload.substr(index, 4), web3.eth.abi.encodeParameter("uint16", testChainId).substring(2 + 64 - 4))
+        index += 4
+
+        // conversion rate
+        assert.equal(parseInt(log.payload.substr(index, 64), 16), 2000000000000000000);
+        index += 64
+
+        // recipient of proceeds
+        assert.equal(log.payload.substr(index, 64), web3.eth.abi.encodeParameter("address", accounts[0]).substring(2));
+        index += 64
+
+        // refund recipient in case the sale is aborted
+        assert.equal(log.payload.substr(index, 64), web3.eth.abi.encodeParameter("address", accounts[0]).substring(2));
+        index += 64
+
+        assert.equal(log.payload.length, index)
+        saleInitPayload2 = log.payload.toString()
+
+        // TODO: verify getter
+    })
+
+    it('should init a second sale in the contributor', async function () {
+        const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
+
+        const vm = await signAndEncodeVM(
+            1,
+            1,
+            testChainId,
+            "0x000000000000000000000000"+TokenSaleConductor.address.substr(2),
+            0,
+            saleInitPayload2,
+            [
+                testSigner1PK
+            ],
+            0,
+            0
+        );
+
+        let tx = await initialized.methods.initSale("0x"+vm).send({
+            from : seller,
+            gasLimit : "2000000"
+        })
+
+        // check to see if sale 2 is active
+        let result = await initialized.methods.getSaleStatus(saleId2).call();
+
+        assert.ok(!result.isSealed)
+        assert.ok(!result.isAborted)
+
+        // TODO: verify getter
+    })
+
+    it('should accept contributions in the contributor during the second sale timeframe', async function () {
+        await timeout(5000)
+
+        await contributedTokenOne.approve(TokenSaleContributor.address, "1000", {
+            from:buyerOne
+        })
+        await contributedTokenTwo.approve(TokenSaleContributor.address, "250", {
+            from:buyerTwo
+        })
+
+        const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
+
+        let tx = await initialized.methods.contribute(saleId2,0,1000).send({
+            from : buyerOne,
+            gasLimit : "2000000"
+        })
+
+        let tx2 = await initialized.methods.contribute(saleId2,1,250).send({
+            from : buyerTwo,
+            gasLimit : "2000000"
+        })
+
+        // verify getters
+    })
+
+    let contributionsPayload2;
+
+    it('should attest contributions for second sale correctly', async function () {
+        await timeout(10000)
+
+        const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
+        let tx = await initialized.methods.attestContributions(saleId2).send({
+            from : buyerOne,
+            gasLimit : "2000000"
+        })
+
+        const wormhole = new web3.eth.Contract(WormholeImplementationFullABI, Wormhole.address);
+
+        const log = (await wormhole.getPastEvents('LogMessagePublished', {
+            fromBlock: 'latest'
+        }))[0].returnValues
+
+        assert.equal(log.sender, TokenSaleContributor.address)
+
+        // payload id
+        let index = 2
+        assert.equal(log.payload.substr(index, 2), "02")
+        index += 2
+
+        // sale id
+        assert.equal(parseInt(log.payload.substr(index, 64), 16), saleId2);
+        index += 64
+
+        // chain id
+        assert.equal(log.payload.substr(index, 4), web3.eth.abi.encodeParameter("uint16", 2).substring(2 + 64 - 4))
+        index += 4
+
+        // tokens length
+        assert.equal(parseInt(log.payload.substr(index, 2), 16), 2);
+        index += 2
+
+        // token index
+        assert.equal(log.payload.substr(index, 2), web3.eth.abi.encodeParameter("uint8", 0).substring(2 + 64 - 2))
+        index += 2
+
+        // amount
+        assert.equal(parseInt(log.payload.substr(index, 64), 16), 1000);
+        index += 64
+
+        // token index
+        assert.equal(log.payload.substr(index, 2), web3.eth.abi.encodeParameter("uint8", 1).substring(2 + 64 - 2))
+        index += 2
+
+        // amount
+        assert.equal(parseInt(log.payload.substr(index, 64), 16), 250);
+        index += 64
+
+        assert.equal(log.payload.length, index);
+
+        contributionsPayload2 = log.payload.toString()
+    })
+
+    it('conductor should collect second sale contributions correctly', async function () {
+        const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+
+        const vm = await signAndEncodeVM(
+            1,
+            1,
+            testChainId,
+            "0x000000000000000000000000"+TokenSaleContributor.address.substr(2),
+            0,
+            contributionsPayload2,
+            [
+                testSigner1PK
+            ],
+            0,
+            0
+        );
+
+        let tx = await initialized.methods.collectContribution("0x"+vm).send({
+            from : seller,
+            gasLimit : "2000000"
+        })
+    })
+
+    let saleSealedPayload2;
+
+    it('conductor should seal the second sale correctly and abort sale', async function () {
+        const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+
+        const contributorBalanceBefore = await soldToken.balanceOf(TokenSaleContributor.address);
+        const conductorBalanceBefore = await soldToken.balanceOf(TokenSaleConductor.address);
+
+
+        const sale = await initialized.methods.sales(saleId2).call()
+
+        // contributor balance is 500 before because of the reverted transaction 
+        // in "allocation should only be claimable once"
+        assert.equal(contributorBalanceBefore, "500")
+        assert.equal(conductorBalanceBefore, "1000")
+
+        let tx = await initialized.methods.sealSale(saleId2).send({
+            from : seller,
+            gasLimit : "2000000"
+        })
+
+        const contributorBalanceAfter = await soldToken.balanceOf(TokenSaleContributor.address);
+        const conductorBalanceAfter = await soldToken.balanceOf(TokenSaleConductor.address);
+
+        // make sure balances haven't changed
+        assert.equal(contributorBalanceAfter, "500")
+        assert.equal(conductorBalanceAfter, "1000")
+
+        const log = (await wormhole.getPastEvents('LogMessagePublished', {
+            fromBlock: 'latest'
+        }))[0].returnValues
+
+        saleSealedPayload2 = log.payload
+
+        // payload id
+        let index = 2
+        assert.equal(saleSealedPayload2.substr(index, 2), "04")
+        index += 2
+
+        // sale id
+        assert.equal(parseInt(saleSealedPayload2.substr(index, 64), 16), saleId2);
+        index += 64
+    })
+
+    it('contributor should abort sale correctly', async function () {
+        const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
+
+        const vm = await signAndEncodeVM(
+            1,
+            1,
+            testChainId,
+            "0x000000000000000000000000"+TokenSaleConductor.address.substr(2),
+            0,
+            saleSealedPayload2,
+            [
+                testSigner1PK
+            ],
+            0,
+            0
+        );
+
+        let tx = await initialized.methods.saleAborted("0x"+vm).send({
+            from : buyerOne,
+            gasLimit : "2000000"
+        })
+
+        // confirm that saleAborted was set to true
+        const status = await initialized.methods.getSaleStatus(saleId2).call();
+
+        assert.ok(status.isAborted)
+
+    })
+
+    it('conductor should distribute refund to refundRecipient correctly', async function () {
+        const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+
+        // check starting balances 
+        const conductorBalanceBefore = await soldToken.balanceOf(TokenSaleConductor.address);
+        const sellerBalanceBefore = await soldToken.balanceOf(seller);
+
+        assert.equal(conductorBalanceBefore, "1000")
+        assert.equal(sellerBalanceBefore, "0")
+
+        await initialized.methods.claimRefund(saleId2).send({
+            from : seller,
+            gasLimit : "2000000"
+        })
+
+        // make sure new balances are correct
+        const conductorBalanceAfter = await soldToken.balanceOf(TokenSaleConductor.address);
+        const sellerBalanceAfter = await soldToken.balanceOf(seller);
+
+        assert.equal(conductorBalanceAfter, "0")
+        assert.equal(sellerBalanceAfter, "1000")
+
+        // confirm that refundClaimed was set to true 
+        const sale = await initialized.methods.sales(saleId2).call()
+
+        assert.ok(sale.refundIsClaimed)
+    })
+
+    let oneRefundSnapshot;   
+
+    it('contributor should distribute refunds to contributors correctly', async function () {
+        const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
+
+        // check balances of contributed tokens for buyers and the contributor 
+        const contributorTokenOneBalanceBefore = await contributedTokenOne.balanceOf(TokenSaleContributor.address);
+        const contributorTokenTwoBalanceBefore = await contributedTokenTwo.balanceOf(TokenSaleContributor.address);        
+        const buyerOneBalanceBefore = await contributedTokenOne.balanceOf(buyerOne);
+        const buyerTwoBalanceBefore = await contributedTokenTwo.balanceOf(buyerTwo);
+
+        assert.equal(contributorTokenOneBalanceBefore, "1000")
+        assert.equal(contributorTokenTwoBalanceBefore, "250")
+        assert.equal(buyerOneBalanceBefore, "9000")
+        assert.equal(buyerTwoBalanceBefore, "14750") 
+
+        // buyerOne/buyerTwo claims refund
+        await initialized.methods.claimRefund(saleId2, tokenOneIndex).send({
+            from : buyerOne,
+            gasLimit : "2000000"
+        })
+
+        // snapshot to test trying to claim refund 2x
+        oneRefundSnapshot = await snapshot()
+
+        await initialized.methods.claimRefund(saleId2, tokenTwoIndex).send({
+            from : buyerTwo,
+            gasLimit : "2000000"
+        })
+
+        // check balances of contributed tokens for buyers and the contributor 
+        const contributorTokenOneBalanceAfter = await contributedTokenOne.balanceOf(TokenSaleContributor.address);
+        const contributorTokenTwoBalanceAfter = await contributedTokenTwo.balanceOf(TokenSaleContributor.address);        
+        const buyerOneBalanceAfter = await contributedTokenOne.balanceOf(buyerOne);
+        const buyerTwoBalanceAfter = await contributedTokenTwo.balanceOf(buyerTwo);
+
+        assert.equal(contributorTokenOneBalanceAfter, "0")
+        assert.equal(contributorTokenTwoBalanceAfter, "0")
+        assert.equal(buyerOneBalanceAfter, "10000")
+        assert.equal(buyerTwoBalanceAfter, "15000")
+
+        // confirm refundIsClaimed is set to true
+        const buyerOneHasClaimedRefund = await initialized.methods.refundIsClaimed(saleId2, tokenOneIndex, buyerOne).call()
+        const buyerTwoHasClaimedRefund = await initialized.methods.refundIsClaimed(saleId2, tokenTwoIndex, buyerTwo).call()
+
+        assert.ok(buyerOneHasClaimedRefund)
+        assert.ok(buyerTwoHasClaimedRefund)
+    })
+    
+    it('refund should only be claimable once', async function () {
+        const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
+
+        await revert(oneRefundSnapshot)
+
+        let failed = false
+        try {
+            await initialized.methods.claimRefund(saleId2, tokenOneIndex).send({
+                from : buyerOne,
+                gasLimit : "2000000"
+            })
+        } catch(e) {
+            assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert refund already claimed")
             failed = true
         }
 

@@ -10,44 +10,6 @@ const ConductorImplementationFullABI = jsonfile.readFileSync("../build/contracts
 const testSigner1PK = "cfb12303a19cde580bb4dd771639b0d26bc68353645571a8cff516ab2ee113a0";
 
 module.exports = async function (callback) {
-    /*
-
-        const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
-
-        let data = [
-            "0x",
-            "0000000000000000000000000000000000000000000000546f6b656e53616c65",
-            "01",
-            "0000",
-            web3.eth.abi.encodeParameter("uint16", testChainId).substring(2 + (64 - 4)),
-            web3.eth.abi.encodeParameter("bytes32", "0x000000000000000000000000" + TokenSaleContributor.address.substr(2)).substring(2),
-        ].join('')
-
-        const vm = await signAndEncodeVM(
-            1,
-            1,
-            testGovernanceChainId,
-            testGovernanceContract,
-            0,
-            data,
-            [
-                testSigner1PK
-            ],
-            0,
-            0
-        );
-
-
-        let before = await initialized.methods.contributorContracts(testChainId).call();
-
-        assert.equal(before, "0x0000000000000000000000000000000000000000000000000000000000000000");
-
-        await initialized.methods.registerChain("0x" + vm).send({
-            value: 0,
-            from: accounts[0],
-            gasLimit: 2000000
-        });
-    */
     try {
         const chainId = 2;
         const governanceChainId = process.env.ICCO_CONTRIBUTOR_INIT_GOV_CHAIN_ID;

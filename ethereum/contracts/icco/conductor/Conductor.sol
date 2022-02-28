@@ -200,6 +200,9 @@ contract Conductor is ConductorGovernance, ICCOStructs {
             require(valueSent >= messageFee, "insufficient wormhole messaging fees");
             valueSent -= messageFee;
 
+            // set saleSealed
+            setSaleSealed(saleId);
+
             // attest sale success on wormhole
             wormholeSequence = wormhole.publishMessage{
                 value : messageFee

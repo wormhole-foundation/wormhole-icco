@@ -218,7 +218,7 @@ contract Conductor is ConductorGovernance, ICCOStructs {
 
             // attest sale success on wormhole
             wormholeSequence = wormhole.publishMessage{
-                value : accounting.valueSent
+                value : accounting.messageFee
             }(0, encodeSaleSealed(saleSealed), 15);
         } else {
             // set saleAborted

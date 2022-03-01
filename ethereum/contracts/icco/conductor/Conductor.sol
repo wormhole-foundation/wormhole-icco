@@ -203,8 +203,6 @@ contract Conductor is ConductorGovernance, ICCOStructs {
                             0,
                             0
                         );
-
-                        //SafeERC20.safeApprove(IERC20(address(uint160(uint256(sale.tokenAddress)))), address(tknBridge), 0);
                     }
                     accounting.totalAllocated += allocation;
                 }

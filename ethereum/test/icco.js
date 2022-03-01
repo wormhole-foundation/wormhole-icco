@@ -265,6 +265,9 @@ contract("ICCO", function (accounts) {
     let saleEnd;
     let saleInitPayload;  
     let saleInitSnapshot;
+    let saleId = 0;
+    let tokenOneIndex = 0;
+    let tokenTwoIndex = 1;
 
     it('create a sale correctly and attest over wormhole', async function () {
         saleStart = Math.floor(Date.now() / 1000) + 5;
@@ -295,14 +298,14 @@ contract("ICCO", function (accounts) {
             value : "0",
             from : seller,
             gasLimit : "2000000"
-        })
+        })   
 
-        const wormhole = new web3.eth.Contract(WormholeImplementationFullABI, Wormhole.address);
-
+        // Verify Payload sent to contributor
         const log = (await wormhole.getPastEvents('LogMessagePublished', {
             fromBlock: 'latest'
         }))[0].returnValues
 
+        // verify payload 
         assert.equal(log.sender, TokenSaleConductor.address)
 
         // payload id
@@ -311,7 +314,7 @@ contract("ICCO", function (accounts) {
         index += 2
 
         // sale id
-        assert.equal(parseInt(log.payload.substr(index, 64), 16), 0);
+        assert.equal(parseInt(log.payload.substr(index, 64), 16), saleId);
         index += 64
 
         // token address
@@ -376,12 +379,37 @@ contract("ICCO", function (accounts) {
 
         assert.equal(log.payload.length, index)
         saleInitPayload = log.payload.toString()
-
-        // TODO: verify getter
-
         saleInitSnapshot = await snapshot()
-    })
 
+        // verify sale getter
+        const sale = await initialized.methods.sales(saleId).call()
+
+        assert.equal(sale.saleID, saleId);
+        assert.equal(sale.tokenAddress.substring(2), web3.eth.abi.encodeParameter("address", soldToken.address).substring(2));
+        assert.equal(sale.tokenChain, testChainId);
+        assert.equal(sale.tokenAmount, 1000);
+        assert.equal(sale.minRaise, 2000);
+        assert.equal(sale.saleStart, saleStart);
+        assert.equal(sale.saleEnd, saleEnd);
+        assert.equal(sale.acceptedTokensAddresses[tokenOneIndex].substring(2), web3.eth.abi.encodeParameter("address", contributedTokenOne.address).substring(2));
+        assert.equal(sale.acceptedTokensChains[tokenOneIndex], testChainId);
+        assert.equal(sale.acceptedTokensConversionRates[tokenOneIndex], 1000000000000000000);
+        assert.equal(sale.acceptedTokensAddresses[tokenTwoIndex].substring(2), web3.eth.abi.encodeParameter("address", contributedTokenTwo.address).substring(2));
+        assert.equal(sale.acceptedTokensChains[tokenTwoIndex], testChainId);
+        assert.equal(sale.acceptedTokensConversionRates[tokenTwoIndex], 2000000000000000000);
+        assert.equal(sale.recipient.substring(2), web3.eth.abi.encodeParameter("address", accounts[0]).substring(2));
+        assert.equal(sale.refundRecipient.substring(2), web3.eth.abi.encodeParameter("address", accounts[0]).substring(2));
+        assert.ok(!sale.isSealed);
+        assert.ok(!sale.isAborted);
+        assert.ok(!sale.refundIsClaimed);
+
+        // verify that getNextSaleId is correct
+        const nextSaleId = await initialized.methods.getNextSaleId().call()
+
+        assert.equal(nextSaleId, saleId + 1)
+
+    })
+    
     it('should init a sale in the contributor', async function () {
         const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
 
@@ -404,13 +432,53 @@ contract("ICCO", function (accounts) {
             gasLimit : "2000000"
         })
 
-        // TODO: verify getter
-        // compare saleInit payload with ContributrStructs.Sale?
-    })
+        // verify sale getter
+        const sale = await initialized.methods.sales(saleId).call()
 
-    let tokenOneIndex = 0;
-    let tokenTwoIndex = 1;
+        assert.equal(sale.saleID, saleId);
+        assert.equal(sale.tokenAddress.substring(2), web3.eth.abi.encodeParameter("address", soldToken.address).substring(2));
+        assert.equal(sale.tokenChain, testChainId);
+        assert.equal(sale.tokenAmount, 1000);
+        assert.equal(sale.minRaise, 2000);
+        assert.equal(sale.saleStart, saleStart);
+        assert.equal(sale.saleEnd, saleEnd);
+        assert.equal(sale.acceptedTokensAddresses[tokenOneIndex].substring(2), web3.eth.abi.encodeParameter("address", contributedTokenOne.address).substring(2));
+        assert.equal(sale.acceptedTokensChains[tokenOneIndex], testChainId);
+        assert.equal(sale.acceptedTokensConversionRates[tokenOneIndex], 1000000000000000000);
+        assert.equal(sale.acceptedTokensAddresses[tokenTwoIndex].substring(2), web3.eth.abi.encodeParameter("address", contributedTokenTwo.address).substring(2));
+        assert.equal(sale.acceptedTokensChains[tokenTwoIndex], testChainId);
+        assert.equal(sale.acceptedTokensConversionRates[tokenTwoIndex], 2000000000000000000);
+        assert.equal(sale.recipient.substring(2), web3.eth.abi.encodeParameter("address", accounts[0]).substring(2));
+        assert.equal(sale.refundRecipient.substring(2), web3.eth.abi.encodeParameter("address", accounts[0]).substring(2));
+        assert.ok(!sale.isSealed);
+        assert.ok(!sale.isAborted);
+        assert.ok(sale.allocations[tokenOneIndex], 0);
+        assert.ok(sale.allocations[tokenTwoIndex], 0) 
 
+        // verify getsaleAcceptedTokenInfo getter
+        const tokenOneInfo = await initialized.methods.getSaleAcceptedTokenInfo(saleId, tokenOneIndex).call();
+        const tokenTwoInfo = await initialized.methods.getSaleAcceptedTokenInfo(saleId, tokenTwoIndex).call();
+        
+        assert.equal(tokenOneInfo.tokenAddress.substring(2), web3.eth.abi.encodeParameter("address", contributedTokenOne.address).substring(2));
+        assert.equal(tokenOneInfo.tokenChainId, testChainId);
+        assert.equal(tokenOneInfo.conversionRate, 1000000000000000000);
+        assert.equal(tokenTwoInfo.tokenAddress.substring(2), web3.eth.abi.encodeParameter("address", contributedTokenTwo.address).substring(2));
+        assert.equal(tokenTwoInfo.tokenChainId, testChainId);
+        assert.equal(tokenTwoInfo.conversionRate, 2000000000000000000);
+
+        // verify getSaleTimeFrame getter
+        const saleTimeframe = await initialized.methods.getSaleTimeframe(saleId).call();
+
+        assert.equal(saleTimeframe.start, saleStart);
+        assert.equal(saleTimeframe.end, saleEnd);
+
+        // verify getSaleStatus getter
+        const saleStatus = await initialized.methods.getSaleStatus(saleId).call();
+    
+        assert.ok(!saleStatus.isSealed);
+        assert.ok(!saleStatus.saleAborted);
+    })  
+    
     it('should accept contributions in the contributor during the sale timeframe', async function () {
         await timeout(5000)
 
@@ -433,11 +501,22 @@ contract("ICCO", function (accounts) {
             gasLimit : "2000000"
         })
 
-        // verify getters
-        // need to check if the amounts are right in the storage?
-        // call getSaleContribution and check againnst amount added
-    })
+        // verify getSaleTotalContribution before contributing
+        const totalContributionsTokenOne = await initialized.methods.getSaleTotalContribution(saleId, tokenOneIndex).call();
+        const totalContributionsTokenTwo = await initialized.methods.getSaleTotalContribution(saleId, tokenTwoIndex).call();
 
+        assert.equal(totalContributionsTokenOne, 10000);
+        assert.equal(totalContributionsTokenTwo, 5000);
+
+        // verify getSaleContribution
+        const buyerOneContribution = await initialized.methods.getSaleContribution(saleId, tokenOneIndex, buyerOne).call();
+        const buyerTwoContribution = await initialized.methods.getSaleContribution(saleId, tokenTwoIndex, buyerTwo).call();
+
+        assert.equal(buyerOneContribution, 10000);
+        assert.equal(buyerTwoContribution, 5000);
+
+    }) 
+    
     it('should not accept contributions after the sale has ended', async function () {
         await timeout(10000)
 
@@ -456,18 +535,16 @@ contract("ICCO", function (accounts) {
 
         assert.ok(failed)
     })
-
+ 
     let contributionsPayload;
 
-    // TODO: fail contribution after end
     it('should attest contributions correctly', async function () {
         const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
+
         let tx = await initialized.methods.attestContributions(0).send({
             from : buyerOne,
             gasLimit : "2000000"
         })
-
-        const wormhole = new web3.eth.Contract(WormholeImplementationFullABI, Wormhole.address);
 
         const log = (await wormhole.getPastEvents('LogMessagePublished', {
             fromBlock: 'latest'
@@ -512,9 +589,16 @@ contract("ICCO", function (accounts) {
 
         contributionsPayload = log.payload.toString()
     })
-
+ 
     it('conductor should collect contributions correctly', async function () {
         const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+
+        // verify saleContributionIsCollected getter before calling contribute
+        const isContributionOneCollectedBefore = await initialized.methods.saleContributionIsCollected(saleId, tokenOneIndex).call();
+        const isContributionTwoCollectedBefore = await initialized.methods.saleContributionIsCollected(saleId, tokenTwoIndex).call();
+
+        assert.ok(!isContributionOneCollectedBefore);
+        assert.ok(!isContributionTwoCollectedBefore);
 
         const vm = await signAndEncodeVM(
             1,
@@ -534,8 +618,21 @@ contract("ICCO", function (accounts) {
             from : seller,
             gasLimit : "2000000"
         })
-    })
 
+        // verify saleContributionIsCollected getter after calling contribute
+        const isContributionOneCollectedAfter = await initialized.methods.saleContributionIsCollected(saleId, tokenOneIndex).call();
+        const isContributionTwoCollectedAfter = await initialized.methods.saleContributionIsCollected(saleId, tokenTwoIndex).call();
+
+        assert.ok(isContributionOneCollectedAfter);
+        assert.ok(isContributionTwoCollectedAfter);
+
+        // verify saleContributions getter
+        const contributions = await initialized.methods.saleContributions(saleId).call();
+
+        assert.equal(contributions[0], 10000);
+        assert.equal(contributions[1], 5000);
+    })
+    
     let saleSealedPayload
 
     it('conductor should seal the sale correctly and distribute tokens', async function () {
@@ -546,6 +643,11 @@ contract("ICCO", function (accounts) {
 
         assert.equal(contributorBalanceBefore, "0")
         assert.equal(conductorBalanceBefore, "1000")
+
+        // verify sealSealed flag in sales
+        const saleBefore = await initialized.methods.sales(saleId).call();
+
+        assert.ok(!saleBefore.isSealed);
 
         let tx = await initialized.methods.sealSale(0).send({
             from : seller,
@@ -563,10 +665,21 @@ contract("ICCO", function (accounts) {
         }))[0].returnValues
 
         saleSealedPayload = log.payload
-    })
 
+        // verify saleSealed flag in sales
+        const saleAfter = await initialized.methods.sales(saleId).call();
+
+        assert.ok(saleAfter.isSealed);
+    })
+    
     it('contributor should seal a sale correctly', async function () {
         const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
+
+        // verify sealSealed getters before calling saleSealed
+        const saleBefore = await initialized.methods.sales(saleId).call();
+
+        // verify isSealed flag before
+        assert.ok(!saleBefore.isSealed);
 
         const vm = await signAndEncodeVM(
             1,
@@ -587,9 +700,19 @@ contract("ICCO", function (accounts) {
             gasLimit : "2000000"
         })
 
-        // todo verify getters
-    })
+        // verify saleSealed flag after sealing the sale
+        const saleAfter = await initialized.methods.sales(saleId).call();
+        
+        assert.ok(saleAfter.isSealed);
 
+        // verify getSaleAllocation after sealing the sale
+        const allocationTokenOne = await initialized.methods.getSaleAllocation(saleId, tokenOneIndex).call();
+        const allocationTokenTwo = await initialized.methods.getSaleAllocation(saleId, tokenTwoIndex).call();
+
+        assert.equal(allocationTokenOne, "500");
+        assert.equal(allocationTokenTwo, "500");
+    })
+    
     let oneClaimSnapshot
 
     it('contributor should distribute tokens correctly', async function () {
@@ -603,14 +726,21 @@ contract("ICCO", function (accounts) {
         assert.equal(buyerOneBalanceBefore, "0")
         assert.equal(buyerTwoBalanceBefore, "0")
 
-        await initialized.methods.claimAllocation(0, 1).send({
+        // verify allocationIsClaimed before claiming allocation
+        const isAllocationClaimedTokenOneBefore = await initialized.methods.allocationIsClaimed(saleId, tokenOneIndex, buyerOne).call();
+        const isAllocationClaimedTokenTwoBefore = await initialized.methods.allocationIsClaimed(saleId, tokenTwoIndex, buyerTwo).call();
+        
+        assert.ok(!isAllocationClaimedTokenOneBefore);
+        assert.ok(!isAllocationClaimedTokenTwoBefore);
+
+        await initialized.methods.claimAllocation(saleId, tokenTwoIndex).send({
             from : buyerTwo,
             gasLimit : "2000000"
         })
 
         oneClaimSnapshot = await snapshot()
 
-        await initialized.methods.claimAllocation(0, 0).send({
+        await initialized.methods.claimAllocation(saleId, tokenOneIndex).send({
             from : buyerOne,
             gasLimit : "2000000"
         })
@@ -622,8 +752,15 @@ contract("ICCO", function (accounts) {
         assert.equal(contributorBalanceAfter, "0")
         assert.equal(buyerOneBalanceAfter, "500")
         assert.equal(buyerTwoBalanceAfter, "500")
-    })
 
+        // verify allocationIsClaimed before claiming allocation
+        const isAllocationClaimedTokenOneAfter = await initialized.methods.allocationIsClaimed(saleId, tokenOneIndex, buyerOne).call();
+        const isAllocationClaimedTokenTwoAfter = await initialized.methods.allocationIsClaimed(saleId, tokenTwoIndex, buyerTwo).call();
+        
+        assert.ok(isAllocationClaimedTokenOneAfter);
+        assert.ok(isAllocationClaimedTokenTwoAfter);
+    })
+    
     it('allocation should only be claimable once', async function () {
         await revert(oneClaimSnapshot)
 
@@ -642,7 +779,7 @@ contract("ICCO", function (accounts) {
 
         assert.ok(failed)
     })
-
+    
     let saleInitPayload2;
     let saleId2;
 
@@ -676,8 +813,6 @@ contract("ICCO", function (accounts) {
             from : seller,
             gasLimit : "2000000"
         })
-
-        const wormhole = new web3.eth.Contract(WormholeImplementationFullABI, Wormhole.address);
 
         const log = (await wormhole.getPastEvents('LogMessagePublished', {
             fromBlock: 'latest'
@@ -758,7 +893,32 @@ contract("ICCO", function (accounts) {
         assert.equal(log.payload.length, index)
         saleInitPayload2 = log.payload.toString()
 
-        // TODO: verify getter
+        // verify sale getter
+        const sale = await initialized.methods.sales(saleId2).call()
+
+        assert.equal(sale.saleID, saleId2);
+        assert.equal(sale.tokenAddress.substring(2), web3.eth.abi.encodeParameter("address", soldToken.address).substring(2));
+        assert.equal(sale.tokenChain, testChainId);
+        assert.equal(sale.tokenAmount, 1000);
+        assert.equal(sale.minRaise, 2000);
+        assert.equal(sale.saleStart, saleStart);
+        assert.equal(sale.saleEnd, saleEnd);
+        assert.equal(sale.acceptedTokensAddresses[tokenOneIndex].substring(2), web3.eth.abi.encodeParameter("address", contributedTokenOne.address).substring(2));
+        assert.equal(sale.acceptedTokensChains[tokenOneIndex], testChainId);
+        assert.equal(sale.acceptedTokensConversionRates[tokenOneIndex], 1000000000000000000);
+        assert.equal(sale.acceptedTokensAddresses[tokenTwoIndex].substring(2), web3.eth.abi.encodeParameter("address", contributedTokenTwo.address).substring(2));
+        assert.equal(sale.acceptedTokensChains[tokenTwoIndex], testChainId);
+        assert.equal(sale.acceptedTokensConversionRates[tokenTwoIndex], 2000000000000000000);
+        assert.equal(sale.recipient.substring(2), web3.eth.abi.encodeParameter("address", accounts[0]).substring(2));
+        assert.equal(sale.refundRecipient.substring(2), web3.eth.abi.encodeParameter("address", accounts[0]).substring(2));
+        assert.ok(!sale.isSealed);
+        assert.ok(!sale.isAborted);
+        assert.ok(!sale.refundIsClaimed);
+
+        // verify that getNextSaleId is correct
+        const nextSaleId = await initialized.methods.getNextSaleId().call()
+
+        assert.equal(nextSaleId, saleId2 + 1)
     })
 
     it('should init a second sale in the contributor', async function () {
@@ -783,15 +943,53 @@ contract("ICCO", function (accounts) {
             gasLimit : "2000000"
         })
 
-        // check to see if sale 2 is active
-        let result = await initialized.methods.getSaleStatus(saleId2).call();
+        // verify sale getter
+        const sale = await initialized.methods.sales(saleId2).call()
 
-        assert.ok(!result.isSealed)
-        assert.ok(!result.isAborted)
+        assert.equal(sale.saleID, saleId2);
+        assert.equal(sale.tokenAddress.substring(2), web3.eth.abi.encodeParameter("address", soldToken.address).substring(2));
+        assert.equal(sale.tokenChain, testChainId);
+        assert.equal(sale.tokenAmount, 1000);
+        assert.equal(sale.minRaise, 2000);
+        assert.equal(sale.saleStart, saleStart);
+        assert.equal(sale.saleEnd, saleEnd);
+        assert.equal(sale.acceptedTokensAddresses[tokenOneIndex].substring(2), web3.eth.abi.encodeParameter("address", contributedTokenOne.address).substring(2));
+        assert.equal(sale.acceptedTokensChains[tokenOneIndex], testChainId);
+        assert.equal(sale.acceptedTokensConversionRates[tokenOneIndex], 1000000000000000000);
+        assert.equal(sale.acceptedTokensAddresses[tokenTwoIndex].substring(2), web3.eth.abi.encodeParameter("address", contributedTokenTwo.address).substring(2));
+        assert.equal(sale.acceptedTokensChains[tokenTwoIndex], testChainId);
+        assert.equal(sale.acceptedTokensConversionRates[tokenTwoIndex], 2000000000000000000);
+        assert.equal(sale.recipient.substring(2), web3.eth.abi.encodeParameter("address", accounts[0]).substring(2));
+        assert.equal(sale.refundRecipient.substring(2), web3.eth.abi.encodeParameter("address", accounts[0]).substring(2));
+        assert.ok(!sale.isSealed);
+        assert.ok(!sale.isAborted);
+        assert.ok(sale.allocations[tokenOneIndex], 0);
+        assert.ok(sale.allocations[tokenTwoIndex], 0) 
 
-        // TODO: verify getter
+        // verify getsaleAcceptedTokenInfo getter
+        const tokenOneInfo = await initialized.methods.getSaleAcceptedTokenInfo(saleId2, tokenOneIndex).call();
+        const tokenTwoInfo = await initialized.methods.getSaleAcceptedTokenInfo(saleId2, tokenTwoIndex).call();
+        
+        assert.equal(tokenOneInfo.tokenAddress.substring(2), web3.eth.abi.encodeParameter("address", contributedTokenOne.address).substring(2));
+        assert.equal(tokenOneInfo.tokenChainId, testChainId);
+        assert.equal(tokenOneInfo.conversionRate, 1000000000000000000);
+        assert.equal(tokenTwoInfo.tokenAddress.substring(2), web3.eth.abi.encodeParameter("address", contributedTokenTwo.address).substring(2));
+        assert.equal(tokenTwoInfo.tokenChainId, testChainId);
+        assert.equal(tokenTwoInfo.conversionRate, 2000000000000000000);
+
+        // verify getSaleTimeFrame getter
+        const saleTimeframe = await initialized.methods.getSaleTimeframe(saleId2).call();
+
+        assert.equal(saleTimeframe.start, saleStart);
+        assert.equal(saleTimeframe.end, saleEnd);
+
+        // verify getSaleStatus getter
+        const saleStatus = await initialized.methods.getSaleStatus(saleId2).call();
+    
+        assert.ok(!saleStatus.isSealed);
+        assert.ok(!saleStatus.saleAborted);
     })
-
+    
     it('should accept contributions in the contributor during the second sale timeframe', async function () {
         await timeout(5000)
 
@@ -827,8 +1025,6 @@ contract("ICCO", function (accounts) {
             from : buyerOne,
             gasLimit : "2000000"
         })
-
-        const wormhole = new web3.eth.Contract(WormholeImplementationFullABI, Wormhole.address);
 
         const log = (await wormhole.getPastEvents('LogMessagePublished', {
             fromBlock: 'latest'

@@ -175,7 +175,7 @@ contract ICCOStructs {
         consSealed.payloadID = encoded.toUint8(index);
         index += 1;
 
-        require(consSealed.payloadID == 2, "invalid ContributionsSealed");
+        require(consSealed.payloadID == 2, "invalid payloadID");
 
         consSealed.saleID = encoded.toUint256(index);
         index += 32;
@@ -225,7 +225,7 @@ contract ICCOStructs {
         ss.payloadID = encoded.toUint8(index);
         index += 1;
 
-        require(ss.payloadID == 3, "invalid SaleSealed");
+        require(ss.payloadID == 3, "invalid payloadID");
 
         ss.saleID = encoded.toUint256(index);
         index += 32;
@@ -266,13 +266,12 @@ contract ICCOStructs {
             ca.saleID
         );
     }
-
     function parseSaleAborted(bytes memory encoded) public pure returns (SaleAborted memory sa) {
         uint index = 0;
         sa.payloadID = encoded.toUint8(index);
         index += 1;
 
-        require(sa.payloadID == 4, "invalid SaleAborted");
+        require(sa.payloadID == 4, "invalid payloadID");
 
         sa.saleID = encoded.toUint256(index);
         index += 32;

@@ -138,20 +138,10 @@ contract Conductor is ConductorGovernance, ICCOStructs {
         }
     }
 
-    struct InternalAccounting {
-        // fees
-        uint messageFee;
-        uint valueSent;
-        // token allocation
-        uint totalContribution;
-        uint totalAllocated;
-        uint dust;
-    }
-
     function sealSale(uint saleId) public payable returns (uint wormholeSequence) {
         ConductorStructs.Sale memory sale = sales(saleId);
 
-        InternalAccounting memory accounting;
+        ConductorStructs.InternalAccounting memory accounting;
 
         require(!sale.isSealed && !sale.isAborted, "already sealed / aborted");
 
@@ -160,18 +150,18 @@ contract Conductor is ConductorGovernance, ICCOStructs {
             accounting.totalContribution += sale.contributions[i] * sale.acceptedTokensConversionRates[i] / 1e18;
         }
 
-        SaleSealed memory saleSealed = SaleSealed({
-            payloadID : 3,
-            saleID : saleId,
-            allocations : new Allocation[](sale.acceptedTokensAddresses.length)
-        });
-
         IWormhole wormhole = wormhole();
         if (accounting.totalContribution >= sale.minRaise) {
             BridgeImplementation tknBridge = tokenBridge();
 
             accounting.messageFee = wormhole.messageFee();
             accounting.valueSent = msg.value;
+
+            SaleSealed memory saleSealed = SaleSealed({
+                payloadID : 3,
+                saleID : saleId,
+                allocations : new Allocation[](sale.acceptedTokensAddresses.length)
+            });
 
             // sale succeeded - payout token allocations to contributor contracts
             for(uint i = 0; i < sale.acceptedTokensAddresses.length; i++) {
@@ -212,10 +202,8 @@ contract Conductor is ConductorGovernance, ICCOStructs {
                     allocation : allocation
                 });
             }
-            require(sale.tokenAmount >= accounting.totalAllocated, "sale.tokenAmount < accounting.totalAllocated");
+            // transfer dust back to refund recipient
             accounting.dust = sale.tokenAmount - accounting.totalAllocated;
-
-            // transfer dust back to recipient
             if (accounting.dust > 0) {
                 SafeERC20.safeTransfer(IERC20(address(uint160(uint256(sale.tokenAddress)))), address(uint160(uint256(sale.refundRecipient))), accounting.dust);
             }

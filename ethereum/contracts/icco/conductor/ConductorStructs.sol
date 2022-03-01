@@ -21,24 +21,20 @@ contract ConductorStructs {
         uint256 saleStart;
         // timestamp raise end
         uint256 saleEnd;
-
         // accepted Tokens
         // solidity does not handle struct arrays in storage well
         uint16[] acceptedTokensChains;
         bytes32[] acceptedTokensAddresses;
         uint256[] acceptedTokensConversionRates;
         // contributions
-        uint[] contributions;
+        uint256[] contributions;
         bool[] contributionsCollected;
-
         // recipient of proceeds
         bytes32 recipient;
         // refund recipient in case the sale is aborted
         bytes32 refundRecipient;
-
         bool isSealed;
         bool isAborted;
-
         bool refundIsClaimed;
     }
 
@@ -50,7 +46,6 @@ contract ConductorStructs {
         uint8 action;
         // governance paket chain id: this or 0
         uint16 chainId;
-
         // Chain ID
         uint16 emitterChainID;
         // Emitter address. Left-zero-padded if shorter than 32 bytes
@@ -65,8 +60,17 @@ contract ConductorStructs {
         uint8 action;
         // governance paket chain id
         uint16 chainId;
-
         // Address of the new contract
         bytes32 newContract;
+    }
+
+    struct InternalAccounting {
+        // fees
+        uint256 messageFee;
+        uint256 valueSent;
+        // token allocation
+        uint256 totalContribution;
+        uint256 totalAllocated;
+        uint256 dust;
     }
 }

@@ -141,50 +141,50 @@ contract Conductor is ConductorGovernance, ICCOStructs {
     function sealSale(uint saleId) public payable returns (uint wormholeSequence) {
         ConductorStructs.Sale memory sale = sales(saleId);
 
+        ConductorStructs.InternalAccounting memory accounting;
+
         require(!sale.isSealed && !sale.isAborted, "already sealed / aborted");
 
-        uint totalContribution;
         for (uint i = 0; i < sale.contributionsCollected.length; i++) {
             require(sale.contributionsCollected[i], "missing contribution info");
-            totalContribution += sale.contributions[i] * sale.acceptedTokensConversionRates[i] / 1e18;
+            accounting.totalContribution += sale.contributions[i] * sale.acceptedTokensConversionRates[i] / 1e18;
         }
 
-        SaleSealed memory saleSealed = SaleSealed({
-            payloadID : 3,
-            saleID : saleId,
-            allocations : new Allocation[](sale.acceptedTokensAddresses.length)
-        });
-
         IWormhole wormhole = wormhole();
-        if (totalContribution >= sale.minRaise) {
+        if (accounting.totalContribution >= sale.minRaise) {
             BridgeImplementation tknBridge = tokenBridge();
 
-            uint messageFee = wormhole.messageFee();
-            uint valueSent = msg.value;
+            accounting.messageFee = wormhole.messageFee();
+            accounting.valueSent = msg.value;
+
+            SaleSealed memory saleSealed = SaleSealed({
+                payloadID : 3,
+                saleID : saleId,
+                allocations : new Allocation[](sale.acceptedTokensAddresses.length)
+            });
 
             // sale succeeded - payout token allocations to contributor contracts
             for(uint i = 0; i < sale.acceptedTokensAddresses.length; i++) {
-                uint allocation = sale.tokenAmount * (sale.contributions[i] * sale.acceptedTokensConversionRates[i] / 1e18) / totalContribution;
-
-                saleSealed.allocations[i] = Allocation({
-                    tokenIndex : uint8(i),
-                    allocation : allocation
-                });
+                uint allocation = sale.tokenAmount * (sale.contributions[i] * sale.acceptedTokensConversionRates[i] / 1e18) / accounting.totalContribution;
 
                 if(allocation > 0) {
+
                     // send allocations to contributor contracts
                     if (sale.acceptedTokensChains[i] == chainId()) {
                         // simple transfer on same chain
                         SafeERC20.safeTransfer(IERC20(address(uint160(uint256(sale.tokenAddress)))), address(uint160(uint256(contributorContracts(sale.acceptedTokensChains[i])))), allocation);
                     } else {
+                        // adjust allocation
+                        allocation = (allocation / 1e10) * 1e10;
+
                         // transfer over wormhole token bridge
                         SafeERC20.safeApprove(IERC20(address(uint160(uint256(sale.tokenAddress)))), address(tknBridge), allocation);
 
-                        require(valueSent >= messageFee, "insufficient wormhole messaging fees");
-                        valueSent -= messageFee;
+                        require(accounting.valueSent >= accounting.messageFee, "insufficient wormhole messaging fees");
+                        accounting.valueSent -= accounting.messageFee;
 
                         tknBridge.transferTokens{
-                            value : messageFee
+                            value : accounting.messageFee
                         }(
                             address(uint160(uint256(sale.tokenAddress))),
                             allocation,
@@ -194,18 +194,31 @@ contract Conductor is ConductorGovernance, ICCOStructs {
                             0
                         );
                     }
+                    accounting.totalAllocated += allocation;
                 }
+                
+                saleSealed.allocations[i] = Allocation({
+                    tokenIndex : uint8(i),
+                    allocation : allocation
+                });
             }
+            // transfer dust back to refund recipient
+            accounting.dust = sale.tokenAmount - accounting.totalAllocated;
+            if (accounting.dust > 0) {
+                SafeERC20.safeTransfer(IERC20(address(uint160(uint256(sale.tokenAddress)))), address(uint160(uint256(sale.refundRecipient))), accounting.dust);
+            }
+            SafeERC20.safeApprove(IERC20(address(uint160(uint256(sale.tokenAddress)))), address(tknBridge), 0);
+            
 
-            require(valueSent >= messageFee, "insufficient wormhole messaging fees");
-            valueSent -= messageFee;
+            require(accounting.valueSent >= accounting.messageFee, "insufficient wormhole messaging fees");
+            accounting.valueSent -= accounting.messageFee;
 
             // set saleSealed
             setSaleSealed(saleId);
 
             // attest sale success on wormhole
             wormholeSequence = wormhole.publishMessage{
-                value : messageFee
+                value : accounting.valueSent
             }(0, encodeSaleSealed(saleSealed), 15);
         } else {
             // set saleAborted

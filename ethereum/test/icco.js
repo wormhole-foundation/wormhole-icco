@@ -310,15 +310,18 @@ contract("ICCO", function (accounts) {
         await SOLD_TOKEN.approve(TokenSaleConductor.address, saleTokenAmount);
 
         // create accepted tokens array
-        const acceptedTokens = [[
-            TEST_CHAIN_ID,
-            "0x000000000000000000000000" + CONTRIBUTED_TOKEN_ONE.address.substr(2),
-            tokenOneConversionRate 
-        ],[
-            TEST_CHAIN_ID,
-            "0x000000000000000000000000" + CONTRIBUTED_TOKEN_TWO.address.substr(2),
-            tokenTwoConversionRate
-        ]]
+        const acceptedTokens = [
+            [
+                TEST_CHAIN_ID,
+                "0x000000000000000000000000" + CONTRIBUTED_TOKEN_ONE.address.substr(2),
+                tokenOneConversionRate 
+            ],
+            [
+                TEST_CHAIN_ID,
+                "0x000000000000000000000000" + CONTRIBUTED_TOKEN_TWO.address.substr(2),
+                tokenTwoConversionRate
+            ]
+        ]
 
         // create the sale
         let tx = await initialized.methods.createSale(
@@ -898,6 +901,20 @@ contract("ICCO", function (accounts) {
 
         await SOLD_TOKEN.approve(TokenSaleConductor.address, saleTokenAmount)
 
+        // create accepted tokens array 
+        const acceptedTokens = [
+            [
+                TEST_CHAIN_ID,
+                "0x000000000000000000000000" + CONTRIBUTED_TOKEN_ONE.address.substr(2),
+                tokenOneConversionRate
+            ],
+            [
+                TEST_CHAIN_ID,
+                "0x000000000000000000000000" + CONTRIBUTED_TOKEN_TWO.address.substr(2),
+                tokenTwoConversionRate
+            ]
+        ]
+
         // create a second sale
         let tx = await initialized.methods.createSale(
             SOLD_TOKEN.address,
@@ -905,15 +922,7 @@ contract("ICCO", function (accounts) {
             minimumTokenRaise,
             SALE_2_START,
             SALE_2_END,
-            [[
-                TEST_CHAIN_ID,
-                "0x000000000000000000000000" + CONTRIBUTED_TOKEN_ONE.address.substr(2),
-                tokenOneConversionRate
-            ],[
-                TEST_CHAIN_ID,
-                "0x000000000000000000000000" + CONTRIBUTED_TOKEN_TWO.address.substr(2),
-                tokenTwoConversionRate
-            ]],
+            acceptedTokens,
             saleRecipient,
             refundRecipient
         ).send({
@@ -1408,7 +1417,7 @@ contract("ICCO", function (accounts) {
 
         const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
 
-        // confirm refundIsClaimed is set to true
+        // confirm refundIsClaimed is set to false
         const buyerOneHasClaimedRefundBefore = await initialized.methods.refundIsClaimed(SALE_2_ID, TOKEN_ONE_INDEX, BUYER_ONE).call();
         const buyerTwoHasClaimedRefundBefore = await initialized.methods.refundIsClaimed(SALE_2_ID, TOKEN_TWO_INDEX, BUYER_TWO).call();
 

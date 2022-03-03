@@ -1493,62 +1493,69 @@ contract("ICCO", function (accounts) {
         const vmPayload = "0x0100000000000000000000000000000000000000000000000000000000000000020000000000000000000000002d8be6bf0baa74e0a907016679cae9190e80dd0a00020000000000000000000000000000000000000000000000000de0b6b3a76400000000000000000000000000000000000000000000000000008ac7230489e800000000000000000000000000000000000000000000000000000000000000000240000000000000000000000000000000000000000000000000000000000000027c04000000000000000000000000ddb64fe46a91d46ee29420539fc25fd07c5fea3e00020000000000000000000000000000000000000000000000000de0b6b3a7640000000000000000000000000000ddb64fe46a91d46ee29420539fc25fd07c5fea3e000400000000000000000000000000000000000000000000000002c68af0bb1400000000000000000000000000008a5bbc20ad253e296f61601e868a3206b2d4774c000200000000000000000000000000000000000000000000000002c68af0bb1400000000000000000000000000003d9e7a12daa29a8b2b1bfaa9dc97ce018853ab3100040000000000000000000000000000000000000000000000000de0b6b3a764000000000000000000000000000090f8bf6a479f320ead074411a4b0e7944ea8c9c100000000000000000000000090f8bf6a479f320ead074411a4b0e7944ea8c9c1";
         const parsed = await initialized.methods.parseSaleInit(vmPayload).call();
 
-        assert.equal(parsed.payloadID, "1");
-        assert.equal(parsed.saleID, "2");
-        assert.equal(parsed.tokenAddress, "0x0000000000000000000000002d8be6bf0baa74e0a907016679cae9190e80dd0a");
-        assert.equal(parsed.tokenChain, "2");
-        assert.equal(parsed.tokenAmount, '1000000000000000000');
-        assert.equal(parsed.minRaise, '10000000000000000000');
-        assert.equal(parsed.saleStart, "576");
-        assert.equal(parsed.saleEnd, "636");
-        // TODO: need to add more assert.equal
-        /*
-payloadID: '1',
-  saleID: '2',
-  tokenAddress: '0x0000000000000000000000002d8be6bf0baa74e0a907016679cae9190e80dd0a',
-  tokenChain: '2',
-  tokenAmount: '1000000000000000000',
-  minRaise: '10000000000000000000',
-  saleStart: '576',
-  saleEnd: '636',
-  acceptedTokens: [
-    [
-      '2',
-      '0x000000000000000000000000ddb64fe46a91d46ee29420539fc25fd07c5fea3e',
-      '1000000000000000000',
-      tokenChain: '2',
-      tokenAddress: '0x000000000000000000000000ddb64fe46a91d46ee29420539fc25fd07c5fea3e',
-      conversionRate: '1000000000000000000'
-    ],
-    [
-      '4',
-      '0x000000000000000000000000ddb64fe46a91d46ee29420539fc25fd07c5fea3e',
-      '200000000000000000',
-      tokenChain: '4',
-      tokenAddress: '0x000000000000000000000000ddb64fe46a91d46ee29420539fc25fd07c5fea3e',
-      conversionRate: '200000000000000000'
-    ],
-    [
-      '2',
-      '0x0000000000000000000000008a5bbc20ad253e296f61601e868a3206b2d4774c',
-      '200000000000000000',
-      tokenChain: '2',
-      tokenAddress: '0x0000000000000000000000008a5bbc20ad253e296f61601e868a3206b2d4774c',
-      conversionRate: '200000000000000000'
-    ],
-    [
-      '4',
-      '0x0000000000000000000000003d9e7a12daa29a8b2b1bfaa9dc97ce018853ab31',
-      '1000000000000000000',
-      tokenChain: '4',
-      tokenAddress: '0x0000000000000000000000003d9e7a12daa29a8b2b1bfaa9dc97ce018853ab31',
-      conversionRate: '1000000000000000000'
-    ]
-  ],
-  recipient: '0x00000000000000000000000090f8bf6a479f320ead074411a4b0e7944ea8c9c1',
-  refundRecipient: '0x00000000000000000000000090f8bf6a479f320ead074411a4b0e7944ea8c9c1'
-        */
+        // test variables
+        const payloadIdType1 = "1";
+        const saleId = "2";
+        const saleTokenAddress = "0x0000000000000000000000002d8be6bf0baa74e0a907016679cae9190e80dd0a";
+        const saleTokenChain = "2";
+        const saleTokenAmount = "1000000000000000000";
+        const minimumRaiseAmount = "10000000000000000000";
+        const saleStart = "576";
+        const saleEnd = "636";
+        const tokenOneChainId = "2";
+        const tokenOneAddress = "0x000000000000000000000000ddb64fe46a91d46ee29420539fc25fd07c5fea3e";
+        const tokenOneConversionRate = "1000000000000000000";
+        const tokenTwoChainId = "4";
+        const tokenTwoAddress = "0x000000000000000000000000ddb64fe46a91d46ee29420539fc25fd07c5fea3e";
+        const tokenTwoConversionRate = "200000000000000000";
+        const tokenThreeChainId = "2";
+        const tokenThreeAddress = "0x0000000000000000000000008a5bbc20ad253e296f61601e868a3206b2d4774c";
+        const tokenThreeConversionRate = "200000000000000000";
+        const tokenFourChainId = "4";
+        const tokenFourAddress = "0x0000000000000000000000003d9e7a12daa29a8b2b1bfaa9dc97ce018853ab31";
+        const tokenFourConversionRate = "1000000000000000000";
+        const saleRecipient = "0x00000000000000000000000090f8bf6a479f320ead074411a4b0e7944ea8c9c1";
+        const refundRecipient = "0x00000000000000000000000090f8bf6a479f320ead074411a4b0e7944ea8c9c1";
 
+        // verify data in the payload
+        assert.equal(parsed.payloadID, payloadIdType1);
+        assert.equal(parsed.saleID, saleId);
+        assert.equal(parsed.tokenAddress, saleTokenAddress);
+        assert.equal(parsed.tokenChain, saleTokenChain);
+        assert.equal(parsed.tokenAmount, saleTokenAmount);
+        assert.equal(parsed.minRaise, minimumRaiseAmount);
+        assert.equal(parsed.saleStart, saleStart);
+        assert.equal(parsed.saleEnd, saleEnd);
+        assert.equal(parsed.recipient, saleRecipient);
+        assert.equal(parsed.refundRecipient, refundRecipient);
+
+        // token one info
+        const tokenOneInfo = parsed.acceptedTokens[0];
+
+        assert.equal(tokenOneInfo.tokenChain, tokenOneChainId);
+        assert.equal(tokenOneInfo.tokenAddress, tokenOneAddress);
+        assert.equal(tokenOneInfo.conversionRate, tokenOneConversionRate);
+
+        // token two info
+        const tokenTwoInfo = parsed.acceptedTokens[1];
+
+        assert.equal(tokenTwoInfo.tokenChain, tokenTwoChainId);
+        assert.equal(tokenTwoInfo.tokenAddress, tokenTwoAddress);
+        assert.equal(tokenTwoInfo.conversionRate, tokenTwoConversionRate);
+
+        // token three info
+        const tokenThreeInfo = parsed.acceptedTokens[2];
+
+        assert.equal(tokenThreeInfo.tokenChain, tokenThreeChainId);
+        assert.equal(tokenThreeInfo.tokenAddress, tokenThreeAddress);
+        assert.equal(tokenThreeInfo.conversionRate, tokenThreeConversionRate);
+
+        // token four info
+        const tokenFourInfo = parsed.acceptedTokens[3];
+
+        assert.equal(tokenFourInfo.tokenChain, tokenFourChainId);
+        assert.equal(tokenFourInfo.tokenAddress, tokenFourAddress);
+        assert.equal(tokenFourInfo.conversionRate, tokenFourConversionRate);
     });
 });
 

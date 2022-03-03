@@ -128,17 +128,32 @@ contract Contributor is ContributorGovernance, ICCOStructs {
 
         SaleSealed memory sSealed = parseSaleSealed(vm.payload);
 
-        setSaleSealed(sSealed.saleID);
-
-        for(uint i; i < sSealed.allocations.length; i++) {
-            Allocation memory allo = sSealed.allocations[i];
-            setSaleAllocation(sSealed.saleID, allo.tokenIndex, allo.allocation);
-        }
-
-        // send raised funds to recipient
+        // confirm the allocated sale tokens are in this contract
         ContributorStructs.Sale memory sale = sales(sSealed.saleID);
-
         uint16 thisChainId = chainId(); // cache from storage
+ 
+        {
+            address saleTokenAddress = address(uint160(uint256(sale.tokenAddress))); 
+            (,bytes memory queriedTokenBalance) = saleTokenAddress.staticcall(
+                abi.encodeWithSelector(IERC20.balanceOf.selector, address(this))
+            );
+            uint256 tokenBalance = abi.decode(queriedTokenBalance, (uint256));
+
+            require(tokenBalance > 0, "sale tokenBalance must be non-zero");
+
+            uint256 tokenAllocation;
+            for(uint i; i < sSealed.allocations.length; i++) {
+                Allocation memory allo = sSealed.allocations[i];
+                if (sale.acceptedTokensChains[allo.tokenIndex] == thisChainId) {
+                    tokenAllocation += allo.allocation;
+                    setSaleAllocation(sSealed.saleID, allo.tokenIndex, allo.allocation);
+                }
+            }
+
+            require(tokenBalance >= tokenAllocation, "insufficient sale token balance");
+            setSaleSealed(sSealed.saleID);
+        }          
+
         uint16 conductorChainId = conductorChainId();
         if (conductorChainId == thisChainId) {
             // raised funds are payed out on this chain

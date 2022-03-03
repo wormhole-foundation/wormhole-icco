@@ -139,7 +139,7 @@ contract Contributor is ContributorGovernance, ICCOStructs {
             );
             uint256 tokenBalance = abi.decode(queriedTokenBalance, (uint256));
 
-            require(tokenBalance > 0, "sale tokenBalance must be non-zero");
+            require(tokenBalance > 0, "sale token balance must be non-zero");
 
             uint256 tokenAllocation;
             for(uint i; i < sSealed.allocations.length; i++) {

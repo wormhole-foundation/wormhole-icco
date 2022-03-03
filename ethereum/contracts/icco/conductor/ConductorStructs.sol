@@ -27,7 +27,7 @@ contract ConductorStructs {
         bytes32[] acceptedTokensAddresses;
         uint256[] acceptedTokensConversionRates;
         // contributions
-        uint256[] contributions;
+        uint[] contributions;
         bool[] contributionsCollected;
         // recipient of proceeds
         bytes32 recipient;

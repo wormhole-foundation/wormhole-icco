@@ -196,7 +196,7 @@ contract Conductor is ConductorGovernance, ICCOStructs {
                     }
                     accounting.totalAllocated += allocation;
                 }
-                
+
                 saleSealed.allocations[i] = Allocation({
                     tokenIndex : uint8(i),
                     allocation : allocation
@@ -208,7 +208,7 @@ contract Conductor is ConductorGovernance, ICCOStructs {
                 SafeERC20.safeTransfer(IERC20(address(uint160(uint256(sale.tokenAddress)))), address(uint160(uint256(sale.refundRecipient))), accounting.dust);
             }
             SafeERC20.safeApprove(IERC20(address(uint160(uint256(sale.tokenAddress)))), address(tknBridge), 0);
-            
+
             require(accounting.valueSent >= accounting.messageFee, "insufficient wormhole messaging fees");
             accounting.valueSent -= accounting.messageFee;
 

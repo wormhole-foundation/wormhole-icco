@@ -51,8 +51,8 @@ contract Contributor is ContributorGovernance, ICCOStructs {
         setSale(saleInit.saleID, sale);
     }
 
-    function contribute(uint256 saleId, uint256 tokenIndex, uint256 amount) public {
-        (uint256 start, uint256 end) = getSaleTimeframe(saleId);
+    function contribute(uint saleId, uint tokenIndex, uint amount) public {
+        (uint start, uint end) = getSaleTimeframe(saleId);
 
         require(block.timestamp >= start, "sale not yet started");
         require(block.timestamp <= end, "sale has ended");
@@ -71,9 +71,7 @@ contract Contributor is ContributorGovernance, ICCOStructs {
         SafeERC20.safeTransferFrom(IERC20(tokenAddress), msg.sender, address(this), amount);
 
         // query own token balance after transfer
-        (, bytes memory queriedBalanceAfter) = tokenAddress.staticcall(
-            abi.encodeWithSelector(IERC20.balanceOf.selector, address(this))
-        );
+        (, bytes memory queriedBalanceAfter) = tokenAddress.staticcall(abi.encodeWithSelector(IERC20.balanceOf.selector, address(this)));
         uint256 balanceAfter = abi.decode(queriedBalanceAfter, (uint256));
 
         // revert if token has fee
@@ -83,14 +81,14 @@ contract Contributor is ContributorGovernance, ICCOStructs {
         setSaleContribution(saleId, msg.sender, tokenIndex, amount);
     }
 
-    function attestContributions(uint256 saleId) public payable returns (uint256 wormholeSequence) {
+    function attestContributions(uint saleId) public payable returns (uint wormholeSequence) {
         ContributorStructs.Sale memory sale = sales(saleId);
 
         require(sale.tokenAddress != bytes32(0), "sale not initialized");
         require(block.timestamp > sale.saleEnd, "sale has not yet ended");
 
-        uint256 nativeTokens = 0;
-        uint256 chainId = chainId(); // cache from storage
+        uint nativeTokens = 0;
+        uint chainId = chainId(); // cache from storage
         for (uint i = 0; i < sale.acceptedTokensAddresses.length; i++) {
             if (sale.acceptedTokensChains[i] == chainId) {
                 nativeTokens++;
@@ -104,8 +102,8 @@ contract Contributor is ContributorGovernance, ICCOStructs {
             contributions : new Contribution[](nativeTokens)
         });
 
-        uint256 ci = 0;
-        for (uint256 i = 0; i < sale.acceptedTokensAddresses.length; i++) {
+        uint ci = 0;
+        for (uint i = 0; i < sale.acceptedTokensAddresses.length; i++) {
             if (sale.acceptedTokensChains[i] == chainId) {
                 consSealed.contributions[ci].tokenIndex = uint8(i);
                 consSealed.contributions[ci].contributed = getSaleTotalContribution(saleId, i);
@@ -114,7 +112,7 @@ contract Contributor is ContributorGovernance, ICCOStructs {
         }
 
         wormholeSequence = wormhole().publishMessage{
-            value: msg.value
+            value : msg.value
         }(0, encodeContributionsSealed(consSealed), 15);
     }
 
@@ -141,9 +139,7 @@ contract Contributor is ContributorGovernance, ICCOStructs {
                 require(saleTokenAddress != address(0), "sale token is not attested");
             }
 
-            (, bytes memory queriedTokenBalance) = saleTokenAddress.staticcall(
-                abi.encodeWithSelector(IERC20.balanceOf.selector, address(this))
-            );
+            (, bytes memory queriedTokenBalance) = saleTokenAddress.staticcall(abi.encodeWithSelector(IERC20.balanceOf.selector, address(this)));
             uint tokenBalance = abi.decode(queriedTokenBalance, (uint256));
 
             require(tokenBalance > 0, "sale token balance must be non-zero");
@@ -153,18 +149,11 @@ contract Contributor is ContributorGovernance, ICCOStructs {
                 Allocation memory allo = sSealed.allocations[i];
                 if (sale.acceptedTokensChains[allo.tokenIndex] == thisChainId) {
                     tokenAllocation += allo.allocation;
-                    setSaleAllocation(
-                        sSealed.saleID,
-                        allo.tokenIndex,
-                        allo.allocation
-                    );
+                    setSaleAllocation(sSealed.saleID, allo.tokenIndex, allo.allocation);
                 }
             }
 
-            require(
-                tokenBalance >= tokenAllocation,
-                "insufficient sale token balance"
-            );
+            require(tokenBalance >= tokenAllocation, "insufficient sale token balance");
             setSaleSealed(sSealed.saleID);
         }
 
@@ -188,7 +177,7 @@ contract Contributor is ContributorGovernance, ICCOStructs {
 
             for (uint i = 0; i < sale.acceptedTokensAddresses.length; i++) {
                 if (sale.acceptedTokensChains[i] == thisChainId) {
-                    uint256 totalContributions = getSaleTotalContribution(sale.saleID, i);
+                    uint totalContributions = getSaleTotalContribution(sale.saleID, i);
 
                     // transfer over wormhole token bridge
                     SafeERC20.safeApprove(IERC20(address(uint160(uint256(sale.acceptedTokensAddresses[i])))), address(tknBridge), totalContributions);
@@ -197,7 +186,7 @@ contract Contributor is ContributorGovernance, ICCOStructs {
                     valueSent -= messageFee;
 
                     tknBridge.transferTokens{
-                        value: messageFee
+                        value : messageFee
                     }(
                         address(uint160(uint256(sale.acceptedTokensAddresses[i]))),
                         totalContributions,

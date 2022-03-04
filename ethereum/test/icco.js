@@ -553,7 +553,7 @@ contract("ICCO", function (accounts) {
             gasLimit : GAS_LIMIT
         })
 
-        // verify getSaleTotalContribution before contributing
+        // verify getSaleTotalContribution after contributing
         const totalContributionsTokenOne = await initialized.methods.getSaleTotalContribution(SALE_ID, TOKEN_ONE_INDEX).call();
         const totalContributionsTokenTwo = await initialized.methods.getSaleTotalContribution(SALE_ID, TOKEN_TWO_INDEX).call();
 
@@ -601,6 +601,7 @@ contract("ICCO", function (accounts) {
 
         const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
 
+        // attest contributions 
         let tx = await initialized.methods.attestContributions(SALE_ID).send({
             from : BUYER_ONE,
             gasLimit : GAS_LIMIT
@@ -682,7 +683,7 @@ contract("ICCO", function (accounts) {
             gasLimit : GAS_LIMIT
         })
 
-        // verify saleContributionIsCollected getter after calling contribute
+        // verify saleContributionIsCollected getter after collecting contributions
         const isContributionOneCollectedAfter = await initialized.methods.saleContributionIsCollected(SALE_ID, TOKEN_ONE_INDEX).call();
         const isContributionTwoCollectedAfter = await initialized.methods.saleContributionIsCollected(SALE_ID, TOKEN_TWO_INDEX).call();
 
@@ -748,7 +749,7 @@ contract("ICCO", function (accounts) {
         index += 64
         SALE_SEALED_PAYLOAD = log.payload;
 
-        // verify saleSealed flag in sales
+        // verify saleSealed flag after sealing the sale
         const saleAfter = await initialized.methods.sales(SALE_ID).call();
 
         assert.ok(saleAfter.isSealed);

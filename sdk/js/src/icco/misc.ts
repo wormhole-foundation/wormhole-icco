@@ -8,6 +8,7 @@ import {
   importCoreWasm,
   nativeToHexString,
   uint8ArrayToHex,
+  ERC20__factory,
 } from "..";
 
 export function nativeToUint8Array(
@@ -45,4 +46,13 @@ export async function extractVaaPayload(
   const { parse_vaa } = await importCoreWasm();
   const { payload: payload } = parse_vaa(signedVaa);
   return payload;
+}
+
+export async function getErc20Balance(
+  provider: ethers.providers.Provider,
+  tokenAddress: string,
+  walletAddress: string
+): Promise<ethers.BigNumber> {
+  const token = ERC20__factory.connect(tokenAddress, provider);
+  return token.balanceOf(walletAddress);
 }

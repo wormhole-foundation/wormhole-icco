@@ -10,7 +10,7 @@ import {
   setDefaultWasm,
 } from "../..";
 import { checkRegisteredContributor } from "../contributorContracts";
-import { wrapEth } from "../misc";
+import { getErc20Balance, wrapEth } from "../misc";
 import {
   BSC_NODE_URL,
   ETH_NODE_URL,
@@ -41,10 +41,13 @@ import {
   contributionsReconcile,
   attestOnEthAndCreateWrappedOnEth,
   allocationsReconcile,
-  getErc20Balance,
+  claimAllBuyerRefundsOnEth,
+  refundsReconcile,
+  getLatestBlockTime,
 } from "./helpers";
 
-jest.setTimeout(300000);
+// ten minutes? nobody got time for that
+jest.setTimeout(600000);
 
 setDefaultWasm("node");
 
@@ -239,17 +242,21 @@ describe("Integration Tests", () => {
             );
           }
 
+          // get the time
+          const timeOffset = 5; // seconds (arbitrarily short amount of time to delay sale)
+          const saleStart =
+            timeOffset + (await getLatestBlockTime(contributorConfigs));
+
           const saleInit = await createSaleOnEthAndInit(
             conductorConfig,
             contributorConfigs,
             tokenAddress,
             tokenAmount,
             minRaise,
+            saleStart,
             saleDuration,
             acceptedTokens
           );
-
-          console.info("saleInit", saleInit);
 
           // balance check
           {
@@ -318,7 +325,6 @@ describe("Integration Tests", () => {
           expect(saleResult.sealed).toBeTruthy();
 
           const saleSealed = saleResult.saleSealed;
-          console.info("saleSealed", saleSealed);
 
           const recipientBalanceAfter = await getErc20Balance(
             ethProvider,
@@ -384,6 +390,7 @@ describe("Integration Tests", () => {
 
           ethProvider.destroy();
           bscProvider.destroy();
+
           done();
         } catch (e) {
           console.error(e);
@@ -403,7 +410,262 @@ describe("Integration Tests", () => {
             BSC_NODE_URL
           );
 
-          // TODO
+          // seller
+          const contributorConfigs: ContributorConfig[] = [
+            {
+              chainId: CHAIN_ID_ETH,
+              wallet: new ethers.Wallet(ETH_PRIVATE_KEY1, ethProvider),
+              collateralAddress: WETH_ADDRESS,
+              conversionRate: "1",
+            },
+            {
+              chainId: CHAIN_ID_BSC,
+              wallet: new ethers.Wallet(ETH_PRIVATE_KEY1, bscProvider),
+              collateralAddress: WBNB_ADDRESS,
+              conversionRate: "0.2",
+            },
+          ];
+
+          const [wormholeWethOnBscAddress, wormholeWbnbOnEthAddress] =
+            await Promise.all([
+              createWrappedIfUndefined(
+                contributorConfigs[0],
+                contributorConfigs[1]
+              ),
+              createWrappedIfUndefined(
+                contributorConfigs[1],
+                contributorConfigs[0]
+              ),
+            ]);
+
+          // pk2 := weth contributors, pk3 := wbnb contributors
+          const buyers: BuyerConfig[] = [
+            // native weth
+            {
+              chainId: CHAIN_ID_ETH,
+              wallet: new ethers.Wallet(ETH_PRIVATE_KEY2, ethProvider),
+              collateralAddress: WETH_ADDRESS,
+              contribution: "3",
+            },
+            // native wbnb
+            {
+              chainId: CHAIN_ID_BSC,
+              wallet: new ethers.Wallet(ETH_PRIVATE_KEY3, bscProvider),
+              collateralAddress: WBNB_ADDRESS,
+              contribution: "15",
+            },
+            // wormhole wrapped bnb
+            {
+              chainId: CHAIN_ID_ETH,
+              wallet: new ethers.Wallet(ETH_PRIVATE_KEY3, ethProvider),
+              collateralAddress: wormholeWbnbOnEthAddress,
+              contribution: "5",
+            },
+            // wormhole wrapped weth
+            {
+              chainId: CHAIN_ID_BSC,
+              wallet: new ethers.Wallet(ETH_PRIVATE_KEY2, bscProvider),
+              collateralAddress: wormholeWethOnBscAddress,
+              contribution: "2.99999999",
+            },
+          ];
+
+          // we need to set up all of the accepted tokens (natives plus their wrapped versions)
+          const acceptedTokens = await makeAcceptedTokensFromConfigs(
+            contributorConfigs,
+            buyers
+          );
+
+          // prepare for the contribution
+          {
+            await Promise.all([
+              wrapEth(
+                buyers[0].wallet,
+                buyers[0].collateralAddress,
+                buyers[0].contribution
+              ),
+
+              wrapEth(
+                buyers[1].wallet,
+                buyers[1].collateralAddress,
+                buyers[1].contribution
+              ),
+            ]);
+          }
+
+          // transfer eth/bnb to other wallets
+          {
+            const ethSender = buyers[0];
+            const ethReceiver = buyers[3];
+
+            const bnbSender = buyers[1];
+            const bnbReceiver = buyers[2];
+
+            const receipts = await Promise.all([
+              transferFromEthNativeAndRedeemOnEth(
+                ethSender.wallet,
+                ethSender.chainId,
+                ethReceiver.contribution,
+                ethReceiver.wallet,
+                ethReceiver.chainId
+              ),
+
+              transferFromEthNativeAndRedeemOnEth(
+                bnbSender.wallet,
+                bnbSender.chainId,
+                bnbReceiver.contribution,
+                bnbReceiver.wallet,
+                bnbReceiver.chainId
+              ),
+            ]);
+          }
+
+          // conductor lives in CHAIN_ID_ETH
+          const conductorConfig = contributorConfigs[0];
+
+          const tokenAddress = TEST_ERC20;
+          const tokenAmount = "1";
+          const minRaise = "10"; // eth units
+          const saleDuration = 60; // seconds
+
+          // we need to make sure the distribution token is attested before we consider seling it cross-chain
+          for (const config of contributorConfigs) {
+            if (config.chainId === conductorConfig.chainId) {
+              continue;
+            }
+            const wrapped = await attestOnEthAndCreateWrappedOnEth(
+              conductorConfig.wallet,
+              conductorConfig.chainId,
+              tokenAddress,
+              config.wallet
+            );
+          }
+
+          // get the time
+          const timeOffset = 5; // seconds (arbitrarily short amount of time to delay sale)
+          const saleStart =
+            timeOffset + (await getLatestBlockTime(contributorConfigs));
+
+          const saleInit = await createSaleOnEthAndInit(
+            conductorConfig,
+            contributorConfigs,
+            tokenAddress,
+            tokenAmount,
+            minRaise,
+            saleStart,
+            saleDuration,
+            acceptedTokens
+          );
+
+          // balance check
+          {
+            const buyerBalancesBefore = await getCollateralBalancesOnEth(
+              buyers
+            );
+
+            // hold your horses
+            await waitForSaleToStart(contributorConfigs, saleInit, 5);
+
+            // finally buyers contribute
+            const contributionSuccessful = await contributeAllTokensOnEth(
+              saleInit,
+              buyers
+            );
+            expect(contributionSuccessful).toBeTruthy();
+
+            const buyerBalancesAfter = await getCollateralBalancesOnEth(buyers);
+            const allLessThan = buyerBalancesAfter
+              .map((balance, index) => {
+                return ethers.BigNumber.from(balance).lt(
+                  buyerBalancesBefore[index]
+                );
+              })
+              .reduce((prev, curr) => {
+                return prev && curr;
+              });
+            expect(allLessThan).toBeTruthy();
+
+            // we expect that balances before minus balances after equals the contributions
+            const reconciled = await contributionsReconcile(
+              buyers,
+              buyerBalancesBefore,
+              buyerBalancesAfter
+            );
+            expect(reconciled).toBeTruthy();
+          }
+
+          // hold your horses again
+          await waitForSaleToEnd(contributorConfigs, saleInit, 5);
+
+          // before sealing the sale, check the balance of the distribution token
+          // on the refundRecipient address. Then check again to double-check the dust
+          // calculation after allocations have been sent
+          const refundRecipient =
+            hexToNativeString(
+              saleInit.refundRecipient,
+              saleInit.tokenChain as ChainId
+            ) || "";
+
+          const recipientBalanceBefore = await getErc20Balance(
+            ethProvider,
+            tokenAddress,
+            refundRecipient
+          );
+
+          // now seal the sale
+          const saleResult = await sealOrAbortSaleOnEth(
+            conductorConfig,
+            contributorConfigs,
+            saleInit
+          );
+          expect(saleResult.aborted).toBeTruthy();
+
+          const recipientBalanceAfter = await getErc20Balance(
+            ethProvider,
+            tokenAddress,
+            refundRecipient
+          );
+
+          // on a refund, the refund recipient gets the distribution token
+          expect(
+            recipientBalanceAfter
+              .sub(recipientBalanceBefore)
+              .eq(saleInit.tokenAmount)
+          ).toBeTruthy();
+
+          // balance check after refund
+          {
+            const buyerBalancesBefore = await getCollateralBalancesOnEth(
+              buyers
+            );
+
+            // claim refunds and check balances
+            const refundSuccessful = await claimAllBuyerRefundsOnEth(
+              saleInit.saleId,
+              buyers
+            );
+            expect(refundSuccessful).toBeTruthy();
+
+            const buyerBalancesAfter = await getCollateralBalancesOnEth(buyers);
+            const allGreaterThan = buyerBalancesAfter
+              .map((balance, index) => {
+                return ethers.BigNumber.from(balance).gt(
+                  buyerBalancesBefore[index]
+                );
+              })
+              .reduce((prev, curr) => {
+                return prev && curr;
+              });
+            expect(allGreaterThan).toBeTruthy();
+
+            // we expect that balances after minus balances before equals the contributions
+            const reconciled = await refundsReconcile(
+              buyers,
+              buyerBalancesBefore,
+              buyerBalancesAfter
+            );
+            expect(reconciled).toBeTruthy();
+          }
 
           ethProvider.destroy();
           bscProvider.destroy();

@@ -1,6 +1,7 @@
 const jsonfile = require('jsonfile');
 const elliptic = require('elliptic');
 const { assert } = require('chai');
+const { ethers } = require('ethers');
 
 const Wormhole = artifacts.require("Wormhole");
 const TokenBridge = artifacts.require("TokenBridge");
@@ -1494,12 +1495,13 @@ contract("ICCO", function (accounts) {
         const parsed = await initialized.methods.parseSaleInit(vmPayload).call();
 
         // test variables
+        const tokenDecimals = 18;
         const payloadIdType1 = "1";
         const saleId = "2";
         const saleTokenAddress = "0x0000000000000000000000002d8be6bf0baa74e0a907016679cae9190e80dd0a";
         const saleTokenChain = "2";
-        const saleTokenAmount = "1000000000000000000";
-        const minimumRaiseAmount = "10000000000000000000";
+        const saleTokenAmount = 1;
+        const minimumRaiseAmount = 10;
         const saleStart = "576";
         const saleEnd = "636";
         const tokenOneChainId = "2";
@@ -1517,13 +1519,13 @@ contract("ICCO", function (accounts) {
         const saleRecipient = "0x00000000000000000000000090f8bf6a479f320ead074411a4b0e7944ea8c9c1";
         const refundRecipient = "0x00000000000000000000000090f8bf6a479f320ead074411a4b0e7944ea8c9c1";
 
-        // verify data in the payload
+        // verify data in the parsed payload
         assert.equal(parsed.payloadID, payloadIdType1);
         assert.equal(parsed.saleID, saleId);
         assert.equal(parsed.tokenAddress, saleTokenAddress);
         assert.equal(parsed.tokenChain, saleTokenChain);
-        assert.equal(parsed.tokenAmount, saleTokenAmount);
-        assert.equal(parsed.minRaise, minimumRaiseAmount);
+        assert.equal(ethers.utils.formatUnits(parsed.tokenAmount, tokenDecimals), saleTokenAmount);
+        assert.equal(ethers.utils.formatUnits(parsed.minRaise, tokenDecimals), minimumRaiseAmount);
         assert.equal(parsed.saleStart, saleStart);
         assert.equal(parsed.saleEnd, saleEnd);
         assert.equal(parsed.recipient, saleRecipient);
@@ -1556,6 +1558,50 @@ contract("ICCO", function (accounts) {
         assert.equal(tokenFourInfo.tokenChain, tokenFourChainId);
         assert.equal(tokenFourInfo.tokenAddress, tokenFourAddress);
         assert.equal(tokenFourInfo.conversionRate, tokenFourConversionRate);
+    });
+
+    it('parse saleSealed payload from vaa (cross chain)', async function() {
+        const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
+
+        const vmPayload = "0x030000000000000000000000000000000000000000000000000000000000000001040000000000000000000000000000000000000000000000000005566da78f26762701000000000000000000000000000000000000000000000000038ef3c38c04e400020000000000000000000000000000000000000000000000000088a490c183d89d030000000000000000000000000000000000000000000000000472b0b62e0f0800";
+        const parsed = await initialized.methods.parseSaleSealed(vmPayload).call();
+
+        // test variables
+        const payloadIdType3 = "3";
+        const saleId = "1";
+        const tokenOneIndex = "0";
+        const tokenTwoIndex = "1";
+        const tokenThreeIndex = "2";
+        const tokenFourIndex = "3";
+        const tokenDecimals = 18;
+        const tokenOneAllo = 0.384615384615384615;
+        const tokenTwoAllo = 0.25641025;
+        const tokenThreeAllo = 0.038461538461538461;
+        const tokenFourAllo = 0.32051282;
+
+        // verify data in the parsed payload
+        assert.equal(parsed.payloadID, payloadIdType3);
+        assert.equal(parsed.saleID, saleId);
+
+        // allocation one info
+        const alloOne = parsed.allocations[0];
+        assert.equal(alloOne.tokenIndex, tokenOneIndex)
+        assert.equal(ethers.utils.formatUnits(alloOne.allocation, tokenDecimals), tokenOneAllo);
+
+        // allocation two info
+        const alloTwo = parsed.allocations[1];
+        assert.equal(alloTwo.tokenIndex, tokenTwoIndex);
+        assert.equal(ethers.utils.formatUnits(alloTwo.allocation, tokenDecimals), tokenTwoAllo);
+
+        // allocation three info
+        const alloThree = parsed.allocations[2];
+        assert.equal(alloThree.tokenIndex, tokenThreeIndex);
+        assert.equal(ethers.utils.formatUnits(alloThree.allocation, tokenDecimals), tokenThreeAllo);
+
+        // allocation four info
+        const alloFour = parsed.allocations[3];
+        assert.equal(alloFour.tokenIndex, tokenFourIndex);
+        assert.equal(ethers.utils.formatUnits(alloFour.allocation, tokenDecimals), tokenFourAllo);
     });
 });
 

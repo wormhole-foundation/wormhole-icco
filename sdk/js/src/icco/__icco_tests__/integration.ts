@@ -44,6 +44,12 @@ import {
   claimAllBuyerRefundsOnEth,
   refundsReconcile,
   getLatestBlockTime,
+  prepareBuyersForMixedContributionTest,
+  makeSaleStartFromLastBlock,
+  sealSaleAtContributors,
+  abortSaleAtContributors,
+  claimConductorRefund,
+  redeemCrossChainAllocations,
 } from "./helpers";
 
 // ten minutes? nobody got time for that
@@ -171,55 +177,14 @@ describe("Integration Tests", () => {
             },
           ];
 
+          // specific prep so buyers can make contributions from their respective wallets
+          await prepareBuyersForMixedContributionTest(buyers);
+
           // we need to set up all of the accepted tokens (natives plus their wrapped versions)
           const acceptedTokens = await makeAcceptedTokensFromConfigs(
             contributorConfigs,
             buyers
           );
-
-          // prepare for the contribution
-          {
-            await Promise.all([
-              wrapEth(
-                buyers[0].wallet,
-                buyers[0].collateralAddress,
-                buyers[0].contribution
-              ),
-
-              wrapEth(
-                buyers[1].wallet,
-                buyers[1].collateralAddress,
-                buyers[1].contribution
-              ),
-            ]);
-          }
-
-          // transfer eth/bnb to other wallets
-          {
-            const ethSender = buyers[0];
-            const ethReceiver = buyers[3];
-
-            const bnbSender = buyers[1];
-            const bnbReceiver = buyers[2];
-
-            const receipts = await Promise.all([
-              transferFromEthNativeAndRedeemOnEth(
-                ethSender.wallet,
-                ethSender.chainId,
-                ethReceiver.contribution,
-                ethReceiver.wallet,
-                ethReceiver.chainId
-              ),
-
-              transferFromEthNativeAndRedeemOnEth(
-                bnbSender.wallet,
-                bnbSender.chainId,
-                bnbReceiver.contribution,
-                bnbReceiver.wallet,
-                bnbReceiver.chainId
-              ),
-            ]);
-          }
 
           // conductor lives in CHAIN_ID_ETH
           const conductorConfig = contributorConfigs[0];
@@ -243,9 +208,9 @@ describe("Integration Tests", () => {
           }
 
           // get the time
-          const timeOffset = 5; // seconds (arbitrarily short amount of time to delay sale)
-          const saleStart =
-            timeOffset + (await getLatestBlockTime(contributorConfigs));
+          const saleStart = await makeSaleStartFromLastBlock(
+            contributorConfigs
+          );
 
           const saleInit = await createSaleOnEthAndInit(
             conductorConfig,
@@ -319,12 +284,38 @@ describe("Integration Tests", () => {
             contributorConfigs,
             saleInit
           );
-          if (saleResult.saleSealed === undefined) {
-            throw Error("saleSealed is undefined");
-          }
           expect(saleResult.sealed).toBeTruthy();
 
-          const saleSealed = saleResult.saleSealed;
+          // should not be able to seal the sale before allocations have been send to contributors
+          {
+            let expectedErrorExists = false;
+            try {
+              const saleSealed = await sealSaleAtContributors(
+                saleResult,
+                contributorConfigs
+              );
+            } catch (error) {
+              const errorMsg: string = error.error.toString();
+              if (errorMsg.endsWith("sale token balance must be non-zero")) {
+                expectedErrorExists = true;
+              }
+            }
+            expect(expectedErrorExists).toBeTruthy();
+          }
+
+          // redeem token transfer vaas
+          {
+            const receipts = await redeemCrossChainAllocations(
+              saleResult,
+              contributorConfigs
+            );
+          }
+
+          // seal the sale at the contributors, then check balances
+          const saleSealed = await sealSaleAtContributors(
+            saleResult,
+            contributorConfigs
+          );
 
           const recipientBalanceAfter = await getErc20Balance(
             ethProvider,
@@ -470,55 +461,14 @@ describe("Integration Tests", () => {
             },
           ];
 
+          // specific prep so buyers can make contributions from their respective wallets
+          await prepareBuyersForMixedContributionTest(buyers);
+
           // we need to set up all of the accepted tokens (natives plus their wrapped versions)
           const acceptedTokens = await makeAcceptedTokensFromConfigs(
             contributorConfigs,
             buyers
           );
-
-          // prepare for the contribution
-          {
-            await Promise.all([
-              wrapEth(
-                buyers[0].wallet,
-                buyers[0].collateralAddress,
-                buyers[0].contribution
-              ),
-
-              wrapEth(
-                buyers[1].wallet,
-                buyers[1].collateralAddress,
-                buyers[1].contribution
-              ),
-            ]);
-          }
-
-          // transfer eth/bnb to other wallets
-          {
-            const ethSender = buyers[0];
-            const ethReceiver = buyers[3];
-
-            const bnbSender = buyers[1];
-            const bnbReceiver = buyers[2];
-
-            const receipts = await Promise.all([
-              transferFromEthNativeAndRedeemOnEth(
-                ethSender.wallet,
-                ethSender.chainId,
-                ethReceiver.contribution,
-                ethReceiver.wallet,
-                ethReceiver.chainId
-              ),
-
-              transferFromEthNativeAndRedeemOnEth(
-                bnbSender.wallet,
-                bnbSender.chainId,
-                bnbReceiver.contribution,
-                bnbReceiver.wallet,
-                bnbReceiver.chainId
-              ),
-            ]);
-          }
 
           // conductor lives in CHAIN_ID_ETH
           const conductorConfig = contributorConfigs[0];
@@ -542,9 +492,9 @@ describe("Integration Tests", () => {
           }
 
           // get the time
-          const timeOffset = 5; // seconds (arbitrarily short amount of time to delay sale)
-          const saleStart =
-            timeOffset + (await getLatestBlockTime(contributorConfigs));
+          const saleStart = await makeSaleStartFromLastBlock(
+            contributorConfigs
+          );
 
           const saleInit = await createSaleOnEthAndInit(
             conductorConfig,
@@ -620,6 +570,9 @@ describe("Integration Tests", () => {
           );
           expect(saleResult.aborted).toBeTruthy();
 
+          // conductor gets his refund. check that he does
+          await claimConductorRefund(saleInit, conductorConfig);
+
           const recipientBalanceAfter = await getErc20Balance(
             ethProvider,
             tokenAddress,
@@ -633,7 +586,9 @@ describe("Integration Tests", () => {
               .eq(saleInit.tokenAmount)
           ).toBeTruthy();
 
-          // balance check after refund
+          // now make the buyers whole again. abort and refund, checking their balances after refund
+          await abortSaleAtContributors(saleResult, contributorConfigs);
+
           {
             const buyerBalancesBefore = await getCollateralBalancesOnEth(
               buyers

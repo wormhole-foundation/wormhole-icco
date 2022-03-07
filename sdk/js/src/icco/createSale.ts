@@ -88,17 +88,6 @@ export async function createSaleOnEth(
   return tx.wait();
 }
 
-export async function initSaleOnEth(
-  contributorAddress: string,
-  buyer: ethers.Wallet,
-  signedVaa: Uint8Array
-): Promise<ethers.ContractReceipt> {
-  const contributor = Contributor__factory.connect(contributorAddress, buyer);
-
-  const tx = await contributor.initSale(signedVaa);
-  return tx.wait();
-}
-
 export interface IccoSaleInit {
   payloadId: number;
   saleId: ethers.BigNumberish;

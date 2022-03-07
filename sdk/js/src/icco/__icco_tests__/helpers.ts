@@ -46,6 +46,7 @@ import { contributeOnEth, getSaleContribution } from "../contribute";
 import {
   extractVaaPayload,
   getCurrentBlock,
+  getErc20Balance,
   nativeToUint8Array,
   sleepFor,
 } from "../misc";
@@ -59,6 +60,11 @@ import {
   claimAllocationOnEth,
 } from "../claimAllocation";
 import { attestContributionsOnEth } from "../attestContributions";
+import {
+  claimConductorRefundOnEth,
+  claimContributorRefundOnEth,
+  refundIsClaimedOnEth,
+} from "../claimRefund";
 
 export interface BuyerConfig {
   chainId: ChainId;
@@ -379,6 +385,7 @@ export async function createSaleOnEthAndInit(
   saleTokenAddress: string,
   tokenAmount: string,
   minRaise: string,
+  saleStart: number,
   saleDuration: number,
   acceptedTokens: AcceptedToken[]
 ): Promise<IccoSaleInit> {
@@ -388,9 +395,6 @@ export async function createSaleOnEthAndInit(
   );
   const decimals = await tokenOffered.decimals();
 
-  // get the time
-  const timeOffset = 3; // seconds (arbitrarily short amount of time to delay sale)
-  const saleStart = timeOffset + (await getLatestBlockTime(contributorConfigs));
   const saleEnd = saleStart + saleDuration;
 
   const initSaleVaa = await createSaleOnEthAndGetVaa(
@@ -403,6 +407,9 @@ export async function createSaleOnEthAndInit(
     saleEnd,
     acceptedTokens
   );
+
+  // parse vaa for ICCOStruct
+  const initSale = await parseIccoSaleInit(initSaleVaa);
 
   {
     const receipts = await Promise.all(
@@ -418,8 +425,7 @@ export async function createSaleOnEthAndInit(
     );
   }
 
-  // finally parse vaa for ICCOStruct
-  return parseIccoSaleInit(initSaleVaa);
+  return initSale;
 }
 
 export async function waitForSaleToStart(
@@ -554,16 +560,25 @@ export async function sealOrAbortSaleOnEth(
   }
 
   // but if the sale is aborted... abort!
-  const receipts = await Promise.all(
-    contributorConfigs.map(async (config) => {
-      const contributor = Contributor__factory.connect(
-        ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
-        config.wallet
-      );
+  {
+    const receipts = await Promise.all(
+      contributorConfigs.map(async (config) => {
+        const contributor = Contributor__factory.connect(
+          ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
+          config.wallet
+        );
 
-      const tx = await contributor.saleAborted(saleCompletionVaa);
-      return tx.wait();
-    })
+        const tx = await contributor.saleAborted(saleCompletionVaa);
+        return tx.wait();
+      })
+    );
+  }
+
+  // claim refund for refundRecipient
+  const reeipt = await claimConductorRefundOnEth(
+    ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
+    saleId,
+    conductorConfig.wallet
   );
 
   return {
@@ -576,16 +591,24 @@ export async function sealOrAbortSaleOnEth(
 export function balanceChangeReconciles(
   before: ethers.BigNumberish,
   after: ethers.BigNumberish,
+  direction: BalanceChange,
   change: ethers.BigNumberish
 ): boolean {
   const balanceBefore = ethers.BigNumber.from(before);
   const balanceAfter = ethers.BigNumber.from(after);
   const balanceChange = ethers.BigNumber.from(change);
 
-  if (balanceBefore.gt(balanceAfter)) {
-    return balanceBefore.sub(balanceAfter).eq(balanceChange);
+  if (direction === BalanceChange.Increase) {
+    return (
+      balanceBefore.lte(balanceAfter) &&
+      balanceAfter.sub(balanceBefore).eq(balanceChange)
+    );
   }
-  return balanceAfter.sub(balanceBefore).eq(balanceChange);
+
+  return (
+    balanceBefore.gte(balanceAfter) &&
+    balanceBefore.sub(balanceAfter).eq(balanceChange)
+  );
 }
 
 export async function contributionsReconcile(
@@ -608,6 +631,7 @@ export async function contributionsReconcile(
       return balanceChangeReconciles(
         before[index],
         after[index],
+        BalanceChange.Decrease,
         parseUnits(config.contribution, decimals[index]).toString()
       );
     })
@@ -616,7 +640,35 @@ export async function contributionsReconcile(
     });
 }
 
-// TODO: when adding solana and terra claiming, grab subset
+export async function refundsReconcile(
+  buyers: BuyerConfig[],
+  before: ethers.BigNumberish[],
+  after: ethers.BigNumberish[]
+): Promise<boolean> {
+  const decimals = await Promise.all(
+    buyers.map(async (config): Promise<number> => {
+      const token = ERC20__factory.connect(
+        config.collateralAddress,
+        config.wallet
+      );
+      return token.decimals();
+    })
+  );
+
+  return buyers
+    .map((config, index): boolean => {
+      return balanceChangeReconciles(
+        before[index],
+        after[index],
+        BalanceChange.Increase,
+        parseUnits(config.contribution, decimals[index]).toString()
+      );
+    })
+    .reduce((prev, curr): boolean => {
+      return prev && curr;
+    });
+}
+
 export async function claimAllAllocationsOnEth(
   buyers: BuyerConfig[],
   saleSealed: IccoSaleSealed
@@ -691,15 +743,6 @@ export async function getAllocationBalancesOnEth(
   );
 }
 
-export async function getErc20Balance(
-  provider: ethers.providers.Provider,
-  tokenAddress: string,
-  walletAddress: string
-): Promise<ethers.BigNumber> {
-  const token = ERC20__factory.connect(tokenAddress, provider);
-  return token.balanceOf(walletAddress);
-}
-
 export function allocationsReconcile(
   saleSealed: IccoSaleSealed,
   before: ethers.BigNumberish[],
@@ -711,6 +754,7 @@ export function allocationsReconcile(
       return balanceChangeReconciles(
         before[tokenIndex],
         after[tokenIndex],
+        BalanceChange.Increase,
         item.allocation
       );
     })
@@ -719,7 +763,41 @@ export function allocationsReconcile(
     });
 }
 
+export async function claimAllBuyerRefundsOnEth(
+  saleId: ethers.BigNumberish,
+  buyers: BuyerConfig[]
+): Promise<boolean> {
+  const isClaimed = await Promise.all(
+    buyers.map(async (config, tokenIndex): Promise<boolean> => {
+      const wallet = config.wallet;
+
+      const receipt = await claimContributorRefundOnEth(
+        ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
+        saleId,
+        tokenIndex,
+        wallet
+      );
+
+      return refundIsClaimedOnEth(
+        ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
+        saleId,
+        tokenIndex,
+        wallet
+      );
+    })
+  );
+
+  return isClaimed.reduce((prev, curr): boolean => {
+    return prev && curr;
+  });
+}
+
 // private
+enum BalanceChange {
+  Increase = 1,
+  Decrease,
+}
+
 async function redeemMultiChainTransfersFromConfigs(
   contributorConfigs: ContributorConfig[],
   signedVaas: Uint8Array[]

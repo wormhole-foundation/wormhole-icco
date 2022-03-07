@@ -1726,7 +1726,12 @@ contract("ICCO", function (accounts) {
         assert.ok(!saleStatus.isAborted);
     })
 
+    let SALE_SEALED_PAYLOAD_3;
+
     it('conductor should abort sale before the third sale starts', async function () {
+        // test variables 
+        const payloadIdType4 = "04";
+
         const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
 
         // verify getSaleStatus getter before aborting
@@ -1741,12 +1746,318 @@ contract("ICCO", function (accounts) {
             gasLimit : GAS_LIMIT
         })
 
+        // grab VAA so contributor can abort the sale
+        const log = (await WORMHOLE.getPastEvents('LogMessagePublished', {
+            fromBlock: 'latest'
+        }))[0].returnValues;
+
+        // verify sale sealed payload
+        SALE_SEALED_PAYLOAD_3 = log.payload;
+
+        // payload id
+        let index = 2
+        assert.equal(SALE_SEALED_PAYLOAD_3.substr(index, 2), payloadIdType4);
+        index += 2
+
+        // sale id
+        assert.equal(parseInt(SALE_SEALED_PAYLOAD_3.substr(index, 64), 16), SALE_3_ID);
+        index += 64
+
         // verify getSaleStatus getter after aborting 
         const saleStatusAfter = await initialized.methods.sales(SALE_3_ID).call();
     
         assert.ok(!saleStatusAfter.isSealed);
         assert.ok(saleStatusAfter.isAborted);
     })
+
+    it('should accept contributions after sale period starts and before aborting the sale (block timestamps out of sync test)', async function () {
+        // this test simulates block timestamps being out of sync cross-chain
+        await timeout(5000)
+
+        // test variables
+        const tokenOneContributionAmount = "100";
+        const tokenTwoContributionAmount = "50";
+
+        const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
+
+        await CONTRIBUTED_TOKEN_ONE.approve(TokenSaleContributor.address, tokenOneContributionAmount, {
+            from:BUYER_ONE
+        })
+        await CONTRIBUTED_TOKEN_TWO.approve(TokenSaleContributor.address, tokenTwoContributionAmount, {
+            from:BUYER_TWO
+        })   
+
+        // contribute tokens to the sale
+        let tx = await initialized.methods.contribute(SALE_3_ID, TOKEN_ONE_INDEX, parseInt(tokenOneContributionAmount)).send({
+            from : BUYER_ONE,
+            gasLimit : GAS_LIMIT
+        })
+
+        let tx2 = await initialized.methods.contribute(SALE_3_ID, TOKEN_TWO_INDEX, parseInt(tokenTwoContributionAmount)).send({
+            from : BUYER_TWO,
+            gasLimit : GAS_LIMIT
+        })
+
+        // verify getSaleTotalContribution after contributing
+        const totalContributionsTokenOne = await initialized.methods.getSaleTotalContribution(SALE_3_ID, TOKEN_ONE_INDEX).call();
+        const totalContributionsTokenTwo = await initialized.methods.getSaleTotalContribution(SALE_3_ID, TOKEN_TWO_INDEX).call();
+
+        assert.equal(totalContributionsTokenOne, parseInt(tokenOneContributionAmount));
+        assert.equal(totalContributionsTokenTwo, parseInt(tokenTwoContributionAmount));
+
+        // verify getSaleContribution
+        const buyerOneContribution = await initialized.methods.getSaleContribution(SALE_3_ID, TOKEN_ONE_INDEX, BUYER_ONE).call();
+        const buyerTwoContribution = await initialized.methods.getSaleContribution(SALE_3_ID, TOKEN_TWO_INDEX, BUYER_TWO).call();
+
+        assert.equal(buyerOneContribution, parseInt(tokenOneContributionAmount));
+        assert.equal(buyerTwoContribution, parseInt(tokenTwoContributionAmount));
+    }) 
+
+    it('contributor should abort third sale correctly', async function () {
+        const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
+
+        // verify getSaleStatus before aborting in contributor
+        const statusBefore = await initialized.methods.getSaleStatus(SALE_3_ID).call();
+
+        assert.ok(!statusBefore.isAborted)
+        assert.ok(!statusBefore.isSealed)
+
+        const vm = await signAndEncodeVM(
+            1,
+            1,
+            TEST_CHAIN_ID,
+            "0x000000000000000000000000"+TokenSaleConductor.address.substr(2),
+            0,
+            SALE_SEALED_PAYLOAD_3,
+            [
+                testSigner1PK
+            ],
+            0,
+            0
+        );
+
+        // abort the sale
+        let tx = await initialized.methods.saleAborted("0x"+vm).send({
+            from : BUYER_ONE,
+            gasLimit : GAS_LIMIT
+        })
+
+        // confirm that saleAborted was set to true
+        const statusAfter = await initialized.methods.getSaleStatus(SALE_3_ID).call();
+
+        assert.ok(statusAfter.isAborted)
+        assert.ok(!statusAfter.isSealed)
+    })
+
+    it('contributor should not allow contributions after sale is aborted early', async function () {
+        // test variables
+        const tokenOneContributionAmount = "100";
+
+        const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
+
+        await CONTRIBUTED_TOKEN_ONE.approve(TokenSaleContributor.address, tokenOneContributionAmount, {
+            from:BUYER_ONE
+        })
+   
+        let failed = false
+        try {
+            // try to contribute tokens to the sale
+            await initialized.methods.contribute(SALE_3_ID, TOKEN_ONE_INDEX, parseInt(tokenOneContributionAmount)).send({
+                from : BUYER_ONE,
+                gasLimit : GAS_LIMIT
+            })   
+        } catch(e) {
+            assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert sale was aborted")
+            failed = true
+        }
+
+        assert.ok(failed)
+    })
+
+    it('contributor should not allow contributions to be attested after sale is aborted early', async function () {
+        await timeout(10000)
+
+        const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
+   
+        let failed = false
+        try {
+            // attest contributions
+            let tx = await initialized.methods.attestContributions(SALE_2_ID).send({
+                from : BUYER_ONE,
+                gasLimit : GAS_LIMIT
+            })
+        } catch(e) {
+            assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert sale was aborted")
+            failed = true
+        }
+
+        assert.ok(failed)
+    })
+
+    it('conductor should distribute refund to refundRecipient correctly after sale is aborted early', async function () {
+        // test variables
+        const expectedConductorBalanceBefore = "1000";
+        const expectedSellerBalanceBefore = "0";
+        const expectedConductorBalanceAfter = "0";
+        const expectedSellerBalanceAfter = "1000";
+
+        const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+
+        // confirm that refundIsClaimed is false
+        const saleBefore = await initialized.methods.sales(SALE_3_ID).call();
+
+        assert.ok(!saleBefore.refundIsClaimed);
+
+        // check starting balances 
+        const actualConductorBalanceBefore = await SOLD_TOKEN.balanceOf(TokenSaleConductor.address);
+        const actualSellerBalanceBefore = await SOLD_TOKEN.balanceOf(SELLER);
+
+        assert.equal(actualConductorBalanceBefore, expectedConductorBalanceBefore);
+        assert.equal(actualSellerBalanceBefore, expectedSellerBalanceBefore);
+
+        // claim the sale token refund
+        await initialized.methods.claimRefund(SALE_3_ID).send({
+            from : SELLER,
+            gasLimit : GAS_LIMIT
+        });
+
+        // make sure new balances are correct
+        const actualConductorBalanceAfter = await SOLD_TOKEN.balanceOf(TokenSaleConductor.address);
+        const actualSellerBalanceAfter = await SOLD_TOKEN.balanceOf(SELLER);
+
+        assert.equal(actualConductorBalanceAfter, expectedConductorBalanceAfter);
+        assert.equal(actualSellerBalanceAfter, expectedSellerBalanceAfter);
+
+        // confirm that refundClaimed was set to true 
+        const saleAfter = await initialized.methods.sales(SALE_3_ID).call();
+
+        assert.ok(saleAfter.refundIsClaimed);
+    })
+
+    it('contributor should distribute refunds to contributors correctly after sale is aborted early', async function () {
+        // test variables
+        const expectedContributorTokenOneBalanceBefore = "100";
+        const expectedContributorTokenTwoBalanceBefore = "300"; // lingering 250 from rolled back transaction earlier in test  
+        const expectedBuyerOneBalanceBefore = "9900";
+        const expectedBuyerTwoBalanceBefore = "14700";
+        const expectedContributorTokenOneBalanceAfter = "0";
+        const excpectedContributorTokenTwoBalanceAfter = "250";  
+        const expectedBuyerOneBalanceAfter = "10000";
+        const expectedBuyerTwoBalanceAfter = "14750";
+
+        const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
+
+        // confirm refundIsClaimed is set to false
+        const buyerOneHasClaimedRefundBefore = await initialized.methods.refundIsClaimed(SALE_3_ID, TOKEN_ONE_INDEX, BUYER_ONE).call();
+        const buyerTwoHasClaimedRefundBefore = await initialized.methods.refundIsClaimed(SALE_3_ID, TOKEN_TWO_INDEX, BUYER_TWO).call();
+
+        assert.ok(!buyerOneHasClaimedRefundBefore);
+        assert.ok(!buyerTwoHasClaimedRefundBefore);
+
+        // check balances of contributed tokens for buyers and the contributor 
+        const actualContributorTokenOneBalanceBefore = await CONTRIBUTED_TOKEN_ONE.balanceOf(TokenSaleContributor.address);
+        const actualContributorTokenTwoBalanceBefore = await CONTRIBUTED_TOKEN_TWO.balanceOf(TokenSaleContributor.address);        
+        const actualBuyerOneBalanceBefore = await CONTRIBUTED_TOKEN_ONE.balanceOf(BUYER_ONE);
+        const actualBuyerTwoBalanceBefore = await CONTRIBUTED_TOKEN_TWO.balanceOf(BUYER_TWO);
+
+        assert.equal(actualContributorTokenOneBalanceBefore, expectedContributorTokenOneBalanceBefore);
+        assert.equal(actualContributorTokenTwoBalanceBefore, expectedContributorTokenTwoBalanceBefore);
+        assert.equal(actualBuyerOneBalanceBefore, expectedBuyerOneBalanceBefore);
+        assert.equal(actualBuyerTwoBalanceBefore, expectedBuyerTwoBalanceBefore); 
+
+        // BUYER_ONE/BUYER_TWO claims refund
+        await initialized.methods.claimRefund(SALE_3_ID, TOKEN_ONE_INDEX).send({
+            from : BUYER_ONE,
+            gasLimit : GAS_LIMIT
+        })
+
+        await initialized.methods.claimRefund(SALE_3_ID, TOKEN_TWO_INDEX).send({
+            from : BUYER_TWO,
+            gasLimit : GAS_LIMIT
+        })
+
+        // check balances of contributed tokens for buyers and the contributor 
+        const actualContributorTokenOneBalanceAfter = await CONTRIBUTED_TOKEN_ONE.balanceOf(TokenSaleContributor.address);
+        const actualContributorTokenTwoBalanceAfter = await CONTRIBUTED_TOKEN_TWO.balanceOf(TokenSaleContributor.address);        
+        const actualBuyerOneBalanceAfter = await CONTRIBUTED_TOKEN_ONE.balanceOf(BUYER_ONE);
+        const actualBuyerTwoBalanceAfter = await CONTRIBUTED_TOKEN_TWO.balanceOf(BUYER_TWO);
+
+        assert.equal(actualContributorTokenOneBalanceAfter, expectedContributorTokenOneBalanceAfter);
+        assert.equal(actualContributorTokenTwoBalanceAfter, excpectedContributorTokenTwoBalanceAfter);
+        assert.equal(actualBuyerOneBalanceAfter, expectedBuyerOneBalanceAfter);
+        assert.equal(actualBuyerTwoBalanceAfter, expectedBuyerTwoBalanceAfter);
+
+        // confirm refundIsClaimed is set to true
+        const buyerOneHasClaimedRefundAfter = await initialized.methods.refundIsClaimed(SALE_3_ID, TOKEN_ONE_INDEX, BUYER_ONE).call();
+        const buyerTwoHasClaimedRefundAfter = await initialized.methods.refundIsClaimed(SALE_3_ID, TOKEN_TWO_INDEX, BUYER_TWO).call();
+
+        assert.ok(buyerOneHasClaimedRefundAfter);
+        assert.ok(buyerTwoHasClaimedRefundAfter);
+    })
+
+    it('conductor should not allow a sale to abort after the sale start time', async function () {
+        // test variables
+        sale_start = Math.floor(Date.now() / 1000) + 5;
+        sale_end = sale_start + 8;
+        const saleTokenAmount = "1000";
+        const minimumTokenRaise = "2000";
+        const tokenOneConversionRate = "1000000000000000000";
+        const tokenTwoConversionRate = "2000000000000000000";
+        const saleRecipient = accounts[0];
+        const refundRecipient = accounts[0];
+        const sale_4_id = 3;
+
+        const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+
+        await SOLD_TOKEN.approve(TokenSaleConductor.address, saleTokenAmount)
+
+        // create accepted tokens array 
+        const acceptedTokens = [
+            [
+                TEST_CHAIN_ID,
+                "0x000000000000000000000000" + CONTRIBUTED_TOKEN_ONE.address.substr(2),
+                tokenOneConversionRate
+            ],
+            [
+                TEST_CHAIN_ID,
+                "0x000000000000000000000000" + CONTRIBUTED_TOKEN_TWO.address.substr(2),
+                tokenTwoConversionRate
+            ]
+        ]
+
+        // create a second sale
+        let tx = await initialized.methods.createSale(
+            SOLD_TOKEN.address,
+            saleTokenAmount,
+            minimumTokenRaise,
+            sale_start,
+            sale_end,
+            acceptedTokens,
+            saleRecipient,
+            refundRecipient
+        ).send({
+            value : "0",
+            from : SELLER,
+            gasLimit : GAS_LIMIT
+        })
+
+        // wait for the sale to start
+        await timeout(6000)
+
+        let failed = false
+        try {
+            // attest contributions
+            let tx = await initialized.methods.abortSaleBeforeStartTime(sale_4_id).send({
+                from : BUYER_ONE,
+                gasLimit : GAS_LIMIT
+            })
+        } catch(e) {
+            assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert sale cannot be aborted once it has started")
+            failed = true
+        }
+
+        assert.ok(failed) 
+    });
 
     it('parse saleInit from vaa (cross chain)', async function() {
         const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);

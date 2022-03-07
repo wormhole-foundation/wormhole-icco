@@ -52,6 +52,10 @@ contract Contributor is ContributorGovernance, ICCOStructs {
     }
 
     function contribute(uint saleId, uint tokenIndex, uint amount) public {
+        (, bool isAborted) = getSaleStatus(saleId);
+
+        require(!isAborted, "sale was aborted");
+
         (uint start, uint end) = getSaleTimeframe(saleId);
 
         require(block.timestamp >= start, "sale not yet started");
@@ -86,6 +90,7 @@ contract Contributor is ContributorGovernance, ICCOStructs {
 
         require(sale.tokenAddress != bytes32(0), "sale not initialized");
         require(block.timestamp > sale.saleEnd, "sale has not yet ended");
+        require(!sale.isAborted, "sale was aborted");
 
         uint nativeTokens = 0;
         uint chainId = chainId(); // cache from storage
@@ -122,7 +127,12 @@ contract Contributor is ContributorGovernance, ICCOStructs {
         require(valid, reason);
         require(verifyConductorVM(vm), "invalid emitter");
 
-        SaleSealed memory sSealed = parseSaleSealed(vm.payload);
+        SaleSealed memory sSealed = parseSaleSealed(vm.payload); 
+
+        // check to see if the sale was aborted already
+        (bool isSealed, bool isAborted) = getSaleStatus(sSealed.saleID);
+
+        require(isSealed && isAborted, "already sealed / aborted");
 
         // confirm the allocated sale tokens are in this contract
         ContributorStructs.Sale memory sale = sales(sSealed.saleID);

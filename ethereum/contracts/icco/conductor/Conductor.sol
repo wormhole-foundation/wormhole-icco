@@ -132,6 +132,7 @@ contract Conductor is ConductorGovernance, ICCOStructs {
         // make sure the sale period has ended
         ConductorStructs.Sale memory sale = sales(conSealed.saleID);
 
+        require(!sale.isAborted, "sale was aborted");
         require(block.timestamp > sale.saleEnd, "sale has not ended yet");
 
         for(uint i = 0; i < conSealed.contributions.length; i++) {
@@ -165,9 +166,9 @@ contract Conductor is ConductorGovernance, ICCOStructs {
     function sealSale(uint saleId) public payable returns (uint wormholeSequence) {
         ConductorStructs.Sale memory sale = sales(saleId);
 
-        ConductorStructs.InternalAccounting memory accounting;
-
         require(!sale.isSealed && !sale.isAborted, "already sealed / aborted");
+        
+        ConductorStructs.InternalAccounting memory accounting;        
 
         for (uint i = 0; i < sale.contributionsCollected.length; i++) {
             require(sale.contributionsCollected[i], "missing contribution info");

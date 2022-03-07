@@ -187,7 +187,7 @@ contract Contributor is ContributorGovernance, ICCOStructs {
 
             for (uint i = 0; i < sale.acceptedTokensAddresses.length; i++) {
                 if (sale.acceptedTokensChains[i] == thisChainId) {
-                    uint totalContributions = getSaleTotalContribution(sale.saleID, i);
+                    uint totalContributions = (getSaleTotalContribution(sale.saleID, i) / 1e10) * 1e10;
 
                     // transfer over wormhole token bridge
                     SafeERC20.safeApprove(IERC20(address(uint160(uint256(sale.acceptedTokensAddresses[i])))), address(tknBridge), totalContributions);
@@ -205,6 +205,7 @@ contract Contributor is ContributorGovernance, ICCOStructs {
                         0,
                         0
                     );
+                    SafeERC20.safeApprove(IERC20(address(uint160(uint256(sale.acceptedTokensAddresses[i])))), address(tknBridge), 0);
                 }
             }
         }

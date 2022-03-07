@@ -5,12 +5,14 @@ import {
   CHAIN_ID_BSC,
   CHAIN_ID_ETH,
   ERC20__factory,
+  getEmitterAddressEth,
   hexToNativeString,
   nativeToHexString,
+  redeemOnEth,
   setDefaultWasm,
 } from "../..";
 import { checkRegisteredContributor } from "../contributorContracts";
-import { getErc20Balance, wrapEth } from "../misc";
+import { extractVaaPayload, getErc20Balance } from "../misc";
 import {
   BSC_NODE_URL,
   ETH_NODE_URL,
@@ -28,7 +30,6 @@ import {
   BuyerConfig,
   ContributorConfig,
   createSaleOnEthAndInit,
-  transferFromEthNativeAndRedeemOnEth,
   createWrappedIfUndefined,
   waitForSaleToEnd,
   waitForSaleToStart,
@@ -39,17 +40,19 @@ import {
   claimAllAllocationsOnEth,
   getAllocationBalancesOnEth,
   contributionsReconcile,
-  attestOnEthAndCreateWrappedOnEth,
   allocationsReconcile,
   claimAllBuyerRefundsOnEth,
   refundsReconcile,
-  getLatestBlockTime,
   prepareBuyersForMixedContributionTest,
   makeSaleStartFromLastBlock,
   sealSaleAtContributors,
   abortSaleAtContributors,
   claimConductorRefund,
   redeemCrossChainAllocations,
+  getSignedVaaFromSequence,
+  attestSaleToken,
+  getWrappedCollateral,
+  getRefundRecipientBalanceOnEth,
 } from "./helpers";
 
 // ten minutes? nobody got time for that
@@ -131,17 +134,9 @@ describe("Integration Tests", () => {
             },
           ];
 
-          const [wormholeWethOnBscAddress, wormholeWbnbOnEthAddress] =
-            await Promise.all([
-              createWrappedIfUndefined(
-                contributorConfigs[0],
-                contributorConfigs[1]
-              ),
-              createWrappedIfUndefined(
-                contributorConfigs[1],
-                contributorConfigs[0]
-              ),
-            ]);
+          const wormholeWrapped = await getWrappedCollateral(
+            contributorConfigs
+          );
 
           // pk2 := weth contributors, pk3 := wbnb contributors
           const buyers: BuyerConfig[] = [
@@ -160,11 +155,10 @@ describe("Integration Tests", () => {
               contribution: "20",
             },
             // wormhole wrapped bnb
-
             {
               chainId: CHAIN_ID_ETH,
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY3, ethProvider),
-              collateralAddress: wormholeWbnbOnEthAddress,
+              collateralAddress: wormholeWrapped.wbnbOnEth,
               contribution: "3",
             },
 
@@ -172,7 +166,7 @@ describe("Integration Tests", () => {
             {
               chainId: CHAIN_ID_BSC,
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY2, bscProvider),
-              collateralAddress: wormholeWethOnBscAddress,
+              collateralAddress: wormholeWrapped.wethOnBsc,
               contribution: "5",
             },
           ];
@@ -195,17 +189,11 @@ describe("Integration Tests", () => {
           const saleDuration = 60; // seconds
 
           // we need to make sure the distribution token is attested before we consider seling it cross-chain
-          for (const config of contributorConfigs) {
-            if (config.chainId === conductorConfig.chainId) {
-              continue;
-            }
-            const wrapped = await attestOnEthAndCreateWrappedOnEth(
-              conductorConfig.wallet,
-              conductorConfig.chainId,
-              tokenAddress,
-              config.wallet
-            );
-          }
+          await attestSaleToken(
+            tokenAddress,
+            conductorConfig,
+            contributorConfigs
+          );
 
           // get the time
           const saleStart = await makeSaleStartFromLastBlock(
@@ -290,13 +278,70 @@ describe("Integration Tests", () => {
           {
             let expectedErrorExists = false;
             try {
+              const relevantConfigs = contributorConfigs.filter(
+                (config): boolean => {
+                  return config.chainId !== conductorConfig.chainId;
+                }
+              );
               const saleSealed = await sealSaleAtContributors(
                 saleResult,
-                contributorConfigs
+                relevantConfigs
               );
             } catch (error) {
               const errorMsg: string = error.error.toString();
               if (errorMsg.endsWith("sale token balance must be non-zero")) {
+                expectedErrorExists = true;
+              }
+            }
+            expect(expectedErrorExists).toBeTruthy();
+          }
+
+          // redeem one and expect another error
+          console.info("saleResult", saleResult);
+
+          {
+            const sequence = saleResult.bridgeSequences.pop();
+            if (sequence === undefined) {
+              throw Error("bridgeSequences is empty");
+            }
+
+            const signedVaa = await getSignedVaaFromSequence(
+              saleResult.conductorChainId,
+              getEmitterAddressEth(ETH_TOKEN_BRIDGE_ADDRESS),
+              sequence
+            );
+
+            const payload = await extractVaaPayload(signedVaa);
+            const chainId = Buffer.from(payload).readUInt16BE(99) as ChainId;
+
+            const config = contributorConfigs.find((config) => {
+              return config.chainId === chainId;
+            });
+            if (config === undefined) {
+              throw Error("config is undefined");
+            }
+
+            const receipt = await redeemOnEth(
+              ETH_TOKEN_BRIDGE_ADDRESS,
+              config.wallet,
+              signedVaa
+            );
+
+            let expectedErrorExists = false;
+            try {
+              const relevantConfigs = contributorConfigs.filter(
+                (config): boolean => {
+                  return config.chainId !== conductorConfig.chainId;
+                }
+              );
+              const saleSealed = await sealSaleAtContributors(
+                saleResult,
+                relevantConfigs
+              );
+            } catch (error) {
+              const errorMsg: string = error.error.toString();
+              console.info("errorMsg", errorMsg);
+              if (errorMsg.endsWith("insufficient sale token balance")) {
                 expectedErrorExists = true;
               }
             }
@@ -386,12 +431,12 @@ describe("Integration Tests", () => {
         } catch (e) {
           console.error(e);
           done(
-            "An error occurred while trying to Create Successful ICCO Sale With Native Contributions"
+            "An error occurred while trying to Create Successful Sale With Mixed Contributions"
           );
         }
       })();
     });
-    test("Execute Failed ICCO Sale with Raise Not Met", (done) => {
+    test("Execute Aborted ICCO Sale with Raise Not Met", (done) => {
       (async () => {
         try {
           const ethProvider = new ethers.providers.WebSocketProvider(
@@ -417,17 +462,9 @@ describe("Integration Tests", () => {
             },
           ];
 
-          const [wormholeWethOnBscAddress, wormholeWbnbOnEthAddress] =
-            await Promise.all([
-              createWrappedIfUndefined(
-                contributorConfigs[0],
-                contributorConfigs[1]
-              ),
-              createWrappedIfUndefined(
-                contributorConfigs[1],
-                contributorConfigs[0]
-              ),
-            ]);
+          const wormholeWrapped = await getWrappedCollateral(
+            contributorConfigs
+          );
 
           // pk2 := weth contributors, pk3 := wbnb contributors
           const buyers: BuyerConfig[] = [
@@ -449,14 +486,14 @@ describe("Integration Tests", () => {
             {
               chainId: CHAIN_ID_ETH,
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY3, ethProvider),
-              collateralAddress: wormholeWbnbOnEthAddress,
+              collateralAddress: wormholeWrapped.wbnbOnEth,
               contribution: "5",
             },
             // wormhole wrapped weth
             {
               chainId: CHAIN_ID_BSC,
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY2, bscProvider),
-              collateralAddress: wormholeWethOnBscAddress,
+              collateralAddress: wormholeWrapped.wethOnBsc,
               contribution: "2.99999999",
             },
           ];
@@ -479,17 +516,11 @@ describe("Integration Tests", () => {
           const saleDuration = 60; // seconds
 
           // we need to make sure the distribution token is attested before we consider seling it cross-chain
-          for (const config of contributorConfigs) {
-            if (config.chainId === conductorConfig.chainId) {
-              continue;
-            }
-            const wrapped = await attestOnEthAndCreateWrappedOnEth(
-              conductorConfig.wallet,
-              conductorConfig.chainId,
-              tokenAddress,
-              config.wallet
-            );
-          }
+          await attestSaleToken(
+            tokenAddress,
+            conductorConfig,
+            contributorConfigs
+          );
 
           // get the time
           const saleStart = await makeSaleStartFromLastBlock(
@@ -550,16 +581,9 @@ describe("Integration Tests", () => {
           // before sealing the sale, check the balance of the distribution token
           // on the refundRecipient address. Then check again to double-check the dust
           // calculation after allocations have been sent
-          const refundRecipient =
-            hexToNativeString(
-              saleInit.refundRecipient,
-              saleInit.tokenChain as ChainId
-            ) || "";
-
-          const recipientBalanceBefore = await getErc20Balance(
-            ethProvider,
-            tokenAddress,
-            refundRecipient
+          const recipientBalanceBefore = await getRefundRecipientBalanceOnEth(
+            saleInit,
+            conductorConfig
           );
 
           // now seal the sale
@@ -573,10 +597,9 @@ describe("Integration Tests", () => {
           // conductor gets his refund. check that he does
           await claimConductorRefund(saleInit, conductorConfig);
 
-          const recipientBalanceAfter = await getErc20Balance(
-            ethProvider,
-            tokenAddress,
-            refundRecipient
+          const recipientBalanceAfter = await getRefundRecipientBalanceOnEth(
+            saleInit,
+            conductorConfig
           );
 
           // on a refund, the refund recipient gets the distribution token
@@ -628,12 +651,12 @@ describe("Integration Tests", () => {
         } catch (e) {
           console.error(e);
           done(
-            "An error occurred while trying to execute failed ICCO Sale with Raise Not Met"
+            "An error occurred while trying to Execute Aborted ICCO Sale with Raise Not Met"
           );
         }
       })();
     });
-    test("Execute Successful ICCO Sale with Late Contributor", (done) => {
+    test("Execute Abort Sale Before Sale Start", (done) => {
       (async () => {
         try {
           const ethProvider = new ethers.providers.WebSocketProvider(

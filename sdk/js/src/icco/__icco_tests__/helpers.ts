@@ -60,6 +60,7 @@ import {
   parseIccoSaleSealed,
   sealSaleOnEth,
 } from "../sealSale";
+import { saleSealedOnEth } from "../saleSealed";
 import {
   allocationIsClaimedOnEth,
   claimAllocationOnEth,
@@ -85,6 +86,8 @@ export interface ContributorConfig {
   collateralAddress: string;
   conversionRate: string;
 }
+
+export interface ConductorConfig extends ContributorConfig {}
 
 // TODO: add terra and solana handling to this (doing it serially here to make it easier to adapt)
 export async function makeAcceptedTokensFromConfigs(
@@ -169,6 +172,44 @@ export async function prepareBuyersForMixedContributionTest(
     ]);
   }
 
+  return;
+}
+
+export interface WormholeWrappedAddresses {
+  wethOnBsc: string;
+  wbnbOnEth: string;
+}
+
+export async function getWrappedCollateral(
+  configs: ContributorConfig[]
+): Promise<WormholeWrappedAddresses> {
+  const [wethOnBsc, wbnbOnEth] = await Promise.all([
+    createWrappedIfUndefined(configs[0], configs[1]),
+    createWrappedIfUndefined(configs[1], configs[0]),
+  ]);
+
+  return {
+    wethOnBsc: wethOnBsc,
+    wbnbOnEth: wbnbOnEth,
+  };
+}
+
+export async function attestSaleToken(
+  tokenAddress: string,
+  conductorConfig: ContributorConfig,
+  contributorConfigs: ContributorConfig[]
+): Promise<void> {
+  for (const config of contributorConfigs) {
+    if (config.chainId === conductorConfig.chainId) {
+      continue;
+    }
+    const wrapped = await attestOnEthAndCreateWrappedOnEth(
+      conductorConfig.wallet,
+      conductorConfig.chainId,
+      tokenAddress,
+      config.wallet
+    );
+  }
   return;
 }
 
@@ -649,6 +690,7 @@ export async function sealSaleAtContributors(
   );
 
   const saleSealed = await parseIccoSaleSealed(signedVaa);
+  console.info("saleSealed", saleSealed);
 
   {
     // set sale sealed for each contributor
@@ -907,6 +949,33 @@ export async function claimAllBuyerRefundsOnEth(
   return isClaimed.reduce((prev, curr): boolean => {
     return prev && curr;
   });
+}
+
+export async function getRefundRecipientBalanceOnEth(
+  saleInit: IccoSaleInit,
+  conductorConfig: ContributorConfig
+): Promise<ethers.BigNumber> {
+  const tokenAddress = hexToNativeString(
+    saleInit.tokenAddress,
+    saleInit.tokenChain as ChainId
+  );
+  if (tokenAddress === undefined) {
+    throw Error("tokenAddress is undefined");
+  }
+
+  const refundRecipient = hexToNativeString(
+    saleInit.refundRecipient,
+    saleInit.tokenChain as ChainId
+  );
+  if (refundRecipient === undefined) {
+    throw Error("refundRecipient is undefined");
+  }
+
+  return getErc20Balance(
+    conductorConfig.wallet.provider,
+    tokenAddress,
+    refundRecipient
+  );
 }
 
 // private

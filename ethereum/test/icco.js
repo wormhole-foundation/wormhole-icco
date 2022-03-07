@@ -523,7 +523,7 @@ contract("ICCO", function (accounts) {
         const saleStatus = await initialized.methods.getSaleStatus(SALE_ID).call();
     
         assert.ok(!saleStatus.isSealed);
-        assert.ok(!saleStatus.saleAborted);
+        assert.ok(!saleStatus.isAborted);
     })  
     
     it('should accept contributions in the contributor during the sale timeframe', async function () {
@@ -1115,7 +1115,7 @@ contract("ICCO", function (accounts) {
         const saleStatus = await initialized.methods.getSaleStatus(SALE_2_ID).call();
     
         assert.ok(!saleStatus.isSealed);
-        assert.ok(!saleStatus.saleAborted);
+        assert.ok(!saleStatus.isAborted);
     })
     
     it('should accept contributions in the contributor during the second sale timeframe', async function () {
@@ -1487,6 +1487,265 @@ contract("ICCO", function (accounts) {
         }
 
         assert.ok(failed)
+    })
+
+    let SALE_3_START;
+    let SALE_3_END;
+    let SALE_3_INIT_PAYLOAD;
+    let SALE_3_ID;
+
+    it('create a third sale correctly and attest over wormhole', async function () {
+        // test variables
+        SALE_3_START = Math.floor(Date.now() / 1000) + 5;
+        SALE_3_END = SALE_3_START + 8;
+        const saleTokenAmount = "1000";
+        const minimumTokenRaise = "2000";
+        const tokenOneConversionRate = "1000000000000000000";
+        const tokenTwoConversionRate = "2000000000000000000";
+        const saleRecipient = accounts[0];
+        const refundRecipient = accounts[0];
+        const acceptedTokenLength = 2;
+        const payloadIdType1 = "01";
+
+        const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+
+        await SOLD_TOKEN.approve(TokenSaleConductor.address, saleTokenAmount)
+
+        // create accepted tokens array 
+        const acceptedTokens = [
+            [
+                TEST_CHAIN_ID,
+                "0x000000000000000000000000" + CONTRIBUTED_TOKEN_ONE.address.substr(2),
+                tokenOneConversionRate
+            ],
+            [
+                TEST_CHAIN_ID,
+                "0x000000000000000000000000" + CONTRIBUTED_TOKEN_TWO.address.substr(2),
+                tokenTwoConversionRate
+            ]
+        ]
+
+        // create a second sale
+        let tx = await initialized.methods.createSale(
+            SOLD_TOKEN.address,
+            saleTokenAmount,
+            minimumTokenRaise,
+            SALE_3_START,
+            SALE_3_END,
+            acceptedTokens,
+            saleRecipient,
+            refundRecipient
+        ).send({
+            value : "0",
+            from : SELLER,
+            gasLimit : GAS_LIMIT
+        })
+
+        const log = (await WORMHOLE.getPastEvents('LogMessagePublished', {
+            fromBlock: 'latest'
+        }))[0].returnValues
+
+        assert.equal(log.sender, TokenSaleConductor.address)
+
+        // payload id
+        let index = 2
+        assert.equal(log.payload.substr(index, 2), payloadIdType1)
+        index += 2
+
+        // sale id, should == 1 since it's the second sale
+        SALE_3_ID = 2;
+        assert.equal(parseInt(log.payload.substr(index, 64), 16), SALE_3_ID); 
+        index += 64
+
+        // token address
+        assert.equal(log.payload.substr(index, 64), web3.eth.abi.encodeParameter("address", SOLD_TOKEN.address).substring(2));
+        index += 64
+
+        // token chain
+        assert.equal(log.payload.substr(index, 4), web3.eth.abi.encodeParameter("uint16", TEST_CHAIN_ID).substring(2 + 64 - 4))
+        index += 4
+
+        // token amount
+        assert.equal(parseInt(log.payload.substr(index, 64), 16), parseInt(saleTokenAmount));
+        index += 64
+
+        // min raise amount
+        assert.equal(parseInt(log.payload.substr(index, 64), 16), parseInt(minimumTokenRaise));
+        index += 64
+
+        // timestamp start
+        assert.equal(parseInt(log.payload.substr(index, 64), 16), SALE_3_START);
+        index += 64
+
+        // timestamp end
+        assert.equal(parseInt(log.payload.substr(index, 64), 16), SALE_3_END);
+        index += 64
+
+        // accepted tokens length
+        assert.equal(parseInt(log.payload.substr(index, 2), 16), acceptedTokenLength);
+        index += 2
+
+        // token address
+        assert.equal(log.payload.substr(index, 64), web3.eth.abi.encodeParameter("address", CONTRIBUTED_TOKEN_ONE.address).substring(2));
+        index += 64
+
+        // token chain
+        assert.equal(log.payload.substr(index, 4), web3.eth.abi.encodeParameter("uint16", TEST_CHAIN_ID).substring(2 + 64 - 4))
+        index += 4
+
+        // conversion rate
+        assert.equal(parseInt(log.payload.substr(index, 64), 16), parseInt(tokenOneConversionRate));
+        index += 64
+
+        // token address
+        assert.equal(log.payload.substr(index, 64), web3.eth.abi.encodeParameter("address", CONTRIBUTED_TOKEN_TWO.address).substring(2));
+        index += 64
+
+        // token chain
+        assert.equal(log.payload.substr(index, 4), web3.eth.abi.encodeParameter("uint16", TEST_CHAIN_ID).substring(2 + 64 - 4))
+        index += 4
+
+        // conversion rate
+        assert.equal(parseInt(log.payload.substr(index, 64), 16), parseInt(tokenTwoConversionRate));
+        index += 64
+
+        // recipient of proceeds
+        assert.equal(log.payload.substr(index, 64), web3.eth.abi.encodeParameter("address", saleRecipient).substring(2));
+        index += 64
+
+        // refund recipient in case the sale is aborted
+        assert.equal(log.payload.substr(index, 64), web3.eth.abi.encodeParameter("address", refundRecipient).substring(2));
+        index += 64
+
+        assert.equal(log.payload.length, index)
+        SALE_3_INIT_PAYLOAD = log.payload.toString()
+
+        // verify sale getter
+        const sale = await initialized.methods.sales(SALE_3_ID).call()
+
+        assert.equal(sale.saleID, SALE_3_ID);
+        assert.equal(sale.tokenAddress.substring(2), web3.eth.abi.encodeParameter("address", SOLD_TOKEN.address).substring(2));
+        assert.equal(sale.tokenChain, TEST_CHAIN_ID);
+        assert.equal(sale.tokenAmount, parseInt(saleTokenAmount));
+        assert.equal(sale.minRaise, parseInt(minimumTokenRaise));
+        assert.equal(sale.saleStart, SALE_3_START);
+        assert.equal(sale.saleEnd, SALE_3_END);
+        assert.equal(sale.acceptedTokensAddresses[TOKEN_ONE_INDEX].substring(2), web3.eth.abi.encodeParameter("address", CONTRIBUTED_TOKEN_ONE.address).substring(2));
+        assert.equal(sale.acceptedTokensChains[TOKEN_ONE_INDEX], TEST_CHAIN_ID);
+        assert.equal(sale.acceptedTokensConversionRates[TOKEN_ONE_INDEX], parseInt(tokenOneConversionRate));
+        assert.equal(sale.acceptedTokensAddresses[TOKEN_TWO_INDEX].substring(2), web3.eth.abi.encodeParameter("address", CONTRIBUTED_TOKEN_TWO.address).substring(2));
+        assert.equal(sale.acceptedTokensChains[TOKEN_TWO_INDEX], TEST_CHAIN_ID);
+        assert.equal(sale.acceptedTokensConversionRates[TOKEN_TWO_INDEX], parseInt(tokenTwoConversionRate));
+        assert.equal(sale.recipient.substring(2), web3.eth.abi.encodeParameter("address", saleRecipient).substring(2));
+        assert.equal(sale.refundRecipient.substring(2), web3.eth.abi.encodeParameter("address", refundRecipient).substring(2));
+        assert.ok(!sale.isSealed);
+        assert.ok(!sale.isAborted);
+        assert.ok(!sale.refundIsClaimed);
+
+        // verify that getNextSaleId is correct
+        const nextSaleId = await initialized.methods.getNextSaleId().call()
+
+        assert.equal(nextSaleId, SALE_3_ID + 1)
+    })
+    
+    it('should init a third sale in the contributor', async function () {
+        // test variables
+        const saleTokenAmount = 1000;
+        const minimumTokenRaise = 2000;
+        const tokenOneConversionRate = 1000000000000000000;
+        const tokenTwoConversionRate = 2000000000000000000;
+        const saleRecipient = accounts[0];
+        const refundRecipient = accounts[0];
+
+        const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
+
+        const vm = await signAndEncodeVM(
+            1,
+            1,
+            TEST_CHAIN_ID,
+            "0x000000000000000000000000"+TokenSaleConductor.address.substr(2),
+            0,
+            SALE_3_INIT_PAYLOAD,
+            [
+                testSigner1PK
+            ],
+            0,
+            0
+        );
+
+        // initialize the second sale
+        let tx = await initialized.methods.initSale("0x"+vm).send({
+            from : SELLER,
+            gasLimit : GAS_LIMIT
+        })
+
+        // verify sale getter
+        const sale = await initialized.methods.sales(SALE_3_ID).call()
+
+        assert.equal(sale.saleID, SALE_3_ID);
+        assert.equal(sale.tokenAddress.substring(2), web3.eth.abi.encodeParameter("address", SOLD_TOKEN.address).substring(2));
+        assert.equal(sale.tokenChain, TEST_CHAIN_ID);
+        assert.equal(sale.tokenAmount, saleTokenAmount);
+        assert.equal(sale.minRaise, minimumTokenRaise);
+        assert.equal(sale.saleStart, SALE_3_START);
+        assert.equal(sale.saleEnd, SALE_3_END);
+        assert.equal(sale.acceptedTokensAddresses[TOKEN_ONE_INDEX].substring(2), web3.eth.abi.encodeParameter("address", CONTRIBUTED_TOKEN_ONE.address).substring(2));
+        assert.equal(sale.acceptedTokensChains[TOKEN_ONE_INDEX], TEST_CHAIN_ID);
+        assert.equal(sale.acceptedTokensConversionRates[TOKEN_ONE_INDEX], tokenOneConversionRate);
+        assert.equal(sale.acceptedTokensAddresses[TOKEN_TWO_INDEX].substring(2), web3.eth.abi.encodeParameter("address", CONTRIBUTED_TOKEN_TWO.address).substring(2));
+        assert.equal(sale.acceptedTokensChains[TOKEN_TWO_INDEX], TEST_CHAIN_ID);
+        assert.equal(sale.acceptedTokensConversionRates[TOKEN_TWO_INDEX], tokenTwoConversionRate);
+        assert.equal(sale.recipient.substring(2), web3.eth.abi.encodeParameter("address", saleRecipient).substring(2));
+        assert.equal(sale.refundRecipient.substring(2), web3.eth.abi.encodeParameter("address", refundRecipient).substring(2));
+        assert.ok(!sale.isSealed);
+        assert.ok(!sale.isAborted);
+        assert.ok(sale.allocations[TOKEN_ONE_INDEX], 0);
+        assert.ok(sale.allocations[TOKEN_TWO_INDEX], 0) 
+
+        // verify getsaleAcceptedTokenInfo getter
+        const tokenOneInfo = await initialized.methods.getSaleAcceptedTokenInfo(SALE_3_ID, TOKEN_ONE_INDEX).call();
+        const tokenTwoInfo = await initialized.methods.getSaleAcceptedTokenInfo(SALE_3_ID, TOKEN_TWO_INDEX).call();
+        
+        assert.equal(tokenOneInfo.tokenAddress.substring(2), web3.eth.abi.encodeParameter("address", CONTRIBUTED_TOKEN_ONE.address).substring(2));
+        assert.equal(tokenOneInfo.tokenChainId, TEST_CHAIN_ID);
+        assert.equal(tokenOneInfo.conversionRate, tokenOneConversionRate);
+        assert.equal(tokenTwoInfo.tokenAddress.substring(2), web3.eth.abi.encodeParameter("address", CONTRIBUTED_TOKEN_TWO.address).substring(2));
+        assert.equal(tokenTwoInfo.tokenChainId, TEST_CHAIN_ID);
+        assert.equal(tokenTwoInfo.conversionRate, tokenTwoConversionRate);
+
+        // verify getSaleTimeFrame getter
+        const saleTimeframe = await initialized.methods.getSaleTimeframe(SALE_3_ID).call();
+
+        assert.equal(saleTimeframe.start, SALE_3_START);
+        assert.equal(saleTimeframe.end, SALE_3_END);
+
+        // verify getSaleStatus getter
+        const saleStatus = await initialized.methods.getSaleStatus(SALE_3_ID).call();
+    
+        assert.ok(!saleStatus.isSealed);
+        assert.ok(!saleStatus.isAborted);
+    })
+
+    it('conductor should abort sale before the third sale starts', async function () {
+        const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+
+        // verify getSaleStatus getter before aborting
+        const saleStatusBefore = await initialized.methods.sales(SALE_3_ID).call();
+    
+        assert.ok(!saleStatusBefore.isSealed);
+        assert.ok(!saleStatusBefore.isAborted);
+
+        // abort the sale
+        let tx = await initialized.methods.abortSaleBeforeStartTime(SALE_3_ID).send({
+            from : SELLER,
+            gasLimit : GAS_LIMIT
+        })
+
+        // verify getSaleStatus getter after aborting 
+        const saleStatusAfter = await initialized.methods.sales(SALE_3_ID).call();
+    
+        assert.ok(!saleStatusAfter.isSealed);
+        assert.ok(saleStatusAfter.isAborted);
     })
 
     it('parse saleInit from vaa (cross chain)', async function() {

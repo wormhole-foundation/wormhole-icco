@@ -1995,6 +1995,70 @@ contract("ICCO", function (accounts) {
         assert.ok(buyerTwoHasClaimedRefundAfter);
     })
 
+    it('conductor should not allow a sale to abort after the sale start time', async function () {
+        // test variables
+        sale_start = Math.floor(Date.now() / 1000) + 5;
+        sale_end = sale_start + 8;
+        const saleTokenAmount = "1000";
+        const minimumTokenRaise = "2000";
+        const tokenOneConversionRate = "1000000000000000000";
+        const tokenTwoConversionRate = "2000000000000000000";
+        const saleRecipient = accounts[0];
+        const refundRecipient = accounts[0];
+        const sale_4_id = 3;
+
+        const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+
+        await SOLD_TOKEN.approve(TokenSaleConductor.address, saleTokenAmount)
+
+        // create accepted tokens array 
+        const acceptedTokens = [
+            [
+                TEST_CHAIN_ID,
+                "0x000000000000000000000000" + CONTRIBUTED_TOKEN_ONE.address.substr(2),
+                tokenOneConversionRate
+            ],
+            [
+                TEST_CHAIN_ID,
+                "0x000000000000000000000000" + CONTRIBUTED_TOKEN_TWO.address.substr(2),
+                tokenTwoConversionRate
+            ]
+        ]
+
+        // create a second sale
+        let tx = await initialized.methods.createSale(
+            SOLD_TOKEN.address,
+            saleTokenAmount,
+            minimumTokenRaise,
+            sale_start,
+            sale_end,
+            acceptedTokens,
+            saleRecipient,
+            refundRecipient
+        ).send({
+            value : "0",
+            from : SELLER,
+            gasLimit : GAS_LIMIT
+        })
+
+        // wait for the sale to start
+        await timeout(6000)
+
+        let failed = false
+        try {
+            // attest contributions
+            let tx = await initialized.methods.abortSaleBeforeStartTime(sale_4_id).send({
+                from : BUYER_ONE,
+                gasLimit : GAS_LIMIT
+            })
+        } catch(e) {
+            assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert sale cannot be aborted once it has started")
+            failed = true
+        }
+
+        assert.ok(failed) 
+    });
+
     it('parse saleInit from vaa (cross chain)', async function() {
         const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
 

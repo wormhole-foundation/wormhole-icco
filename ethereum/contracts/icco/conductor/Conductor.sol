@@ -129,6 +129,11 @@ contract Conductor is ConductorGovernance, ICCOStructs {
 
         require(conSealed.chainID == vm.emitterChainId, "contribution from wrong chain id");
 
+        // make sure the sale period has ended
+        ConductorStructs.Sale memory sale = sales(conSealed.saleID);
+
+        require(block.timestamp > sale.saleEnd, "sale has not ended yet");
+
         for(uint i = 0; i < conSealed.contributions.length; i++) {
             setSaleContribution(
                 conSealed.saleID,
@@ -136,6 +141,25 @@ contract Conductor is ConductorGovernance, ICCOStructs {
                 conSealed.contributions[i].contributed
             );
         }
+    }
+
+    function abortSaleBeforeStartTime(uint saleId) public payable returns (uint wormholeSequence) {
+        ConductorStructs.Sale memory sale = sales(saleId);
+
+        require(!sale.isSealed && !sale.isAborted, "already sealed / aborted");
+        require(block.timestamp < sale.saleStart, "sale cannot be aborted once it has started");
+
+        // set saleAborted
+        setSaleAborted(sale.saleID);   
+
+        // attest sale aborted on wormhole
+        IWormhole wormhole = wormhole();
+        wormholeSequence = wormhole.publishMessage{
+            value : msg.value
+        }(0, encodeSaleAborted(SaleAborted({
+            payloadID : 4,
+            saleID : saleId
+        })), 15);
     }
 
     function sealSale(uint saleId) public payable returns (uint wormholeSequence) {

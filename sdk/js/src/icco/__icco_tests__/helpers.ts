@@ -34,14 +34,18 @@ import {
 } from "./consts";
 import { NodeHttpTransport } from "@improbable-eng/grpc-web-node-http-transport";
 import {
+  getSaleFromConductorOnEth,
+  getSaleFromContributorOnEth,
+} from "../getters";
+import {
   AcceptedToken,
   createSaleOnEth,
   IccoSaleInit,
-  initSaleOnEth,
   makeAcceptedToken,
   makeAcceptedWrappedTokenEth,
   parseIccoSaleInit,
 } from "../createSale";
+import { initSaleOnEth } from "../initSale";
 import { contributeOnEth, getSaleContribution } from "../contribute";
 import {
   extractVaaPayload,
@@ -49,6 +53,7 @@ import {
   getErc20Balance,
   nativeToUint8Array,
   sleepFor,
+  wrapEth,
 } from "../misc";
 import {
   IccoSaleSealed,
@@ -60,6 +65,7 @@ import {
   claimAllocationOnEth,
 } from "../claimAllocation";
 import { attestContributionsOnEth } from "../attestContributions";
+import { collectContributionsOnEth } from "../collectContribution";
 import {
   claimConductorRefundOnEth,
   claimContributorRefundOnEth,
@@ -115,6 +121,55 @@ export async function makeAcceptedTokensFromConfigs(
     );
   }
   return acceptedTokens;
+}
+
+export async function prepareBuyersForMixedContributionTest(
+  buyers: BuyerConfig[]
+): Promise<void> {
+  {
+    await Promise.all([
+      wrapEth(
+        buyers[0].wallet,
+        buyers[0].collateralAddress,
+        buyers[0].contribution
+      ),
+
+      wrapEth(
+        buyers[1].wallet,
+        buyers[1].collateralAddress,
+        buyers[1].contribution
+      ),
+    ]);
+  }
+
+  // transfer eth/bnb to other wallets
+  {
+    const ethSender = buyers[0];
+    const ethReceiver = buyers[3];
+
+    const bnbSender = buyers[1];
+    const bnbReceiver = buyers[2];
+
+    const receipts = await Promise.all([
+      transferFromEthNativeAndRedeemOnEth(
+        ethSender.wallet,
+        ethSender.chainId,
+        ethReceiver.contribution,
+        ethReceiver.wallet,
+        ethReceiver.chainId
+      ),
+
+      transferFromEthNativeAndRedeemOnEth(
+        bnbSender.wallet,
+        bnbSender.chainId,
+        bnbReceiver.contribution,
+        bnbReceiver.wallet,
+        bnbReceiver.chainId
+      ),
+    ]);
+  }
+
+  return;
 }
 
 export function parseSequencesFromEthReceipt(
@@ -362,10 +417,10 @@ export async function contributeAllTokensOnEth(
 }
 
 export async function getLatestBlockTime(
-  ContributorConfigs: ContributorConfig[]
+  configs: ContributorConfig[]
 ): Promise<number> {
   const currentBlocks = await Promise.all(
-    ContributorConfigs.map((config): Promise<ethers.providers.Block> => {
+    configs.map((config): Promise<ethers.providers.Block> => {
       return getCurrentBlock(config.wallet.provider);
     })
   );
@@ -377,6 +432,14 @@ export async function getLatestBlockTime(
     .reduce((prev, curr): number => {
       return Math.max(prev, curr);
     });
+}
+
+export async function makeSaleStartFromLastBlock(
+  configs: ContributorConfig[]
+): Promise<number> {
+  const timeOffset = 5; // seconds (arbitrarily short amount of time to delay sale)
+  const lastBlockTime = await getLatestBlockTime(configs);
+  return timeOffset + lastBlockTime;
 }
 
 export async function createSaleOnEthAndInit(
@@ -397,7 +460,7 @@ export async function createSaleOnEthAndInit(
 
   const saleEnd = saleStart + saleDuration;
 
-  const initSaleVaa = await createSaleOnEthAndGetVaa(
+  const saleInitVaa = await createSaleOnEthAndGetVaa(
     conductorConfig.wallet,
     conductorConfig.chainId,
     tokenOffered,
@@ -409,7 +472,8 @@ export async function createSaleOnEthAndInit(
   );
 
   // parse vaa for ICCOStruct
-  const initSale = await parseIccoSaleInit(initSaleVaa);
+  const saleInit = await parseIccoSaleInit(saleInitVaa);
+  console.info("saleInit", saleInit);
 
   {
     const receipts = await Promise.all(
@@ -418,14 +482,14 @@ export async function createSaleOnEthAndInit(
           return initSaleOnEth(
             ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
             config.wallet,
-            initSaleVaa
+            saleInitVaa
           );
         }
       )
     );
   }
 
-  return initSale;
+  return saleInit;
 }
 
 export async function waitForSaleToStart(
@@ -454,17 +518,60 @@ export async function waitForSaleToEnd(
   return;
 }
 
+/*
 interface IccoSaleResult {
   saleSealed: IccoSaleSealed | undefined;
   sealed: boolean;
   aborted: boolean;
+}
+*/
+
+interface SealSaleResult {
+  sealed: boolean;
+  aborted: boolean;
+  conductorChainId: ChainId;
+  bridgeSequences: string[];
+  conductorSequence: string;
+}
+
+export async function attestAndCollectContributions(
+  saleInit: IccoSaleInit,
+  conductorConfig: ContributorConfig,
+  contributorConfigs: ContributorConfig[]
+): Promise<void> {
+  const saleId = saleInit.saleId;
+
+  const signedVaas = await Promise.all(
+    contributorConfigs.map(async (config): Promise<Uint8Array> => {
+      const receipt = await attestContributionsOnEth(
+        ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
+        saleId,
+        config.wallet
+      );
+
+      return getSignedVaaFromReceiptOnEth(
+        config.chainId,
+        ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
+        receipt
+      );
+    })
+  );
+
+  {
+    const receipts = await collectContributionsOnEth(
+      ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
+      conductorConfig.wallet,
+      signedVaas
+    );
+  }
+  return;
 }
 
 export async function sealOrAbortSaleOnEth(
   conductorConfig: ContributorConfig,
   contributorConfigs: ContributorConfig[],
   saleInit: IccoSaleInit
-): Promise<IccoSaleResult> {
+): Promise<SealSaleResult> {
   const saleId = saleInit.saleId;
 
   const conductor = Conductor__factory.connect(
@@ -506,36 +613,44 @@ export async function sealOrAbortSaleOnEth(
   // we have token transfers and saleSealed vaas. first grab
   // the last vaa sent, which is the saleSealed message
   const sequences = parseSequencesFromEthReceipt(sealReceipt);
-  const completeSaleSequence = sequences.pop();
-  if (completeSaleSequence === undefined) {
-    throw Error("no sequences found in sealSale receipt");
+  const conductorSequence = sequences.pop();
+  if (conductorSequence === undefined) {
+    throw Error("no sequences found");
   }
 
-  const saleCompletionVaa = await getSignedVaaFromSequence(
-    conductorConfig.chainId,
-    getEmitterAddressEth(ETH_TOKEN_SALE_CONDUCTOR_ADDRESS),
-    completeSaleSequence
+  // what is the result?
+  const sale = await getSaleFromConductorOnEth(
+    ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
+    conductorConfig.wallet.provider,
+    saleId
   );
 
-  // redeem token transfer vaas
-  {
-    const signedVaas = await getSignedVaasFromSequences(
-      conductorConfig.chainId,
-      getEmitterAddressEth(ETH_TOKEN_BRIDGE_ADDRESS),
-      sequences
-    );
+  return {
+    sealed: sale.isSealed,
+    aborted: sale.isAborted,
+    conductorChainId: conductorConfig.chainId,
+    bridgeSequences: sequences,
+    conductorSequence: conductorSequence,
+  };
+}
 
-    const receipts = await redeemMultiChainTransfersFromConfigs(
-      contributorConfigs,
-      signedVaas
-    );
+export async function sealSaleAtContributors(
+  sealSaleResult: SealSaleResult,
+  contributorConfigs: ContributorConfig[]
+) {
+  if (!sealSaleResult.sealed) {
+    throw Error("sale was not sealed");
   }
 
-  const sale = await conductor.sales(saleId);
-  // if the sale is sealed, get ready for distribution
-  if (sale.isSealed) {
-    const saleSealed = await parseIccoSaleSealed(saleCompletionVaa);
+  const signedVaa = await getSignedVaaFromSequence(
+    sealSaleResult.conductorChainId,
+    getEmitterAddressEth(ETH_TOKEN_SALE_CONDUCTOR_ADDRESS),
+    sealSaleResult.conductorSequence
+  );
 
+  const saleSealed = await parseIccoSaleSealed(signedVaa);
+
+  {
     // set sale sealed for each contributor
     const receipts = await Promise.all(
       contributorConfigs.map(async (config) => {
@@ -543,23 +658,25 @@ export async function sealOrAbortSaleOnEth(
           ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
           config.wallet
         );
-        const tx = await contributor.saleSealed(saleCompletionVaa);
+        const tx = await contributor.saleSealed(signedVaa);
         return tx.wait();
       })
     );
-
-    return {
-      saleSealed: saleSealed,
-      sealed: true,
-      aborted: false,
-    };
   }
 
-  if (!sale.isAborted) {
-    throw Error("neither isSealed nor isAborted are set");
-  }
+  return saleSealed;
+}
 
-  // but if the sale is aborted... abort!
+export async function abortSaleAtContributors(
+  sealSaleResult: SealSaleResult,
+  contributorConfigs: ContributorConfig[]
+) {
+  const signedVaa = await getSignedVaaFromSequence(
+    sealSaleResult.conductorChainId,
+    getEmitterAddressEth(ETH_TOKEN_SALE_CONDUCTOR_ADDRESS),
+    sealSaleResult.conductorSequence
+  );
+
   {
     const receipts = await Promise.all(
       contributorConfigs.map(async (config) => {
@@ -568,24 +685,24 @@ export async function sealOrAbortSaleOnEth(
           config.wallet
         );
 
-        const tx = await contributor.saleAborted(saleCompletionVaa);
+        const tx = await contributor.saleAborted(signedVaa);
         return tx.wait();
       })
     );
   }
 
-  // claim refund for refundRecipient
-  const reeipt = await claimConductorRefundOnEth(
+  return;
+}
+
+export async function claimConductorRefund(
+  saleInit: IccoSaleInit,
+  conductorConfig: ContributorConfig
+): Promise<ethers.ContractReceipt> {
+  return claimConductorRefundOnEth(
     ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
-    saleId,
+    saleInit.saleId,
     conductorConfig.wallet
   );
-
-  return {
-    saleSealed: undefined,
-    sealed: false,
-    aborted: true,
-  };
 }
 
 export function balanceChangeReconciles(
@@ -798,10 +915,16 @@ enum BalanceChange {
   Decrease,
 }
 
-async function redeemMultiChainTransfersFromConfigs(
-  contributorConfigs: ContributorConfig[],
-  signedVaas: Uint8Array[]
+export async function redeemCrossChainAllocations(
+  saleResult: SealSaleResult,
+  contributorConfigs: ContributorConfig[]
 ): Promise<ethers.ContractReceipt[][]> {
+  const signedVaas = await getSignedVaasFromSequences(
+    saleResult.conductorChainId,
+    getEmitterAddressEth(ETH_TOKEN_BRIDGE_ADDRESS),
+    saleResult.bridgeSequences
+  );
+
   // redeem transfers before calling saleSealed
   const chainVaas = new Map<ChainId, Uint8Array[]>();
   for (const signedVaa of signedVaas) {

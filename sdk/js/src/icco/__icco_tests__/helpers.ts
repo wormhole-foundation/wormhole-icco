@@ -62,7 +62,7 @@ import {
 } from "../sealSale";
 import { saleSealedOnEth } from "../saleSealed";
 import {
-  allocationIsClaimedOnEth,
+  getAllocationIsClaimedOnEth,
   claimAllocationOnEth,
 } from "../claimAllocation";
 import { attestContributionsOnEth } from "../attestContributions";
@@ -845,7 +845,7 @@ export async function claimAllAllocationsOnEth(
         wallet
       );
 
-      return allocationIsClaimedOnEth(
+      return getAllocationIsClaimedOnEth(
         ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
         saleId,
         tokenIndex,

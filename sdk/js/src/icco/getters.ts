@@ -1,5 +1,5 @@
 import { ethers } from "ethers";
-import { Conductor__factory, Contributor__factory } from "..";
+import { ChainId, Conductor__factory, Contributor__factory } from "..";
 
 interface IccoSaleState {
   // sale init
@@ -90,4 +90,24 @@ export async function getSaleFromContributorOnEth(
     isAborted: sale.isAborted,
     allocations: sale.allocations,
   };
+}
+
+export async function getAllocationIsClaimedOnEth(
+  contributorAddress: string,
+  saleId: ethers.BigNumberish,
+  tokenIndex: number,
+  wallet: ethers.Wallet
+): Promise<boolean> {
+  const contributor = Contributor__factory.connect(contributorAddress, wallet);
+  return contributor.allocationIsClaimed(saleId, tokenIndex, wallet.address);
+}
+
+export async function getContributorContractsOnEth(
+  conductorAddress: string,
+  provider: ethers.providers.Provider,
+  chainId: ChainId
+): Promise<string> {
+  const conductor = Conductor__factory.connect(conductorAddress, provider);
+
+  return conductor.contributorContracts(chainId);
 }

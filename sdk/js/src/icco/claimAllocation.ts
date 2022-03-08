@@ -1,15 +1,8 @@
 import { ethers } from "ethers";
 import { Contributor__factory } from "..";
+import { getAllocationIsClaimedOnEth } from "./getters";
 
-export async function allocationIsClaimedOnEth(
-  contributorAddress: string,
-  saleId: ethers.BigNumberish,
-  tokenIndex: number,
-  wallet: ethers.Wallet
-): Promise<boolean> {
-  const contributor = Contributor__factory.connect(contributorAddress, wallet);
-  return contributor.allocationIsClaimed(saleId, tokenIndex, wallet.address);
-}
+export { getAllocationIsClaimedOnEth };
 
 export async function claimAllocationOnEth(
   contributorAddress: string,
@@ -19,7 +12,7 @@ export async function claimAllocationOnEth(
 ): Promise<ethers.ContractReceipt> {
   const contributor = Contributor__factory.connect(contributorAddress, wallet);
 
-  const isClaimed = await allocationIsClaimedOnEth(
+  const isClaimed = await getAllocationIsClaimedOnEth(
     contributorAddress,
     saleId,
     tokenIndex,

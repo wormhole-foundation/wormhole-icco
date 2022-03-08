@@ -4,15 +4,13 @@ import {
   ChainId,
   CHAIN_ID_BSC,
   CHAIN_ID_ETH,
-  ERC20__factory,
   getEmitterAddressEth,
-  hexToNativeString,
   nativeToHexString,
   redeemOnEth,
   setDefaultWasm,
 } from "../..";
-import { checkRegisteredContributor } from "../contributorContracts";
-import { extractVaaPayload, getErc20Balance } from "../misc";
+import { getContributorContractAsHexStringOnEth } from "../getters";
+import { extractVaaPayload } from "../signedVaa";
 import {
   BSC_NODE_URL,
   ETH_NODE_URL,
@@ -27,10 +25,9 @@ import {
   WETH_ADDRESS,
 } from "./consts";
 import {
-  BuyerConfig,
-  ContributorConfig,
+  EthBuyerConfig,
+  EthContributorConfig,
   createSaleOnEthAndInit,
-  createWrappedIfUndefined,
   waitForSaleToEnd,
   waitForSaleToStart,
   makeAcceptedTokensFromConfigs,
@@ -53,6 +50,7 @@ import {
   attestSaleToken,
   getWrappedCollateral,
   getRefundRecipientBalanceOnEth,
+  redeemOneAllocation,
 } from "./helpers";
 
 // ten minutes? nobody got time for that
@@ -69,33 +67,25 @@ describe("Integration Tests", () => {
       (async () => {
         try {
           // TODO: double-check this
-          const provider = new ethers.providers.WebSocketProvider(BSC_NODE_URL);
+          const provider = new ethers.providers.WebSocketProvider(ETH_NODE_URL);
 
           expect(
-            await checkRegisteredContributor(
+            await getContributorContractAsHexStringOnEth(
+              ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
               provider,
-              CHAIN_ID_ETH,
-              ETH_TOKEN_SALE_CONDUCTOR_ADDRESS
+              CHAIN_ID_ETH
             )
           ).toEqual(
-            "0x" +
-              nativeToHexString(
-                ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
-                CHAIN_ID_ETH
-              )
+            nativeToHexString(ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS, CHAIN_ID_ETH)
           );
           expect(
-            await checkRegisteredContributor(
+            await getContributorContractAsHexStringOnEth(
+              ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
               provider,
-              CHAIN_ID_BSC,
-              ETH_TOKEN_SALE_CONDUCTOR_ADDRESS
+              CHAIN_ID_BSC
             )
           ).toEqual(
-            "0x" +
-              nativeToHexString(
-                ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
-                CHAIN_ID_BSC
-              )
+            nativeToHexString(ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS, CHAIN_ID_BSC)
           );
 
           provider.destroy();
@@ -119,7 +109,7 @@ describe("Integration Tests", () => {
           );
 
           // seller
-          const contributorConfigs: ContributorConfig[] = [
+          const contributorConfigs: EthContributorConfig[] = [
             {
               chainId: CHAIN_ID_ETH,
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY1, ethProvider),
@@ -139,7 +129,7 @@ describe("Integration Tests", () => {
           );
 
           // pk2 := weth contributors, pk3 := wbnb contributors
-          const buyers: BuyerConfig[] = [
+          const buyers: EthBuyerConfig[] = [
             // native weth
             {
               chainId: CHAIN_ID_ETH,
@@ -187,13 +177,6 @@ describe("Integration Tests", () => {
           const tokenAmount = "1";
           const minRaise = "10"; // eth units
           const saleDuration = 60; // seconds
-
-          // we need to make sure the distribution token is attested before we consider seling it cross-chain
-          await attestSaleToken(
-            tokenAddress,
-            conductorConfig,
-            contributorConfigs
-          );
 
           // get the time
           const saleStart = await makeSaleStartFromLastBlock(
@@ -251,19 +234,37 @@ describe("Integration Tests", () => {
           // hold your horses again
           await waitForSaleToEnd(contributorConfigs, saleInit, 5);
 
+          // expect an error if anyone tries to contribute after the sale
+          {
+            // specific prep so buyers can make contributions from their respective wallets
+            console.info("prepareBuyersForMixedContributionTest");
+            await prepareBuyersForMixedContributionTest(buyers);
+
+            console.info("contributeAllTokensOnEth");
+            let expectedErrorExists = false;
+            try {
+              // buyers contribute
+              const contributionSuccessful = await contributeAllTokensOnEth(
+                saleInit,
+                buyers
+              );
+            } catch (error) {
+              const errorMsg: string = error.error.toString();
+              if (errorMsg.endsWith("sale has ended")) {
+                expectedErrorExists = true;
+              } else {
+                throw Error(error);
+              }
+            }
+            expect(expectedErrorExists).toBeTruthy();
+          }
+
           // before sealing the sale, check the balance of the distribution token
           // on the refundRecipient address. Then check again to double-check the dust
           // calculation after allocations have been sent
-          const refundRecipient =
-            hexToNativeString(
-              saleInit.refundRecipient,
-              saleInit.tokenChain as ChainId
-            ) || "";
-
-          const recipientBalanceBefore = await getErc20Balance(
-            ethProvider,
-            tokenAddress,
-            refundRecipient
+          const recipientBalanceBefore = await getRefundRecipientBalanceOnEth(
+            saleInit,
+            conductorConfig
           );
 
           // now seal the sale
@@ -274,7 +275,17 @@ describe("Integration Tests", () => {
           );
           expect(saleResult.sealed).toBeTruthy();
 
+          console.info("saleResult", saleResult);
+
+          // we need to make sure the distribution token is attested before we consider seling it cross-chain
+          await attestSaleToken(
+            tokenAddress,
+            conductorConfig,
+            contributorConfigs
+          );
+
           // should not be able to seal the sale before allocations have been send to contributors
+          console.info("expected error: sale token balance must be non-zero");
           {
             let expectedErrorExists = false;
             try {
@@ -284,6 +295,7 @@ describe("Integration Tests", () => {
                 }
               );
               const saleSealed = await sealSaleAtContributors(
+                saleInit,
                 saleResult,
                 relevantConfigs
               );
@@ -291,41 +303,29 @@ describe("Integration Tests", () => {
               const errorMsg: string = error.error.toString();
               if (errorMsg.endsWith("sale token balance must be non-zero")) {
                 expectedErrorExists = true;
+              } else {
+                throw Error(error);
               }
             }
             expect(expectedErrorExists).toBeTruthy();
           }
 
-          // redeem one and expect another error
-          console.info("saleResult", saleResult);
-
+          // redeem one and expect error: cannot seal the sale due to insufficient balance
+          console.info("expected error: insufficient sale token balance");
           {
             const sequence = saleResult.bridgeSequences.pop();
             if (sequence === undefined) {
               throw Error("bridgeSequences is empty");
             }
 
-            const signedVaa = await getSignedVaaFromSequence(
-              saleResult.conductorChainId,
-              getEmitterAddressEth(ETH_TOKEN_BRIDGE_ADDRESS),
-              sequence
-            );
-
-            const payload = await extractVaaPayload(signedVaa);
-            const chainId = Buffer.from(payload).readUInt16BE(99) as ChainId;
-
-            const config = contributorConfigs.find((config) => {
-              return config.chainId === chainId;
-            });
-            if (config === undefined) {
-              throw Error("config is undefined");
+            // redeem only one
+            {
+              const receipt = await redeemOneAllocation(
+                conductorConfig.chainId,
+                sequence,
+                contributorConfigs
+              );
             }
-
-            const receipt = await redeemOnEth(
-              ETH_TOKEN_BRIDGE_ADDRESS,
-              config.wallet,
-              signedVaa
-            );
 
             let expectedErrorExists = false;
             try {
@@ -335,20 +335,23 @@ describe("Integration Tests", () => {
                 }
               );
               const saleSealed = await sealSaleAtContributors(
+                saleInit,
                 saleResult,
                 relevantConfigs
               );
             } catch (error) {
               const errorMsg: string = error.error.toString();
-              console.info("errorMsg", errorMsg);
               if (errorMsg.endsWith("insufficient sale token balance")) {
                 expectedErrorExists = true;
+              } else {
+                throw Error(error);
               }
             }
             expect(expectedErrorExists).toBeTruthy();
           }
 
           // redeem token transfer vaas
+          console.info("redeemCrossChainAllocations");
           {
             const receipts = await redeemCrossChainAllocations(
               saleResult,
@@ -356,16 +359,17 @@ describe("Integration Tests", () => {
             );
           }
 
+          console.info("sealSaleAtContributors");
           // seal the sale at the contributors, then check balances
           const saleSealed = await sealSaleAtContributors(
+            saleInit,
             saleResult,
             contributorConfigs
           );
 
-          const recipientBalanceAfter = await getErc20Balance(
-            ethProvider,
-            tokenAddress,
-            refundRecipient
+          const recipientBalanceAfter = await getRefundRecipientBalanceOnEth(
+            saleInit,
+            conductorConfig
           );
           expect(
             recipientBalanceAfter.gte(recipientBalanceBefore)
@@ -447,7 +451,7 @@ describe("Integration Tests", () => {
           );
 
           // seller
-          const contributorConfigs: ContributorConfig[] = [
+          const contributorConfigs: EthContributorConfig[] = [
             {
               chainId: CHAIN_ID_ETH,
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY1, ethProvider),
@@ -467,7 +471,7 @@ describe("Integration Tests", () => {
           );
 
           // pk2 := weth contributors, pk3 := wbnb contributors
-          const buyers: BuyerConfig[] = [
+          const buyers: EthBuyerConfig[] = [
             // native weth
             {
               chainId: CHAIN_ID_ETH,
@@ -514,13 +518,6 @@ describe("Integration Tests", () => {
           const tokenAmount = "1";
           const minRaise = "10"; // eth units
           const saleDuration = 60; // seconds
-
-          // we need to make sure the distribution token is attested before we consider seling it cross-chain
-          await attestSaleToken(
-            tokenAddress,
-            conductorConfig,
-            contributorConfigs
-          );
 
           // get the time
           const saleStart = await makeSaleStartFromLastBlock(
@@ -644,6 +641,8 @@ describe("Integration Tests", () => {
             );
             expect(reconciled).toBeTruthy();
           }
+
+          // TODO: try to refund again. expect error when failed
 
           ethProvider.destroy();
           bscProvider.destroy();

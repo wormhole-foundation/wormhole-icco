@@ -17,6 +17,7 @@ import {
   getOriginalAssetEth,
   uint8ArrayToHex,
   hexToNativeString,
+  uint8ArrayToNative,
 } from "../..";
 import {
   AcceptedToken,
@@ -664,7 +665,37 @@ export async function sealOrAbortSaleOnEth(
   };
 }
 
+export async function getWrappedSaleTokenAddresses(
+  saleInit: SaleInit,
+  contributorConfigs: EthConductorConfig[]
+): Promise<string[]> {
+  const originChain = saleInit.tokenChain as ChainId;
+  const originAsset = hexToUint8Array(saleInit.tokenAddress);
+
+  return Promise.all(
+    contributorConfigs.map(async (config): Promise<string> => {
+      if (config.chainId === originChain) {
+        return uint8ArrayToNative(originAsset, originChain) || "";
+      }
+      const foreignAsset = await getForeignAssetEth(
+        ETH_TOKEN_BRIDGE_ADDRESS,
+        config.wallet,
+        originChain,
+        originAsset
+      );
+      if (
+        foreignAsset === null ||
+        foreignAsset === ethers.constants.AddressZero
+      ) {
+        throw Error("sale token not attested");
+      }
+      return foreignAsset;
+    })
+  );
+}
+
 export async function sealSaleAtContributors(
+  saleInit: SaleInit,
   sealSaleResult: SealSaleResult,
   contributorConfigs: EthContributorConfig[]
 ) {
@@ -679,7 +710,14 @@ export async function sealSaleAtContributors(
   );
 
   const saleSealed = await parseSaleSealed(signedVaa);
-  console.info("saleSealed", saleSealed);
+
+  // first check if the sale token has been attested
+  {
+    const addresses = await getWrappedSaleTokenAddresses(
+      saleInit,
+      contributorConfigs
+    );
+  }
 
   {
     // set sale sealed for each contributor

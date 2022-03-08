@@ -72,6 +72,8 @@ import {
   claimContributorRefundOnEth,
   refundIsClaimedOnEth,
 } from "../claimRefund";
+import { abortSaleBeforeStartOnEth} from "../abortSaleBeforeStartTime";
+import { Int } from "@terra-money/terra.js";
 
 export interface BuyerConfig {
   chainId: ChainId;
@@ -124,6 +126,21 @@ export async function makeAcceptedTokensFromConfigs(
     );
   }
   return acceptedTokens;
+}
+
+export async function prepareBuyerForEarlyAbortTest(
+  buyers: BuyerConfig[]
+): Promise<void> {
+  {
+    await Promise.all([
+      wrapEth(
+        buyers[0].wallet,
+        buyers[0].collateralAddress,
+        buyers[0].contribution
+      ),
+    ]);
+  }
+  return;
 }
 
 export async function prepareBuyersForMixedContributionTest(
@@ -1035,6 +1052,46 @@ export async function redeemCrossChainAllocations(
       }
     )
   );
+}
+
+export async function abortSaleEarlyAtConductor(
+  saleInit: IccoSaleInit,
+  conductorConfig: ContributorConfig
+): Promise<ethers.ContractReceipt> {
+    const receipt = await abortSaleBeforeStartOnEth(
+      ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
+      saleInit.saleId,
+      conductorConfig.wallet
+    );
+    return receipt;
+}
+
+export async function abortSaleEarlyAtContributors(
+  abortEarlyReceipt: ethers.ContractReceipt,
+  contributorConfigs: ContributorConfig[],
+  conductorConfig: ContributorConfig
+) {
+  const signedVaa = await getSignedVaaFromReceiptOnEth(
+    conductorConfig.chainId,
+    ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
+    abortEarlyReceipt
+  );
+
+  {
+    const receipts = await Promise.all(
+      contributorConfigs.map(async (config) => {
+        const contributor = Contributor__factory.connect(
+          ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
+          config.wallet
+        );
+
+        const tx = await contributor.saleAborted(signedVaa);
+        return tx.wait();
+      })
+    );
+  }
+
+  return;
 }
 
 describe("helpers should exist", () => {

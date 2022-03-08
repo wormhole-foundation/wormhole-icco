@@ -1,23 +1,18 @@
 import { describe, expect, jest, test } from "@jest/globals";
 import { ethers } from "ethers";
 import {
-  ChainId,
   CHAIN_ID_BSC,
   CHAIN_ID_ETH,
-  getEmitterAddressEth,
   nativeToHexString,
-  redeemOnEth,
   setDefaultWasm,
 } from "../..";
 import { getContributorContractAsHexStringOnEth } from "../getters";
-import { extractVaaPayload } from "../signedVaa";
 import {
   BSC_NODE_URL,
   ETH_NODE_URL,
   ETH_PRIVATE_KEY1,
   ETH_PRIVATE_KEY2,
   ETH_PRIVATE_KEY3,
-  ETH_TOKEN_BRIDGE_ADDRESS,
   ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
   ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
   TEST_ERC20,
@@ -46,7 +41,6 @@ import {
   abortSaleAtContributors,
   claimConductorRefund,
   redeemCrossChainAllocations,
-  getSignedVaaFromSequence,
   attestSaleToken,
   getWrappedCollateral,
   getRefundRecipientBalanceOnEth,
@@ -234,13 +228,11 @@ describe("Integration Tests", () => {
           // hold your horses again
           await waitForSaleToEnd(contributorConfigs, saleInit, 5);
 
-          // expect an error if anyone tries to contribute after the sale
+          // EXPECTED ERROR: sale has ended if anyone tries to contribute after the sale
           {
             // specific prep so buyers can make contributions from their respective wallets
-            console.info("prepareBuyersForMixedContributionTest");
             await prepareBuyersForMixedContributionTest(buyers);
 
-            console.info("contributeAllTokensOnEth");
             let expectedErrorExists = false;
             try {
               // buyers contribute
@@ -269,9 +261,9 @@ describe("Integration Tests", () => {
 
           // now seal the sale
           const saleResult = await sealOrAbortSaleOnEth(
+            saleInit,
             conductorConfig,
-            contributorConfigs,
-            saleInit
+            contributorConfigs
           );
           expect(saleResult.sealed).toBeTruthy();
 
@@ -284,7 +276,7 @@ describe("Integration Tests", () => {
             contributorConfigs
           );
 
-          // should not be able to seal the sale before allocations have been send to contributors
+          // EXPECT ERROR: should not be able to seal the sale before allocations have been send to contributors
           console.info("expected error: sale token balance must be non-zero");
           {
             let expectedErrorExists = false;
@@ -310,7 +302,7 @@ describe("Integration Tests", () => {
             expect(expectedErrorExists).toBeTruthy();
           }
 
-          // redeem one and expect error: cannot seal the sale due to insufficient balance
+          // EXPECT ERROR: redeem one transfer, but cannot seal the sale due to insufficient balance
           console.info("expected error: insufficient sale token balance");
           {
             const sequence = saleResult.bridgeSequences.pop();
@@ -585,9 +577,9 @@ describe("Integration Tests", () => {
 
           // now seal the sale
           const saleResult = await sealOrAbortSaleOnEth(
+            saleInit,
             conductorConfig,
-            contributorConfigs,
-            saleInit
+            contributorConfigs
           );
           expect(saleResult.aborted).toBeTruthy();
 

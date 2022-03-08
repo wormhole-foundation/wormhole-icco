@@ -603,35 +603,18 @@ export async function attestAndCollectContributions(
 }
 
 export async function sealOrAbortSaleOnEth(
+  saleInit: SaleInit,
   conductorConfig: EthContributorConfig,
-  contributorConfigs: EthContributorConfig[],
-  saleInit: SaleInit
+  contributorConfigs: EthContributorConfig[]
 ): Promise<SealSaleResult> {
   const saleId = saleInit.saleId;
 
   // attest contributions and use vaas to seal sale
   {
-    const signedVaas = await Promise.all(
-      contributorConfigs.map(async (config): Promise<Uint8Array> => {
-        const receipt = await attestContributionsOnEth(
-          ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
-          saleId,
-          config.wallet
-        );
-
-        return getSignedVaaFromReceiptOnEth(
-          config.chainId,
-          ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
-          receipt
-        );
-      })
-    );
-
-    // need to do serially do to nonce issues
-    await collectContributionsOnEth(
-      ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
-      conductorConfig.wallet,
-      signedVaas
+    await attestAndCollectContributions(
+      saleInit,
+      conductorConfig,
+      contributorConfigs
     );
   }
 

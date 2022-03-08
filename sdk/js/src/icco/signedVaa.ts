@@ -13,7 +13,7 @@ export async function extractVaaPayload(
   return payload;
 }
 
-export async function getSaleIdFromSaleVaa(
+export async function getSaleIdFromIccoVaa(
   signedVaa: Uint8Array
 ): Promise<ethers.BigNumberish> {
   const payload = await extractVaaPayload(signedVaa);

@@ -1,14 +1,14 @@
 import { ethers } from "ethers";
 import { Contributor__factory } from "../ethers-contracts";
 import { getSaleFromContributorOnEth } from "./getters";
-import { getSaleIdFromVaa } from "./signedVaa";
+import { getSaleIdFromIccoVaa } from "./signedVaa";
 
 export async function saleSealedOnEth(
   contributorAddress: string,
   signedVaa: Uint8Array,
   wallet: ethers.Wallet
 ): Promise<ethers.ContractReceipt> {
-  const saleId = await getSaleIdFromVaa(signedVaa);
+  const saleId = await getSaleIdFromIccoVaa(signedVaa);
 
   // save on gas by checking the state of the sale
   const sale = await getSaleFromContributorOnEth(

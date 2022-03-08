@@ -106,7 +106,7 @@ export async function getAllocationIsClaimedOnEth(
   return contributor.allocationIsClaimed(saleId, tokenIndex, walletAddress);
 }
 
-export async function getContributorContractsOnEth(
+export async function getContributorContractOnEth(
   conductorAddress: string,
   provider: ethers.providers.Provider,
   chainId: ChainId
@@ -114,4 +114,17 @@ export async function getContributorContractsOnEth(
   const conductor = Conductor__factory.connect(conductorAddress, provider);
 
   return conductor.contributorContracts(chainId);
+}
+
+export async function getContributorContractAsHexStringOnEth(
+  conductorAddress: string,
+  provider: ethers.providers.Provider,
+  chainId: ChainId
+): Promise<string> {
+  const address = await getContributorContractOnEth(
+    conductorAddress,
+    provider,
+    chainId
+  );
+  return address.slice(2);
 }

@@ -1,5 +1,6 @@
 import { ethers } from "ethers";
 import { Conductor__factory } from "..";
+import { getSaleFromConductorOnEth } from "./getters";
 import { extractVaaPayload } from "./misc";
 
 const VAA_PAYLOAD_NUM_ALLOCATIONS = 33;
@@ -60,7 +61,11 @@ export async function sealSaleOnEth(
   const conductor = Conductor__factory.connect(conductorAddress, wallet);
 
   // need to calculate allocations in order to calculate proper approvals
-  const sale = await conductor.sales(saleId);
+  const sale = await getSaleFromConductorOnEth(
+    conductorAddress,
+    wallet.provider,
+    saleId
+  );
 
   if (sale.isSealed || sale.isAborted) {
     throw Error("already sealed / aborted");

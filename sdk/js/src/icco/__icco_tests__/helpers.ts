@@ -48,6 +48,7 @@ import {
   sleepFor,
   wrapEth,
   saleAbortedOnEth,
+  getTargetChainIdFromTransferVaa,
 } from "..";
 import {
   ETH_CORE_BRIDGE_ADDRESS,
@@ -968,6 +969,28 @@ export async function getRefundRecipientBalanceOnEth(
   );
 }
 
+export async function redeemOneAllocation(
+  srcChainId: ChainId,
+  sequence: string,
+  contributorConfigs: EthContributorConfig[]
+): Promise<ethers.ContractReceipt> {
+  const signedVaa = await getSignedVaaFromSequence(
+    srcChainId,
+    getEmitterAddressEth(ETH_TOKEN_BRIDGE_ADDRESS),
+    sequence
+  );
+
+  const chainId = await getTargetChainIdFromTransferVaa(signedVaa);
+  const config = contributorConfigs.find((config) => {
+    return config.chainId === chainId;
+  });
+  if (config === undefined) {
+    throw Error("cannot find chainId in contributorConfigs");
+  }
+
+  return redeemOnEth(ETH_TOKEN_BRIDGE_ADDRESS, config.wallet, signedVaa);
+}
+
 export async function redeemCrossChainAllocations(
   saleResult: SealSaleResult,
   contributorConfigs: EthContributorConfig[]
@@ -981,14 +1004,13 @@ export async function redeemCrossChainAllocations(
   // redeem transfers before calling saleSealed
   const chainVaas = new Map<ChainId, Uint8Array[]>();
   for (const signedVaa of signedVaas) {
-    const payload = await extractVaaPayload(signedVaa);
-    const chainId = Buffer.from(payload).readUInt16BE(99) as ChainId;
+    const chainId = await getTargetChainIdFromTransferVaa(signedVaa);
 
     // verify this chainId exists in our contributor configs
-    const findIndex = contributorConfigs.findIndex((config) => {
+    const config = contributorConfigs.find((config) => {
       return config.chainId === chainId;
     });
-    if (findIndex < 0) {
+    if (config === undefined) {
       throw Error("cannot find chainId in contributorConfigs");
     }
 

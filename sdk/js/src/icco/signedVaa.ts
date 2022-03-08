@@ -1,6 +1,6 @@
 import { ethers } from "ethers";
 import { AcceptedToken, Allocation, SaleInit, SaleSealed } from "./structs";
-import { importCoreWasm, uint8ArrayToHex } from "..";
+import { ChainId, importCoreWasm, uint8ArrayToHex } from "..";
 
 const VAA_PAYLOAD_NUM_ACCEPTED_TOKENS = 195;
 const VAA_PAYLOAD_ACCEPTED_TOKEN_BYTES_LENGTH = 66;
@@ -13,11 +13,18 @@ export async function extractVaaPayload(
   return payload;
 }
 
-export async function getSaleIdFromVaa(
+export async function getSaleIdFromSaleVaa(
   signedVaa: Uint8Array
 ): Promise<ethers.BigNumberish> {
   const payload = await extractVaaPayload(signedVaa);
   return ethers.BigNumber.from(payload.slice(1, 33)).toString();
+}
+
+export async function getTargetChainIdFromTransferVaa(
+  signedVaa: Uint8Array
+): Promise<ChainId> {
+  const payload = await extractVaaPayload(signedVaa);
+  return Buffer.from(payload).readUInt16BE(99) as ChainId;
 }
 
 export async function parseSaleInit(signedVaa: Uint8Array): Promise<SaleInit> {

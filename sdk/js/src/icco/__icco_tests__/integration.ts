@@ -805,7 +805,7 @@ describe("Integration Tests", () => {
 
           // abort the sale for contributors and verify getters
           {
-              // sale info before aborting
+              // get sale info before aborting
               const conductorSaleEthBefore = await getSaleFromContributorOnEth(
                 ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
                 contributorConfigs[0].wallet.provider,
@@ -883,7 +883,7 @@ describe("Integration Tests", () => {
 
             let expectedErrorExists = false;
             try {
-              // try to contribute funds and expect a revert
+              // try to attest contributions and expect a revert
               await attestContributionsOnEth(
                 ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
                 saleInit.saleId,
@@ -903,7 +903,7 @@ describe("Integration Tests", () => {
           {
             let expectedErrorExists = false;
             try {
-              // try to seal the sale
+              // try to seal the sale and expect a revert
               await sealSaleOnEth(
                 ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
                 conductorConfig.wallet,

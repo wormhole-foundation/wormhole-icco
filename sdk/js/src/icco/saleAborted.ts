@@ -3,7 +3,7 @@ import { Contributor__factory } from "../ethers-contracts";
 import { getSaleFromContributorOnEth } from "./getters";
 import { getSaleIdFromVaa } from "./signedVaa";
 
-export async function saleSealedOnEth(
+export async function saleAbortedOnEth(
   contributorAddress: string,
   signedVaa: Uint8Array,
   wallet: ethers.Wallet
@@ -22,6 +22,6 @@ export async function saleSealedOnEth(
   }
 
   const contributor = Contributor__factory.connect(contributorAddress, wallet);
-  const tx = await contributor.saleSealed(signedVaa);
+  const tx = await contributor.saleAborted(signedVaa);
   return tx.wait();
 }

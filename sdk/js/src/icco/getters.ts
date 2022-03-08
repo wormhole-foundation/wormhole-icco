@@ -1,7 +1,8 @@
 import { ethers } from "ethers";
-import { ChainId, Conductor__factory, Contributor__factory } from "..";
+import { ChainId } from "..";
+import { Conductor__factory, Contributor__factory } from "../ethers-contracts";
 
-interface IccoSaleState {
+interface Sale {
   // sale init
   saleId: ethers.BigNumberish;
   tokenAddress: ethers.BytesLike;
@@ -21,13 +22,13 @@ interface IccoSaleState {
   isAborted: boolean;
 }
 
-interface IccoConductorSaleState extends IccoSaleState {
+interface ConductorSale extends Sale {
   contributions: ethers.BigNumberish[];
   contributionsCollected: boolean[];
   refundIsClaimed: boolean;
 }
 
-interface IccoContributorSaleState extends IccoSaleState {
+interface ContributorSale extends Sale {
   allocations: ethers.BigNumberish[];
 }
 
@@ -35,7 +36,7 @@ export async function getSaleFromConductorOnEth(
   conductorAddress: string,
   provider: ethers.providers.Provider,
   saleId: ethers.BigNumberish
-): Promise<IccoConductorSaleState> {
+): Promise<ConductorSale> {
   const conductor = Conductor__factory.connect(conductorAddress, provider);
 
   const sale = await conductor.sales(saleId);
@@ -65,7 +66,7 @@ export async function getSaleFromContributorOnEth(
   contributorAddress: string,
   provider: ethers.providers.Provider,
   saleId: ethers.BigNumberish
-): Promise<IccoContributorSaleState> {
+): Promise<ContributorSale> {
   const contributor = Contributor__factory.connect(
     contributorAddress,
     provider

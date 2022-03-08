@@ -1,5 +1,5 @@
 import { ethers } from "ethers";
-import { Conductor__factory } from "..";
+import { Conductor__factory } from "../ethers-contracts";
 
 export async function collectContributionOnEth(
   conductorAddress: string,

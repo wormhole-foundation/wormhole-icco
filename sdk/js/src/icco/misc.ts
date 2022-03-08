@@ -40,14 +40,6 @@ export async function sleepFor(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function extractVaaPayload(
-  signedVaa: Uint8Array
-): Promise<Uint8Array> {
-  const { parse_vaa } = await importCoreWasm();
-  const { payload: payload } = parse_vaa(signedVaa);
-  return payload;
-}
-
 export async function getErc20Balance(
   provider: ethers.providers.Provider,
   tokenAddress: string,

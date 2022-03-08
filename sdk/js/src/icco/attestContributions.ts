@@ -1,5 +1,5 @@
 import { ethers } from "ethers";
-import { Contributor__factory } from "..";
+import { Contributor__factory } from "../ethers-contracts";
 
 export async function attestContributionsOnEth(
   contributorAddress: string,

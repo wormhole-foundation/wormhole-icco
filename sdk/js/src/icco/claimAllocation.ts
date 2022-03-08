@@ -1,5 +1,5 @@
 import { ethers } from "ethers";
-import { Contributor__factory } from "..";
+import { Contributor__factory } from "../ethers-contracts";
 import { getAllocationIsClaimedOnEth } from "./getters";
 
 export { getAllocationIsClaimedOnEth };

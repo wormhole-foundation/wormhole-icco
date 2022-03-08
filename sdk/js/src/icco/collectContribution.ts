@@ -3,10 +3,10 @@ import { Conductor__factory } from "..";
 
 export async function collectContributionOnEth(
   conductorAddress: string,
-  signer: ethers.Signer,
+  wallet: ethers.Wallet,
   signedVaa: Uint8Array
 ): Promise<ethers.ContractReceipt> {
-  const conductor = Conductor__factory.connect(conductorAddress, signer);
+  const conductor = Conductor__factory.connect(conductorAddress, wallet);
 
   const tx = await conductor.collectContribution(signedVaa);
   return tx.wait();
@@ -14,14 +14,14 @@ export async function collectContributionOnEth(
 
 export async function collectContributionsOnEth(
   conductorAddress: string,
-  signer: ethers.Signer,
+  wallet: ethers.Wallet,
   signedVaas: Uint8Array[]
 ): Promise<ethers.ContractReceipt[]> {
   const receipts: ethers.ContractReceipt[] = [];
   for (const signedVaa of signedVaas) {
     const receipt = await collectContributionOnEth(
       conductorAddress,
-      signer,
+      wallet,
       signedVaa
     );
     receipts.push(receipt);

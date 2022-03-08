@@ -19,11 +19,11 @@ export function nativeToUint8Array(
 }
 
 export async function wrapEth(
-  signer: ethers.Wallet,
+  wallet: ethers.Wallet,
   wethAddress: string,
   amount: string
 ): Promise<void> {
-  const weth = IWETH__factory.connect(wethAddress, signer);
+  const weth = IWETH__factory.connect(wethAddress, wallet);
   await weth.deposit({
     value: parseUnits(amount),
   });

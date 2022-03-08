@@ -14,9 +14,10 @@ export async function claimAllocationOnEth(
 
   const isClaimed = await getAllocationIsClaimedOnEth(
     contributorAddress,
+    wallet.provider,
     saleId,
     tokenIndex,
-    wallet
+    wallet.address
   );
   if (isClaimed) {
     throw Error("allocation already claimed");

@@ -94,12 +94,16 @@ export async function getSaleFromContributorOnEth(
 
 export async function getAllocationIsClaimedOnEth(
   contributorAddress: string,
+  provider: ethers.providers.Provider,
   saleId: ethers.BigNumberish,
   tokenIndex: number,
-  wallet: ethers.Wallet
+  walletAddress: string
 ): Promise<boolean> {
-  const contributor = Contributor__factory.connect(contributorAddress, wallet);
-  return contributor.allocationIsClaimed(saleId, tokenIndex, wallet.address);
+  const contributor = Contributor__factory.connect(
+    contributorAddress,
+    provider
+  );
+  return contributor.allocationIsClaimed(saleId, tokenIndex, walletAddress);
 }
 
 export async function getContributorContractsOnEth(

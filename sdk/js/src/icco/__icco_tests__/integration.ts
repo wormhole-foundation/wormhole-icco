@@ -803,7 +803,7 @@ describe("Integration Tests", () => {
             );
 
             // wait until sale starts to contribute
-            await waitForSaleToStart(contributorConfigs, saleInit, 0);
+            await waitForSaleToStart(contributorConfigs, saleInit, 2);
 
             // submit one buyer's contribution before
             const contributionSuccessful = await contributeAllTokensOnEth(

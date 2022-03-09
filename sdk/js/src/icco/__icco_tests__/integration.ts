@@ -210,7 +210,6 @@ describe("Integration Tests", () => {
             contributorConfigs
           );
 
-          console.info("createSaleOnEthAndInit");
           const saleInit = await createSaleOnEthAndInit(
             conductorConfig,
             contributorConfigs,
@@ -232,7 +231,6 @@ describe("Integration Tests", () => {
             await waitForSaleToStart(contributorConfigs, saleInit, 5);
 
             // finally buyers contribute
-            console.info("contributeAllTokensOnEth");
             const contributionSuccessful = await contributeAllTokensOnEth(
               saleInit,
               buyers
@@ -263,10 +261,6 @@ describe("Integration Tests", () => {
 
           // hold your horses again
           await waitForSaleToEnd(contributorConfigs, saleInit, 5);
-
-          console.info(
-            "EXPECTED ERROR: sale has ended if anyone tries to contribute after the sale"
-          );
 
           // EXPECTED ERROR: sale has ended if anyone tries to contribute after the sale
           {
@@ -308,7 +302,6 @@ describe("Integration Tests", () => {
           );
 
           // now seal the sale
-          console.info("sealOrAbortSaleOnEth");
           const saleResult = await sealOrAbortSaleOnEth(
             saleInit,
             conductorConfig,
@@ -316,7 +309,7 @@ describe("Integration Tests", () => {
           );
           expect(saleResult.sale.isSealed).toBeTruthy();
 
-          console.info("saleResult", saleResult);
+          //console.info("saleResult", saleResult);
 
           // we need to make sure the distribution token is attested before we consider seling it cross-chain
           await attestSaleToken(
@@ -326,7 +319,6 @@ describe("Integration Tests", () => {
           );
 
           // EXPECT ERROR: should not be able to seal the sale before allocations have been send to contributors
-          console.info("expected error: sale token balance must be non-zero");
           {
             let expectedErrorExists = false;
             try {
@@ -352,7 +344,6 @@ describe("Integration Tests", () => {
           }
 
           // EXPECT ERROR: redeem one transfer, but cannot seal the sale due to insufficient balance
-          console.info("expected error: insufficient sale token balance");
           {
             const signedVaas = saleResult.transferVaas.get(
               contributorConfigs[1].chainId
@@ -399,7 +390,6 @@ describe("Integration Tests", () => {
           }
 
           // redeem token transfer vaas
-          console.info("redeemCrossChainAllocations");
           {
             const receipts = await redeemCrossChainAllocations(
               saleResult,
@@ -407,7 +397,6 @@ describe("Integration Tests", () => {
             );
           }
 
-          console.info("sealSaleAtContributors");
           // seal the sale at the contributors, then check balances
           const saleSealed = await sealSaleAtContributors(
             saleInit,
@@ -468,7 +457,7 @@ describe("Integration Tests", () => {
               });
             expect(allGreaterThan).toBeTruthy();
 
-            const allocationsReconciled = allocationsReconcile(
+            const allocationsReconciled = await allocationsReconcile(
               saleInit,
               buyers,
               buyerBalancesBefore,
@@ -839,7 +828,7 @@ describe("Integration Tests", () => {
           );
 
           // abort the sale in the conductor and verify getters
-          let abortEarlyReceipt: ethers.ContractReceipt = undefined;
+          let abortEarlyReceipt: ethers.ContractReceipt | undefined = undefined;
           {
             // sale info before aborting
             const conductorSaleBefore = await getSaleFromConductorOnEth(
@@ -847,7 +836,7 @@ describe("Integration Tests", () => {
               conductorConfig.wallet.provider,
               saleInit.saleId
             );
-            expect(!conductorSaleBefore.isAborted).toBeTruthy();
+            expect(conductorSaleBefore.isAborted).toBeFalsy();
 
             // abort the sale early in the conductor
             abortEarlyReceipt = await abortSaleEarlyAtConductor(
@@ -902,13 +891,14 @@ describe("Integration Tests", () => {
               contributorConfigs[0].wallet.provider,
               saleInit.saleId
             );
+            expect(conductorSaleEthBefore.isAborted).toBeFalsy();
+
             const conductorSaleBscBefore = await getSaleFromContributorOnEth(
               ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
               contributorConfigs[1].wallet.provider,
               saleInit.saleId
             );
-            expect(!conductorSaleEthBefore.isAborted).toBeTruthy();
-            expect(!conductorSaleBscBefore.isAborted).toBeTruthy();
+            expect(conductorSaleBscBefore.isAborted).toBeFalsy();
 
             // abort the sale for all contributors
             await abortSaleEarlyAtContributors(
@@ -923,12 +913,13 @@ describe("Integration Tests", () => {
               contributorConfigs[0].wallet.provider,
               saleInit.saleId
             );
+            expect(conductorSaleEthAfter.isAborted).toBeTruthy();
+
             const conductorSaleBscAfter = await getSaleFromContributorOnEth(
               ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
               contributorConfigs[1].wallet.provider,
               saleInit.saleId
             );
-            expect(conductorSaleEthAfter.isAborted).toBeTruthy();
             expect(conductorSaleBscAfter.isAborted).toBeTruthy();
           }
 
@@ -944,7 +935,6 @@ describe("Integration Tests", () => {
               await contributeAllTokensOnEth(saleInit, buyers);
             } catch (error) {
               const errorMsg: string = error.error.toString();
-              console.info("errorMsg", errorMsg);
               if (errorMsg.endsWith("sale was aborted")) {
                 expectedErrorExists = true;
               }
@@ -973,7 +963,6 @@ describe("Integration Tests", () => {
               );
             } catch (error) {
               const errorMsg: string = error.error.toString();
-              console.info("errorMsg", errorMsg);
               if (errorMsg.endsWith("sale was aborted")) {
                 expectedErrorExists = true;
               }
@@ -993,7 +982,6 @@ describe("Integration Tests", () => {
               );
             } catch (error) {
               const errorMsg: string = error.toString();
-              console.info("errorMsg", errorMsg);
               if (errorMsg.endsWith("already sealed / aborted")) {
                 expectedErrorExists = true;
               }

@@ -485,7 +485,6 @@ export async function createSaleOnEthAndInit(
 
   const saleEnd = saleStart + saleDuration;
 
-  console.info("createSaleOnEthAndGetVaa");
   const saleInitVaa = await createSaleOnEthAndGetVaa(
     conductorConfig.wallet,
     conductorConfig.chainId,
@@ -497,11 +496,9 @@ export async function createSaleOnEthAndInit(
     acceptedTokens
   );
 
-  // parse vaa for ICCOStruct
   const saleInit = await parseSaleInit(saleInitVaa);
-  console.info("saleInit", saleInit);
+  // console.info("saleInit", saleInit);
 
-  console.info("initSaleOnEth");
   {
     const receipts = await Promise.all(
       contributorConfigs.map(
@@ -873,7 +870,6 @@ export async function allocationsReconcile(
   after: ethers.BigNumberish[]
 ): Promise<boolean> {
   const expected = await getAllAlocations(saleInit, buyers);
-  console.info("expected", expected);
 
   return buyers
     .map((config, index): boolean => {

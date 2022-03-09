@@ -720,12 +720,12 @@ describe("Integration Tests", () => {
 
           // one buyer
           const buyers: EthBuyerConfig[] = [
-            // native weth
+            // native wbnb
             {
-              chainId: CHAIN_ID_ETH,
-              wallet: new ethers.Wallet(ETH_PRIVATE_KEY2, ethProvider),
-              collateralAddress: WETH_ADDRESS,
-              contribution: "6",
+              chainId: CHAIN_ID_BSC,
+              wallet: new ethers.Wallet(ETH_PRIVATE_KEY3, bscProvider),
+              collateralAddress: WBNB_ADDRESS,
+              contribution: "20",
             },
           ];
 

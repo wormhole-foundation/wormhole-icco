@@ -754,8 +754,6 @@ contract("ICCO", function (accounts) {
 
         assert.ok(saleAfter.isSealed);
     })
-
-    // TODO: test the allocation revert
     
     it('contributor should seal a sale correctly', async function () {
         // test variables
@@ -1470,7 +1468,7 @@ contract("ICCO", function (accounts) {
         assert.ok(buyerTwoHasClaimedRefundAfter);
     })
     
-    it('refund should only be claimable once', async function () {
+    it('refund should only be claimable once in contributor', async function () {
         const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
 
         await revert(ONE_REFUND_SNAPSHOT)
@@ -1483,6 +1481,24 @@ contract("ICCO", function (accounts) {
             })
         } catch(e) {
             assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert refund already claimed")
+            failed = true
+        }
+
+        assert.ok(failed)
+    })
+
+     it('refund should only be claimable once in conductor', async function () {
+        const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+
+        let failed = false
+        try {
+            // claim the sale token refund
+            await initialized.methods.claimRefund(SALE_2_ID).send({
+                from : SELLER,
+                gasLimit : GAS_LIMIT
+            });
+        } catch(e) {
+            assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert already claimed")
             failed = true
         }
 

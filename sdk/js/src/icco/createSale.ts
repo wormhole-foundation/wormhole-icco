@@ -1,11 +1,6 @@
 import { ethers } from "ethers";
-import {
-  ChainId,
-  Conductor__factory,
-  ERC20,
-  ERC20__factory,
-  getForeignAssetEth,
-} from "..";
+import { Conductor__factory, ERC20__factory } from "../ethers-contracts";
+import { ChainId, getForeignAssetEth } from "..";
 import { nativeToUint8Array } from "./misc";
 import { AcceptedToken, SaleInit, makeAcceptedToken } from "./structs";
 

@@ -1,9 +1,14 @@
 import { ethers } from "ethers";
-import { Conductor__factory } from "..";
+import { ConductorSale, getTargetChainIdFromTransferVaa } from ".";
+import {
+  ChainId,
+  Conductor__factory,
+  getEmitterAddressEth,
+  getSignedVAA,
+  getSignedVAAWithRetry,
+  parseSequencesFromLogEth,
+} from "..";
 import { getSaleFromConductorOnEth } from "./getters";
-import { Allocation, SaleSealed } from "./structs";
-
-export { Allocation, SaleSealed };
 
 export async function sealSaleOnEth(
   conductorAddress: string,
@@ -24,6 +29,73 @@ export async function sealSaleOnEth(
   }
 
   // and seal
-  const sealTx = await conductor.sealSale(saleId);
-  return sealTx.wait();
+  const tx = await conductor.sealSale(saleId);
+  return tx.wait();
+}
+
+export interface SealSaleResult {
+  sale: ConductorSale;
+  transferVaas: Map<ChainId, Uint8Array[]>;
+  sealSaleVaa: Uint8Array;
+}
+
+export async function sealSaleAndParseReceiptOnEth(
+  conductorAddress: string,
+  wallet: ethers.Wallet,
+  saleId: ethers.BigNumberish,
+  coreBridgeAddress: string,
+  tokenBridgeAddress: string,
+  wormholeHosts: string[],
+  extraGrpcOpts: any = {}
+): Promise<SealSaleResult> {
+  const receipt = await sealSaleOnEth(conductorAddress, wallet, saleId);
+
+  const sale = await getSaleFromConductorOnEth(
+    conductorAddress,
+    wallet.provider,
+    saleId
+  );
+  const emitterChain = sale.tokenChain as ChainId;
+
+  const sequences = parseSequencesFromLogEth(receipt, coreBridgeAddress);
+  const sealSaleSequence = sequences.pop();
+  if (sealSaleSequence === undefined) {
+    throw Error("no vaa sequences found");
+  }
+
+  const result = await getSignedVAAWithRetry(
+    wormholeHosts,
+    emitterChain,
+    getEmitterAddressEth(conductorAddress),
+    sealSaleSequence,
+    extraGrpcOpts
+  );
+  const sealSaleVaa = result.vaaBytes;
+
+  // doing it serially for ease of putting into the map
+  const mapped = new Map<ChainId, Uint8Array[]>();
+  for (const sequence of sequences) {
+    const result = await getSignedVAAWithRetry(
+      wormholeHosts,
+      emitterChain,
+      getEmitterAddressEth(tokenBridgeAddress),
+      sequence,
+      extraGrpcOpts
+    );
+    const signedVaa = result.vaaBytes;
+    const chainId = await getTargetChainIdFromTransferVaa(signedVaa);
+
+    const signedVaas = mapped.get(chainId);
+    if (signedVaas === undefined) {
+      mapped.set(chainId, [signedVaa]);
+    } else {
+      signedVaas.push(signedVaa);
+    }
+  }
+
+  return {
+    sale: sale,
+    transferVaas: mapped,
+    sealSaleVaa: sealSaleVaa,
+  };
 }

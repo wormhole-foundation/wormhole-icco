@@ -1,36 +1,7 @@
 import { ethers } from "ethers";
 import { ChainId } from "..";
 import { Conductor__factory, Contributor__factory } from "../ethers-contracts";
-
-interface Sale {
-  // sale init
-  saleId: ethers.BigNumberish;
-  tokenAddress: ethers.BytesLike;
-  tokenChain: number;
-  tokenAmount: ethers.BigNumberish;
-  minRaise: ethers.BigNumberish;
-  saleStart: ethers.BigNumberish;
-  saleEnd: ethers.BigNumberish;
-  recipient: ethers.BytesLike;
-  refundRecipient: ethers.BytesLike;
-  // accepted tokens
-  acceptedTokenChains: number[];
-  acceptedTokensAddresses: ethers.BytesLike[];
-  acceptedTokensConversionRates: ethers.BigNumberish[];
-  // state
-  isSealed: boolean;
-  isAborted: boolean;
-}
-
-interface ConductorSale extends Sale {
-  contributions: ethers.BigNumberish[];
-  contributionsCollected: boolean[];
-  refundIsClaimed: boolean;
-}
-
-interface ContributorSale extends Sale {
-  allocations: ethers.BigNumberish[];
-}
+import { ConductorSale, ContributorSale } from "./structs";
 
 export async function getSaleFromConductorOnEth(
   conductorAddress: string,
@@ -128,4 +99,18 @@ export async function getContributorContractAsHexStringOnEth(
     chainId
   );
   return address.slice(2);
+}
+
+export async function getRefundIsClaimedOnEth(
+  contributorAddress: string,
+  provider: ethers.providers.Provider,
+  saleId: ethers.BigNumberish,
+  tokenIndex: number,
+  walletAddress: string
+): Promise<boolean> {
+  const contributor = Contributor__factory.connect(
+    contributorAddress,
+    provider
+  );
+  return contributor.refundIsClaimed(saleId, tokenIndex, walletAddress);
 }

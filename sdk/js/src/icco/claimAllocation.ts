@@ -2,8 +2,6 @@ import { ethers } from "ethers";
 import { Contributor__factory } from "../ethers-contracts";
 import { getAllocationIsClaimedOnEth } from "./getters";
 
-export { getAllocationIsClaimedOnEth };
-
 export async function claimAllocationOnEth(
   contributorAddress: string,
   saleId: ethers.BigNumberish,

@@ -2,6 +2,36 @@ import { ethers } from "ethers";
 import { ChainId } from "..";
 import { nativeToUint8Array } from "./misc";
 
+export interface Sale {
+  // sale init
+  saleId: ethers.BigNumberish;
+  tokenAddress: ethers.BytesLike;
+  tokenChain: number;
+  tokenAmount: ethers.BigNumberish;
+  minRaise: ethers.BigNumberish;
+  saleStart: ethers.BigNumberish;
+  saleEnd: ethers.BigNumberish;
+  recipient: ethers.BytesLike;
+  refundRecipient: ethers.BytesLike;
+  // accepted tokens
+  acceptedTokenChains: number[];
+  acceptedTokensAddresses: ethers.BytesLike[];
+  acceptedTokensConversionRates: ethers.BigNumberish[];
+  // state
+  isSealed: boolean;
+  isAborted: boolean;
+}
+
+export interface ConductorSale extends Sale {
+  contributions: ethers.BigNumberish[];
+  contributionsCollected: boolean[];
+  refundIsClaimed: boolean;
+}
+
+export interface ContributorSale extends Sale {
+  allocations: ethers.BigNumberish[];
+}
+
 export interface AcceptedToken {
   tokenAddress: ethers.BytesLike;
   tokenChain: ethers.BigNumberish;

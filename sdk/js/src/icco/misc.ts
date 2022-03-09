@@ -1,15 +1,6 @@
 import { ethers } from "ethers";
-import { parseUnits } from "ethers/lib/utils";
-import {
-  ChainId,
-  IWETH__factory,
-  hexToNativeString,
-  hexToUint8Array,
-  importCoreWasm,
-  nativeToHexString,
-  uint8ArrayToHex,
-  ERC20__factory,
-} from "..";
+import { IWETH__factory, ERC20__factory } from "../ethers-contracts";
+import { ChainId, hexToUint8Array, nativeToHexString } from "..";
 
 export function nativeToUint8Array(
   address: string,
@@ -25,7 +16,7 @@ export async function wrapEth(
 ): Promise<void> {
   const weth = IWETH__factory.connect(wethAddress, wallet);
   await weth.deposit({
-    value: parseUnits(amount),
+    value: ethers.utils.parseUnits(amount),
   });
 }
 

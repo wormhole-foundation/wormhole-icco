@@ -1,6 +1,5 @@
 import { describe, expect, jest, test } from "@jest/globals";
 import { ethers } from "ethers";
-import { formatUnits, parseUnits } from "ethers/lib/utils";
 import {
   CHAIN_ID_BSC,
   CHAIN_ID_ETH,
@@ -15,6 +14,8 @@ import {
   ETH_PRIVATE_KEY1,
   ETH_PRIVATE_KEY2,
   ETH_PRIVATE_KEY3,
+  ETH_PRIVATE_KEY4,
+  ETH_PRIVATE_KEY5,
   ETH_TOKEN_BRIDGE_ADDRESS,
   ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
   ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
@@ -48,7 +49,6 @@ import {
   attestSaleToken,
   getWrappedCollateral,
   getRefundRecipientBalanceOnEth,
-  prepareBuyerForEarlyAbortTest,
   abortSaleEarlyAtContributors,
   abortSaleEarlyAtConductor,
 } from "./helpers";
@@ -157,7 +157,6 @@ describe("Integration Tests", () => {
               collateralAddress: wormholeWrapped.wbnbOnEth,
               contribution: "3",
             },
-
             // wormhole wrapped weth
             {
               chainId: CHAIN_ID_BSC,
@@ -165,10 +164,32 @@ describe("Integration Tests", () => {
               collateralAddress: wormholeWrapped.wethOnBsc,
               contribution: "5",
             },
+            // and another native wbnb contribution
+            {
+              chainId: CHAIN_ID_BSC,
+              wallet: new ethers.Wallet(ETH_PRIVATE_KEY4, bscProvider),
+              collateralAddress: WBNB_ADDRESS,
+              contribution: "6",
+            },
+            // and ANOTHER native wbnb contribution
+            {
+              chainId: CHAIN_ID_BSC,
+              wallet: new ethers.Wallet(ETH_PRIVATE_KEY5, bscProvider),
+              collateralAddress: WBNB_ADDRESS,
+              contribution: "9",
+            },
           ];
 
           // specific prep so buyers can make contributions from their respective wallets
-          await prepareBuyersForMixedContributionTest(buyers);
+          const wrapIndices = [0, 1, 4, 5];
+          const transferFromIndices = [0, 1];
+          const transferToIndices = [3, 2];
+          await prepareBuyersForMixedContributionTest(
+            buyers,
+            wrapIndices,
+            transferFromIndices,
+            transferToIndices
+          );
 
           // we need to set up all of the accepted tokens (natives plus their wrapped versions)
           const acceptedTokens = await makeAcceptedTokensFromConfigs(
@@ -189,6 +210,7 @@ describe("Integration Tests", () => {
             contributorConfigs
           );
 
+          console.info("createSaleOnEthAndInit");
           const saleInit = await createSaleOnEthAndInit(
             conductorConfig,
             contributorConfigs,
@@ -210,6 +232,7 @@ describe("Integration Tests", () => {
             await waitForSaleToStart(contributorConfigs, saleInit, 5);
 
             // finally buyers contribute
+            console.info("contributeAllTokensOnEth");
             const contributionSuccessful = await contributeAllTokensOnEth(
               saleInit,
               buyers
@@ -230,6 +253,7 @@ describe("Integration Tests", () => {
 
             // we expect that balances before minus balances after equals the contributions
             const reconciled = await contributionsReconcile(
+              saleInit,
               buyers,
               buyerBalancesBefore,
               buyerBalancesAfter
@@ -240,10 +264,22 @@ describe("Integration Tests", () => {
           // hold your horses again
           await waitForSaleToEnd(contributorConfigs, saleInit, 5);
 
+          console.info(
+            "EXPECTED ERROR: sale has ended if anyone tries to contribute after the sale"
+          );
+
           // EXPECTED ERROR: sale has ended if anyone tries to contribute after the sale
           {
             // specific prep so buyers can make contributions from their respective wallets
-            await prepareBuyersForMixedContributionTest(buyers);
+            const wrapIndices = [0, 1, 4, 5];
+            const transferFromIndices = [0, 1];
+            const transferToIndices = [3, 2];
+            await prepareBuyersForMixedContributionTest(
+              buyers,
+              wrapIndices,
+              transferFromIndices,
+              transferToIndices
+            );
 
             let expectedErrorExists = false;
             try {
@@ -412,8 +448,8 @@ describe("Integration Tests", () => {
             );
 
             const claimsSuccessful = await claimAllAllocationsOnEth(
-              buyers,
-              saleSealed
+              saleSealed,
+              buyers
             );
             expect(claimsSuccessful).toBeTruthy();
 
@@ -433,7 +469,8 @@ describe("Integration Tests", () => {
             expect(allGreaterThan).toBeTruthy();
 
             const allocationsReconciled = allocationsReconcile(
-              saleSealed,
+              saleInit,
+              buyers,
               buyerBalancesBefore,
               buyerBalancesAfter
             );
@@ -496,7 +533,7 @@ describe("Integration Tests", () => {
               chainId: CHAIN_ID_BSC,
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY3, bscProvider),
               collateralAddress: WBNB_ADDRESS,
-              contribution: "15",
+              contribution: "10",
             },
             // wormhole wrapped bnb
             {
@@ -512,10 +549,32 @@ describe("Integration Tests", () => {
               collateralAddress: wormholeWrapped.wethOnBsc,
               contribution: "2.99999999",
             },
+            // and another native wbnb contribution
+            {
+              chainId: CHAIN_ID_BSC,
+              wallet: new ethers.Wallet(ETH_PRIVATE_KEY4, bscProvider),
+              collateralAddress: WBNB_ADDRESS,
+              contribution: "3",
+            },
+            // and ANOTHER native wbnb contribution
+            {
+              chainId: CHAIN_ID_BSC,
+              wallet: new ethers.Wallet(ETH_PRIVATE_KEY5, bscProvider),
+              collateralAddress: WBNB_ADDRESS,
+              contribution: "2",
+            },
           ];
 
           // specific prep so buyers can make contributions from their respective wallets
-          await prepareBuyersForMixedContributionTest(buyers);
+          const wrapIndices = [0, 1, 4, 5];
+          const transferFromIndices = [0, 1];
+          const transferToIndices = [3, 2];
+          await prepareBuyersForMixedContributionTest(
+            buyers,
+            wrapIndices,
+            transferFromIndices,
+            transferToIndices
+          );
 
           // we need to set up all of the accepted tokens (natives plus their wrapped versions)
           const acceptedTokens = await makeAcceptedTokensFromConfigs(
@@ -577,6 +636,7 @@ describe("Integration Tests", () => {
 
             // we expect that balances before minus balances after equals the contributions
             const reconciled = await contributionsReconcile(
+              saleInit,
               buyers,
               buyerBalancesBefore,
               buyerBalancesAfter
@@ -673,6 +733,7 @@ describe("Integration Tests", () => {
 
           // we expect that balances after minus balances before equals the contributions
           const reconciled = await refundsReconcile(
+            saleInit,
             buyers,
             buyerBalancesBefore,
             buyerBalancesAfter
@@ -730,7 +791,15 @@ describe("Integration Tests", () => {
           ];
 
           // specific prep so buyers can make contributions from their respective wallets
-          await prepareBuyerForEarlyAbortTest(buyers);
+          const wrapIndices = [0];
+          const transferFromIndices = undefined; // no transfers
+          const transferToIndices = undefined; // no transfers
+          await prepareBuyersForMixedContributionTest(
+            buyers,
+            wrapIndices,
+            transferFromIndices,
+            transferToIndices
+          );
 
           // we need to set up all of the accepted tokens
           const acceptedTokens = await makeAcceptedTokensFromConfigs(
@@ -764,13 +833,13 @@ describe("Integration Tests", () => {
             tokenAddress,
             tokenAmount,
             minRaise,
-            saleStart + 20,
+            saleStart + 20, // 20 second duration
             saleDuration,
             acceptedTokens
           );
 
           // abort the sale in the conductor and verify getters
-          let abortEarlyReceipt;
+          let abortEarlyReceipt: ethers.ContractReceipt = undefined;
           {
             // sale info before aborting
             const conductorSaleBefore = await getSaleFromConductorOnEth(
@@ -817,6 +886,7 @@ describe("Integration Tests", () => {
 
             // we expect that balances before minus balances after equals the contributions
             const reconciled = await contributionsReconcile(
+              saleInit,
               buyers,
               buyerBalancesBefore,
               buyerBalancesAfter
@@ -984,6 +1054,7 @@ describe("Integration Tests", () => {
 
             // we expect that balances after minus balances before equals the contributions
             const reconciled = await refundsReconcile(
+              saleInit,
               buyers,
               buyerBalancesBefore,
               buyerBalancesAfter

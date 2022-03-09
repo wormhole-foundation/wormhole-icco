@@ -38,13 +38,3 @@ export async function contributeOnEth(
   const tx = await contributor.contribute(saleId, tokenIndex, amount);
   return tx.wait();
 }
-
-export async function getSaleContribution(
-  contributorAddress: string,
-  saleId: ethers.BigNumberish,
-  tokenIndex: number,
-  wallet: ethers.Wallet
-): Promise<ethers.BigNumber> {
-  const contributor = Contributor__factory.connect(contributorAddress, wallet);
-  return contributor.getSaleContribution(saleId, tokenIndex, wallet.address);
-}

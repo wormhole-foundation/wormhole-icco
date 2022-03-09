@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import { ethers } from "ethers";
 import { NodeHttpTransport } from "@improbable-eng/grpc-web-node-http-transport";
-import { ERC20__factory } from "../../ethers-contracts";
+import { Contributor__factory, ERC20__factory } from "../../ethers-contracts";
 import {
   ChainId,
   hexToUint8Array,
@@ -23,6 +23,7 @@ import {
   AcceptedToken,
   SaleInit,
   SaleSealed,
+  abortSaleBeforeStartOnEth,
   attestContributionsOnEth,
   initSaleOnEth,
   claimAllocationOnEth,
@@ -118,6 +119,21 @@ export async function makeAcceptedTokensFromConfigs(
     );
   }
   return acceptedTokens;
+}
+
+export async function prepareBuyerForEarlyAbortTest(
+  buyers: EthBuyerConfig[]
+): Promise<void> {
+  {
+    await Promise.all([
+      wrapEth(
+        buyers[0].wallet,
+        buyers[0].collateralAddress,
+        buyers[0].contribution
+      ),
+    ]);
+  }
+  return;
 }
 
 export async function prepareBuyersForMixedContributionTest(
@@ -1061,6 +1077,46 @@ export async function redeemCrossChainAllocations(
       }
     )
   );
+}
+
+export async function abortSaleEarlyAtConductor(
+  saleInit: SaleInit,
+  conductorConfig: EthContributorConfig
+): Promise<ethers.ContractReceipt> {
+  const receipt = await abortSaleBeforeStartOnEth(
+    ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
+    saleInit.saleId,
+    conductorConfig.wallet
+  );
+  return receipt;
+}
+
+export async function abortSaleEarlyAtContributors(
+  abortEarlyReceipt: ethers.ContractReceipt,
+  contributorConfigs: EthContributorConfig[],
+  conductorConfig: EthContributorConfig
+) {
+  const signedVaa = await getSignedVaaFromReceiptOnEth(
+    conductorConfig.chainId,
+    ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
+    abortEarlyReceipt
+  );
+
+  {
+    const receipts = await Promise.all(
+      contributorConfigs.map(async (config) => {
+        const contributor = Contributor__factory.connect(
+          ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
+          config.wallet
+        );
+
+        const tx = await contributor.saleAborted(signedVaa);
+        return tx.wait();
+      })
+    );
+  }
+
+  return;
 }
 
 describe("helpers should exist", () => {

@@ -295,8 +295,10 @@ contract("ICCO", function (accounts) {
 
     it('create a sale correctly and attest over wormhole', async function () {
         // test variables
-        SALE_START = Math.floor(Date.now() / 1000) + 5;
+        const current_block = await web3.eth.getBlock('latest');
+        SALE_START = current_block.timestamp + 5;
         SALE_END = SALE_START + 8;
+
         const saleTokenAmount = "1000";
         const minimumTokenRaise = "2000";
         const tokenOneConversionRate = "1000000000000000000";
@@ -527,7 +529,7 @@ contract("ICCO", function (accounts) {
     })  
     
     it('should accept contributions in the contributor during the sale timeframe', async function () {
-        await timeout(5000)
+        await advanceTimeAndBlock(5);
 
         // test variables
         const tokenOneContributionAmount = "10000";
@@ -569,7 +571,7 @@ contract("ICCO", function (accounts) {
     }) 
      
     it('should not accept contributions after the sale has ended', async function () {
-        await timeout(10000)
+        await advanceTimeAndBlock(10);
 
         // test variables
         const tokenTwoContributionAmount = 5000;
@@ -886,7 +888,8 @@ contract("ICCO", function (accounts) {
 
     it('create a second sale correctly and attest over wormhole', async function () {
         // test variables
-        SALE_2_START = Math.floor(Date.now() / 1000) + 5;
+        const current_block = await web3.eth.getBlock('latest');
+        SALE_2_START = current_block.timestamp + 5;
         SALE_2_END = SALE_2_START + 8;
         const saleTokenAmount = "1000";
         const minimumTokenRaise = "2000";
@@ -1117,7 +1120,7 @@ contract("ICCO", function (accounts) {
     })
     
     it('should accept contributions in the contributor during the second sale timeframe', async function () {
-        await timeout(5000)
+        await advanceTimeAndBlock(5);
 
         // test variables
         const tokenOneContributionAmount = "1000";
@@ -1161,7 +1164,7 @@ contract("ICCO", function (accounts) {
     let CONTRIBUTIONS_PAYLOAD_2;
 
     it('should attest contributions for second sale correctly', async function () {
-        await timeout(10000)
+        await advanceTimeAndBlock(10);
 
         // test variables
         const tokenOneContributionAmount = 1000;
@@ -1512,7 +1515,8 @@ contract("ICCO", function (accounts) {
 
     it('create a third sale correctly and attest over wormhole', async function () {
         // test variables
-        SALE_3_START = Math.floor(Date.now() / 1000) + 5;
+        const current_block = await web3.eth.getBlock('latest');
+        SALE_3_START = current_block.timestamp + 5;
         SALE_3_END = SALE_3_START + 8;
         const saleTokenAmount = "1000";
         const minimumTokenRaise = "2000";
@@ -1788,7 +1792,7 @@ contract("ICCO", function (accounts) {
 
     it('should accept contributions after sale period starts and before aborting the sale (block timestamps out of sync test)', async function () {
         // this test simulates block timestamps being out of sync cross-chain
-        await timeout(5000)
+        await advanceTimeAndBlock(5);
 
         // test variables
         const tokenOneContributionAmount = "100";
@@ -1891,7 +1895,7 @@ contract("ICCO", function (accounts) {
     })
 
     it('contributor should not allow contributions to be attested after sale is aborted early', async function () {
-        await timeout(10000)
+        await advanceTimeAndBlock(10);
 
         const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
    
@@ -2013,7 +2017,8 @@ contract("ICCO", function (accounts) {
 
     it('conductor should not allow a sale to abort after the sale start time', async function () {
         // test variables
-        sale_start = Math.floor(Date.now() / 1000) + 5;
+        const current_block = await web3.eth.getBlock('latest');
+        sale_start = current_block.timestamp + 5;
         sale_end = sale_start + 8;
         const saleTokenAmount = "1000";
         const minimumTokenRaise = "2000";
@@ -2058,7 +2063,7 @@ contract("ICCO", function (accounts) {
         })
 
         // wait for the sale to start
-        await timeout(6000)
+        await advanceTimeAndBlock(6);
 
         let failed = false
         try {
@@ -2251,8 +2256,11 @@ function zeroPadBytes(value, length) {
     return value;
 }
 
-function timeout(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+advanceTimeAndBlock = async (time) => {
+    await advanceTime(time);
+    await advanceBlock();
+
+    return Promise.resolve(web3.eth.getBlock('latest'));
 }
 
 advanceTime = (time) => {
@@ -2271,6 +2279,22 @@ advanceTime = (time) => {
     });
 }
 
+advanceBlock = () => {
+    return new Promise((resolve, reject) => {
+        web3.currentProvider.send({
+            jsonrpc: "2.0",
+            method: "evm_mine",
+            id: new Date().getTime()
+        }, (err, result) => {
+            if (err) {
+                return reject(err);
+            }
+            const newBlockHash = web3.eth.getBlock('latest').hash;
+
+            return resolve(newBlockHash)
+        });
+    });
+}
 
 revert = (snapshotId) => {
     return new Promise((resolve, reject) => {

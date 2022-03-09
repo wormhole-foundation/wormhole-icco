@@ -1,14 +1,14 @@
 import { ethers } from "ethers";
 import { Contributor__factory } from "..";
-import { parseIccoSaleInit } from "./createSale";
 import { getSaleFromContributorOnEth } from "./getters";
+import { parseSaleInit } from "./signedVaa";
 
 export async function initSaleOnEth(
   contributorAddress: string,
   buyer: ethers.Wallet,
   signedVaa: Uint8Array
 ): Promise<ethers.ContractReceipt> {
-  const saleInit = await parseIccoSaleInit(signedVaa);
+  const saleInit = await parseSaleInit(signedVaa);
 
   // check if sale exists already
   const sale = await getSaleFromContributorOnEth(

@@ -1,15 +1,6 @@
 import { ethers } from "ethers";
-import { Conductor__factory, Contributor__factory } from "..";
-
-export async function refundIsClaimedOnEth(
-  contributorAddress: string,
-  saleId: ethers.BigNumberish,
-  tokenIndex: number,
-  wallet: ethers.Wallet
-): Promise<boolean> {
-  const contributor = Contributor__factory.connect(contributorAddress, wallet);
-  return contributor.refundIsClaimed(saleId, tokenIndex, wallet.address);
-}
+import { Conductor__factory, Contributor__factory } from "../ethers-contracts";
+import { getRefundIsClaimedOnEth } from "./getters";
 
 export async function claimContributorRefundOnEth(
   contributorAddress: string,
@@ -19,11 +10,12 @@ export async function claimContributorRefundOnEth(
 ): Promise<ethers.ContractReceipt> {
   const contributor = Contributor__factory.connect(contributorAddress, wallet);
 
-  const isClaimed = await refundIsClaimedOnEth(
+  const isClaimed = await getRefundIsClaimedOnEth(
     contributorAddress,
+    wallet.provider,
     saleId,
     tokenIndex,
-    wallet
+    wallet.address
   );
   if (isClaimed) {
     throw Error("refund already claimed");

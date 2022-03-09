@@ -1,30 +1,59 @@
 import { describe, expect, it } from "@jest/globals";
-import { formatUnits, parseUnits } from "@ethersproject/units";
 import { ethers } from "ethers";
+import { NodeHttpTransport } from "@improbable-eng/grpc-web-node-http-transport";
+import { Contributor__factory, ERC20__factory } from "../../ethers-contracts";
 import {
-  CHAIN_ID_ETH,
   ChainId,
-  Conductor__factory,
-  Contributor__factory,
-  ERC20,
-  ERC20__factory,
   hexToUint8Array,
   nativeToHexString,
   getSignedVAAWithRetry,
   getEmitterAddressEth,
   getForeignAssetEth,
-  parseSequenceFromLogEth,
   parseSequencesFromLogEth,
   redeemOnEth,
   transferFromEthNative,
   attestFromEth,
   createWrappedOnEth,
   getOriginalAssetEth,
-  uint8ArrayToNative,
   uint8ArrayToHex,
   hexToNativeString,
-  Contributor,
+  uint8ArrayToNative,
 } from "../..";
+import {
+  AcceptedToken,
+  SaleInit,
+  SaleSealed,
+  abortSaleBeforeStartOnEth,
+  attestContributionsOnEth,
+  initSaleOnEth,
+  claimAllocationOnEth,
+  claimConductorRefundOnEth,
+  claimContributorRefundOnEth,
+  collectContributionsOnEth,
+  createSaleOnEth,
+  contributeOnEth,
+  extractVaaPayload,
+  getAllocationIsClaimedOnEth,
+  getCurrentBlock,
+  getErc20Balance,
+  getRefundIsClaimedOnEth,
+  getSaleContribution,
+  getSaleFromConductorOnEth,
+  getSaleFromContributorOnEth,
+  makeAcceptedToken,
+  makeAcceptedWrappedTokenEth,
+  nativeToUint8Array,
+  parseSaleInit,
+  parseSaleSealed,
+  sealSaleOnEth,
+  saleSealedOnEth,
+  sleepFor,
+  wrapEth,
+  saleAbortedOnEth,
+  getTargetChainIdFromTransferVaa,
+  sealSaleAndParseReceiptOnEth,
+  SealSaleResult,
+} from "..";
 import {
   ETH_CORE_BRIDGE_ADDRESS,
   ETH_TOKEN_BRIDGE_ADDRESS,
@@ -32,69 +61,33 @@ import {
   ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
   WORMHOLE_RPC_HOSTS,
 } from "./consts";
-import { NodeHttpTransport } from "@improbable-eng/grpc-web-node-http-transport";
-import {
-  getSaleFromConductorOnEth,
-  getSaleFromContributorOnEth,
-} from "../getters";
-import {
-  AcceptedToken,
-  createSaleOnEth,
-  IccoSaleInit,
-  makeAcceptedToken,
-  makeAcceptedWrappedTokenEth,
-  parseIccoSaleInit,
-} from "../createSale";
-import { initSaleOnEth } from "../initSale";
-import { contributeOnEth, getSaleContribution } from "../contribute";
-import {
-  extractVaaPayload,
-  getCurrentBlock,
-  getErc20Balance,
-  nativeToUint8Array,
-  sleepFor,
-  wrapEth,
-} from "../misc";
-import {
-  IccoSaleSealed,
-  parseIccoSaleSealed,
-  sealSaleOnEth,
-} from "../sealSale";
-import { saleSealedOnEth } from "../saleSealed";
-import {
-  allocationIsClaimedOnEth,
-  claimAllocationOnEth,
-} from "../claimAllocation";
-import { attestContributionsOnEth } from "../attestContributions";
-import { collectContributionsOnEth } from "../collectContribution";
-import {
-  claimConductorRefundOnEth,
-  claimContributorRefundOnEth,
-  refundIsClaimedOnEth,
-} from "../claimRefund";
-import { abortSaleBeforeStartOnEth} from "../abortSaleBeforeStartTime";
-import { Int } from "@terra-money/terra.js";
 
-export interface BuyerConfig {
+interface EthConfig {
   chainId: ChainId;
   wallet: ethers.Wallet;
-  collateralAddress: string;
-  contribution: string;
 }
 
-export interface ContributorConfig {
-  chainId: ChainId;
-  wallet: ethers.Wallet;
+export interface EthConductorConfig extends EthConfig {}
+
+export interface EthContributorConfig extends EthConfig {
   collateralAddress: string;
   conversionRate: string;
 }
 
-export interface ConductorConfig extends ContributorConfig {}
+export interface EthBuyerConfig extends EthConfig {
+  collateralAddress: string;
+  contribution: string;
+}
+
+enum BalanceChange {
+  Increase = 1,
+  Decrease,
+}
 
 // TODO: add terra and solana handling to this (doing it serially here to make it easier to adapt)
 export async function makeAcceptedTokensFromConfigs(
-  configs: ContributorConfig[],
-  potentialBuyers: BuyerConfig[]
+  configs: EthContributorConfig[],
+  potentialBuyers: EthBuyerConfig[]
 ): Promise<AcceptedToken[]> {
   const acceptedTokens: AcceptedToken[] = [];
 
@@ -129,7 +122,7 @@ export async function makeAcceptedTokensFromConfigs(
 }
 
 export async function prepareBuyerForEarlyAbortTest(
-  buyers: BuyerConfig[]
+  buyers: EthBuyerConfig[]
 ): Promise<void> {
   {
     await Promise.all([
@@ -144,7 +137,7 @@ export async function prepareBuyerForEarlyAbortTest(
 }
 
 export async function prepareBuyersForMixedContributionTest(
-  buyers: BuyerConfig[]
+  buyers: EthBuyerConfig[]
 ): Promise<void> {
   {
     await Promise.all([
@@ -198,7 +191,7 @@ export interface WormholeWrappedAddresses {
 }
 
 export async function getWrappedCollateral(
-  configs: ContributorConfig[]
+  configs: EthContributorConfig[]
 ): Promise<WormholeWrappedAddresses> {
   const [wethOnBsc, wbnbOnEth] = await Promise.all([
     createWrappedIfUndefined(configs[0], configs[1]),
@@ -213,8 +206,8 @@ export async function getWrappedCollateral(
 
 export async function attestSaleToken(
   tokenAddress: string,
-  conductorConfig: ContributorConfig,
-  contributorConfigs: ContributorConfig[]
+  conductorConfig: EthContributorConfig,
+  contributorConfigs: EthContributorConfig[]
 ): Promise<void> {
   for (const config of contributorConfigs) {
     if (config.chainId === conductorConfig.chainId) {
@@ -331,8 +324,8 @@ export async function attestOnEthAndCreateWrappedOnEth(
 }
 
 export async function createWrappedIfUndefined(
-  srcSeller: ContributorConfig,
-  dstSeller: ContributorConfig
+  srcSeller: EthContributorConfig,
+  dstSeller: EthContributorConfig
 ): Promise<string> {
   return attestOnEthAndCreateWrappedOnEth(
     srcSeller.wallet,
@@ -352,7 +345,7 @@ export async function transferFromEthNativeAndRedeemOnEth(
   const transferReceipt = await transferFromEthNative(
     ETH_TOKEN_BRIDGE_ADDRESS,
     srcWallet,
-    parseUnits(amount),
+    ethers.utils.parseUnits(amount),
     dstChainId,
     nativeToUint8Array(dstWallet.address, dstChainId)
   );
@@ -369,7 +362,7 @@ export async function transferFromEthNativeAndRedeemOnEth(
 export async function createSaleOnEthAndGetVaa(
   seller: ethers.Wallet,
   chainId: ChainId,
-  token: ERC20,
+  tokenAddress: string,
   amount: ethers.BigNumberish,
   minRaise: ethers.BigNumberish,
   saleStart: ethers.BigNumberish,
@@ -387,13 +380,15 @@ export async function createSaleOnEthAndGetVaa(
   // create
   const receipt = await createSaleOnEth(
     ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
-    seller,
-    token,
+    tokenAddress,
     amount,
     minRaise,
     saleStart,
     saleEnd,
-    acceptedTokens
+    acceptedTokens,
+    seller.address,
+    seller.address,
+    seller
   );
 
   return getSignedVaaFromReceiptOnEth(
@@ -404,7 +399,7 @@ export async function createSaleOnEthAndGetVaa(
 }
 
 export async function getCollateralBalancesOnEth(
-  buyers: BuyerConfig[]
+  buyers: EthBuyerConfig[]
 ): Promise<ethers.BigNumberish[]> {
   return Promise.all(
     buyers.map(async (config): Promise<ethers.BigNumberish> => {
@@ -419,8 +414,8 @@ export async function getCollateralBalancesOnEth(
 }
 
 export async function contributeAllTokensOnEth(
-  saleInit: IccoSaleInit,
-  buyers: BuyerConfig[]
+  saleInit: SaleInit,
+  buyers: EthBuyerConfig[]
 ): Promise<boolean> {
   const saleId = saleInit.saleId;
 
@@ -443,7 +438,7 @@ export async function contributeAllTokensOnEth(
             ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
             saleId,
             tokenIndex,
-            parseUnits(config.contribution, decimals[tokenIndex]),
+            ethers.utils.parseUnits(config.contribution, decimals[tokenIndex]),
             config.wallet
           );
         }
@@ -465,9 +460,9 @@ export async function contributeAllTokensOnEth(
 
   return buyers
     .map((config, tokenIndex): boolean => {
-      return parseUnits(config.contribution, decimals[tokenIndex]).eq(
-        contributions[tokenIndex]
-      );
+      return ethers.utils
+        .parseUnits(config.contribution, decimals[tokenIndex])
+        .eq(contributions[tokenIndex]);
     })
     .reduce((prev, curr): boolean => {
       return prev && curr;
@@ -475,7 +470,7 @@ export async function contributeAllTokensOnEth(
 }
 
 export async function getLatestBlockTime(
-  configs: ContributorConfig[]
+  configs: EthContributorConfig[]
 ): Promise<number> {
   const currentBlocks = await Promise.all(
     configs.map((config): Promise<ethers.providers.Block> => {
@@ -493,7 +488,7 @@ export async function getLatestBlockTime(
 }
 
 export async function makeSaleStartFromLastBlock(
-  configs: ContributorConfig[]
+  configs: EthContributorConfig[]
 ): Promise<number> {
   const timeOffset = 5; // seconds (arbitrarily short amount of time to delay sale)
   const lastBlockTime = await getLatestBlockTime(configs);
@@ -501,15 +496,15 @@ export async function makeSaleStartFromLastBlock(
 }
 
 export async function createSaleOnEthAndInit(
-  conductorConfig: ContributorConfig,
-  contributorConfigs: ContributorConfig[],
+  conductorConfig: EthContributorConfig,
+  contributorConfigs: EthContributorConfig[],
   saleTokenAddress: string,
   tokenAmount: string,
   minRaise: string,
   saleStart: number,
   saleDuration: number,
   acceptedTokens: AcceptedToken[]
-): Promise<IccoSaleInit> {
+): Promise<SaleInit> {
   const tokenOffered = ERC20__factory.connect(
     saleTokenAddress,
     conductorConfig.wallet
@@ -521,16 +516,16 @@ export async function createSaleOnEthAndInit(
   const saleInitVaa = await createSaleOnEthAndGetVaa(
     conductorConfig.wallet,
     conductorConfig.chainId,
-    tokenOffered,
-    parseUnits(tokenAmount, decimals),
-    parseUnits(minRaise),
+    saleTokenAddress,
+    ethers.utils.parseUnits(tokenAmount, decimals),
+    ethers.utils.parseUnits(minRaise),
     saleStart,
     saleEnd,
     acceptedTokens
   );
 
   // parse vaa for ICCOStruct
-  const saleInit = await parseIccoSaleInit(saleInitVaa);
+  const saleInit = await parseSaleInit(saleInitVaa);
   console.info("saleInit", saleInit);
 
   {
@@ -551,8 +546,8 @@ export async function createSaleOnEthAndInit(
 }
 
 export async function waitForSaleToStart(
-  contributorConfigs: ContributorConfig[],
-  saleInit: IccoSaleInit,
+  contributorConfigs: EthContributorConfig[],
+  saleInit: SaleInit,
   extraTime: number // seconds
 ): Promise<void> {
   const timeNow = await getLatestBlockTime(contributorConfigs);
@@ -564,8 +559,8 @@ export async function waitForSaleToStart(
 }
 
 export async function waitForSaleToEnd(
-  contributorConfigs: ContributorConfig[],
-  saleInit: IccoSaleInit,
+  contributorConfigs: EthContributorConfig[],
+  saleInit: SaleInit,
   extraTime: number // seconds
 ): Promise<void> {
   const timeNow = await getLatestBlockTime(contributorConfigs);
@@ -578,11 +573,11 @@ export async function waitForSaleToEnd(
 
 /*
 interface IccoSaleResult {
-  saleSealed: IccoSaleSealed | undefined;
+  saleSealed: SaleSealed | undefined;
   sealed: boolean;
   aborted: boolean;
 }
-*/
+
 
 interface SealSaleResult {
   sealed: boolean;
@@ -591,11 +586,12 @@ interface SealSaleResult {
   bridgeSequences: string[];
   conductorSequence: string;
 }
+*/
 
 export async function attestAndCollectContributions(
-  saleInit: IccoSaleInit,
-  conductorConfig: ContributorConfig,
-  contributorConfigs: ContributorConfig[]
+  saleInit: SaleInit,
+  conductorConfig: EthContributorConfig,
+  contributorConfigs: EthContributorConfig[]
 ): Promise<void> {
   const saleId = saleInit.saleId;
 
@@ -625,41 +621,20 @@ export async function attestAndCollectContributions(
   return;
 }
 
-export async function sealOrAbortSaleOnEth(
-  conductorConfig: ContributorConfig,
-  contributorConfigs: ContributorConfig[],
-  saleInit: IccoSaleInit
-): Promise<SealSaleResult> {
+async function _sealOrAbortSaleOnEth(
+  saleInit: SaleInit,
+  conductorConfig: EthContributorConfig,
+  contributorConfigs: EthContributorConfig[]
+): Promise<void> {
   const saleId = saleInit.saleId;
-
-  const conductor = Conductor__factory.connect(
-    ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
-    conductorConfig.wallet
-  );
 
   // attest contributions and use vaas to seal sale
   {
-    const signedVaas = await Promise.all(
-      contributorConfigs.map(async (config): Promise<Uint8Array> => {
-        const receipt = await attestContributionsOnEth(
-          ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
-          saleId,
-          config.wallet
-        );
-
-        return getSignedVaaFromReceiptOnEth(
-          config.chainId,
-          ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
-          receipt
-        );
-      })
+    await attestAndCollectContributions(
+      saleInit,
+      conductorConfig,
+      contributorConfigs
     );
-
-    // need to do serially do to nonce issues
-    for (const signedVaa of signedVaas) {
-      const collectTx = await conductor.collectContribution(signedVaa);
-      await collectTx.wait();
-    }
   }
 
   const sealReceipt = await sealSaleOnEth(
@@ -683,6 +658,7 @@ export async function sealOrAbortSaleOnEth(
     saleId
   );
 
+  /*
   return {
     sealed: sale.isSealed,
     aborted: sale.isAborted,
@@ -690,36 +666,101 @@ export async function sealOrAbortSaleOnEth(
     bridgeSequences: sequences,
     conductorSequence: conductorSequence,
   };
+  */
+  return;
+}
+
+export async function sealOrAbortSaleOnEth(
+  saleInit: SaleInit,
+  conductorConfig: EthContributorConfig,
+  contributorConfigs: EthContributorConfig[]
+): Promise<SealSaleResult> {
+  const saleId = saleInit.saleId;
+
+  // attest contributions and use vaas to seal sale
+  {
+    await attestAndCollectContributions(
+      saleInit,
+      conductorConfig,
+      contributorConfigs
+    );
+  }
+
+  return sealSaleAndParseReceiptOnEth(
+    ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
+    conductorConfig.wallet,
+    saleId,
+    ETH_CORE_BRIDGE_ADDRESS,
+    ETH_TOKEN_BRIDGE_ADDRESS,
+    WORMHOLE_RPC_HOSTS,
+    {
+      transport: NodeHttpTransport(),
+    }
+  );
+}
+
+export async function getWrappedSaleTokenAddresses(
+  saleInit: SaleInit,
+  contributorConfigs: EthConductorConfig[]
+): Promise<string[]> {
+  const originChain = saleInit.tokenChain as ChainId;
+  const originAsset = hexToUint8Array(saleInit.tokenAddress);
+
+  return Promise.all(
+    contributorConfigs.map(async (config): Promise<string> => {
+      if (config.chainId === originChain) {
+        return uint8ArrayToNative(originAsset, originChain) || "";
+      }
+      const foreignAsset = await getForeignAssetEth(
+        ETH_TOKEN_BRIDGE_ADDRESS,
+        config.wallet,
+        originChain,
+        originAsset
+      );
+      if (
+        foreignAsset === null ||
+        foreignAsset === ethers.constants.AddressZero
+      ) {
+        throw Error("sale token not attested");
+      }
+      return foreignAsset;
+    })
+  );
 }
 
 export async function sealSaleAtContributors(
-  sealSaleResult: SealSaleResult,
-  contributorConfigs: ContributorConfig[]
+  saleInit: SaleInit,
+  saleResult: SealSaleResult,
+  contributorConfigs: EthContributorConfig[]
 ) {
-  if (!sealSaleResult.sealed) {
+  if (!saleResult.sale.isSealed) {
     throw Error("sale was not sealed");
   }
 
-  const signedVaa = await getSignedVaaFromSequence(
-    sealSaleResult.conductorChainId,
-    getEmitterAddressEth(ETH_TOKEN_SALE_CONDUCTOR_ADDRESS),
-    sealSaleResult.conductorSequence
-  );
+  const signedVaa = saleResult.sealSaleVaa;
 
-  const saleSealed = await parseIccoSaleSealed(signedVaa);
-  console.info("saleSealed", saleSealed);
+  const saleSealed = await parseSaleSealed(signedVaa);
+
+  // first check if the sale token has been attested
+  {
+    const addresses = await getWrappedSaleTokenAddresses(
+      saleInit,
+      contributorConfigs
+    );
+  }
 
   {
     // set sale sealed for each contributor
     const receipts = await Promise.all(
-      contributorConfigs.map(async (config) => {
-        const contributor = Contributor__factory.connect(
-          ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
-          config.wallet
-        );
-        const tx = await contributor.saleSealed(signedVaa);
-        return tx.wait();
-      })
+      contributorConfigs.map(
+        async (config): Promise<ethers.ContractReceipt> => {
+          return saleSealedOnEth(
+            ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
+            signedVaa,
+            config.wallet
+          );
+        }
+      )
     );
   }
 
@@ -727,26 +768,22 @@ export async function sealSaleAtContributors(
 }
 
 export async function abortSaleAtContributors(
-  sealSaleResult: SealSaleResult,
-  contributorConfigs: ContributorConfig[]
+  saleResult: SealSaleResult,
+  contributorConfigs: EthContributorConfig[]
 ) {
-  const signedVaa = await getSignedVaaFromSequence(
-    sealSaleResult.conductorChainId,
-    getEmitterAddressEth(ETH_TOKEN_SALE_CONDUCTOR_ADDRESS),
-    sealSaleResult.conductorSequence
-  );
+  const signedVaa = saleResult.sealSaleVaa;
 
   {
     const receipts = await Promise.all(
-      contributorConfigs.map(async (config) => {
-        const contributor = Contributor__factory.connect(
-          ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
-          config.wallet
-        );
-
-        const tx = await contributor.saleAborted(signedVaa);
-        return tx.wait();
-      })
+      contributorConfigs.map(
+        async (config): Promise<ethers.ContractReceipt> => {
+          return saleAbortedOnEth(
+            ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
+            signedVaa,
+            config.wallet
+          );
+        }
+      )
     );
   }
 
@@ -754,8 +791,8 @@ export async function abortSaleAtContributors(
 }
 
 export async function claimConductorRefund(
-  saleInit: IccoSaleInit,
-  conductorConfig: ContributorConfig
+  saleInit: SaleInit,
+  conductorConfig: EthContributorConfig
 ): Promise<ethers.ContractReceipt> {
   return claimConductorRefundOnEth(
     ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
@@ -788,7 +825,7 @@ export function balanceChangeReconciles(
 }
 
 export async function contributionsReconcile(
-  buyers: BuyerConfig[],
+  buyers: EthBuyerConfig[],
   before: ethers.BigNumberish[],
   after: ethers.BigNumberish[]
 ): Promise<boolean> {
@@ -808,7 +845,7 @@ export async function contributionsReconcile(
         before[index],
         after[index],
         BalanceChange.Decrease,
-        parseUnits(config.contribution, decimals[index]).toString()
+        ethers.utils.parseUnits(config.contribution, decimals[index]).toString()
       );
     })
     .reduce((prev, curr): boolean => {
@@ -817,7 +854,7 @@ export async function contributionsReconcile(
 }
 
 export async function refundsReconcile(
-  buyers: BuyerConfig[],
+  buyers: EthBuyerConfig[],
   before: ethers.BigNumberish[],
   after: ethers.BigNumberish[]
 ): Promise<boolean> {
@@ -837,7 +874,7 @@ export async function refundsReconcile(
         before[index],
         after[index],
         BalanceChange.Increase,
-        parseUnits(config.contribution, decimals[index]).toString()
+        ethers.utils.parseUnits(config.contribution, decimals[index]).toString()
       );
     })
     .reduce((prev, curr): boolean => {
@@ -846,8 +883,8 @@ export async function refundsReconcile(
 }
 
 export async function claimAllAllocationsOnEth(
-  buyers: BuyerConfig[],
-  saleSealed: IccoSaleSealed
+  buyers: EthBuyerConfig[],
+  saleSealed: SaleSealed
 ): Promise<boolean> {
   const saleId = saleSealed.saleId;
 
@@ -862,11 +899,12 @@ export async function claimAllAllocationsOnEth(
         wallet
       );
 
-      return allocationIsClaimedOnEth(
+      return getAllocationIsClaimedOnEth(
         ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
+        wallet.provider,
         saleId,
         tokenIndex,
-        wallet
+        wallet.address
       );
     })
   );
@@ -877,8 +915,8 @@ export async function claimAllAllocationsOnEth(
 }
 
 export async function getAllocationBalancesOnEth(
-  saleInit: IccoSaleInit,
-  buyers: BuyerConfig[]
+  saleInit: SaleInit,
+  buyers: EthBuyerConfig[]
 ): Promise<ethers.BigNumberish[]> {
   const chainId = saleInit.tokenChain as ChainId;
   const encoded = hexToUint8Array(saleInit.tokenAddress);
@@ -920,7 +958,7 @@ export async function getAllocationBalancesOnEth(
 }
 
 export function allocationsReconcile(
-  saleSealed: IccoSaleSealed,
+  saleSealed: SaleSealed,
   before: ethers.BigNumberish[],
   after: ethers.BigNumberish[]
 ): boolean {
@@ -939,27 +977,44 @@ export function allocationsReconcile(
     });
 }
 
+export async function claimOneContributorRefundOnEth(
+  saleInit: SaleInit,
+  buyers: EthBuyerConfig[],
+  tokenIndex: number
+) {
+  const saleId = saleInit.saleId;
+  const wallet = buyers[tokenIndex].wallet;
+
+  const receipt = await claimContributorRefundOnEth(
+    ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
+    saleInit.saleId,
+    tokenIndex,
+    wallet
+  );
+
+  return getRefundIsClaimedOnEth(
+    ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
+    wallet.provider,
+    saleId,
+    tokenIndex,
+    wallet.address
+  );
+}
+
 export async function claimAllBuyerRefundsOnEth(
-  saleId: ethers.BigNumberish,
-  buyers: BuyerConfig[]
+  saleInit: SaleInit,
+  buyers: EthBuyerConfig[],
+  claimed: boolean[] | undefined
 ): Promise<boolean> {
+  const saleId = saleInit.saleId;
+
   const isClaimed = await Promise.all(
     buyers.map(async (config, tokenIndex): Promise<boolean> => {
-      const wallet = config.wallet;
+      if (claimed !== undefined && claimed[tokenIndex]) {
+        return true;
+      }
 
-      const receipt = await claimContributorRefundOnEth(
-        ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
-        saleId,
-        tokenIndex,
-        wallet
-      );
-
-      return refundIsClaimedOnEth(
-        ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
-        saleId,
-        tokenIndex,
-        wallet
-      );
+      return claimOneContributorRefundOnEth(saleInit, buyers, tokenIndex);
     })
   );
 
@@ -969,8 +1024,8 @@ export async function claimAllBuyerRefundsOnEth(
 }
 
 export async function getRefundRecipientBalanceOnEth(
-  saleInit: IccoSaleInit,
-  conductorConfig: ContributorConfig
+  saleInit: SaleInit,
+  conductorConfig: EthContributorConfig
 ): Promise<ethers.BigNumber> {
   const tokenAddress = hexToNativeString(
     saleInit.tokenAddress,
@@ -995,47 +1050,17 @@ export async function getRefundRecipientBalanceOnEth(
   );
 }
 
-// private
-enum BalanceChange {
-  Increase = 1,
-  Decrease,
-}
-
 export async function redeemCrossChainAllocations(
   saleResult: SealSaleResult,
-  contributorConfigs: ContributorConfig[]
+  contributorConfigs: EthContributorConfig[]
 ): Promise<ethers.ContractReceipt[][]> {
-  const signedVaas = await getSignedVaasFromSequences(
-    saleResult.conductorChainId,
-    getEmitterAddressEth(ETH_TOKEN_BRIDGE_ADDRESS),
-    saleResult.bridgeSequences
-  );
-
   // redeem transfers before calling saleSealed
-  const chainVaas = new Map<ChainId, Uint8Array[]>();
-  for (const signedVaa of signedVaas) {
-    const payload = await extractVaaPayload(signedVaa);
-    const chainId = Buffer.from(payload).readUInt16BE(99) as ChainId;
+  const transferVaas = saleResult.transferVaas;
 
-    // verify this chainId exists in our contributor configs
-    const findIndex = contributorConfigs.findIndex((config) => {
-      return config.chainId === chainId;
-    });
-    if (findIndex < 0) {
-      throw Error("cannot find chainId in contributorConfigs");
-    }
-
-    if (!chainVaas.has(chainId)) {
-      chainVaas.set(chainId, []);
-    }
-    const vaas = chainVaas.get(chainId);
-    vaas?.push(signedVaa);
-  }
-
-  return await Promise.all(
+  return Promise.all(
     contributorConfigs.map(
       async (config): Promise<ethers.ContractReceipt[]> => {
-        const signedVaas = chainVaas.get(config.chainId);
+        const signedVaas = transferVaas.get(config.chainId);
         if (signedVaas === undefined) {
           return [];
         }
@@ -1055,21 +1080,21 @@ export async function redeemCrossChainAllocations(
 }
 
 export async function abortSaleEarlyAtConductor(
-  saleInit: IccoSaleInit,
-  conductorConfig: ContributorConfig
+  saleInit: SaleInit,
+  conductorConfig: EthContributorConfig
 ): Promise<ethers.ContractReceipt> {
-    const receipt = await abortSaleBeforeStartOnEth(
-      ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
-      saleInit.saleId,
-      conductorConfig.wallet
-    );
-    return receipt;
+  const receipt = await abortSaleBeforeStartOnEth(
+    ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
+    saleInit.saleId,
+    conductorConfig.wallet
+  );
+  return receipt;
 }
 
 export async function abortSaleEarlyAtContributors(
   abortEarlyReceipt: ethers.ContractReceipt,
-  contributorConfigs: ContributorConfig[],
-  conductorConfig: ContributorConfig
+  contributorConfigs: EthContributorConfig[],
+  conductorConfig: EthContributorConfig
 ) {
   const signedVaa = await getSignedVaaFromReceiptOnEth(
     conductorConfig.chainId,

@@ -1,15 +1,6 @@
 import { ethers } from "ethers";
-import { parseUnits } from "ethers/lib/utils";
-import {
-  ChainId,
-  IWETH__factory,
-  hexToNativeString,
-  hexToUint8Array,
-  importCoreWasm,
-  nativeToHexString,
-  uint8ArrayToHex,
-  ERC20__factory,
-} from "..";
+import { IWETH__factory, ERC20__factory } from "../ethers-contracts";
+import { ChainId, hexToUint8Array, nativeToHexString } from "..";
 
 export function nativeToUint8Array(
   address: string,
@@ -19,13 +10,13 @@ export function nativeToUint8Array(
 }
 
 export async function wrapEth(
-  signer: ethers.Wallet,
+  wallet: ethers.Wallet,
   wethAddress: string,
   amount: string
 ): Promise<void> {
-  const weth = IWETH__factory.connect(wethAddress, signer);
+  const weth = IWETH__factory.connect(wethAddress, wallet);
   await weth.deposit({
-    value: parseUnits(amount),
+    value: ethers.utils.parseUnits(amount),
   });
 }
 
@@ -38,14 +29,6 @@ export async function getCurrentBlock(
 
 export async function sleepFor(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-export async function extractVaaPayload(
-  signedVaa: Uint8Array
-): Promise<Uint8Array> {
-  const { parse_vaa } = await importCoreWasm();
-  const { payload: payload } = parse_vaa(signedVaa);
-  return payload;
 }
 
 export async function getErc20Balance(

@@ -1,5 +1,5 @@
 import { ethers } from "ethers";
-import { Conductor__factory, Contributor__factory } from "..";
+import { Conductor__factory } from "..";
 
 export async function abortSaleBeforeStartOnEth(
   conductorAddress: string,

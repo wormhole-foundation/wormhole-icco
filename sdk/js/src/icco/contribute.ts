@@ -1,10 +1,6 @@
 import { ethers } from "ethers";
-import {
-  ChainId,
-  Contributor__factory,
-  ERC20__factory,
-  hexToNativeString,
-} from "..";
+import { Contributor__factory, ERC20__factory } from "../ethers-contracts";
+import { ChainId, hexToNativeString } from "..";
 
 export async function contributeOnEth(
   contributorAddress: string,

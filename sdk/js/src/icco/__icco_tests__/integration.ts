@@ -2,18 +2,13 @@ import { describe, expect, jest, test } from "@jest/globals";
 import { ethers } from "ethers";
 import { formatUnits, parseUnits } from "ethers/lib/utils";
 import {
-  ChainId,
   CHAIN_ID_BSC,
   CHAIN_ID_ETH,
-  ERC20__factory,
-  getEmitterAddressEth,
-  hexToNativeString,
   nativeToHexString,
   redeemOnEth,
   setDefaultWasm,
 } from "../..";
-import { checkRegisteredContributor } from "../contributorContracts";
-import { extractVaaPayload, getErc20Balance } from "../misc";
+import { getContributorContractAsHexStringOnEth } from "../getters";
 import {
   BSC_NODE_URL,
   ETH_NODE_URL,
@@ -28,10 +23,9 @@ import {
   WETH_ADDRESS,
 } from "./consts";
 import {
-  BuyerConfig,
-  ContributorConfig,
+  EthBuyerConfig,
+  EthContributorConfig,
   createSaleOnEthAndInit,
-  createWrappedIfUndefined,
   waitForSaleToEnd,
   waitForSaleToStart,
   makeAcceptedTokensFromConfigs,
@@ -49,15 +43,14 @@ import {
   sealSaleAtContributors,
   abortSaleAtContributors,
   claimConductorRefund,
+  claimOneContributorRefundOnEth,
   redeemCrossChainAllocations,
-  getSignedVaaFromSequence,
   attestSaleToken,
   getWrappedCollateral,
   getRefundRecipientBalanceOnEth,
-  getLatestBlockTime,
   prepareBuyerForEarlyAbortTest,
   abortSaleEarlyAtContributors,
-  abortSaleEarlyAtConductor
+  abortSaleEarlyAtConductor,
 } from "./helpers";
 import {
   getSaleFromConductorOnEth,
@@ -80,33 +73,25 @@ describe("Integration Tests", () => {
       (async () => {
         try {
           // TODO: double-check this
-          const provider = new ethers.providers.WebSocketProvider(BSC_NODE_URL);
+          const provider = new ethers.providers.WebSocketProvider(ETH_NODE_URL);
 
           expect(
-            await checkRegisteredContributor(
+            await getContributorContractAsHexStringOnEth(
+              ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
               provider,
-              CHAIN_ID_ETH,
-              ETH_TOKEN_SALE_CONDUCTOR_ADDRESS
+              CHAIN_ID_ETH
             )
           ).toEqual(
-            "0x" +
-              nativeToHexString(
-                ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
-                CHAIN_ID_ETH
-              )
+            nativeToHexString(ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS, CHAIN_ID_ETH)
           );
           expect(
-            await checkRegisteredContributor(
+            await getContributorContractAsHexStringOnEth(
+              ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
               provider,
-              CHAIN_ID_BSC,
-              ETH_TOKEN_SALE_CONDUCTOR_ADDRESS
+              CHAIN_ID_BSC
             )
           ).toEqual(
-            "0x" +
-              nativeToHexString(
-                ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
-                CHAIN_ID_BSC
-              )
+            nativeToHexString(ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS, CHAIN_ID_BSC)
           );
 
           provider.destroy();
@@ -130,7 +115,7 @@ describe("Integration Tests", () => {
           );
 
           // seller
-          const contributorConfigs: ContributorConfig[] = [
+          const contributorConfigs: EthContributorConfig[] = [
             {
               chainId: CHAIN_ID_ETH,
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY1, ethProvider),
@@ -150,7 +135,7 @@ describe("Integration Tests", () => {
           );
 
           // pk2 := weth contributors, pk3 := wbnb contributors
-          const buyers: BuyerConfig[] = [
+          const buyers: EthBuyerConfig[] = [
             // native weth
             {
               chainId: CHAIN_ID_ETH,
@@ -198,13 +183,6 @@ describe("Integration Tests", () => {
           const tokenAmount = "1";
           const minRaise = "10"; // eth units
           const saleDuration = 60; // seconds
-
-          // we need to make sure the distribution token is attested before we consider seling it cross-chain
-          await attestSaleToken(
-            tokenAddress,
-            conductorConfig,
-            contributorConfigs
-          );
 
           // get the time
           const saleStart = await makeSaleStartFromLastBlock(
@@ -262,30 +240,57 @@ describe("Integration Tests", () => {
           // hold your horses again
           await waitForSaleToEnd(contributorConfigs, saleInit, 5);
 
+          // EXPECTED ERROR: sale has ended if anyone tries to contribute after the sale
+          {
+            // specific prep so buyers can make contributions from their respective wallets
+            await prepareBuyersForMixedContributionTest(buyers);
+
+            let expectedErrorExists = false;
+            try {
+              // buyers contribute
+              const contributionSuccessful = await contributeAllTokensOnEth(
+                saleInit,
+                buyers
+              );
+            } catch (error) {
+              const errorMsg: string = error.error.toString();
+              if (errorMsg.endsWith("sale has ended")) {
+                expectedErrorExists = true;
+              } else {
+                throw Error(error);
+              }
+            }
+            expect(expectedErrorExists).toBeTruthy();
+          }
+
           // before sealing the sale, check the balance of the distribution token
           // on the refundRecipient address. Then check again to double-check the dust
           // calculation after allocations have been sent
-          const refundRecipient =
-            hexToNativeString(
-              saleInit.refundRecipient,
-              saleInit.tokenChain as ChainId
-            ) || "";
-
-          const recipientBalanceBefore = await getErc20Balance(
-            ethProvider,
-            tokenAddress,
-            refundRecipient
+          const recipientBalanceBefore = await getRefundRecipientBalanceOnEth(
+            saleInit,
+            conductorConfig
           );
 
           // now seal the sale
+          console.info("sealOrAbortSaleOnEth");
           const saleResult = await sealOrAbortSaleOnEth(
+            saleInit,
             conductorConfig,
-            contributorConfigs,
-            saleInit
+            contributorConfigs
           );
-          expect(saleResult.sealed).toBeTruthy();
+          expect(saleResult.sale.isSealed).toBeTruthy();
 
-          // should not be able to seal the sale before allocations have been send to contributors
+          console.info("saleResult", saleResult);
+
+          // we need to make sure the distribution token is attested before we consider seling it cross-chain
+          await attestSaleToken(
+            tokenAddress,
+            conductorConfig,
+            contributorConfigs
+          );
+
+          // EXPECT ERROR: should not be able to seal the sale before allocations have been send to contributors
+          console.info("expected error: sale token balance must be non-zero");
           {
             let expectedErrorExists = false;
             try {
@@ -295,6 +300,7 @@ describe("Integration Tests", () => {
                 }
               );
               const saleSealed = await sealSaleAtContributors(
+                saleInit,
                 saleResult,
                 relevantConfigs
               );
@@ -302,41 +308,36 @@ describe("Integration Tests", () => {
               const errorMsg: string = error.error.toString();
               if (errorMsg.endsWith("sale token balance must be non-zero")) {
                 expectedErrorExists = true;
+              } else {
+                throw Error(error);
               }
             }
             expect(expectedErrorExists).toBeTruthy();
           }
 
-          // redeem one and expect another error
-          console.info("saleResult", saleResult);
-
+          // EXPECT ERROR: redeem one transfer, but cannot seal the sale due to insufficient balance
+          console.info("expected error: insufficient sale token balance");
           {
-            const sequence = saleResult.bridgeSequences.pop();
-            if (sequence === undefined) {
-              throw Error("bridgeSequences is empty");
-            }
-
-            const signedVaa = await getSignedVaaFromSequence(
-              saleResult.conductorChainId,
-              getEmitterAddressEth(ETH_TOKEN_BRIDGE_ADDRESS),
-              sequence
+            const signedVaas = saleResult.transferVaas.get(
+              contributorConfigs[1].chainId
             );
 
-            const payload = await extractVaaPayload(signedVaa);
-            const chainId = Buffer.from(payload).readUInt16BE(99) as ChainId;
-
-            const config = contributorConfigs.find((config) => {
-              return config.chainId === chainId;
-            });
-            if (config === undefined) {
-              throw Error("config is undefined");
+            if (signedVaas === undefined) {
+              throw Error("cannot find signedVaas for contributor to redeem");
+            }
+            const signedVaa = signedVaas.pop();
+            if (signedVaa === undefined) {
+              throw Error("signedVaas is empty");
             }
 
-            const receipt = await redeemOnEth(
-              ETH_TOKEN_BRIDGE_ADDRESS,
-              config.wallet,
-              signedVaa
-            );
+            // redeem only one
+            {
+              const receipt = await redeemOnEth(
+                ETH_TOKEN_BRIDGE_ADDRESS,
+                contributorConfigs[1].wallet,
+                signedVaa
+              );
+            }
 
             let expectedErrorExists = false;
             try {
@@ -346,20 +347,23 @@ describe("Integration Tests", () => {
                 }
               );
               const saleSealed = await sealSaleAtContributors(
+                saleInit,
                 saleResult,
                 relevantConfigs
               );
             } catch (error) {
               const errorMsg: string = error.error.toString();
-              console.info("errorMsg", errorMsg);
               if (errorMsg.endsWith("insufficient sale token balance")) {
                 expectedErrorExists = true;
+              } else {
+                throw Error(error);
               }
             }
             expect(expectedErrorExists).toBeTruthy();
           }
 
           // redeem token transfer vaas
+          console.info("redeemCrossChainAllocations");
           {
             const receipts = await redeemCrossChainAllocations(
               saleResult,
@@ -367,16 +371,17 @@ describe("Integration Tests", () => {
             );
           }
 
+          console.info("sealSaleAtContributors");
           // seal the sale at the contributors, then check balances
           const saleSealed = await sealSaleAtContributors(
+            saleInit,
             saleResult,
             contributorConfigs
           );
 
-          const recipientBalanceAfter = await getErc20Balance(
-            ethProvider,
-            tokenAddress,
-            refundRecipient
+          const recipientBalanceAfter = await getRefundRecipientBalanceOnEth(
+            saleInit,
+            conductorConfig
           );
           expect(
             recipientBalanceAfter.gte(recipientBalanceBefore)
@@ -458,7 +463,7 @@ describe("Integration Tests", () => {
           );
 
           // seller
-          const contributorConfigs: ContributorConfig[] = [
+          const contributorConfigs: EthContributorConfig[] = [
             {
               chainId: CHAIN_ID_ETH,
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY1, ethProvider),
@@ -478,7 +483,7 @@ describe("Integration Tests", () => {
           );
 
           // pk2 := weth contributors, pk3 := wbnb contributors
-          const buyers: BuyerConfig[] = [
+          const buyers: EthBuyerConfig[] = [
             // native weth
             {
               chainId: CHAIN_ID_ETH,
@@ -525,13 +530,6 @@ describe("Integration Tests", () => {
           const tokenAmount = "1";
           const minRaise = "10"; // eth units
           const saleDuration = 60; // seconds
-
-          // we need to make sure the distribution token is attested before we consider seling it cross-chain
-          await attestSaleToken(
-            tokenAddress,
-            conductorConfig,
-            contributorConfigs
-          );
 
           // get the time
           const saleStart = await makeSaleStartFromLastBlock(
@@ -599,11 +597,11 @@ describe("Integration Tests", () => {
 
           // now seal the sale
           const saleResult = await sealOrAbortSaleOnEth(
+            saleInit,
             conductorConfig,
-            contributorConfigs,
-            saleInit
+            contributorConfigs
           );
-          expect(saleResult.aborted).toBeTruthy();
+          expect(saleResult.sale.isAborted).toBeTruthy();
 
           // conductor gets his refund. check that he does
           await claimConductorRefund(saleInit, conductorConfig);
@@ -623,38 +621,65 @@ describe("Integration Tests", () => {
           // now make the buyers whole again. abort and refund, checking their balances after refund
           await abortSaleAtContributors(saleResult, contributorConfigs);
 
+          const buyerBalancesBefore = await getCollateralBalancesOnEth(buyers);
+
+          const claimed: boolean[] = [false, false, false, false];
+          // EPXECT ERROR: claim one refund (from first buyer), but error if claimed again
           {
-            const buyerBalancesBefore = await getCollateralBalancesOnEth(
-              buyers
-            );
-
-            // claim refunds and check balances
-            const refundSuccessful = await claimAllBuyerRefundsOnEth(
-              saleInit.saleId,
-              buyers
-            );
-            expect(refundSuccessful).toBeTruthy();
-
-            const buyerBalancesAfter = await getCollateralBalancesOnEth(buyers);
-            const allGreaterThan = buyerBalancesAfter
-              .map((balance, index) => {
-                return ethers.BigNumber.from(balance).gt(
-                  buyerBalancesBefore[index]
-                );
-              })
-              .reduce((prev, curr) => {
-                return prev && curr;
-              });
-            expect(allGreaterThan).toBeTruthy();
-
-            // we expect that balances after minus balances before equals the contributions
-            const reconciled = await refundsReconcile(
+            const buyerIndex = 0;
+            claimed[buyerIndex] = await claimOneContributorRefundOnEth(
+              saleInit,
               buyers,
-              buyerBalancesBefore,
-              buyerBalancesAfter
+              buyerIndex
             );
-            expect(reconciled).toBeTruthy();
+
+            let expectedErrorExists = false;
+            try {
+              await claimOneContributorRefundOnEth(
+                saleInit,
+                buyers,
+                buyerIndex
+              );
+            } catch (error) {
+              const errorMsg = error.toString();
+              if (errorMsg.endsWith("refund already claimed")) {
+                expectedErrorExists = true;
+              } else {
+                throw Error(error);
+              }
+            }
+            expect(expectedErrorExists).toBeTruthy();
           }
+
+          // claim refunds and check balances
+          const refundSuccessful = await claimAllBuyerRefundsOnEth(
+            saleInit,
+            buyers,
+            claimed
+          );
+          expect(refundSuccessful).toBeTruthy();
+
+          const buyerBalancesAfter = await getCollateralBalancesOnEth(buyers);
+          const allGreaterThan = buyerBalancesAfter
+            .map((balance, index) => {
+              return ethers.BigNumber.from(balance).gt(
+                buyerBalancesBefore[index]
+              );
+            })
+            .reduce((prev, curr) => {
+              return prev && curr;
+            });
+          expect(allGreaterThan).toBeTruthy();
+
+          // we expect that balances after minus balances before equals the contributions
+          const reconciled = await refundsReconcile(
+            buyers,
+            buyerBalancesBefore,
+            buyerBalancesAfter
+          );
+          expect(reconciled).toBeTruthy();
+
+          // TODO: try to refund again. expect error when failed
 
           ethProvider.destroy();
           bscProvider.destroy();
@@ -678,7 +703,7 @@ describe("Integration Tests", () => {
           );
 
           // seller
-          const contributorConfigs: ContributorConfig[] = [
+          const contributorConfigs: EthContributorConfig[] = [
             {
               chainId: CHAIN_ID_ETH,
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY1, ethProvider),
@@ -694,20 +719,20 @@ describe("Integration Tests", () => {
           ];
 
           // one buyer
-          const buyers: BuyerConfig[] = [
+          const buyers: EthBuyerConfig[] = [
             // native weth
             {
               chainId: CHAIN_ID_ETH,
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY2, ethProvider),
               collateralAddress: WETH_ADDRESS,
               contribution: "6",
-            }
+            },
           ];
 
           // specific prep so buyers can make contributions from their respective wallets
           await prepareBuyerForEarlyAbortTest(buyers);
 
-          // we need to set up all of the accepted tokens 
+          // we need to set up all of the accepted tokens
           const acceptedTokens = await makeAcceptedTokensFromConfigs(
             contributorConfigs,
             buyers
@@ -744,46 +769,43 @@ describe("Integration Tests", () => {
             acceptedTokens
           );
 
-
           // abort the sale in the conductor and verify getters
           let abortEarlyReceipt;
           {
-              // sale info before aborting
-              const conductorSaleBefore = await getSaleFromConductorOnEth(
-                ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
-                conductorConfig.wallet.provider,
-                saleInit.saleId
-              )              
-              expect(!conductorSaleBefore.isAborted).toBeTruthy();
+            // sale info before aborting
+            const conductorSaleBefore = await getSaleFromConductorOnEth(
+              ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
+              conductorConfig.wallet.provider,
+              saleInit.saleId
+            );
+            expect(!conductorSaleBefore.isAborted).toBeTruthy();
 
-              // abort the sale early in the conductor
-              abortEarlyReceipt = await abortSaleEarlyAtConductor(saleInit, conductorConfig);  
+            // abort the sale early in the conductor
+            abortEarlyReceipt = await abortSaleEarlyAtConductor(
+              saleInit,
+              conductorConfig
+            );
 
-              // sale info after aborting
-              const conductorSaleAfter = await getSaleFromConductorOnEth(
-                ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
-                conductorConfig.wallet.provider,
-                saleInit.saleId
-              )  
-              expect(conductorSaleAfter.isAborted).toBeTruthy();
-          } 
-
+            // sale info after aborting
+            const conductorSaleAfter = await getSaleFromConductorOnEth(
+              ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
+              conductorConfig.wallet.provider,
+              saleInit.saleId
+            );
+            expect(conductorSaleAfter.isAborted).toBeTruthy();
+          }
 
           // make a contribution before the early abort VAA
           // is sent to the contributors, and check balances
           {
             const buyerBalancesBefore = await getCollateralBalancesOnEth(
               buyers
-            );           
-
-            // wait until sale starts to contribute
-            await waitForSaleToStart(
-              contributorConfigs,
-              saleInit,
-              0
             );
 
-            // submit one buyer's contribution before 
+            // wait until sale starts to contribute
+            await waitForSaleToStart(contributorConfigs, saleInit, 0);
+
+            // submit one buyer's contribution before
             const contributionSuccessful = await contributeAllTokensOnEth(
               saleInit,
               buyers
@@ -802,59 +824,54 @@ describe("Integration Tests", () => {
             expect(reconciled).toBeTruthy();
           }
 
-
           // abort the sale for contributors and verify getters
           {
-              // get sale info before aborting
-              const conductorSaleEthBefore = await getSaleFromContributorOnEth(
-                ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
-                contributorConfigs[0].wallet.provider,
-                saleInit.saleId
-              )      
-              const conductorSaleBscBefore = await getSaleFromContributorOnEth(
-                ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
-                contributorConfigs[1].wallet.provider,
-                saleInit.saleId
-              )                 
-              expect(!conductorSaleEthBefore.isAborted).toBeTruthy();
-              expect(!conductorSaleBscBefore.isAborted).toBeTruthy();
+            // get sale info before aborting
+            const conductorSaleEthBefore = await getSaleFromContributorOnEth(
+              ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
+              contributorConfigs[0].wallet.provider,
+              saleInit.saleId
+            );
+            const conductorSaleBscBefore = await getSaleFromContributorOnEth(
+              ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
+              contributorConfigs[1].wallet.provider,
+              saleInit.saleId
+            );
+            expect(!conductorSaleEthBefore.isAborted).toBeTruthy();
+            expect(!conductorSaleBscBefore.isAborted).toBeTruthy();
 
-              // abort the sale for all contributors 
-              await abortSaleEarlyAtContributors(
-                abortEarlyReceipt,
-                contributorConfigs,
-                conductorConfig
-              )
+            // abort the sale for all contributors
+            await abortSaleEarlyAtContributors(
+              abortEarlyReceipt,
+              contributorConfigs,
+              conductorConfig
+            );
 
-              // sale info after aborting
-              const conductorSaleEthAfter = await getSaleFromContributorOnEth(
-                ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
-                contributorConfigs[0].wallet.provider,
-                saleInit.saleId
-              )      
-              const conductorSaleBscAfter = await getSaleFromContributorOnEth(
-                ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
-                contributorConfigs[1].wallet.provider,
-                saleInit.saleId
-              )                 
-              expect(conductorSaleEthAfter.isAborted).toBeTruthy();
-              expect(conductorSaleBscAfter.isAborted).toBeTruthy();  
-          }  
-
+            // sale info after aborting
+            const conductorSaleEthAfter = await getSaleFromContributorOnEth(
+              ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
+              contributorConfigs[0].wallet.provider,
+              saleInit.saleId
+            );
+            const conductorSaleBscAfter = await getSaleFromContributorOnEth(
+              ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
+              contributorConfigs[1].wallet.provider,
+              saleInit.saleId
+            );
+            expect(conductorSaleEthAfter.isAborted).toBeTruthy();
+            expect(conductorSaleBscAfter.isAborted).toBeTruthy();
+          }
 
           // try to contribute after the sale has been aborted
           {
             const buyerBalancesBefore = await getCollateralBalancesOnEth(
               buyers
-            );            
+            );
 
             let expectedErrorExists = false;
             try {
-                // try to contribute funds and expect a revert
-              await contributeAllTokensOnEth(
-                saleInit,
-                buyers
-              );
+              // try to contribute funds and expect a revert
+              await contributeAllTokensOnEth(saleInit, buyers);
             } catch (error) {
               const errorMsg: string = error.error.toString();
               console.info("errorMsg", errorMsg);
@@ -871,15 +888,10 @@ describe("Integration Tests", () => {
             expect(buyerBalancesBefore[0]).toBe(buyerBalancesAfter[0]);
           }
 
-
-           // try to attest a contribution after the sale was aborted
+          // try to attest a contribution after the sale was aborted
           {
             // wait until sale ends to attempt attesting contributions
-            await waitForSaleToEnd(
-              contributorConfigs,
-              saleInit,
-              3
-            );
+            await waitForSaleToEnd(contributorConfigs, saleInit, 3);
 
             let expectedErrorExists = false;
             try {
@@ -907,7 +919,7 @@ describe("Integration Tests", () => {
               await sealSaleOnEth(
                 ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
                 conductorConfig.wallet,
-                saleInit.saleId,
+                saleInit.saleId
               );
             } catch (error) {
               const errorMsg: string = error.toString();
@@ -919,30 +931,28 @@ describe("Integration Tests", () => {
             }
           }
 
-
           // refund the conductor and check balances
           {
             const recipientBalanceBefore = await getRefundRecipientBalanceOnEth(
-                saleInit,
-                conductorConfig
+              saleInit,
+              conductorConfig
             );
 
             // conductor gets his refund. check that he does
             await claimConductorRefund(saleInit, conductorConfig);
 
             const recipientBalanceAfter = await getRefundRecipientBalanceOnEth(
-                saleInit,
-                conductorConfig
+              saleInit,
+              conductorConfig
             );
 
             // on a refund, the refund recipient gets the distribution token
             expect(
-                recipientBalanceAfter
+              recipientBalanceAfter
                 .sub(recipientBalanceBefore)
                 .eq(saleInit.tokenAmount)
             ).toBeTruthy();
           }
-
 
           // fetch refunds for any contributors that snuck their contribution in before
           // the sale was aborted on the contributor side, and check balances
@@ -952,9 +962,11 @@ describe("Integration Tests", () => {
             );
 
             // claim refunds and check balances
+            const claimed: boolean[] = [false];
             const refundSuccessful = await claimAllBuyerRefundsOnEth(
-              saleInit.saleId,
-              buyers
+              saleInit,
+              buyers,
+              claimed
             );
             expect(refundSuccessful).toBeTruthy();
 
@@ -978,7 +990,7 @@ describe("Integration Tests", () => {
             );
             expect(reconciled).toBeTruthy();
           }
-          
+
           ethProvider.destroy();
           bscProvider.destroy();
           done();

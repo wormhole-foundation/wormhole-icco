@@ -4,6 +4,7 @@ import {
   CHAIN_ID_BSC,
   CHAIN_ID_ETH,
   nativeToHexString,
+  redeemOnEth,
   setDefaultWasm,
 } from "../..";
 import { getContributorContractAsHexStringOnEth } from "../getters";
@@ -13,6 +14,7 @@ import {
   ETH_PRIVATE_KEY1,
   ETH_PRIVATE_KEY2,
   ETH_PRIVATE_KEY3,
+  ETH_TOKEN_BRIDGE_ADDRESS,
   ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
   ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
   TEST_ERC20,
@@ -44,7 +46,8 @@ import {
   attestSaleToken,
   getWrappedCollateral,
   getRefundRecipientBalanceOnEth,
-  redeemOneAllocation,
+  //redeemOneAllocation,
+  claimOneContributorRefundOnEth,
 } from "./helpers";
 
 // ten minutes? nobody got time for that
@@ -260,12 +263,13 @@ describe("Integration Tests", () => {
           );
 
           // now seal the sale
+          console.info("sealOrAbortSaleOnEth");
           const saleResult = await sealOrAbortSaleOnEth(
             saleInit,
             conductorConfig,
             contributorConfigs
           );
-          expect(saleResult.sealed).toBeTruthy();
+          expect(saleResult.sale.isSealed).toBeTruthy();
 
           console.info("saleResult", saleResult);
 
@@ -305,17 +309,24 @@ describe("Integration Tests", () => {
           // EXPECT ERROR: redeem one transfer, but cannot seal the sale due to insufficient balance
           console.info("expected error: insufficient sale token balance");
           {
-            const sequence = saleResult.bridgeSequences.pop();
-            if (sequence === undefined) {
-              throw Error("bridgeSequences is empty");
+            const signedVaas = saleResult.transferVaas.get(
+              contributorConfigs[1].chainId
+            );
+
+            if (signedVaas === undefined) {
+              throw Error("cannot find signedVaas for contributor to redeem");
+            }
+            const signedVaa = signedVaas.pop();
+            if (signedVaa === undefined) {
+              throw Error("signedVaas is empty");
             }
 
             // redeem only one
             {
-              const receipt = await redeemOneAllocation(
-                conductorConfig.chainId,
-                sequence,
-                contributorConfigs
+              const receipt = await redeemOnEth(
+                ETH_TOKEN_BRIDGE_ADDRESS,
+                contributorConfigs[1].wallet,
+                signedVaa
               );
             }
 
@@ -581,7 +592,7 @@ describe("Integration Tests", () => {
             conductorConfig,
             contributorConfigs
           );
-          expect(saleResult.aborted).toBeTruthy();
+          expect(saleResult.sale.isAborted).toBeTruthy();
 
           // conductor gets his refund. check that he does
           await claimConductorRefund(saleInit, conductorConfig);
@@ -601,38 +612,63 @@ describe("Integration Tests", () => {
           // now make the buyers whole again. abort and refund, checking their balances after refund
           await abortSaleAtContributors(saleResult, contributorConfigs);
 
+          const buyerBalancesBefore = await getCollateralBalancesOnEth(buyers);
+
+          const claimed: boolean[] = [false, false, false, false];
+          // EPXECT ERROR: claim one refund (from first buyer), but error if claimed again
           {
-            const buyerBalancesBefore = await getCollateralBalancesOnEth(
-              buyers
-            );
-
-            // claim refunds and check balances
-            const refundSuccessful = await claimAllBuyerRefundsOnEth(
-              saleInit.saleId,
-              buyers
-            );
-            expect(refundSuccessful).toBeTruthy();
-
-            const buyerBalancesAfter = await getCollateralBalancesOnEth(buyers);
-            const allGreaterThan = buyerBalancesAfter
-              .map((balance, index) => {
-                return ethers.BigNumber.from(balance).gt(
-                  buyerBalancesBefore[index]
-                );
-              })
-              .reduce((prev, curr) => {
-                return prev && curr;
-              });
-            expect(allGreaterThan).toBeTruthy();
-
-            // we expect that balances after minus balances before equals the contributions
-            const reconciled = await refundsReconcile(
+            const buyerIndex = 0;
+            claimed[buyerIndex] = await claimOneContributorRefundOnEth(
+              saleInit,
               buyers,
-              buyerBalancesBefore,
-              buyerBalancesAfter
+              buyerIndex
             );
-            expect(reconciled).toBeTruthy();
+
+            let expectedErrorExists = false;
+            try {
+              await claimOneContributorRefundOnEth(
+                saleInit,
+                buyers,
+                buyerIndex
+              );
+            } catch (error) {
+              const errorMsg = error.toString();
+              if (errorMsg.endsWith("refund already claimed")) {
+                expectedErrorExists = true;
+              } else {
+                throw Error(error);
+              }
+            }
+            expect(expectedErrorExists).toBeTruthy();
           }
+
+          // claim refunds and check balances
+          const refundSuccessful = await claimAllBuyerRefundsOnEth(
+            saleInit,
+            buyers,
+            claimed
+          );
+          expect(refundSuccessful).toBeTruthy();
+
+          const buyerBalancesAfter = await getCollateralBalancesOnEth(buyers);
+          const allGreaterThan = buyerBalancesAfter
+            .map((balance, index) => {
+              return ethers.BigNumber.from(balance).gt(
+                buyerBalancesBefore[index]
+              );
+            })
+            .reduce((prev, curr) => {
+              return prev && curr;
+            });
+          expect(allGreaterThan).toBeTruthy();
+
+          // we expect that balances after minus balances before equals the contributions
+          const reconciled = await refundsReconcile(
+            buyers,
+            buyerBalancesBefore,
+            buyerBalancesAfter
+          );
+          expect(reconciled).toBeTruthy();
 
           // TODO: try to refund again. expect error when failed
 

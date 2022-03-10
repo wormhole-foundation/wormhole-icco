@@ -24,8 +24,8 @@ contract Contributor is ContributorGovernance, ICCOStructs {
 
         SaleInit memory saleInit = parseSaleInit(vm.payload);
 
-        // REVIEW: should we add the following require statements?
         require(saleInit.tokenChain == conductorChainId(), "tokenChain != conductorChainId");
+        // REVIEW: should we add the following require statements?
         require(saleInit.saleStart < saleInit.saleEnd, "sale end must be after sale start");
         require(saleInit.tokenAmount > 0, "amount must be > 0");
         require(saleInit.acceptedTokens.length > 0, "must accept at least one token");

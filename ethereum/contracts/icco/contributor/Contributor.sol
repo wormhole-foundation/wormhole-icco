@@ -63,6 +63,9 @@ contract Contributor is ContributorGovernance, ICCOStructs {
     }
 
     function contribute(uint saleId, uint tokenIndex, uint amount) public {
+        // REVIEW: add test for trying to contribute with the wrong saleId
+        require(saleExists(saleId), "sale not initiated");
+
         (, bool isAborted) = getSaleStatus(saleId);
 
         require(!isAborted, "sale was aborted");
@@ -235,11 +238,13 @@ contract Contributor is ContributorGovernance, ICCOStructs {
     }
 
     function claimAllocation(uint saleId, uint tokenIndex) public {
-        ContributorStructs.Sale memory sale = sales(saleId);
+        // REVIEW
+        require(saleExists(saleId), "sale not initiated");
 
-        require(!sale.isAborted, "token sale is aborted");
-        require(sale.isSealed, "token sale is not yet sealed");
+        (bool isSealed, bool isAborted) = getSaleStatus(saleId);
 
+        require(!isAborted, "token sale is aborted");
+        require(isSealed, "token sale is not yet sealed"); 
         require(!allocationIsClaimed(saleId, tokenIndex, msg.sender), "allocation already claimed");
 
         (uint16 contributedTokenChainId, , ) = getSaleAcceptedTokenInfo(saleId, tokenIndex);
@@ -249,6 +254,8 @@ contract Contributor is ContributorGovernance, ICCOStructs {
         setAllocationClaimed(saleId, tokenIndex, msg.sender);
 
         uint256 thisAllocation = (getSaleAllocation(saleId, tokenIndex) * getSaleContribution(saleId, tokenIndex, msg.sender)) / getSaleTotalContribution(saleId, tokenIndex);
+
+        ContributorStructs.Sale memory sale = sales(saleId);
 
         address tokenAddress;
         if (sale.tokenChain == chainId()) {
@@ -289,7 +296,7 @@ contract Contributor is ContributorGovernance, ICCOStructs {
         return false;
     }
 
-    function saleExists(uint saleId_) public view returns (bool exists) {
+    function saleExists(uint saleId) public view returns (bool exists) {
         exists = (sales(saleId).tokenAddress != bytes32(0));
     }
 

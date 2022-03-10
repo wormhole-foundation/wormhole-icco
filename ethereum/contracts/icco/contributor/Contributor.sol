@@ -236,7 +236,7 @@ contract Contributor is ContributorGovernance, ICCOStructs {
         require(!isAborted, "token sale is aborted");
         require(isSealed, "token sale is not yet sealed");
 
-        require(allocationIsClaimed(saleId, tokenIndex, msg.sender) == false, "allocation already claimed");
+        require(!allocationIsClaimed(saleId, tokenIndex, msg.sender), "allocation already claimed");
 
         (uint16 contributedTokenChainId, , ) = getSaleAcceptedTokenInfo(saleId, tokenIndex);
 

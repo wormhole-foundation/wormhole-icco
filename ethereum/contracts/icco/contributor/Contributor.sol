@@ -214,7 +214,6 @@ contract Contributor is ContributorGovernance, ICCOStructs {
                         0,
                         0
                     );
-                    SafeERC20.safeApprove(IERC20(address(uint160(uint256(sale.acceptedTokensAddresses[i])))), address(tknBridge), 0);
                 }
             }
         }

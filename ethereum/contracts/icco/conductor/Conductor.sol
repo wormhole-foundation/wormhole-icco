@@ -263,15 +263,16 @@ contract Conductor is ConductorGovernance, ICCOStructs {
     }
 
     function claimRefund(uint saleId) public {
-        ConductorStructs.Sale memory sale = sales(saleId);
-        require(msg.sender == address(uint160(uint256(sale.refundRecipient))), "not refund recipient");
+        (, bool isAborted) = getSaleStatus(saleId);
+        require(isAborted, "sale not aborted");
 
-        require(sale.isAborted, "sale not aborted");
+        ConductorStructs.Sale memory sale = sales(saleId);
         require(!sale.refundIsClaimed, "already claimed");
+        require(msg.sender == address(uint160(uint256(sale.refundRecipient))), "not refund recipient");
 
         setRefundClaimed(saleId);
 
-        SafeERC20.safeTransfer(IERC20(address(uint160(uint256(sale.tokenAddress)))), address(uint160(uint256(sale.refundRecipient))), sale.tokenAmount);
+        SafeERC20.safeTransfer(IERC20(address(uint160(uint256(sale.tokenAddress)))), msg.sender, sale.tokenAmount);
     }
 
     function useSaleId() internal returns(uint256 saleId) {

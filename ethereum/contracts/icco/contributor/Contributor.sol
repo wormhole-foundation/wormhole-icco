@@ -225,9 +225,9 @@ contract Contributor is ContributorGovernance, ICCOStructs {
         require(valid, reason);
         require(verifyConductorVM(vm), "invalid emitter");
 
-        SaleAborted memory saleInit = parseSaleAborted(vm.payload);
+        SaleAborted memory saleAborted = parseSaleAborted(vm.payload);
 
-        setSaleAborted(saleInit.saleID);
+        setSaleAborted(saleAborted.saleID);
     }
 
     function claimAllocation(uint saleId, uint tokenIndex) public {

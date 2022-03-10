@@ -204,7 +204,7 @@ contract Conductor is ConductorGovernance, ICCOStructs {
                         // simple transfer on same chain
                         SafeERC20.safeTransfer(IERC20(address(uint160(uint256(sale.tokenAddress)))), address(uint160(uint256(contributorContracts(sale.acceptedTokensChains[i])))), allocation);
                     } else {
-                        // adjust allocation
+                        // adjust allocation for dust after token bridge transfer
                         allocation = (allocation / 1e10) * 1e10;
 
                         // transfer over wormhole token bridge
@@ -237,7 +237,6 @@ contract Conductor is ConductorGovernance, ICCOStructs {
             if (accounting.dust > 0) {
                 SafeERC20.safeTransfer(IERC20(address(uint160(uint256(sale.tokenAddress)))), address(uint160(uint256(sale.refundRecipient))), accounting.dust);
             }
-            SafeERC20.safeApprove(IERC20(address(uint160(uint256(sale.tokenAddress)))), address(tknBridge), 0);
 
             require(accounting.valueSent >= accounting.messageFee, "insufficient wormhole messaging fees");
             accounting.valueSent -= accounting.messageFee;

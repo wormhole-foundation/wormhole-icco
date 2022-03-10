@@ -58,4 +58,11 @@ contract ConductorGetters is ConductorState {
     function saleContributions(uint saleId_) public view returns (uint[] memory){
         return _state.sales[saleId_].contributions;
     }
+
+    function getSaleStatus(uint saleId_) public view returns (bool isSealed, bool isAborted){
+        return (
+            _state.sales[saleId_].isSealed,
+            _state.sales[saleId_].isAborted
+        );
+    }
 }

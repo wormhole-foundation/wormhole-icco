@@ -271,9 +271,9 @@ contract Contributor is ContributorGovernance, ICCOStructs {
         setRefundClaimed(saleId, tokenIndex, msg.sender);
 
         (uint16 tokenChainId, bytes32 tokenAddressBytes, ) = getSaleAcceptedTokenInfo(saleId, tokenIndex);
-        address tokenAddress = address(uint160(uint256(tokenAddressBytes)));
-
         require(tokenChainId == uint16(chainId()), "refund needs to be claimed on another chain");
+
+        address tokenAddress = address(uint160(uint256(tokenAddressBytes)));
 
         // refund tokens
         SafeERC20.safeTransfer(IERC20(tokenAddress), msg.sender, getSaleContribution(saleId, tokenIndex, msg.sender));

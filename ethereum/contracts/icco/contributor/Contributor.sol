@@ -140,15 +140,13 @@ contract Contributor is ContributorGovernance, ICCOStructs {
 
         SaleSealed memory sealedSale = parseSaleSealed(vm.payload);
 
-        // check to see if the sale was aborted already
-        (bool isSealed, bool isAborted) = getSaleStatus(sealedSale.saleID);
-
-        require(!isSealed && !isAborted, "already sealed / aborted");
-
         // confirm the allocated sale tokens are in this contract
         ContributorStructs.Sale memory sale = sales(sealedSale.saleID);
-        uint16 thisChainId = chainId(); // cache from storage
 
+        // check to see if the sale was aborted already
+        require(!sale.isSealed && !sale.isAborted, "already sealed / aborted");
+
+        uint16 thisChainId = chainId(); // cache from storage
         {
             address saleTokenAddress;
             if (sale.tokenChain == chainId()) {

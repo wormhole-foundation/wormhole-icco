@@ -24,6 +24,10 @@ contract Contributor is ContributorGovernance, ICCOStructs {
 
         SaleInit memory saleInit = parseSaleInit(vm.payload);
 
+        // REVIEW: make sure we have a test that tries to initSale with the same vaa after calling once so we hit this revert
+        ContributorStructs.Sale memory checkSale = sales(saleId);
+        require(checkSale.saleId == 0, "sale already created");
+
         ContributorStructs.Sale memory sale = ContributorStructs.Sale({
             saleID : saleInit.saleID,
             tokenAddress : saleInit.tokenAddress,
@@ -43,7 +47,7 @@ contract Contributor is ContributorGovernance, ICCOStructs {
         });
 
         for (uint i = 0; i < saleInit.acceptedTokens.length; i++) {
-            // REVIEW: check if the token is a legitimate erc20 on this chain
+            // REVIEW: check if the token is a legitimate erc20 on this chain. and add test with bogus address
             if (saleInit.acceptedTokens[i].tokenChain == chainId()) {
                 address tokenAddress = address(uint160(uint256(saleInit.acceptedTokens[i].tokenAddress)));
                 (, bytes memory queriedTotalSupply) = tokenAddress.staticcall(abi.encodeWithSelector(IERC20.totalSupply.selector));

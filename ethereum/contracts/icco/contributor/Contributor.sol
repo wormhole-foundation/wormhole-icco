@@ -97,11 +97,15 @@ contract Contributor is ContributorGovernance, ICCOStructs {
     }
 
     function attestContributions(uint saleId) public payable returns (uint wormholeSequence) {
-        ContributorStructs.Sale memory sale = sales(saleId);
+        require(saleExists(saleId), "sale not initiated");
 
-        require(sale.tokenAddress != bytes32(0), "sale not initialized");
-        require(block.timestamp > sale.saleEnd, "sale has not yet ended");
-        require(!sale.isSealed && !sale.isAborted, "already sealed / aborted");
+        (bool isSealed, bool isAborted) = getSaleStatus(saleId);
+        require(!isSealed && !isAborted, "already sealed / aborted");
+
+        (, uint saleEnd) = getSaleTimeframe(saleId);
+        require(block.timestamp > saleEnd, "sale has not yet ended");
+
+        ContributorStructs.Sale memory sale = sales(saleId);
 
         uint nativeTokens = 0;
         uint chainId = chainId(); // cache from storage
@@ -231,10 +235,10 @@ contract Contributor is ContributorGovernance, ICCOStructs {
     }
 
     function claimAllocation(uint saleId, uint tokenIndex) public {
-        (bool isSealed, bool isAborted) = getSaleStatus(saleId);
+        ContributorStructs.Sale memory sale = sales(saleId);
 
-        require(!isAborted, "token sale is aborted");
-        require(isSealed, "token sale is not yet sealed");
+        require(!sale.isAborted, "token sale is aborted");
+        require(sale.isSealed, "token sale is not yet sealed");
 
         require(!allocationIsClaimed(saleId, tokenIndex, msg.sender), "allocation already claimed");
 
@@ -245,8 +249,6 @@ contract Contributor is ContributorGovernance, ICCOStructs {
         setAllocationClaimed(saleId, tokenIndex, msg.sender);
 
         uint256 thisAllocation = (getSaleAllocation(saleId, tokenIndex) * getSaleContribution(saleId, tokenIndex, msg.sender)) / getSaleTotalContribution(saleId, tokenIndex);
-
-        ContributorStructs.Sale memory sale = sales(saleId);
 
         address tokenAddress;
         if (sale.tokenChain == chainId()) {
@@ -286,4 +288,9 @@ contract Contributor is ContributorGovernance, ICCOStructs {
 
         return false;
     }
+
+    function saleExists(uint saleId_) public view returns (bool exists) {
+        exists = (sales(saleId).tokenAddress != bytes32(0));
+    }
+
 }

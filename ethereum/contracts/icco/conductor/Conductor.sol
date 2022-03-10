@@ -263,10 +263,9 @@ contract Conductor is ConductorGovernance, ICCOStructs {
     }
 
     function claimRefund(uint saleId) public {
-        (, bool isAborted) = getSaleStatus(saleId);
-        require(isAborted, "sale not aborted");
-
         ConductorStructs.Sale memory sale = sales(saleId);
+        require(sale.isAborted, "sale not aborted");
+
         require(!sale.refundIsClaimed, "already claimed");
         require(msg.sender == address(uint160(uint256(sale.refundRecipient))), "not refund recipient");
 

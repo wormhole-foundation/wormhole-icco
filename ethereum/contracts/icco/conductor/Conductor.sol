@@ -81,6 +81,7 @@ contract Conductor is ConductorGovernance, ICCOStructs {
         });
         // populate tokens array
         for(uint i = 0; i < acceptedTokens.length; i++) {
+            require(acceptedTokens[i].conversionRate > 0, "conversion rate cannot be zero");
             sale.acceptedTokensChains[i] = acceptedTokens[i].tokenChain;
             sale.acceptedTokensAddresses[i] = acceptedTokens[i].tokenAddress;
             sale.acceptedTokensConversionRates[i] = acceptedTokens[i].conversionRate;

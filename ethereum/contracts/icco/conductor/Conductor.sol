@@ -176,7 +176,7 @@ contract Conductor is ConductorGovernance, ICCOStructs {
         ConductorStructs.InternalAccounting memory accounting;        
 
         for (uint i = 0; i < sale.contributionsCollected.length; i++) {
-            require(sale.contributionsCollected[i], "missing contribution info");
+            require(saleContributionIsCollected(saleId, i), "missing contribution info");
             accounting.totalContribution += sale.contributions[i] * sale.acceptedTokensConversionRates[i] / 1e18;
         }
 

@@ -271,7 +271,7 @@ contract Contributor is ContributorGovernance, ICCOStructs {
         setRefundClaimed(saleId, tokenIndex, msg.sender);
 
         (uint16 tokenChainId, bytes32 tokenAddressBytes, ) = getSaleAcceptedTokenInfo(saleId, tokenIndex);
-        require(tokenChainId == uint16(chainId()), "refund needs to be claimed on another chain");
+        require(tokenChainId == chainId(), "refund needs to be claimed on another chain");
 
         address tokenAddress = address(uint160(uint256(tokenAddressBytes)));
 

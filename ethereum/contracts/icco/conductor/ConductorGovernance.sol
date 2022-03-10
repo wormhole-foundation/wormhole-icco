@@ -30,6 +30,7 @@ contract ConductorGovernance is ConductorGetters, ConductorSetters, ERC1967Upgra
 
         ConductorStructs.RegisterChain memory chain = parseRegisterChain(vm.payload);
 
+        // REVIEW: should we really be allowing chain.chainId == 0? Seems like we should remove this
         require(chain.chainId == chainId() || chain.chainId == 0, "invalid chain id");
         require(contributorContracts(chain.emitterChainID) == bytes32(0), "chain already registered");
 

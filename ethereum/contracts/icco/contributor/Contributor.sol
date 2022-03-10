@@ -266,7 +266,7 @@ contract Contributor is ContributorGovernance, ICCOStructs {
 
         require(isAborted, "token sale is not aborted");
 
-        require(refundIsClaimed(saleId, tokenIndex, msg.sender) == false, "refund already claimed");
+        require(!refundIsClaimed(saleId, tokenIndex, msg.sender), "refund already claimed");
 
         setRefundClaimed(saleId, tokenIndex, msg.sender);
 

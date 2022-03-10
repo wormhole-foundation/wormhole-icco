@@ -107,7 +107,7 @@ contract Contributor is ContributorGovernance, ICCOStructs {
 
         require(sale.tokenAddress != bytes32(0), "sale not initialized");
         require(block.timestamp > sale.saleEnd, "sale has not yet ended");
-        require(!sale.isAborted, "sale was aborted");
+        require(!sale.isSealed && !sale.isAborted, "already sealed / aborted");
 
         uint nativeTokens = 0;
         uint chainId = chainId(); // cache from storage

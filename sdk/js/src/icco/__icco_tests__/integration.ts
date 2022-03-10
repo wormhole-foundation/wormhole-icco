@@ -975,7 +975,7 @@ describe("Integration Tests", () => {
               );
             } catch (error) {
               const errorMsg: string = error.error.toString();
-              if (errorMsg.endsWith("sale was aborted")) {
+              if (errorMsg.endsWith("already sealed / aborted")) {
                 expectedErrorExists = true;
               }
               expect(expectedErrorExists).toBeTruthy();

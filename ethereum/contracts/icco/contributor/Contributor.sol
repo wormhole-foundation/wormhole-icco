@@ -25,8 +25,8 @@ contract Contributor is ContributorGovernance, ICCOStructs {
         SaleInit memory saleInit = parseSaleInit(vm.payload);
 
         // REVIEW: make sure we have a test that tries to initSale with the same vaa after calling once so we hit this revert
-        ContributorStructs.Sale memory checkSale = sales(saleId);
-        require(checkSale.saleId == 0, "sale already created");
+        ContributorStructs.Sale memory checkSale = sales(saleInit.saleID);
+        require(checkSale.saleID == 0, "sale already created");
 
         ContributorStructs.Sale memory sale = ContributorStructs.Sale({
             saleID : saleInit.saleID,

@@ -24,6 +24,10 @@ contract Contributor is ContributorGovernance, ICCOStructs {
 
         SaleInit memory saleInit = parseSaleInit(vm.payload);
 
+        // REVIEW: make sure we have a test that tries to initSale with the same vaa after calling once so we hit this revert
+        ContributorStructs.Sale memory checkSale = sales(saleInit.saleID);
+        require(checkSale.saleID == 0, "sale already created");
+
         ContributorStructs.Sale memory sale = ContributorStructs.Sale({
             saleID : saleInit.saleID,
             tokenAddress : saleInit.tokenAddress,
@@ -43,6 +47,13 @@ contract Contributor is ContributorGovernance, ICCOStructs {
         });
 
         for (uint i = 0; i < saleInit.acceptedTokens.length; i++) {
+            // REVIEW: check if the token is a legitimate erc20 on this chain. and add test with bogus address
+            if (saleInit.acceptedTokens[i].tokenChain == chainId()) {
+                address tokenAddress = address(uint160(uint256(saleInit.acceptedTokens[i].tokenAddress)));
+                (, bytes memory queriedTotalSupply) = tokenAddress.staticcall(abi.encodeWithSelector(IERC20.totalSupply.selector));
+                require(queriedTotalSupply.length > 0, "non-existent ERC20");
+            }
+
             sale.acceptedTokensChains[i] = saleInit.acceptedTokens[i].tokenChain;
             sale.acceptedTokensAddresses[i] = saleInit.acceptedTokens[i].tokenAddress;
             sale.acceptedTokensConversionRates[i] = saleInit.acceptedTokens[i].conversionRate;
@@ -86,11 +97,15 @@ contract Contributor is ContributorGovernance, ICCOStructs {
     }
 
     function attestContributions(uint saleId) public payable returns (uint wormholeSequence) {
-        ContributorStructs.Sale memory sale = sales(saleId);
+        require(saleExists(saleId), "sale not initiated");
 
-        require(sale.tokenAddress != bytes32(0), "sale not initialized");
-        require(block.timestamp > sale.saleEnd, "sale has not yet ended");
-        require(!sale.isAborted, "sale was aborted");
+        (bool isSealed, bool isAborted) = getSaleStatus(saleId);
+        require(!isSealed && !isAborted, "already sealed / aborted");
+
+        (, uint saleEnd) = getSaleTimeframe(saleId);
+        require(block.timestamp > saleEnd, "sale has not yet ended");
+
+        ContributorStructs.Sale memory sale = sales(saleId);
 
         uint nativeTokens = 0;
         uint chainId = chainId(); // cache from storage
@@ -127,17 +142,15 @@ contract Contributor is ContributorGovernance, ICCOStructs {
         require(valid, reason);
         require(verifyConductorVM(vm), "invalid emitter");
 
-        SaleSealed memory sSealed = parseSaleSealed(vm.payload); 
-
-        // check to see if the sale was aborted already
-        (bool isSealed, bool isAborted) = getSaleStatus(sSealed.saleID);
-
-        require(!isSealed && !isAborted, "already sealed / aborted");
+        SaleSealed memory sealedSale = parseSaleSealed(vm.payload);
 
         // confirm the allocated sale tokens are in this contract
-        ContributorStructs.Sale memory sale = sales(sSealed.saleID);
-        uint16 thisChainId = chainId(); // cache from storage
+        ContributorStructs.Sale memory sale = sales(sealedSale.saleID);
 
+        // check to see if the sale was aborted already
+        require(!sale.isSealed && !sale.isAborted, "already sealed / aborted");
+
+        uint16 thisChainId = chainId(); // cache from storage
         {
             address saleTokenAddress;
             if (sale.tokenChain == chainId()) {
@@ -155,16 +168,16 @@ contract Contributor is ContributorGovernance, ICCOStructs {
             require(tokenBalance > 0, "sale token balance must be non-zero");
 
             uint tokenAllocation;
-            for (uint i = 0; i < sSealed.allocations.length; i++) {
-                Allocation memory allo = sSealed.allocations[i];
+            for (uint i = 0; i < sealedSale.allocations.length; i++) {
+                Allocation memory allo = sealedSale.allocations[i];
                 if (sale.acceptedTokensChains[allo.tokenIndex] == thisChainId) {
                     tokenAllocation += allo.allocation;
-                    setSaleAllocation(sSealed.saleID, allo.tokenIndex, allo.allocation);
+                    setSaleAllocation(sealedSale.saleID, allo.tokenIndex, allo.allocation);
                 }
             }
 
             require(tokenBalance >= tokenAllocation, "insufficient sale token balance");
-            setSaleSealed(sSealed.saleID);
+            setSaleSealed(sealedSale.saleID);
         }
 
         uint16 conductorChainId = conductorChainId();
@@ -205,7 +218,6 @@ contract Contributor is ContributorGovernance, ICCOStructs {
                         0,
                         0
                     );
-                    SafeERC20.safeApprove(IERC20(address(uint160(uint256(sale.acceptedTokensAddresses[i])))), address(tknBridge), 0);
                 }
             }
         }
@@ -217,18 +229,18 @@ contract Contributor is ContributorGovernance, ICCOStructs {
         require(valid, reason);
         require(verifyConductorVM(vm), "invalid emitter");
 
-        SaleAborted memory saleInit = parseSaleAborted(vm.payload);
+        SaleAborted memory abortedSale = parseSaleAborted(vm.payload);
 
-        setSaleAborted(saleInit.saleID);
+        setSaleAborted(abortedSale.saleID);
     }
 
     function claimAllocation(uint saleId, uint tokenIndex) public {
-        (bool isSealed, bool isAborted) = getSaleStatus(saleId);
+        ContributorStructs.Sale memory sale = sales(saleId);
 
-        require(!isAborted, "token sale is aborted");
-        require(isSealed, "token sale is not yet sealed");
+        require(!sale.isAborted, "token sale is aborted");
+        require(sale.isSealed, "token sale is not yet sealed");
 
-        require(allocationIsClaimed(saleId, tokenIndex, msg.sender) == false, "allocation already claimed");
+        require(!allocationIsClaimed(saleId, tokenIndex, msg.sender), "allocation already claimed");
 
         (uint16 contributedTokenChainId, , ) = getSaleAcceptedTokenInfo(saleId, tokenIndex);
 
@@ -237,8 +249,6 @@ contract Contributor is ContributorGovernance, ICCOStructs {
         setAllocationClaimed(saleId, tokenIndex, msg.sender);
 
         uint256 thisAllocation = (getSaleAllocation(saleId, tokenIndex) * getSaleContribution(saleId, tokenIndex, msg.sender)) / getSaleTotalContribution(saleId, tokenIndex);
-
-        ContributorStructs.Sale memory sale = sales(saleId);
 
         address tokenAddress;
         if (sale.tokenChain == chainId()) {
@@ -258,14 +268,14 @@ contract Contributor is ContributorGovernance, ICCOStructs {
 
         require(isAborted, "token sale is not aborted");
 
-        require(refundIsClaimed(saleId, tokenIndex, msg.sender) == false, "refund already claimed");
+        require(!refundIsClaimed(saleId, tokenIndex, msg.sender), "refund already claimed");
 
         setRefundClaimed(saleId, tokenIndex, msg.sender);
 
         (uint16 tokenChainId, bytes32 tokenAddressBytes, ) = getSaleAcceptedTokenInfo(saleId, tokenIndex);
-        address tokenAddress = address(uint160(uint256(tokenAddressBytes)));
+        require(tokenChainId == chainId(), "refund needs to be claimed on another chain");
 
-        require(tokenChainId == uint16(chainId()), "refund needs to be claimed on another chain");
+        address tokenAddress = address(uint160(uint256(tokenAddressBytes)));
 
         // refund tokens
         SafeERC20.safeTransfer(IERC20(tokenAddress), msg.sender, getSaleContribution(saleId, tokenIndex, msg.sender));
@@ -278,4 +288,9 @@ contract Contributor is ContributorGovernance, ICCOStructs {
 
         return false;
     }
+
+    function saleExists(uint saleId_) public view returns (bool exists) {
+        exists = (sales(saleId).tokenAddress != bytes32(0));
+    }
+
 }

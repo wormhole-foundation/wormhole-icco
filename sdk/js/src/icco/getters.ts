@@ -114,3 +114,71 @@ export async function getRefundIsClaimedOnEth(
   );
   return contributor.refundIsClaimed(saleId, tokenIndex, walletAddress);
 }
+
+export async function getSaleTotalContributionOnEth(
+  contributorAddress: string,
+  provider: ethers.providers.Provider,
+  saleId: ethers.BigNumberish,
+  tokenIndex: number
+): Promise<ethers.BigNumber> {
+  const contributor = Contributor__factory.connect(
+    contributorAddress,
+    provider
+  );
+  return contributor.getSaleTotalContribution(saleId, tokenIndex);
+}
+
+export async function getSaleContributionOnEth(
+  contributorAddress: string,
+  provider: ethers.providers.Provider,
+  saleId: ethers.BigNumberish,
+  tokenIndex: number,
+  walletAddress: string
+): Promise<ethers.BigNumber> {
+  const contributor = Contributor__factory.connect(
+    contributorAddress,
+    provider
+  );
+  return contributor.getSaleContribution(saleId, tokenIndex, walletAddress);
+}
+
+export async function getSaleAllocationOnEth(
+  contributorAddress: string,
+  provider: ethers.providers.Provider,
+  saleId: ethers.BigNumberish,
+  tokenIndex: number
+): Promise<ethers.BigNumber> {
+  const contributor = Contributor__factory.connect(
+    contributorAddress,
+    provider
+  );
+  return contributor.getSaleAllocation(saleId, tokenIndex);
+}
+
+export async function getSaleWalletAllocationOnEth(
+  contributorAddress: string,
+  provider: ethers.providers.Provider,
+  saleId: ethers.BigNumberish,
+  tokenIndex: number,
+  walletAddress: string
+): Promise<ethers.BigNumber> {
+  const [allocation, walletContribution, totalContribution] = await Promise.all(
+    [
+      getSaleAllocationOnEth(contributorAddress, provider, saleId, tokenIndex),
+      getSaleContributionOnEth(
+        contributorAddress,
+        provider,
+        saleId,
+        tokenIndex,
+        walletAddress
+      ),
+      getSaleTotalContributionOnEth(
+        contributorAddress,
+        provider,
+        saleId,
+        tokenIndex
+      ),
+    ]
+  );
+  return allocation.mul(walletContribution).div(totalContribution);
+}

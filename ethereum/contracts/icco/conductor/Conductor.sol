@@ -81,6 +81,7 @@ contract Conductor is ConductorGovernance, ICCOStructs {
         });
         // populate tokens array
         for(uint i = 0; i < acceptedTokens.length; i++) {
+            require(acceptedTokens[i].conversionRate > 0, "conversion rate cannot be zero");
             sale.acceptedTokensChains[i] = acceptedTokens[i].tokenChain;
             sale.acceptedTokensAddresses[i] = acceptedTokens[i].tokenAddress;
             sale.acceptedTokensConversionRates[i] = acceptedTokens[i].conversionRate;
@@ -135,6 +136,10 @@ contract Conductor is ConductorGovernance, ICCOStructs {
         require(!sale.isAborted, "sale was aborted");
         require(block.timestamp > sale.saleEnd, "sale has not ended yet");
 
+        // REVIEW: add a test to try to collect contributions twice with the same vaa
+        require(conSealed.contributions.length > 0, "no contributions");
+        require(!saleContributionIsCollected(conSealed.saleID, conSealed.contributions[0].tokenIndex), "already collected contribution");
+
         for(uint i = 0; i < conSealed.contributions.length; i++) {
             setSaleContribution(
                 conSealed.saleID,
@@ -171,7 +176,7 @@ contract Conductor is ConductorGovernance, ICCOStructs {
         ConductorStructs.InternalAccounting memory accounting;        
 
         for (uint i = 0; i < sale.contributionsCollected.length; i++) {
-            require(sale.contributionsCollected[i], "missing contribution info");
+            require(saleContributionIsCollected(saleId, i), "missing contribution info");
             accounting.totalContribution += sale.contributions[i] * sale.acceptedTokensConversionRates[i] / 1e18;
         }
 
@@ -199,7 +204,7 @@ contract Conductor is ConductorGovernance, ICCOStructs {
                         // simple transfer on same chain
                         SafeERC20.safeTransfer(IERC20(address(uint160(uint256(sale.tokenAddress)))), address(uint160(uint256(contributorContracts(sale.acceptedTokensChains[i])))), allocation);
                     } else {
-                        // adjust allocation
+                        // adjust allocation for dust after token bridge transfer
                         allocation = (allocation / 1e10) * 1e10;
 
                         // transfer over wormhole token bridge
@@ -232,7 +237,6 @@ contract Conductor is ConductorGovernance, ICCOStructs {
             if (accounting.dust > 0) {
                 SafeERC20.safeTransfer(IERC20(address(uint160(uint256(sale.tokenAddress)))), address(uint160(uint256(sale.refundRecipient))), accounting.dust);
             }
-            SafeERC20.safeApprove(IERC20(address(uint160(uint256(sale.tokenAddress)))), address(tknBridge), 0);
 
             require(accounting.valueSent >= accounting.messageFee, "insufficient wormhole messaging fees");
             accounting.valueSent -= accounting.messageFee;
@@ -260,14 +264,14 @@ contract Conductor is ConductorGovernance, ICCOStructs {
 
     function claimRefund(uint saleId) public {
         ConductorStructs.Sale memory sale = sales(saleId);
-        require(msg.sender == address(uint160(uint256(sale.refundRecipient))), "not refund recipient");
-
         require(sale.isAborted, "sale not aborted");
+
         require(!sale.refundIsClaimed, "already claimed");
+        require(msg.sender == address(uint160(uint256(sale.refundRecipient))), "not refund recipient");
 
         setRefundClaimed(saleId);
 
-        SafeERC20.safeTransfer(IERC20(address(uint160(uint256(sale.tokenAddress)))), address(uint160(uint256(sale.refundRecipient))), sale.tokenAmount);
+        SafeERC20.safeTransfer(IERC20(address(uint160(uint256(sale.tokenAddress)))), msg.sender, sale.tokenAmount);
     }
 
     function useSaleId() internal returns(uint256 saleId) {

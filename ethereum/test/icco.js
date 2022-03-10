@@ -1907,7 +1907,7 @@ contract("ICCO", function (accounts) {
                 gasLimit : GAS_LIMIT
             })
         } catch(e) {
-            assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert sale was aborted")
+            assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert already sealed / aborted")
             failed = true
         }
 

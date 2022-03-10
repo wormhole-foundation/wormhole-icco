@@ -24,6 +24,13 @@ contract Contributor is ContributorGovernance, ICCOStructs {
 
         SaleInit memory saleInit = parseSaleInit(vm.payload);
 
+        // REVIEW: should we add the following require statements?
+        require(saleInit.tokenChain == conductorChainId(), "tokenChain != conductorChainId");
+        require(saleInit.saleStart < saleInit.saleEnd, "sale end must be after sale start");
+        require(saleInit.tokenAmount > 0, "amount must be > 0");
+        require(saleInit.acceptedTokens.length > 0, "must accept at least one token");
+        require(saleInit.acceptedTokens.length < 255, "too many tokens");
+
         ContributorStructs.Sale memory sale = ContributorStructs.Sale({
             saleID : saleInit.saleID,
             tokenAddress : saleInit.tokenAddress,
@@ -43,6 +50,8 @@ contract Contributor is ContributorGovernance, ICCOStructs {
         });
 
         for (uint i = 0; i < saleInit.acceptedTokens.length; i++) {
+            // REVIEW: should we also check this like in the Conductor?
+            require(saleInit.acceptedTokens[i].conversionRate > 0, "conversion rate cannot be zero");
             sale.acceptedTokensChains[i] = saleInit.acceptedTokens[i].tokenChain;
             sale.acceptedTokensAddresses[i] = saleInit.acceptedTokens[i].tokenAddress;
             sale.acceptedTokensConversionRates[i] = saleInit.acceptedTokens[i].conversionRate;

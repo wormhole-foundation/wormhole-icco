@@ -52,6 +52,14 @@ contract Contributor is ContributorGovernance, ICCOStructs {
         for (uint i = 0; i < saleInit.acceptedTokens.length; i++) {
             // REVIEW: should we also check this like in the Conductor?
             require(saleInit.acceptedTokens[i].conversionRate > 0, "conversion rate cannot be zero");
+
+            // REVIEW: check if the token is a legitimate erc20 on this chain
+            if (saleInit.acceptedTokens[i].tokenChain == chainId()) {
+                address tokenAddress = address(uint160(uint256(saleInit.acceptedTokens[i].tokenAddress)));
+                (, bytes memory queriedTotalSupply) = tokenAddress.staticcall(abi.encodeWithSelector(IERC20.totalSupply.selector));
+                require(queriedTotalSupply.length > 0, "non-existent ERC20");
+            }
+
             sale.acceptedTokensChains[i] = saleInit.acceptedTokens[i].tokenChain;
             sale.acceptedTokensAddresses[i] = saleInit.acceptedTokens[i].tokenAddress;
             sale.acceptedTokensConversionRates[i] = saleInit.acceptedTokens[i].conversionRate;

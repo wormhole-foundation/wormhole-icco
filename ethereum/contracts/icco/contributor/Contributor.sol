@@ -138,15 +138,15 @@ contract Contributor is ContributorGovernance, ICCOStructs {
         require(valid, reason);
         require(verifyConductorVM(vm), "invalid emitter");
 
-        SaleSealed memory sSealed = parseSaleSealed(vm.payload); 
+        SaleSealed memory sealedSale = parseSaleSealed(vm.payload);
 
         // check to see if the sale was aborted already
-        (bool isSealed, bool isAborted) = getSaleStatus(sSealed.saleID);
+        (bool isSealed, bool isAborted) = getSaleStatus(sealedSale.saleID);
 
         require(!isSealed && !isAborted, "already sealed / aborted");
 
         // confirm the allocated sale tokens are in this contract
-        ContributorStructs.Sale memory sale = sales(sSealed.saleID);
+        ContributorStructs.Sale memory sale = sales(sealedSale.saleID);
         uint16 thisChainId = chainId(); // cache from storage
 
         {
@@ -166,16 +166,16 @@ contract Contributor is ContributorGovernance, ICCOStructs {
             require(tokenBalance > 0, "sale token balance must be non-zero");
 
             uint tokenAllocation;
-            for (uint i = 0; i < sSealed.allocations.length; i++) {
-                Allocation memory allo = sSealed.allocations[i];
+            for (uint i = 0; i < sealedSale.allocations.length; i++) {
+                Allocation memory allo = sealedSale.allocations[i];
                 if (sale.acceptedTokensChains[allo.tokenIndex] == thisChainId) {
                     tokenAllocation += allo.allocation;
-                    setSaleAllocation(sSealed.saleID, allo.tokenIndex, allo.allocation);
+                    setSaleAllocation(sealedSale.saleID, allo.tokenIndex, allo.allocation);
                 }
             }
 
             require(tokenBalance >= tokenAllocation, "insufficient sale token balance");
-            setSaleSealed(sSealed.saleID);
+            setSaleSealed(sealedSale.saleID);
         }
 
         uint16 conductorChainId = conductorChainId();

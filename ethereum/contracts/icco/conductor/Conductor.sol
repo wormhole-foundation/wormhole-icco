@@ -136,6 +136,10 @@ contract Conductor is ConductorGovernance, ICCOStructs {
         require(!sale.isAborted, "sale was aborted");
         require(block.timestamp > sale.saleEnd, "sale has not ended yet");
 
+        // REVIEW: add a test to try to collect contributions twice with the same vaa
+        require(conSealed.contributions.length > 0, "no contributions");
+        require(!saleContributionIsCollected(conSealed.saleID, conSealed.contributions[0].tokenIndex), "already collected contribution");
+
         for(uint i = 0; i < conSealed.contributions.length; i++) {
             setSaleContribution(
                 conSealed.saleID,

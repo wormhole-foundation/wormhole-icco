@@ -238,7 +238,6 @@ contract Contributor is ContributorGovernance, ICCOStructs {
     }
 
     function claimAllocation(uint saleId, uint tokenIndex) public {
-        // REVIEW
         require(saleExists(saleId), "sale not initiated");
 
         (bool isSealed, bool isAborted) = getSaleStatus(saleId);
@@ -271,6 +270,8 @@ contract Contributor is ContributorGovernance, ICCOStructs {
     }
 
     function claimRefund(uint saleId, uint tokenIndex) public {
+        require(saleExists(saleId), "sale not initiated");
+
         (, bool isAborted) = getSaleStatus(saleId);
 
         require(isAborted, "token sale is not aborted");

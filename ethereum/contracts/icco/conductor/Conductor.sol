@@ -131,10 +131,9 @@ contract Conductor is ConductorGovernance, ICCOStructs {
         require(conSealed.chainID == vm.emitterChainId, "contribution from wrong chain id");
 
         // make sure the sale period has ended
-        (, bool isAborted) = getSaleStatus(conSealed.saleID);
-        require(!isAborted, "sale was aborted");
-
         ConductorStructs.Sale memory sale = sales(conSealed.saleID);
+
+        require(!sale.isAborted, "sale was aborted");
         require(block.timestamp > sale.saleEnd, "sale has not ended yet");
 
         // REVIEW: add a test to try to collect contributions twice with the same vaa
@@ -151,10 +150,9 @@ contract Conductor is ConductorGovernance, ICCOStructs {
     }
 
     function abortSaleBeforeStartTime(uint saleId) public payable returns (uint wormholeSequence) {
-        (bool isSealed, bool isAborted) = getSaleStatus(saleId);
-        require(!isSealed && !isAborted, "already sealed / aborted");
-
         ConductorStructs.Sale memory sale = sales(saleId);
+
+        require(!sale.isSealed && !sale.isAborted, "already sealed / aborted");
         require(block.timestamp < sale.saleStart, "sale cannot be aborted once it has started");
 
         // set saleAborted
@@ -171,10 +169,10 @@ contract Conductor is ConductorGovernance, ICCOStructs {
     }
 
     function sealSale(uint saleId) public payable returns (uint wormholeSequence) {
-        (bool isSealed, bool isAborted) = getSaleStatus(saleId);
-        require(!isSealed && !isAborted, "already sealed / aborted");
-
         ConductorStructs.Sale memory sale = sales(saleId);
+
+        require(!sale.isSealed && !sale.isAborted, "already sealed / aborted");
+        
         ConductorStructs.InternalAccounting memory accounting;        
 
         for (uint i = 0; i < sale.contributionsCollected.length; i++) {

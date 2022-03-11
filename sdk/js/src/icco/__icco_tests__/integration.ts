@@ -107,7 +107,7 @@ describe("Integration Tests", () => {
         }
       })();
     });
-    test.only("Create Successful ICCO Sale With Mixed Contributions", (done) => {
+    test("Create Successful ICCO Sale With Mixed Contributions", (done) => {
       (async () => {
         try {
           const ethProvider = new ethers.providers.WebSocketProvider(
@@ -586,7 +586,16 @@ describe("Integration Tests", () => {
           // conductor lives in CHAIN_ID_ETH
           const conductorConfig = contributorConfigs[0];
 
-          const tokenAddress = TEST_ERC20;
+          // make sale token. mint 10 and sell 10%
+          const tokenAddress = await deployTokenOnEth(
+            ETH_NODE_URL,
+            "Icco-Test",
+            "ICCO",
+            ethers.utils.parseUnits("10").toString(),
+            conductorConfig.wallet
+          );
+
+          //const tokenAddress = TEST_ERC20;
           const tokenAmount = "1";
           const minRaise = "10"; // eth units
           const saleDuration = 60; // seconds
@@ -606,7 +615,7 @@ describe("Integration Tests", () => {
             saleDuration,
             acceptedTokens
           );
-
+          
           // balance check
           {
             const buyerBalancesBefore = await getCollateralBalancesOnEth(
@@ -811,7 +820,16 @@ describe("Integration Tests", () => {
           // conductor lives in CHAIN_ID_ETH
           const conductorConfig = contributorConfigs[0];
 
-          const tokenAddress = TEST_ERC20;
+          // make sale token. mint 10 and sell 10%
+          const tokenAddress = await deployTokenOnEth(
+            ETH_NODE_URL,
+            "Icco-Test",
+            "ICCO",
+            ethers.utils.parseUnits("10").toString(),
+            conductorConfig.wallet
+          );
+
+          //const tokenAddress = TEST_ERC20;
           const tokenAmount = "1";
           const minRaise = "10"; // eth units
           const saleDuration = 30; // seconds

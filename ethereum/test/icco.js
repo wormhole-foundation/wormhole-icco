@@ -2257,6 +2257,82 @@ contract("ICCO", function (accounts) {
         assert.ok(failed)
     });
 
+    it('conductor should only accept tokens with non-zero conversion rates', async function () {
+        // test variables
+        const current_block = await web3.eth.getBlock('latest');
+        sale_start = current_block.timestamp + 5;
+        sale_end = sale_start + 8;
+        const saleTokenAmount = "10";
+        const minimumTokenRaise = "2000";
+        const tokenOneConversionRate = "0";
+        const tokenTwoConversionRate = "2000000000000000000";
+        const saleRecipient = accounts[0];
+        const refundRecipient = accounts[0];
+        const tokenDecimals = 18;
+        const mintAccount = SELLER;
+        const tokenSequence = 0; // set to 0 for the test
+        const tokenChainId = 0; // set to 0 for the test
+        const nativeContractAddress = "0x00"; // set to 0 for the test
+
+        const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+
+        // create sale token again
+        const saleTokenMintAmount = "2000";
+        const sold_token = await TokenImplementation.new()
+        const soldTokenName = "Sold Token";
+        const soldTokenSymbol = "SOLD"
+        
+        await sold_token.initialize(
+            soldTokenName,
+            soldTokenSymbol,
+            tokenDecimals,
+            tokenSequence,
+            mintAccount,
+            tokenChainId,
+            nativeContractAddress
+        );
+        await sold_token.mint(SELLER, saleTokenMintAmount)
+        await sold_token.approve(TokenSaleConductor.address, saleTokenAmount)
+
+        // create accepted tokens array 
+        const acceptedTokens = [
+            [
+                TEST_CHAIN_ID,
+                "0x000000000000000000000000" + CONTRIBUTED_TOKEN_ONE.address.substr(2),
+                tokenOneConversionRate
+            ],
+            [
+                TEST_CHAIN_ID,
+                "0x000000000000000000000000" + accounts[0].substr(2), // create bad address
+                tokenTwoConversionRate
+            ]
+        ]
+
+        let failed = false
+        try {
+            // try to create a sale with a token with zero multiplier
+            let tx = await initialized.methods.createSale(
+                sold_token.address,
+                saleTokenAmount,
+                minimumTokenRaise,
+                sale_start,
+                sale_end,
+                acceptedTokens,
+                saleRecipient,
+                refundRecipient
+            ).send({
+                value : "0",
+                from : SELLER,
+                gasLimit : GAS_LIMIT
+            })            
+        } catch(e) {
+            assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert conversion rate cannot be zero")
+            failed = true
+        }
+
+        assert.ok(failed)
+    })
+
     it('parse saleInit from vaa (cross chain)', async function() {
         const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
 

@@ -62,7 +62,7 @@ contract Contributor is ContributorGovernance, ICCOStructs {
     }
 
     function contribute(uint saleId, uint tokenIndex, uint amount) public {
-        // REVIEW: add test for trying to contribute with the wrong saleId
+        // REVIEW
         require(saleExists(saleId), "sale not initiated");
 
         (, bool isAborted) = getSaleStatus(saleId);

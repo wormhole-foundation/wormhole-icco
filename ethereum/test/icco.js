@@ -589,6 +589,27 @@ contract("ICCO", function (accounts) {
 
         assert.equal(buyerOneContribution, parseInt(tokenOneContributionAmount));
         assert.equal(buyerTwoContribution, parseInt(tokenTwoContributionAmount));
+    })
+    
+    it('should not accept contributions in the contributor for non-existent saleIDs', async function () {
+        // test variables
+        const tokenOneContributionAmount = "10000";
+        const incorrect_sale_id = "42069";
+
+        const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
+
+        let failed = false;
+        try {
+            await initialized.methods.contribute(incorrect_sale_id, TOKEN_ONE_INDEX, tokenOneContributionAmount).send({
+                from : BUYER_TWO,
+                gasLimit : GAS_LIMIT
+            })
+        } catch(e) {
+            assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert sale not initiated");
+            failed = true;
+        }
+
+        assert.ok(failed);
     }) 
      
     it('should not accept contributions after the sale has ended', async function () {
@@ -599,15 +620,15 @@ contract("ICCO", function (accounts) {
 
         const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
  
-        let failed = false
+        let failed = false;
         try {
             await initialized.methods.contribute(SALE_ID, TOKEN_TWO_INDEX, tokenTwoContributionAmount).send({
                 from : BUYER_TWO,
                 gasLimit : GAS_LIMIT
             })
         } catch(e) {
-            assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert sale has ended")
-            failed = true
+            assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert sale has ended");
+            failed = true;
         }
 
         assert.ok(failed)

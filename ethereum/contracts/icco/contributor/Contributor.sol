@@ -24,9 +24,8 @@ contract Contributor is ContributorGovernance, ICCOStructs {
 
         SaleInit memory saleInit = parseSaleInit(vm.payload);
 
-        // REVIEW: make sure we have a test that tries to initSale with the same vaa after calling once so we hit this revert
-        ContributorStructs.Sale memory checkSale = sales(saleInit.saleID);
-        require(checkSale.saleID == 0, "sale already created");
+        // REVIEW
+        require(!saleExists(saleInit.saleID), "sale already initiated");
 
         ContributorStructs.Sale memory sale = ContributorStructs.Sale({
             saleID : saleInit.saleID,
@@ -275,7 +274,6 @@ contract Contributor is ContributorGovernance, ICCOStructs {
         (, bool isAborted) = getSaleStatus(saleId);
 
         require(isAborted, "token sale is not aborted");
-
         require(!refundIsClaimed(saleId, tokenIndex, msg.sender), "refund already claimed");
 
         setRefundClaimed(saleId, tokenIndex, msg.sender);

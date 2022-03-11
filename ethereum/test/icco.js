@@ -449,7 +449,9 @@ contract("ICCO", function (accounts) {
 
         assert.equal(nextSaleId, SALE_ID + 1)
     })
-     
+
+    let INIT_SALE_VM;
+    
     it('should init a sale in the contributor', async function () {
         // test variables 
         const saleTokenAmount = "1000";
@@ -480,6 +482,8 @@ contract("ICCO", function (accounts) {
             from : SELLER,
             gasLimit : GAS_LIMIT
         })
+
+        INIT_SALE_VM = vm;
 
         // verify sale getter
         const sale = await initialized.methods.sales(SALE_ID).call()
@@ -526,8 +530,25 @@ contract("ICCO", function (accounts) {
     
         assert.ok(!saleStatus.isSealed);
         assert.ok(!saleStatus.isAborted);
-    })  
+    }) 
     
+    it('sale should only be initialized once in the contributor', async function () {
+        const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address); 
+
+        let failed = false
+        try {
+            let tx = await initialized.methods.initSale("0x"+INIT_SALE_VM).send({
+                from : SELLER,
+                gasLimit : GAS_LIMIT
+            })
+        } catch(e) {
+            assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert sale already initiated")
+            failed = true
+        }
+
+        assert.ok(failed)        
+    })
+     
     it('should accept contributions in the contributor during the sale timeframe', async function () {
         await advanceTimeAndBlock(5);
 

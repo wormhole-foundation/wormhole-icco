@@ -46,7 +46,7 @@ contract Contributor is ContributorGovernance, ICCOStructs {
         });
 
         for (uint i = 0; i < saleInit.acceptedTokens.length; i++) {
-            // REVIEW: check if the token is a legitimate erc20 on this chain. and add test with bogus address
+            // REVIEW
             if (saleInit.acceptedTokens[i].tokenChain == chainId()) {
                 address tokenAddress = address(uint160(uint256(saleInit.acceptedTokens[i].tokenAddress)));
                 (, bytes memory queriedTotalSupply) = tokenAddress.staticcall(abi.encodeWithSelector(IERC20.totalSupply.selector));

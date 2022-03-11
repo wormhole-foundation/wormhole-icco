@@ -76,11 +76,11 @@ contract Contributor is ContributorGovernance, ICCOStructs {
 
         (uint16 tokenChain, bytes32 tokenAddressBytes,) = getSaleAcceptedTokenInfo(saleId, tokenIndex);
 
-        require(tokenChain == chainId(), "this token can not be contributed on this chain");
-
-        address tokenAddress = address(uint160(uint256(tokenAddressBytes)));
+        require(tokenChain == chainId(), "this token can not be contributed on this chain");        
 
         // query own token balance before transfer
+        address tokenAddress = address(uint160(uint256(tokenAddressBytes)));
+
         (, bytes memory queriedBalanceBefore) = tokenAddress.staticcall(abi.encodeWithSelector(IERC20.balanceOf.selector, address(this)));
         uint256 balanceBefore = abi.decode(queriedBalanceBefore, (uint256));
 

@@ -99,6 +99,7 @@ contract Contributor is ContributorGovernance, ICCOStructs {
     }
 
     function attestContributions(uint saleId) public payable returns (uint wormholeSequence) {
+        // REVIEW
         require(saleExists(saleId), "sale not initiated");
 
         (bool isSealed, bool isAborted) = getSaleStatus(saleId);
@@ -237,6 +238,7 @@ contract Contributor is ContributorGovernance, ICCOStructs {
     }
 
     function claimAllocation(uint saleId, uint tokenIndex) public {
+        // REVIEW
         require(saleExists(saleId), "sale not initiated");
 
         (bool isSealed, bool isAborted) = getSaleStatus(saleId);
@@ -269,6 +271,7 @@ contract Contributor is ContributorGovernance, ICCOStructs {
     }
 
     function claimRefund(uint saleId, uint tokenIndex) public {
+        // REVIEW
         require(saleExists(saleId), "sale not initiated");
 
         (, bool isAborted) = getSaleStatus(saleId);

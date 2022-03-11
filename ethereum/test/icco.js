@@ -740,6 +740,38 @@ contract("ICCO", function (accounts) {
         assert.equal(contributions[0], tokenOneContributionAmount);
         assert.equal(contributions[1], tokenTwoContributionAmount);
     })
+
+    it('conductor should not collect contributions more than once', async function () {
+        const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+
+        const vm = await signAndEncodeVM(
+            1,
+            1,
+            TEST_CHAIN_ID,
+            "0x000000000000000000000000"+TokenSaleContributor.address.substr(2),
+            0,
+            CONTRIBUTIONS_PAYLOAD,
+            [
+                testSigner1PK
+            ],
+            0,
+            0
+        );   
+
+        let failed = false
+        try {
+            // try to collect contributions again
+            let tx = await initialized.methods.collectContribution("0x"+vm).send({
+                from : SELLER,
+                gasLimit : GAS_LIMIT
+            })
+        } catch(e) {
+            assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert already collected contribution")
+            failed = true
+        }
+
+        assert.ok(failed)
+    })
     
     let SALE_SEALED_PAYLOAD;
 

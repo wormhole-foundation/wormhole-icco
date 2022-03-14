@@ -294,7 +294,7 @@ contract Conductor is ConductorGovernance, ICCOStructs {
         return false;
     }
 
-    function saleExists(saleId) public view returns (bool exists) {
+    function saleExists(uint saleId) public view returns (bool exists) {
         exists = (saleId < getNextSaleId());
     }
 }

@@ -38,3 +38,38 @@ export async function contributeOnEth(
   const tx = await contributor.contribute(saleId, tokenIndex, amount);
   return tx.wait();
 }
+
+
+export async function secureContributeOnEth(
+  contributorAddress: string,
+  saleId: ethers.BigNumberish,
+  tokenIndex: number,
+  amount: ethers.BigNumberish,
+  wallet: ethers.Wallet,
+  expectedSaleTokenAddress: string
+): Promise<ethers.ContractReceipt> {
+  const contributor = Contributor__factory.connect(contributorAddress, wallet);
+
+  // confirm that the contribution is for the correct sale token
+  const saleInit = await contributor.sales(saleId);
+  const chainId = saleInit.acceptedTokensChains[tokenIndex] as ChainId;
+  const thisSalesTokenAddress = hexToNativeString(
+    saleInit.tokenAddress.slice(2),
+    chainId
+  );
+
+  if (thisSalesTokenAddress?.toLowerCase() !== expectedSaleTokenAddress.toLowerCase()) {
+    console.log("SHIET", thisSalesTokenAddress, expectedSaleTokenAddress)
+    throw Error("wrong sale token address for provided saleID");
+  }
+
+  // now contribute
+  const tx = await contributeOnEth(
+      contributorAddress,
+      saleId,
+      tokenIndex,
+      amount,
+      wallet
+  );
+  return tx;
+}

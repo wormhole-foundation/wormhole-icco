@@ -38,6 +38,7 @@ import {
   collectContributionsOnEth,
   createSaleOnEth,
   contributeOnEth,
+  secureContributeOnEth,
   extractVaaPayload,
   getAllocationIsClaimedOnEth,
   getCurrentBlock,
@@ -458,6 +459,54 @@ export async function contributeAllTokensOnEth(
             tokenIndex,
             contributions[tokenIndex],
             config.wallet
+          );
+        }
+      )
+    );
+  }
+
+  // check contributions
+  const expected = await getAllContributions(saleInit, buyers);
+
+  return buyers
+    .map((config, tokenIndex): boolean => {
+      return contributions[tokenIndex].eq(expected[tokenIndex]);
+    })
+    .reduce((prev, curr): boolean => {
+      return prev && curr;
+    });
+}
+
+export async function secureContributeAllTokensOnEth(
+  saleInit: SaleInit,
+  buyers: EthBuyerConfig[],
+  saleTokenAddress: string
+): Promise<boolean> {
+  const saleId = saleInit.saleId;
+
+  const contributions = await Promise.all(
+    buyers.map(async (config): Promise<ethers.BigNumber> => {
+      const token = ERC20__factory.connect(
+        config.collateralAddress,
+        config.wallet
+      );
+      const decimals = await token.decimals();
+      return ethers.utils.parseUnits(config.contribution, decimals);
+    })
+  );
+
+  // contribute
+  {
+    const receipts = await Promise.all(
+      buyers.map(
+        async (config, tokenIndex): Promise<ethers.ContractReceipt> => {
+          return secureContributeOnEth(
+            ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
+            saleId,
+            tokenIndex,
+            contributions[tokenIndex],
+            config.wallet,
+            saleTokenAddress
           );
         }
       )

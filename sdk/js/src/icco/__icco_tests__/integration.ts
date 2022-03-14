@@ -34,6 +34,7 @@ import {
   makeAcceptedTokensFromConfigs,
   sealOrAbortSaleOnEth,
   contributeAllTokensOnEth,
+  secureContributeAllTokensOnEth,
   getCollateralBalancesOnEth,
   claimAllAllocationsOnEth,
   getAllocationBalancesOnEth,
@@ -243,9 +244,10 @@ describe("Integration Tests", () => {
             await waitForSaleToStart(contributorConfigs, saleInit, 5);
 
             // finally buyers contribute
-            const contributionSuccessful = await contributeAllTokensOnEth(
+            const contributionSuccessful = await secureContributeAllTokensOnEth(
               saleInit,
-              buyers
+              buyers,
+              tokenAddress // sale token
             );
             expect(contributionSuccessful).toBeTruthy();
 
@@ -270,7 +272,7 @@ describe("Integration Tests", () => {
             );
             expect(reconciled).toBeTruthy();
           }
-
+          
           // hold your horses again
           await waitForSaleToEnd(contributorConfigs, saleInit, 5);
 
@@ -477,7 +479,7 @@ describe("Integration Tests", () => {
             );
             expect(allocationsReconciled).toBeTruthy();
           }
-
+          
           ethProvider.destroy();
           bscProvider.destroy();
 
@@ -589,8 +591,8 @@ describe("Integration Tests", () => {
           // make sale token. mint 10 and sell 10%
           const tokenAddress = await deployTokenOnEth(
             ETH_NODE_URL,
-            "Icco-Test",
-            "ICCO",
+            "Icco-Test2",
+            "ICCO2",
             ethers.utils.parseUnits("10").toString(),
             conductorConfig.wallet
           );
@@ -626,9 +628,10 @@ describe("Integration Tests", () => {
             await waitForSaleToStart(contributorConfigs, saleInit, 5);
 
             // finally buyers contribute
-            const contributionSuccessful = await contributeAllTokensOnEth(
+            const contributionSuccessful = await secureContributeAllTokensOnEth(
               saleInit,
-              buyers
+              buyers,
+              tokenAddress // sale token
             );
             expect(contributionSuccessful).toBeTruthy();
 
@@ -823,8 +826,8 @@ describe("Integration Tests", () => {
           // make sale token. mint 10 and sell 10%
           const tokenAddress = await deployTokenOnEth(
             ETH_NODE_URL,
-            "Icco-Test",
-            "ICCO",
+            "Icco-Test3",
+            "ICCO3",
             ethers.utils.parseUnits("10").toString(),
             conductorConfig.wallet
           );
@@ -894,9 +897,10 @@ describe("Integration Tests", () => {
             await waitForSaleToStart(contributorConfigs, saleInit, 2);
 
             // submit one buyer's contribution before
-            const contributionSuccessful = await contributeAllTokensOnEth(
+            const contributionSuccessful = await secureContributeAllTokensOnEth(
               saleInit,
-              buyers
+              buyers,
+              tokenAddress // sale token
             );
             expect(contributionSuccessful).toBeTruthy();
 
@@ -912,7 +916,7 @@ describe("Integration Tests", () => {
             );
             expect(reconciled).toBeTruthy();
           }
-
+          
           // abort the sale for contributors and verify getters
           {
             // get sale info before aborting
@@ -1079,7 +1083,7 @@ describe("Integration Tests", () => {
             );
             expect(reconciled).toBeTruthy();
           }
-
+          
           ethProvider.destroy();
           bscProvider.destroy();
           done();

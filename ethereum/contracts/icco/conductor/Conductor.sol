@@ -81,6 +81,7 @@ contract Conductor is ConductorGovernance, ICCOStructs {
         });
         // populate tokens array
         for(uint i = 0; i < acceptedTokens.length; i++) {
+            require(acceptedTokens[i].conversionRate > 0, "conversion rate cannot be zero");
             sale.acceptedTokensChains[i] = acceptedTokens[i].tokenChain;
             sale.acceptedTokensAddresses[i] = acceptedTokens[i].tokenAddress;
             sale.acceptedTokensConversionRates[i] = acceptedTokens[i].conversionRate;
@@ -129,6 +130,15 @@ contract Conductor is ConductorGovernance, ICCOStructs {
 
         require(conSealed.chainID == vm.emitterChainId, "contribution from wrong chain id");
 
+        // make sure the sale period has ended
+        ConductorStructs.Sale memory sale = sales(conSealed.saleID);
+
+        require(!sale.isAborted, "sale was aborted");
+        require(block.timestamp > sale.saleEnd, "sale has not ended yet");
+
+        require(conSealed.contributions.length > 0, "no contributions");
+        require(!saleContributionIsCollected(conSealed.saleID, conSealed.contributions[0].tokenIndex), "already collected contribution");
+
         for(uint i = 0; i < conSealed.contributions.length; i++) {
             setSaleContribution(
                 conSealed.saleID,
@@ -138,53 +148,76 @@ contract Conductor is ConductorGovernance, ICCOStructs {
         }
     }
 
-    function sealSale(uint saleId) public payable returns (uint wormholeSequence) {
+    function abortSaleBeforeStartTime(uint saleId) public payable returns (uint wormholeSequence) {
+        require(saleExists(saleId), "sale not initiated");
+
         ConductorStructs.Sale memory sale = sales(saleId);
 
         require(!sale.isSealed && !sale.isAborted, "already sealed / aborted");
+        require(block.timestamp < sale.saleStart, "sale cannot be aborted once it has started");
 
-        uint totalContribution;
+        // set saleAborted
+        setSaleAborted(sale.saleID);   
+
+        // attest sale aborted on wormhole
+        IWormhole wormhole = wormhole();
+        wormholeSequence = wormhole.publishMessage{
+            value : msg.value
+        }(0, encodeSaleAborted(SaleAborted({
+            payloadID : 4,
+            saleID : saleId
+        })), 15);
+    }
+
+    function sealSale(uint saleId) public payable returns (uint wormholeSequence) {
+        require(saleExists(saleId), "sale not initiated");
+
+        ConductorStructs.Sale memory sale = sales(saleId);
+
+        require(!sale.isSealed && !sale.isAborted, "already sealed / aborted");
+        
+        ConductorStructs.InternalAccounting memory accounting;        
+
         for (uint i = 0; i < sale.contributionsCollected.length; i++) {
-            require(sale.contributionsCollected[i], "missing contribution info");
-            totalContribution += sale.contributions[i] * sale.acceptedTokensConversionRates[i] / 1e18;
+            require(saleContributionIsCollected(saleId, i), "missing contribution info");
+            accounting.totalContribution += sale.contributions[i] * sale.acceptedTokensConversionRates[i] / 1e18;
         }
 
-        SaleSealed memory saleSealed = SaleSealed({
-            payloadID : 3,
-            saleID : saleId,
-            allocations : new Allocation[](sale.acceptedTokensAddresses.length)
-        });
-
         IWormhole wormhole = wormhole();
-        if (totalContribution >= sale.minRaise) {
+        if (accounting.totalContribution >= sale.minRaise) {
             BridgeImplementation tknBridge = tokenBridge();
 
-            uint messageFee = wormhole.messageFee();
-            uint valueSent = msg.value;
+            accounting.messageFee = wormhole.messageFee();
+            accounting.valueSent = msg.value;
+
+            SaleSealed memory saleSealed = SaleSealed({
+                payloadID : 3,
+                saleID : saleId,
+                allocations : new Allocation[](sale.acceptedTokensAddresses.length)
+            });
 
             // sale succeeded - payout token allocations to contributor contracts
             for(uint i = 0; i < sale.acceptedTokensAddresses.length; i++) {
-                uint allocation = sale.tokenAmount * (sale.contributions[i] * sale.acceptedTokensConversionRates[i] / 1e18) / totalContribution;
-
-                saleSealed.allocations[i] = Allocation({
-                    tokenIndex : uint8(i),
-                    allocation : allocation
-                });
+                uint allocation = sale.tokenAmount * (sale.contributions[i] * sale.acceptedTokensConversionRates[i] / 1e18) / accounting.totalContribution;
 
                 if(allocation > 0) {
+
                     // send allocations to contributor contracts
                     if (sale.acceptedTokensChains[i] == chainId()) {
                         // simple transfer on same chain
                         SafeERC20.safeTransfer(IERC20(address(uint160(uint256(sale.tokenAddress)))), address(uint160(uint256(contributorContracts(sale.acceptedTokensChains[i])))), allocation);
                     } else {
+                        // adjust allocation for dust after token bridge transfer
+                        allocation = (allocation / 1e10) * 1e10;
+
                         // transfer over wormhole token bridge
                         SafeERC20.safeApprove(IERC20(address(uint160(uint256(sale.tokenAddress)))), address(tknBridge), allocation);
 
-                        require(valueSent >= messageFee, "insufficient wormhole messaging fees");
-                        valueSent -= messageFee;
+                        require(accounting.valueSent >= accounting.messageFee, "insufficient wormhole messaging fees");
+                        accounting.valueSent -= accounting.messageFee;
 
                         tknBridge.transferTokens{
-                            value : messageFee
+                            value : accounting.messageFee
                         }(
                             address(uint160(uint256(sale.tokenAddress))),
                             allocation,
@@ -194,17 +227,34 @@ contract Conductor is ConductorGovernance, ICCOStructs {
                             0
                         );
                     }
+                    accounting.totalAllocated += allocation;
                 }
+
+                saleSealed.allocations[i] = Allocation({
+                    tokenIndex : uint8(i),
+                    allocation : allocation
+                });
+            }
+            // transfer dust back to refund recipient
+            accounting.dust = sale.tokenAmount - accounting.totalAllocated;
+            if (accounting.dust > 0) {
+                SafeERC20.safeTransfer(IERC20(address(uint160(uint256(sale.tokenAddress)))), address(uint160(uint256(sale.refundRecipient))), accounting.dust);
             }
 
-            require(valueSent >= messageFee, "insufficient wormhole messaging fees");
-            valueSent -= messageFee;
+            require(accounting.valueSent >= accounting.messageFee, "insufficient wormhole messaging fees");
+            accounting.valueSent -= accounting.messageFee;
+
+            // set saleSealed
+            setSaleSealed(saleId);
 
             // attest sale success on wormhole
             wormholeSequence = wormhole.publishMessage{
-                value : messageFee
+                value : accounting.messageFee
             }(0, encodeSaleSealed(saleSealed), 15);
         } else {
+            // set saleAborted
+            setSaleAborted(sale.saleID);
+
             // attest sale aborted on wormhole
             wormholeSequence = wormhole.publishMessage{
                 value : msg.value
@@ -216,15 +266,16 @@ contract Conductor is ConductorGovernance, ICCOStructs {
     }
 
     function claimRefund(uint saleId) public {
-        ConductorStructs.Sale memory sale = sales(saleId);
-        require(msg.sender == address(uint160(uint256(sale.refundRecipient))), "not refund recipient");
+        require(saleExists(saleId), "sale not initiated");
 
-        require(sale.isAborted, "sale not aborted");
+        ConductorStructs.Sale memory sale = sales(saleId);
+        require(sale.isAborted, "token sale is not aborted");
         require(!sale.refundIsClaimed, "already claimed");
+        require(msg.sender == address(uint160(uint256(sale.refundRecipient))), "not refund recipient");
 
         setRefundClaimed(saleId);
 
-        SafeERC20.safeTransfer(IERC20(address(uint160(uint256(sale.tokenAddress)))), address(uint160(uint256(sale.refundRecipient))), sale.tokenAmount);
+        SafeERC20.safeTransfer(IERC20(address(uint160(uint256(sale.tokenAddress)))), msg.sender, sale.tokenAmount);
     }
 
     function useSaleId() internal returns(uint256 saleId) {
@@ -238,5 +289,9 @@ contract Conductor is ConductorGovernance, ICCOStructs {
         }
 
         return false;
+    }
+
+    function saleExists(uint saleId) public view returns (bool exists) {
+        exists = (saleId < getNextSaleId());
     }
 }

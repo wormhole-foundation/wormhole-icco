@@ -61,7 +61,7 @@ contract ContributorSetters is ContributorState {
     }
 
     function setRefundClaimed(uint saleId, uint tokenIndex, address contributor) internal {
-        _state.allocationIsClaimed[saleId][tokenIndex][contributor] = true;
+        _state.refundIsClaimed[saleId][tokenIndex][contributor] = true;
     }
 
     function setAllocationClaimed(uint saleId, uint tokenIndex, address contributor) internal {

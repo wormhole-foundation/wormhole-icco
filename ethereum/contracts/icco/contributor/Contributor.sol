@@ -299,7 +299,7 @@ contract Contributor is ContributorGovernance, ICCOStructs {
     }
 
     function saleExists(uint saleId) public view returns (bool exists) {
-        exists = (sales(saleId).tokenAddress != bytes32(0));
+        exists = (getSaleTokenAddress(saleId) != bytes32(0));
     }
 
 }

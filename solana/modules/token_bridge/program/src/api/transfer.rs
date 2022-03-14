@@ -17,6 +17,7 @@ use crate::{
     types::*,
     TokenBridgeError,
     TokenBridgeError::{
+        InvalidChain,
         InvalidFee,
         WrongAccountOwner,
     },
@@ -29,6 +30,7 @@ use bridge::{
     },
     types::ConsistencyLevel,
     vaa::SerializePayload,
+    CHAIN_ID_SOLANA,
 };
 use primitive_types::U256;
 use solana_program::{
@@ -127,6 +129,11 @@ pub fn transfer_native(
     accs: &mut TransferNative,
     data: TransferNativeData,
 ) -> Result<()> {
+    // Prevent transferring to the same chain.
+    if data.target_chain == CHAIN_ID_SOLANA {
+        return Err(InvalidChain.into());
+    }
+
     // Verify that the custody account is derived correctly
     let derivation_data: CustodyAccountDerivationData = (&*accs).into();
     accs.custody
@@ -192,7 +199,7 @@ pub fn transfer_native(
     let payload = PayloadTransfer {
         amount: U256::from(amount),
         token_address: accs.mint.info().key.to_bytes(),
-        token_chain: 1,
+        token_chain: CHAIN_ID_SOLANA,
         to: data.target_address,
         to_chain: data.target_chain,
         fee: U256::from(fee),
@@ -290,6 +297,11 @@ pub fn transfer_wrapped(
     accs: &mut TransferWrapped,
     data: TransferWrappedData,
 ) -> Result<()> {
+    // Prevent transferring to the same chain.
+    if data.target_chain == CHAIN_ID_SOLANA {
+        return Err(InvalidChain.into());
+    }
+
     // Verify that the from account is owned by the from_owner
     if &accs.from.owner != accs.from_owner.key {
         return Err(WrongAccountOwner.into());

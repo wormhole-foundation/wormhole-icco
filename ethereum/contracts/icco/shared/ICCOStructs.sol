@@ -94,6 +94,7 @@ contract ICCOStructs {
             saleInit.refundRecipient
         );
     }
+
     function parseSaleInit(bytes memory encoded) public pure returns (SaleInit memory saleInit) {
         uint index = 0;
 
@@ -123,7 +124,7 @@ contract ICCOStructs {
         saleInit.saleEnd = encoded.toUint256(index);
         index += 32;
 
-        uint len = 1 + 66 * uint8(encoded[index]);
+        uint len = 1 + 66 * uint256(uint8(encoded[index]));
         saleInit.acceptedTokens = parseTokens(encoded.slice(index, len));
         index += len;
 
@@ -138,7 +139,7 @@ contract ICCOStructs {
 
     function encodeTokens(Token[] memory tokens) public pure returns (bytes memory encoded) {
         encoded = abi.encodePacked(uint8(tokens.length));
-        for(uint i = 0; i < tokens.length; i++){
+        for (uint i = 0; i < tokens.length; i++) {
             encoded = abi.encodePacked(
                 encoded,
                 tokens[i].tokenAddress,
@@ -147,6 +148,7 @@ contract ICCOStructs {
             );
         }
     }
+
     function parseTokens(bytes memory encoded) public pure returns (Token[] memory tokens) {
         require(encoded.length % 66 == 1, "invalid Token[]");
 
@@ -154,8 +156,8 @@ contract ICCOStructs {
 
         tokens = new Token[](len);
 
-        for(uint i = 0; i < len; i ++) {
-            tokens[i].tokenAddress   = encoded.toBytes32(1  + i * 66);
+        for (uint i = 0; i < len; i++) {
+            tokens[i].tokenAddress   = encoded.toBytes32( 1 + i * 66);
             tokens[i].tokenChain     = encoded.toUint16( 33 + i * 66);
             tokens[i].conversionRate = encoded.toUint256(35 + i * 66);
         }
@@ -169,13 +171,14 @@ contract ICCOStructs {
             encodeContributions(cs.contributions)
         );
     }
+
     function parseContributionsSealed(bytes memory encoded) public pure returns (ContributionsSealed memory consSealed) {
         uint index = 0;
 
         consSealed.payloadID = encoded.toUint8(index);
         index += 1;
 
-        require(consSealed.payloadID == 2, "invalid ContributionsSealed");
+        require(consSealed.payloadID == 2, "invalid payloadID");
 
         consSealed.saleID = encoded.toUint256(index);
         index += 32;
@@ -183,7 +186,7 @@ contract ICCOStructs {
         consSealed.chainID = encoded.toUint16(index);
         index += 2;
 
-        uint len = 1 + 33 * uint8(encoded[index]);
+        uint len = 1 + 33 * uint256(uint8(encoded[index]));
         consSealed.contributions = parseContributions(encoded.slice(index, len));
         index += len;
 
@@ -192,7 +195,7 @@ contract ICCOStructs {
 
     function encodeContributions(Contribution[] memory contributions) public pure returns (bytes memory encoded) {
         encoded = abi.encodePacked(uint8(contributions.length));
-        for(uint i = 0; i < contributions.length; i++){
+        for (uint i = 0; i < contributions.length; i++) {
             encoded = abi.encodePacked(
                 encoded,
                 contributions[i].tokenIndex,
@@ -200,6 +203,7 @@ contract ICCOStructs {
             );
         }
     }
+
     function parseContributions(bytes memory encoded) public pure returns (Contribution[] memory cons) {
         require(encoded.length % 33 == 1, "invalid Contribution[]");
 
@@ -207,7 +211,7 @@ contract ICCOStructs {
 
         cons = new Contribution[](len);
 
-        for(uint i = 0; i < len; i ++) {
+        for (uint i = 0; i < len; i++) {
             cons[i].tokenIndex  = encoded.toUint8(1 + i * 33);
             cons[i].contributed = encoded.toUint256(2 + i * 33);
         }
@@ -220,17 +224,18 @@ contract ICCOStructs {
             encodeAllocations(ss.allocations)
         );
     }
+
     function parseSaleSealed(bytes memory encoded) public pure returns (SaleSealed memory ss) {
         uint index = 0;
         ss.payloadID = encoded.toUint8(index);
         index += 1;
 
-        require(ss.payloadID == 3, "invalid SaleSealed");
+        require(ss.payloadID == 3, "invalid payloadID");
 
         ss.saleID = encoded.toUint256(index);
         index += 32;
 
-        uint len = 1 + 33 * uint8(encoded[index]);
+        uint len = 1 + 33 * uint256(uint8(encoded[index]));
         ss.allocations = parseAllocations(encoded.slice(index, len));
         index += len;
 
@@ -239,7 +244,7 @@ contract ICCOStructs {
 
     function encodeAllocations(Allocation[] memory allocations) public pure returns (bytes memory encoded) {
         encoded = abi.encodePacked(uint8(allocations.length));
-        for(uint i = 0; i < allocations.length; i++){
+        for (uint i = 0; i < allocations.length; i++) {
             encoded = abi.encodePacked(
                 encoded,
                 allocations[i].tokenIndex,
@@ -247,6 +252,7 @@ contract ICCOStructs {
             );
         }
     }
+
     function parseAllocations(bytes memory encoded) public pure returns (Allocation[] memory allos) {
         require(encoded.length % 33 == 1, "invalid Allocation[]");
 
@@ -254,24 +260,22 @@ contract ICCOStructs {
 
         allos = new Allocation[](len);
 
-        for(uint i = 0; i < len; i ++) {
+        for (uint i = 0; i < len; i++) {
             allos[i].tokenIndex = encoded.toUint8(1 + i * 33);
             allos[i].allocation = encoded.toUint256(2 + i * 33);
         }
     }
 
     function encodeSaleAborted(SaleAborted memory ca) public pure returns (bytes memory encoded) {
-        return abi.encodePacked(
-            uint8(3),
-            ca.saleID
-        );
+        return abi.encodePacked(uint8(4), ca.saleID);
     }
+
     function parseSaleAborted(bytes memory encoded) public pure returns (SaleAborted memory sa) {
         uint index = 0;
         sa.payloadID = encoded.toUint8(index);
         index += 1;
 
-        require(sa.payloadID == 4, "invalid SaleAborted");
+        require(sa.payloadID == 4, "invalid payloadID");
 
         sa.saleID = encoded.toUint256(index);
         index += 32;

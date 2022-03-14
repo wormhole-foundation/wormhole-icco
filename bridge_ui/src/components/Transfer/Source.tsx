@@ -4,10 +4,12 @@ import {
   CHAIN_ID_SOLANA,
 } from "@certusone/wormhole-sdk";
 import { getAddress } from "@ethersproject/address";
-import { Button, makeStyles, TextField } from "@material-ui/core";
-import { useCallback } from "react";
+import { Button, makeStyles, Typography } from "@material-ui/core";
+import { VerifiedUser } from "@material-ui/icons";
+import { useCallback, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useHistory } from "react-router";
+import { Link } from "react-router-dom";
 import useIsWalletReady from "../../hooks/useIsWalletReady";
 import {
   selectTransferAmount,
@@ -17,11 +19,13 @@ import {
   selectTransferSourceChain,
   selectTransferSourceError,
   selectTransferSourceParsedTokenAccount,
+  selectTransferTargetChain,
 } from "../../store/selectors";
 import {
   incrementStep,
   setAmount,
   setSourceChain,
+  setTargetChain,
 } from "../../store/transferSlice";
 import {
   BSC_MIGRATION_ASSET_MAP,
@@ -31,13 +35,34 @@ import {
 } from "../../utils/consts";
 import ButtonWithLoader from "../ButtonWithLoader";
 import ChainSelect from "../ChainSelect";
+import ChainSelectArrow from "../ChainSelectArrow";
 import KeyAndBalance from "../KeyAndBalance";
 import LowBalanceWarning from "../LowBalanceWarning";
+import NumberTextField from "../NumberTextField";
+import SolanaTPSWarning from "../SolanaTPSWarning";
 import StepDescription from "../StepDescription";
 import { TokenSelector } from "../TokenSelectors/SourceTokenSelector";
-import TokenWarning from "./TokenWarning";
+import SourceAssetWarning from "./SourceAssetWarning";
 
 const useStyles = makeStyles((theme) => ({
+  chainSelectWrapper: {
+    display: "flex",
+    alignItems: "center",
+    [theme.breakpoints.down("sm")]: {
+      flexDirection: "column",
+    },
+  },
+  chainSelectContainer: {
+    flexBasis: "100%",
+    [theme.breakpoints.down("sm")]: {
+      width: "100%",
+    },
+  },
+  chainSelectArrow: {
+    position: "relative",
+    top: "12px",
+    [theme.breakpoints.down("sm")]: { transform: "rotate(90deg)" },
+  },
   transferField: {
     marginTop: theme.spacing(5),
   },
@@ -48,6 +73,11 @@ function Source() {
   const dispatch = useDispatch();
   const history = useHistory();
   const sourceChain = useSelector(selectTransferSourceChain);
+  const targetChain = useSelector(selectTransferTargetChain);
+  const targetChainOptions = useMemo(
+    () => CHAINS.filter((c) => c.id !== sourceChain),
+    [sourceChain]
+  );
   const parsedTokenAccount = useSelector(
     selectTransferSourceParsedTokenAccount
   );
@@ -89,29 +119,80 @@ function Source() {
     },
     [dispatch]
   );
+  const handleTargetChange = useCallback(
+    (event) => {
+      dispatch(setTargetChain(event.target.value));
+    },
+    [dispatch]
+  );
   const handleAmountChange = useCallback(
     (event) => {
       dispatch(setAmount(event.target.value));
     },
     [dispatch]
   );
+  const handleMaxClick = useCallback(() => {
+    if (uiAmountString) {
+      dispatch(setAmount(uiAmountString));
+    }
+  }, [dispatch, uiAmountString]);
   const handleNextClick = useCallback(() => {
     dispatch(incrementStep());
   }, [dispatch]);
+
   return (
     <>
       <StepDescription>
-        Select tokens to send through the Wormhole Token Bridge.
+        <div style={{ display: "flex", alignItems: "center" }}>
+          Select tokens to send through the Portal.
+          <div style={{ flexGrow: 1 }} />
+          <div>
+            <Button
+              component={Link}
+              to="/token-origin-verifier"
+              size="small"
+              variant="outlined"
+              startIcon={<VerifiedUser />}
+            >
+              Token Origin Verifier
+            </Button>
+          </div>
+        </div>
       </StepDescription>
-      <ChainSelect
-        select
-        variant="outlined"
-        fullWidth
-        value={sourceChain}
-        onChange={handleSourceChange}
-        disabled={shouldLockFields}
-        chains={CHAINS}
-      />
+      <div className={classes.chainSelectWrapper}>
+        <div className={classes.chainSelectContainer}>
+          <Typography variant="caption">Source</Typography>
+          <ChainSelect
+            select
+            variant="outlined"
+            fullWidth
+            value={sourceChain}
+            onChange={handleSourceChange}
+            disabled={shouldLockFields}
+            chains={CHAINS}
+          />
+        </div>
+        <div className={classes.chainSelectArrow}>
+          <ChainSelectArrow
+            onClick={() => {
+              dispatch(setSourceChain(targetChain));
+            }}
+            disabled={shouldLockFields}
+          />
+        </div>
+        <div className={classes.chainSelectContainer}>
+          <Typography variant="caption">Target</Typography>
+          <ChainSelect
+            variant="outlined"
+            select
+            fullWidth
+            value={targetChain}
+            onChange={handleTargetChange}
+            disabled={shouldLockFields}
+            chains={targetChainOptions}
+          />
+        </div>
+      </div>
       <KeyAndBalance chainId={sourceChain} />
       {isReady || uiAmountString ? (
         <div className={classes.transferField}>
@@ -129,22 +210,26 @@ function Source() {
         </Button>
       ) : (
         <>
-          <TokenWarning
-            sourceChain={sourceChain}
-            tokenAddress={parsedTokenAccount?.mintKey}
-            symbol={parsedTokenAccount?.symbol}
-          />
           <LowBalanceWarning chainId={sourceChain} />
+          {sourceChain === CHAIN_ID_SOLANA && <SolanaTPSWarning />}
+          <SourceAssetWarning
+            sourceChain={sourceChain}
+            sourceAsset={parsedTokenAccount?.mintKey}
+          />
           {hasParsedTokenAccount ? (
-            <TextField
+            <NumberTextField
               variant="outlined"
               label="Amount"
-              type="number"
               fullWidth
               className={classes.transferField}
               value={amount}
               onChange={handleAmountChange}
               disabled={shouldLockFields}
+              onMaxClick={
+                uiAmountString && !parsedTokenAccount.isNativeAsset
+                  ? handleMaxClick
+                  : undefined
+              }
             />
           ) : null}
           <ButtonWithLoader

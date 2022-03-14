@@ -1,8 +1,9 @@
+import { isEVMChain } from "@certusone/wormhole-sdk";
 import { makeStyles, Typography } from "@material-ui/core";
 import { Alert } from "@material-ui/lab";
 import { useCallback, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { EthGasEstimateSummary } from "../../hooks/useTransactionFees";
+import { GasEstimateSummary } from "../../hooks/useTransactionFees";
 import { incrementStep, setTargetChain } from "../../store/attestSlice";
 import {
   selectAttestIsTargetComplete,
@@ -11,7 +12,6 @@ import {
   selectAttestTargetChain,
 } from "../../store/selectors";
 import { CHAINS, CHAINS_BY_ID } from "../../utils/consts";
-import { isEVMChain } from "../../utils/ethereum";
 import ButtonWithLoader from "../ButtonWithLoader";
 import ChainSelect from "../ChainSelect";
 import KeyAndBalance from "../KeyAndBalance";
@@ -62,7 +62,7 @@ function Target() {
           {CHAINS_BY_ID[targetChain].name} to attest this token.{" "}
         </Typography>
         {isEVMChain(targetChain) && (
-          <EthGasEstimateSummary
+          <GasEstimateSummary
             methodType="createWrapped"
             chainId={targetChain}
           />

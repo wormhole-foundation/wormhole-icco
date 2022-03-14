@@ -7,6 +7,7 @@ import {
   getEmitterAddressTerra,
   hexToNativeString,
   hexToUint8Array,
+  isEVMChain,
   parseNFTPayload,
   parseSequenceFromLogEth,
   parseSequenceFromLogSolana,
@@ -35,13 +36,15 @@ import { ethers } from "ethers";
 import { useSnackbar } from "notistack";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useDispatch } from "react-redux";
-import { useHistory } from "react-router";
+import { useHistory, useLocation } from "react-router";
 import { useEthereumProvider } from "../contexts/EthereumProviderContext";
+import useIsWalletReady from "../hooks/useIsWalletReady";
 import { COLORS } from "../muiTheme";
 import { setRecoveryVaa as setRecoveryNFTVaa } from "../store/nftSlice";
 import { setRecoveryVaa } from "../store/transferSlice";
 import {
   CHAINS,
+  CHAINS_BY_ID,
   CHAINS_WITH_NFT_SUPPORT,
   getBridgeAddressForChain,
   getNFTBridgeAddressForChain,
@@ -53,7 +56,6 @@ import {
   TERRA_TOKEN_BRIDGE_ADDRESS,
   WORMHOLE_RPC_HOSTS,
 } from "../utils/consts";
-import { isEVMChain } from "../utils/ethereum";
 import { getSignedVAAWithRetry } from "../utils/getSignedVAAWithRetry";
 import parseError from "../utils/parseError";
 import ButtonWithLoader from "./ButtonWithLoader";
@@ -62,8 +64,8 @@ import KeyAndBalance from "./KeyAndBalance";
 
 const useStyles = makeStyles((theme) => ({
   mainCard: {
-    padding: theme.spacing(2),
-    backgroundColor: COLORS.nearBlackWithMinorTransparency,
+    padding: "32px 32px 16px",
+    backgroundColor: COLORS.whiteWithTransparency,
   },
   advancedContainer: {
     padding: theme.spacing(2, 0),
@@ -174,6 +176,9 @@ export default function Recovery() {
   const [recoverySourceTxError, setRecoverySourceTxError] = useState("");
   const [recoverySignedVAA, setRecoverySignedVAA] = useState("");
   const [recoveryParsedVAA, setRecoveryParsedVAA] = useState<any>(null);
+  const { isReady, statusMessage } = useIsWalletReady(recoverySourceChain);
+  const walletConnectError =
+    isEVMChain(recoverySourceChain) && !isReady ? statusMessage : "";
   const parsedPayload = useMemo(() => {
     try {
       return recoveryParsedVAA?.payload
@@ -190,8 +195,35 @@ export default function Recovery() {
       return null;
     }
   }, [recoveryParsedVAA, isNFT]);
+
+  const { search } = useLocation();
+  const query = useMemo(() => new URLSearchParams(search), [search]);
+  const pathSourceChain = query.get("sourceChain");
+  const pathSourceTransaction = query.get("transactionId");
+
+  //This effect initializes the state based on the path params.
   useEffect(() => {
-    if (recoverySourceTx) {
+    if (!pathSourceChain && !pathSourceTransaction) {
+      return;
+    }
+    try {
+      const sourceChain: ChainId =
+        CHAINS_BY_ID[parseFloat(pathSourceChain || "") as ChainId]?.id;
+
+      if (sourceChain) {
+        setRecoverySourceChain(sourceChain);
+      }
+      if (pathSourceTransaction) {
+        setRecoverySourceTx(pathSourceTransaction);
+      }
+    } catch (e) {
+      console.error(e);
+      console.error("Invalid path params specified.");
+    }
+  }, [pathSourceChain, pathSourceTransaction]);
+
+  useEffect(() => {
+    if (recoverySourceTx && (!isEVMChain(recoverySourceChain) || isReady)) {
       let cancelled = false;
       if (isEVMChain(recoverySourceChain) && provider) {
         setRecoverySourceTxError("");
@@ -253,7 +285,14 @@ export default function Recovery() {
         cancelled = true;
       };
     }
-  }, [recoverySourceChain, recoverySourceTx, provider, enqueueSnackbar, isNFT]);
+  }, [
+    recoverySourceChain,
+    recoverySourceTx,
+    provider,
+    enqueueSnackbar,
+    isNFT,
+    isReady,
+  ]);
   const handleTypeChange = useCallback((event) => {
     setRecoverySourceChain((prevChain) =>
       event.target.value === "NFT" &&
@@ -279,7 +318,7 @@ export default function Recovery() {
       (async () => {
         try {
           const { parse_vaa } = await import(
-            "@certusone/wormhole-sdk/lib/solana/core/bridge"
+            "@certusone/wormhole-sdk/lib/esm/solana/core/bridge"
           );
           const parsedVAA = parse_vaa(hexToUint8Array(recoverySignedVAA));
           if (!cancelled) {
@@ -324,6 +363,10 @@ export default function Recovery() {
               targetAddress: parsedPayload.targetAddress,
               originChain: parsedPayload.originChain,
               originAddress: parsedPayload.originAddress,
+              amount:
+                "amount" in parsedPayload
+                  ? parsedPayload.amount.toString()
+                  : "",
             },
           })
         );
@@ -376,11 +419,15 @@ export default function Recovery() {
         <TextField
           variant="outlined"
           label="Source Tx (paste here)"
-          disabled={!!recoverySignedVAA || recoverySourceTxIsLoading}
+          disabled={
+            !!recoverySignedVAA ||
+            recoverySourceTxIsLoading ||
+            !!walletConnectError
+          }
           value={recoverySourceTx}
           onChange={handleSourceTxChange}
-          error={!!recoverySourceTxError}
-          helperText={recoverySourceTxError}
+          error={!!recoverySourceTxError || !!walletConnectError}
+          helperText={recoverySourceTxError || walletConnectError}
           fullWidth
           margin="normal"
         />
@@ -511,14 +558,6 @@ export default function Recovery() {
                     margin="normal"
                   />
                 ) : null}
-                <TextField
-                  variant="outlined"
-                  label="Target Chain"
-                  disabled
-                  value={parsedPayload?.targetChain.toString() || ""}
-                  fullWidth
-                  margin="normal"
-                />
                 <TextField
                   variant="outlined"
                   label="Target Chain"

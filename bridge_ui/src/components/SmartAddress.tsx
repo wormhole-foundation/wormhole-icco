@@ -1,9 +1,14 @@
 import {
   ChainId,
+  CHAIN_ID_AVAX,
   CHAIN_ID_BSC,
   CHAIN_ID_ETH,
+  CHAIN_ID_ETHEREUM_ROPSTEN,
+  CHAIN_ID_POLYGON,
   CHAIN_ID_SOLANA,
   CHAIN_ID_TERRA,
+  CHAIN_ID_OASIS,
+  isNativeDenom,
 } from "@certusone/wormhole-sdk";
 import { Button, makeStyles, Tooltip, Typography } from "@material-ui/core";
 import { FileCopy, OpenInNew } from "@material-ui/icons";
@@ -14,6 +19,7 @@ import useCopyToClipboard from "../hooks/useCopyToClipboard";
 import { ParsedTokenAccount } from "../store/transferSlice";
 import { CLUSTER, getExplorerName } from "../utils/consts";
 import { shortenAddress } from "../utils/solana";
+import { formatNativeDenom } from "../utils/terra";
 
 const useStyles = makeStyles((theme) => ({
   mainTypog: {
@@ -72,9 +78,13 @@ export default function SmartAddress({
   extraContent?: ReactChild;
 }) {
   const classes = useStyles();
+  const isNativeTerra = chainId === CHAIN_ID_TERRA && isNativeDenom(address);
   const useableAddress = parsedTokenAccount?.mintKey || address || "";
-  const useableSymbol = parsedTokenAccount?.symbol || symbol || "";
-  const isNative = parsedTokenAccount?.isNativeAsset || false;
+  const useableSymbol = isNativeTerra
+    ? formatNativeDenom(address)
+    : parsedTokenAccount?.symbol || symbol || "";
+  // const useableLogo = logo || isNativeTerra ? getNativeTerraIcon(useableSymbol) : null
+  const isNative = parsedTokenAccount?.isNativeAsset || isNativeTerra || false;
   const addressShort = shortenAddress(useableAddress) || "";
 
   const useableName = isNative
@@ -90,12 +100,30 @@ export default function SmartAddress({
     ? `https://${
         CLUSTER === "testnet" ? "goerli." : ""
       }etherscan.io/address/${useableAddress}`
+    : chainId === CHAIN_ID_ETHEREUM_ROPSTEN
+    ? `https://${
+        CLUSTER === "testnet" ? "ropsten." : ""
+      }etherscan.io/address/${useableAddress}`
     : chainId === CHAIN_ID_BSC
-    ? `https://bscscan.com/address/${useableAddress}`
+    ? `https://${
+        CLUSTER === "testnet" ? "testnet." : ""
+      }bscscan.com/address/${useableAddress}`
+    : chainId === CHAIN_ID_POLYGON
+    ? `https://${
+        CLUSTER === "testnet" ? "mumbai." : ""
+      }polygonscan.com/address/${useableAddress}`
+    : chainId === CHAIN_ID_AVAX
+    ? `https://${
+        CLUSTER === "testnet" ? "testnet." : ""
+      }snowtrace.io/address/${useableAddress}`
+    : chainId === CHAIN_ID_OASIS
+    ? `https://${
+        CLUSTER === "testnet" ? "testnet." : ""
+      }explorer.emerald.oasis.dev/address/${useableAddress}`
     : chainId === CHAIN_ID_SOLANA
     ? `https://explorer.solana.com/address/${useableAddress}${
         CLUSTER === "testnet"
-          ? "?cluster=testnet"
+          ? "?cluster=devnet"
           : CLUSTER === "devnet"
           ? "?cluster=custom&customUrl=http%3A%2F%2Flocalhost%3A8899"
           : ""
@@ -117,7 +145,7 @@ export default function SmartAddress({
     <Button
       size="small"
       variant="outlined"
-      endIcon={<OpenInNew />}
+      startIcon={<OpenInNew />}
       className={classes.buttons}
       href={explorerAddress}
       target="_blank"
@@ -131,7 +159,7 @@ export default function SmartAddress({
     <Button
       size="small"
       variant="outlined"
-      endIcon={<FileCopy />}
+      startIcon={<FileCopy />}
       onClick={copyToClipboard}
       className={classes.buttons}
     >

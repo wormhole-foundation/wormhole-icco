@@ -1,13 +1,18 @@
 import {
   ChainId,
+  CHAIN_ID_AVAX,
   CHAIN_ID_BSC,
   CHAIN_ID_ETH,
+  CHAIN_ID_ETHEREUM_ROPSTEN,
+  CHAIN_ID_POLYGON,
   CHAIN_ID_SOLANA,
   CHAIN_ID_TERRA,
+  CHAIN_ID_OASIS,
+  isEVMChain,
   WSOL_ADDRESS,
   WSOL_DECIMALS,
 } from "@certusone/wormhole-sdk";
-import { ethers } from "@certusone/wormhole-sdk/node_modules/ethers";
+import { ethers } from "ethers";
 import { Dispatch } from "@reduxjs/toolkit";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import {
@@ -54,20 +59,31 @@ import {
 } from "../store/transferSlice";
 import {
   COVALENT_GET_TOKENS_URL,
+  logoOverrides,
+  ROPSTEN_WETH_ADDRESS,
+  ROPSTEN_WETH_DECIMALS,
   SOLANA_HOST,
+  WAVAX_ADDRESS,
+  WAVAX_DECIMALS,
   WBNB_ADDRESS,
   WBNB_DECIMALS,
   WETH_ADDRESS,
   WETH_DECIMALS,
+  WMATIC_ADDRESS,
+  WMATIC_DECIMALS,
+  WROSE_ADDRESS,
+  WROSE_DECIMALS,
 } from "../utils/consts";
-import { isEVMChain } from "../utils/ethereum";
 import {
   ExtractedMintInfo,
   extractMintInfo,
   getMultipleAccountsRPC,
 } from "../utils/solana";
+import avaxIcon from "../icons/avax.svg";
 import bnbIcon from "../icons/bnb.svg";
 import ethIcon from "../icons/eth.svg";
+import polygonIcon from "../icons/polygon.svg";
+import oasisIcon from "../icons/oasis-network-rose-logo.svg";
 
 export function createParsedTokenAccount(
   publicKey: string,
@@ -160,7 +176,7 @@ const createParsedTokenAccountFromCovalent = (
     uiAmountString: formatUnits(covalent.balance, covalent.contract_decimals),
     symbol: covalent.contract_ticker_symbol,
     name: covalent.contract_name,
-    logo: covalent.logo_url,
+    logo: logoOverrides.get(covalent.contract_address) || covalent.logo_url,
   };
 };
 
@@ -207,7 +223,30 @@ const createNativeEthParsedTokenAccount = (
           balanceInEth.toString(), //This is the actual display field, which has full precision.
           "ETH", //A white lie for display purposes
           "Ethereum", //A white lie for display purposes
-          ethIcon, //TODO logo
+          ethIcon,
+          true //isNativeAsset
+        );
+      });
+};
+
+const createNativeEthRopstenParsedTokenAccount = (
+  provider: Provider,
+  signerAddress: string | undefined
+) => {
+  return !(provider && signerAddress)
+    ? Promise.reject()
+    : provider.getBalance(signerAddress).then((balanceInWei) => {
+        const balanceInEth = ethers.utils.formatEther(balanceInWei);
+        return createParsedTokenAccount(
+          signerAddress, //public key
+          ROPSTEN_WETH_ADDRESS, //Mint key, On the other side this will be WETH, so this is hopefully a white lie.
+          balanceInWei.toString(), //amount, in wei
+          ROPSTEN_WETH_DECIMALS, //Luckily both ETH and WETH have 18 decimals, so this should not be an issue.
+          parseFloat(balanceInEth), //This loses precision, but is a limitation of the current datamodel. This field is essentially deprecated
+          balanceInEth.toString(), //This is the actual display field, which has full precision.
+          "ETH", //A white lie for display purposes
+          "Ethereum", //A white lie for display purposes
+          ethIcon,
           true //isNativeAsset
         );
       });
@@ -230,7 +269,76 @@ const createNativeBscParsedTokenAccount = (
           balanceInEth.toString(), //This is the actual display field, which has full precision.
           "BNB", //A white lie for display purposes
           "Binance Coin", //A white lie for display purposes
-          bnbIcon, //TODO logo
+          bnbIcon,
+          true //isNativeAsset
+        );
+      });
+};
+
+const createNativePolygonParsedTokenAccount = (
+  provider: Provider,
+  signerAddress: string | undefined
+) => {
+  return !(provider && signerAddress)
+    ? Promise.reject()
+    : provider.getBalance(signerAddress).then((balanceInWei) => {
+        const balanceInEth = ethers.utils.formatEther(balanceInWei);
+        return createParsedTokenAccount(
+          signerAddress, //public key
+          WMATIC_ADDRESS, //Mint key, On the other side this will be WMATIC, so this is hopefully a white lie.
+          balanceInWei.toString(), //amount, in wei
+          WMATIC_DECIMALS, //Luckily both MATIC and WMATIC have 18 decimals, so this should not be an issue.
+          parseFloat(balanceInEth), //This loses precision, but is a limitation of the current datamodel. This field is essentially deprecated
+          balanceInEth.toString(), //This is the actual display field, which has full precision.
+          "MATIC", //A white lie for display purposes
+          "Matic", //A white lie for display purposes
+          polygonIcon,
+          true //isNativeAsset
+        );
+      });
+};
+
+const createNativeAvaxParsedTokenAccount = (
+  provider: Provider,
+  signerAddress: string | undefined
+) => {
+  return !(provider && signerAddress)
+    ? Promise.reject()
+    : provider.getBalance(signerAddress).then((balanceInWei) => {
+        const balanceInEth = ethers.utils.formatEther(balanceInWei);
+        return createParsedTokenAccount(
+          signerAddress, //public key
+          WAVAX_ADDRESS, //Mint key, On the other side this will be wavax, so this is hopefully a white lie.
+          balanceInWei.toString(), //amount, in wei
+          WAVAX_DECIMALS,
+          parseFloat(balanceInEth), //This loses precision, but is a limitation of the current datamodel. This field is essentially deprecated
+          balanceInEth.toString(), //This is the actual display field, which has full precision.
+          "AVAX", //A white lie for display purposes
+          "Avalanche", //A white lie for display purposes
+          avaxIcon,
+          true //isNativeAsset
+        );
+      });
+};
+
+const createNativeOasisParsedTokenAccount = (
+  provider: Provider,
+  signerAddress: string | undefined
+) => {
+  return !(provider && signerAddress)
+    ? Promise.reject()
+    : provider.getBalance(signerAddress).then((balanceInWei) => {
+        const balanceInEth = ethers.utils.formatEther(balanceInWei);
+        return createParsedTokenAccount(
+          signerAddress, //public key
+          WROSE_ADDRESS, //Mint key, On the other side this will be wavax, so this is hopefully a white lie.
+          balanceInWei.toString(), //amount, in wei
+          WROSE_DECIMALS,
+          parseFloat(balanceInEth), //This loses precision, but is a limitation of the current datamodel. This field is essentially deprecated
+          balanceInEth.toString(), //This is the actual display field, which has full precision.
+          "ROSE", //A white lie for display purposes
+          "Rose", //A white lie for display purposes
+          oasisIcon,
           true //isNativeAsset
         );
       });
@@ -581,6 +689,40 @@ function useGetAvailableTokens(nft: boolean = false) {
     };
   }, [lookupChain, provider, signerAddress, nft, ethNativeAccount]);
 
+  //Ethereum (Ropsten) native asset load
+  useEffect(() => {
+    let cancelled = false;
+    if (
+      signerAddress &&
+      lookupChain === CHAIN_ID_ETHEREUM_ROPSTEN &&
+      !ethNativeAccount &&
+      !nft
+    ) {
+      setEthNativeAccountLoading(true);
+      createNativeEthRopstenParsedTokenAccount(provider, signerAddress).then(
+        (result) => {
+          console.log("create native account returned with value", result);
+          if (!cancelled) {
+            setEthNativeAccount(result);
+            setEthNativeAccountLoading(false);
+            setEthNativeAccountError("");
+          }
+        },
+        (error) => {
+          if (!cancelled) {
+            setEthNativeAccount(undefined);
+            setEthNativeAccountLoading(false);
+            setEthNativeAccountError("Unable to retrieve your ETH balance.");
+          }
+        }
+      );
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [lookupChain, provider, signerAddress, nft, ethNativeAccount]);
+
   //Binance Smart Chain native asset load
   useEffect(() => {
     let cancelled = false;
@@ -604,7 +746,109 @@ function useGetAvailableTokens(nft: boolean = false) {
           if (!cancelled) {
             setEthNativeAccount(undefined);
             setEthNativeAccountLoading(false);
-            setEthNativeAccountError("Unable to retrieve your BSC balance.");
+            setEthNativeAccountError("Unable to retrieve your BNB balance.");
+          }
+        }
+      );
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [lookupChain, provider, signerAddress, nft, ethNativeAccount]);
+
+  //Polygon native asset load
+  useEffect(() => {
+    let cancelled = false;
+    if (
+      signerAddress &&
+      lookupChain === CHAIN_ID_POLYGON &&
+      !ethNativeAccount &&
+      !nft
+    ) {
+      setEthNativeAccountLoading(true);
+      createNativePolygonParsedTokenAccount(provider, signerAddress).then(
+        (result) => {
+          console.log("create native account returned with value", result);
+          if (!cancelled) {
+            setEthNativeAccount(result);
+            setEthNativeAccountLoading(false);
+            setEthNativeAccountError("");
+          }
+        },
+        (error) => {
+          if (!cancelled) {
+            setEthNativeAccount(undefined);
+            setEthNativeAccountLoading(false);
+            setEthNativeAccountError("Unable to retrieve your MATIC balance.");
+          }
+        }
+      );
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [lookupChain, provider, signerAddress, nft, ethNativeAccount]);
+
+  //TODO refactor all these into an isEVM effect
+  //avax native asset load
+  useEffect(() => {
+    let cancelled = false;
+    if (
+      signerAddress &&
+      lookupChain === CHAIN_ID_AVAX &&
+      !ethNativeAccount &&
+      !nft
+    ) {
+      setEthNativeAccountLoading(true);
+      createNativeAvaxParsedTokenAccount(provider, signerAddress).then(
+        (result) => {
+          console.log("create native account returned with value", result);
+          if (!cancelled) {
+            setEthNativeAccount(result);
+            setEthNativeAccountLoading(false);
+            setEthNativeAccountError("");
+          }
+        },
+        (error) => {
+          if (!cancelled) {
+            setEthNativeAccount(undefined);
+            setEthNativeAccountLoading(false);
+            setEthNativeAccountError("Unable to retrieve your AVAX balance.");
+          }
+        }
+      );
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [lookupChain, provider, signerAddress, nft, ethNativeAccount]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (
+      signerAddress &&
+      lookupChain === CHAIN_ID_OASIS &&
+      !ethNativeAccount &&
+      !nft
+    ) {
+      setEthNativeAccountLoading(true);
+      createNativeOasisParsedTokenAccount(provider, signerAddress).then(
+        (result) => {
+          console.log("create native account returned with value", result);
+          if (!cancelled) {
+            setEthNativeAccount(result);
+            setEthNativeAccountLoading(false);
+            setEthNativeAccountError("");
+          }
+        },
+        (error) => {
+          if (!cancelled) {
+            setEthNativeAccount(undefined);
+            setEthNativeAccountLoading(false);
+            setEthNativeAccountError("Unable to retrieve your Oasis balance.");
           }
         }
       );

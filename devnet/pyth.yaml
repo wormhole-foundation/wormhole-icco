@@ -10,9 +10,6 @@ spec:
   selector:
     app: pyth
   ports:
-    - port: 8898
-      name: pyth-tx
-      protocol: TCP
     - port: 4242
       name: pyth-accounts
       protocol: TCP

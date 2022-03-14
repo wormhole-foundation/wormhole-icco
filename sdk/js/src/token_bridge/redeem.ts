@@ -11,6 +11,7 @@ import { ethers } from "ethers";
 import { fromUint8Array } from "js-base64";
 import { Bridge__factory } from "../ethers-contracts";
 import { ixFromRust } from "../solana";
+import { importCoreWasm, importTokenWasm } from "../solana/wasm";
 import {
   CHAIN_ID_SOLANA,
   WSOL_ADDRESS,
@@ -47,16 +48,11 @@ export async function redeemOnTerra(
   walletAddress: string,
   signedVAA: Uint8Array
 ) {
-  return new MsgExecuteContract(
-    walletAddress,
-    tokenBridgeAddress,
-    {
-      submit_vaa: {
-        data: fromUint8Array(signedVAA),
-      },
+  return new MsgExecuteContract(walletAddress, tokenBridgeAddress, {
+    submit_vaa: {
+      data: fromUint8Array(signedVAA),
     },
-    { uluna: 1000 }
-  );
+  });
 }
 
 export async function redeemAndUnwrapOnSolana(
@@ -66,10 +62,8 @@ export async function redeemAndUnwrapOnSolana(
   payerAddress: string,
   signedVAA: Uint8Array
 ) {
-  const { parse_vaa } = await import("../solana/core/bridge");
-  const { complete_transfer_native_ix } = await import(
-    "../solana/token/token_bridge"
-  );
+  const { parse_vaa } = await importCoreWasm();
+  const { complete_transfer_native_ix } = await importTokenWasm();
   const parsedVAA = parse_vaa(signedVAA);
   const parsedPayload = parseTransferPayload(
     Buffer.from(new Uint8Array(parsedVAA.payload))
@@ -156,13 +150,13 @@ export async function redeemOnSolana(
   payerAddress: string,
   signedVAA: Uint8Array
 ) {
-  const { parse_vaa } = await import("../solana/core/bridge");
+  const { parse_vaa } = await importCoreWasm();
   const parsedVAA = parse_vaa(signedVAA);
   const isSolanaNative =
     Buffer.from(new Uint8Array(parsedVAA.payload)).readUInt16BE(65) ===
     CHAIN_ID_SOLANA;
   const { complete_transfer_wrapped_ix, complete_transfer_native_ix } =
-    await import("../solana/token/token_bridge");
+    await importTokenWasm();
   const ixs = [];
   if (isSolanaNative) {
     ixs.push(

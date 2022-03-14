@@ -1,7 +1,8 @@
 import { Connection, PublicKey } from "@solana/web3.js";
+import { LCDClient } from "@terra-money/terra.js";
 import { ethers } from "ethers";
 import { Bridge__factory } from "../ethers-contracts";
-import { ConnectedWallet as TerraConnectedWallet } from "@terra-money/wallet-provider";
+import { importTokenWasm } from "../solana/wasm";
 
 /**
  * Returns whether or not an asset address on Ethereum is a wormhole wrapped asset
@@ -12,7 +13,7 @@ import { ConnectedWallet as TerraConnectedWallet } from "@terra-money/wallet-pro
  */
 export async function getIsWrappedAssetEth(
   tokenBridgeAddress: string,
-  provider: ethers.providers.Web3Provider,
+  provider: ethers.Signer | ethers.providers.Provider,
   assetAddress: string
 ) {
   if (!assetAddress) return false;
@@ -22,7 +23,7 @@ export async function getIsWrappedAssetEth(
 
 export async function getIsWrappedAssetTerra(
   tokenBridgeAddress: string,
-  wallet: TerraConnectedWallet,
+  client: LCDClient,
   assetAddress: string
 ) {
   return false;
@@ -41,7 +42,7 @@ export async function getIsWrappedAssetSol(
   mintAddress: string
 ) {
   if (!mintAddress) return false;
-  const { wrapped_meta_address } = await import("../solana/token/token_bridge");
+  const { wrapped_meta_address } = await importTokenWasm();
   const wrappedMetaAddress = wrapped_meta_address(
     tokenBridgeAddress,
     new PublicKey(mintAddress).toBytes()

@@ -5,7 +5,11 @@ import {
   createWrappedOnEth,
   createWrappedOnSolana,
   createWrappedOnTerra,
-  postVaaSolana,
+  updateWrappedOnEth,
+  updateWrappedOnTerra,
+  updateWrappedOnSolana,
+  postVaaSolanaWithRetry,
+  isEVMChain,
 } from "@certusone/wormhole-sdk";
 import { WalletContextState } from "@solana/wallet-adapter-react";
 import { Connection } from "@solana/web3.js";
@@ -24,33 +28,42 @@ import { setCreateTx, setIsCreating } from "../store/attestSlice";
 import {
   selectAttestIsCreating,
   selectAttestTargetChain,
+  selectTerraFeeDenom,
 } from "../store/selectors";
 import {
   getTokenBridgeAddressForChain,
+  MAX_VAA_UPLOAD_RETRIES_SOLANA,
   SOLANA_HOST,
   SOL_BRIDGE_ADDRESS,
   SOL_TOKEN_BRIDGE_ADDRESS,
   TERRA_TOKEN_BRIDGE_ADDRESS,
 } from "../utils/consts";
-import { isEVMChain } from "../utils/ethereum";
 import parseError from "../utils/parseError";
 import { signSendAndConfirm } from "../utils/solana";
 import { Alert } from "@material-ui/lab";
+import { postWithFees } from "../utils/terra";
 
 async function evm(
   dispatch: any,
   enqueueSnackbar: any,
   signer: Signer,
   signedVAA: Uint8Array,
-  chainId: ChainId
+  chainId: ChainId,
+  shouldUpdate: boolean
 ) {
   dispatch(setIsCreating(true));
   try {
-    const receipt = await createWrappedOnEth(
-      getTokenBridgeAddressForChain(chainId),
-      signer,
-      signedVAA
-    );
+    const receipt = shouldUpdate
+      ? await updateWrappedOnEth(
+          getTokenBridgeAddressForChain(chainId),
+          signer,
+          signedVAA
+        )
+      : await createWrappedOnEth(
+          getTokenBridgeAddressForChain(chainId),
+          signer,
+          signedVAA
+        );
     dispatch(
       setCreateTx({ id: receipt.transactionHash, block: receipt.blockNumber })
     );
@@ -70,7 +83,8 @@ async function solana(
   enqueueSnackbar: any,
   wallet: WalletContextState,
   payerAddress: string, // TODO: we may not need this since we have wallet
-  signedVAA: Uint8Array
+  signedVAA: Uint8Array,
+  shouldUpdate: boolean
 ) {
   dispatch(setIsCreating(true));
   try {
@@ -78,20 +92,29 @@ async function solana(
       throw new Error("wallet.signTransaction is undefined");
     }
     const connection = new Connection(SOLANA_HOST, "confirmed");
-    await postVaaSolana(
+    await postVaaSolanaWithRetry(
       connection,
       wallet.signTransaction,
       SOL_BRIDGE_ADDRESS,
       payerAddress,
-      Buffer.from(signedVAA)
+      Buffer.from(signedVAA),
+      MAX_VAA_UPLOAD_RETRIES_SOLANA
     );
-    const transaction = await createWrappedOnSolana(
-      connection,
-      SOL_BRIDGE_ADDRESS,
-      SOL_TOKEN_BRIDGE_ADDRESS,
-      payerAddress,
-      signedVAA
-    );
+    const transaction = shouldUpdate
+      ? await updateWrappedOnSolana(
+          connection,
+          SOL_BRIDGE_ADDRESS,
+          SOL_TOKEN_BRIDGE_ADDRESS,
+          payerAddress,
+          signedVAA
+        )
+      : await createWrappedOnSolana(
+          connection,
+          SOL_BRIDGE_ADDRESS,
+          SOL_TOKEN_BRIDGE_ADDRESS,
+          payerAddress,
+          signedVAA
+        );
     const txid = await signSendAndConfirm(wallet, connection, transaction);
     // TODO: didn't want to make an info call we didn't need, can we get the block without it by modifying the above call?
     dispatch(setCreateTx({ id: txid, block: 1 }));
@@ -110,19 +133,29 @@ async function terra(
   dispatch: any,
   enqueueSnackbar: any,
   wallet: ConnectedWallet,
-  signedVAA: Uint8Array
+  signedVAA: Uint8Array,
+  shouldUpdate: boolean,
+  feeDenom: string
 ) {
   dispatch(setIsCreating(true));
   try {
-    const msg = await createWrappedOnTerra(
-      TERRA_TOKEN_BRIDGE_ADDRESS,
-      wallet.terraAddress,
-      signedVAA
+    const msg = shouldUpdate
+      ? await updateWrappedOnTerra(
+          TERRA_TOKEN_BRIDGE_ADDRESS,
+          wallet.terraAddress,
+          signedVAA
+        )
+      : await createWrappedOnTerra(
+          TERRA_TOKEN_BRIDGE_ADDRESS,
+          wallet.terraAddress,
+          signedVAA
+        );
+    const result = await postWithFees(
+      wallet,
+      [msg],
+      "Wormhole - Create Wrapped",
+      [feeDenom]
     );
-    const result = await wallet.post({
-      msgs: [msg],
-      memo: "Wormhole - Create Wrapped",
-    });
     dispatch(
       setCreateTx({ id: result.result.txhash, block: result.result.height })
     );
@@ -137,7 +170,7 @@ async function terra(
   }
 }
 
-export function useHandleCreateWrapped() {
+export function useHandleCreateWrapped(shouldUpdate: boolean) {
   const dispatch = useDispatch();
   const { enqueueSnackbar } = useSnackbar();
   const targetChain = useSelector(selectAttestTargetChain);
@@ -147,9 +180,17 @@ export function useHandleCreateWrapped() {
   const isCreating = useSelector(selectAttestIsCreating);
   const { signer } = useEthereumProvider();
   const terraWallet = useConnectedWallet();
+  const terraFeeDenom = useSelector(selectTerraFeeDenom);
   const handleCreateClick = useCallback(() => {
     if (isEVMChain(targetChain) && !!signer && !!signedVAA) {
-      evm(dispatch, enqueueSnackbar, signer, signedVAA, targetChain);
+      evm(
+        dispatch,
+        enqueueSnackbar,
+        signer,
+        signedVAA,
+        targetChain,
+        shouldUpdate
+      );
     } else if (
       targetChain === CHAIN_ID_SOLANA &&
       !!solanaWallet &&
@@ -161,10 +202,18 @@ export function useHandleCreateWrapped() {
         enqueueSnackbar,
         solanaWallet,
         solPK.toString(),
-        signedVAA
+        signedVAA,
+        shouldUpdate
       );
     } else if (targetChain === CHAIN_ID_TERRA && !!terraWallet && !!signedVAA) {
-      terra(dispatch, enqueueSnackbar, terraWallet, signedVAA);
+      terra(
+        dispatch,
+        enqueueSnackbar,
+        terraWallet,
+        signedVAA,
+        shouldUpdate,
+        terraFeeDenom
+      );
     } else {
       // enqueueSnackbar(
       //   "Creating wrapped tokens on this chain is not yet supported",
@@ -182,6 +231,8 @@ export function useHandleCreateWrapped() {
     terraWallet,
     signedVAA,
     signer,
+    shouldUpdate,
+    terraFeeDenom,
   ]);
   return useMemo(
     () => ({

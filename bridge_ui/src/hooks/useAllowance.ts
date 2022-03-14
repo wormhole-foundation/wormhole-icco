@@ -1,4 +1,9 @@
-import { approveEth, ChainId, getAllowanceEth } from "@certusone/wormhole-sdk";
+import {
+  approveEth,
+  ChainId,
+  getAllowanceEth,
+  isEVMChain,
+} from "@certusone/wormhole-sdk";
 import { BigNumber } from "ethers";
 import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -6,12 +11,12 @@ import { useEthereumProvider } from "../contexts/EthereumProviderContext";
 import { selectTransferIsApproving } from "../store/selectors";
 import { setIsApproving } from "../store/transferSlice";
 import { getTokenBridgeAddressForChain } from "../utils/consts";
-import { isEVMChain } from "../utils/ethereum";
 
 export default function useAllowance(
   chainId: ChainId,
   tokenAddress?: string,
-  transferAmount?: BigInt
+  transferAmount?: BigInt,
+  sourceIsNative?: boolean
 ) {
   const dispatch = useDispatch();
   const [allowance, setAllowance] = useState<BigInt | null>(null);
@@ -20,6 +25,7 @@ export default function useAllowance(
   const { signer } = useEthereumProvider();
   const sufficientAllowance =
     !isEVMChain(chainId) ||
+    sourceIsNative ||
     (allowance && transferAmount && allowance >= transferAmount);
 
   useEffect(() => {

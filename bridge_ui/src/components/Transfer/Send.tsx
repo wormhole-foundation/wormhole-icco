@@ -1,3 +1,8 @@
+import {
+  CHAIN_ID_SOLANA,
+  CHAIN_ID_TERRA,
+  isEVMChain,
+} from "@certusone/wormhole-sdk";
 import { Checkbox, FormControlLabel } from "@material-ui/core";
 import { Alert } from "@material-ui/lab";
 import { ethers } from "ethers";
@@ -18,11 +23,12 @@ import {
   selectTransferTransferTx,
 } from "../../store/selectors";
 import { CHAINS_BY_ID } from "../../utils/consts";
-import { isEVMChain } from "../../utils/ethereum";
 import ButtonWithLoader from "../ButtonWithLoader";
 import KeyAndBalance from "../KeyAndBalance";
 import ShowTx from "../ShowTx";
+import SolanaTPSWarning from "../SolanaTPSWarning";
 import StepDescription from "../StepDescription";
+import TerraFeeDenomPicker from "../TerraFeeDenomPicker";
 import TransactionProgress from "../TransactionProgress";
 import SendConfirmationDialog from "./SendConfirmationDialog";
 import WaitingForWalletMessage from "./WaitingForWalletMessage";
@@ -44,9 +50,11 @@ function Send() {
   const sourceChain = useSelector(selectTransferSourceChain);
   const sourceAsset = useSelector(selectTransferSourceAsset);
   const sourceAmount = useSelector(selectTransferAmount);
-  const sourceDecimals = useSelector(
+  const sourceParsedTokenAccount = useSelector(
     selectTransferSourceParsedTokenAccount
-  )?.decimals;
+  );
+  const sourceDecimals = sourceParsedTokenAccount?.decimals;
+  const sourceIsNative = sourceParsedTokenAccount?.isNativeAsset;
   const sourceAmountParsed =
     sourceDecimals !== undefined &&
     sourceDecimals !== null &&
@@ -80,7 +88,12 @@ function Send() {
     isAllowanceFetching,
     isApproveProcessing,
     approveAmount,
-  } = useAllowance(sourceChain, sourceAsset, sourceAmountParsed || undefined);
+  } = useAllowance(
+    sourceChain,
+    sourceAsset,
+    sourceAmountParsed || undefined,
+    sourceIsNative
+  );
 
   const approveButtonNeeded = isEVMChain(sourceChain) && !sufficientAllowance;
   const notOne = shouldApproveUnlimited || sourceAmountParsed !== oneParsed;
@@ -123,12 +136,16 @@ function Send() {
         Transfer the tokens to the Wormhole Token Bridge.
       </StepDescription>
       <KeyAndBalance chainId={sourceChain} />
+      {sourceChain === CHAIN_ID_TERRA && (
+        <TerraFeeDenomPicker disabled={disabled} />
+      )}
       <Alert severity="info" variant="outlined">
         This will initiate the transfer on {CHAINS_BY_ID[sourceChain].name} and
         wait for finalization. If you navigate away from this page before
         completing Step 4, you will have to perform the recovery workflow to
         complete the transfer.
       </Alert>
+      {sourceChain === CHAIN_ID_SOLANA && <SolanaTPSWarning />}
       {approveButtonNeeded ? (
         <>
           <FormControlLabel

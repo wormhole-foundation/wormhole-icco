@@ -1,12 +1,17 @@
-import { CHAIN_ID_SOLANA, hexToNativeString } from "@certusone/wormhole-sdk";
+import {
+  CHAIN_ID_SOLANA,
+  CHAIN_ID_TERRA,
+  hexToNativeString,
+  isEVMChain,
+} from "@certusone/wormhole-sdk";
 import { makeStyles, Typography } from "@material-ui/core";
 import { Alert } from "@material-ui/lab";
 import { useCallback, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import useGetTargetParsedTokenAccounts from "../../hooks/useGetTargetParsedTokenAccounts";
 import useIsWalletReady from "../../hooks/useIsWalletReady";
-import useMetadata from "../../hooks/useMetadata";
 import useSyncTargetAddress from "../../hooks/useSyncTargetAddress";
-import { EthGasEstimateSummary } from "../../hooks/useTransactionFees";
+import { GasEstimateSummary } from "../../hooks/useTransactionFees";
 import {
   selectTransferAmount,
   selectTransferIsTargetComplete,
@@ -14,14 +19,14 @@ import {
   selectTransferSourceChain,
   selectTransferTargetAddressHex,
   selectTransferTargetAsset,
+  selectTransferTargetAssetWrapper,
   selectTransferTargetBalanceString,
   selectTransferTargetChain,
   selectTransferTargetError,
-  UNREGISTERED_ERROR_MESSAGE,
+  selectTransferTargetParsedTokenAccount,
 } from "../../store/selectors";
 import { incrementStep, setTargetChain } from "../../store/transferSlice";
 import { CHAINS, CHAINS_BY_ID } from "../../utils/consts";
-import { isEVMChain } from "../../utils/ethereum";
 import ButtonWithLoader from "../ButtonWithLoader";
 import ChainSelect from "../ChainSelect";
 import KeyAndBalance from "../KeyAndBalance";
@@ -30,6 +35,7 @@ import SmartAddress from "../SmartAddress";
 import SolanaCreateAssociatedAddress, {
   useAssociatedAccountExistsState,
 } from "../SolanaCreateAssociatedAddress";
+import SolanaTPSWarning from "../SolanaTPSWarning";
 import StepDescription from "../StepDescription";
 import RegisterNowButton from "./RegisterNowButton";
 
@@ -47,17 +53,12 @@ export const useTargetInfo = () => {
   const targetChain = useSelector(selectTransferTargetChain);
   const targetAddressHex = useSelector(selectTransferTargetAddressHex);
   const targetAsset = useSelector(selectTransferTargetAsset);
-  const targetAssetArrayed = useMemo(
-    () => (targetAsset ? [targetAsset] : []),
-    [targetAsset]
+  const targetParsedTokenAccount = useSelector(
+    selectTransferTargetParsedTokenAccount
   );
-  const metadata = useMetadata(targetChain, targetAssetArrayed);
-  const tokenName =
-    (targetAsset && metadata.data?.get(targetAsset)?.tokenName) || undefined;
-  const symbol =
-    (targetAsset && metadata.data?.get(targetAsset)?.symbol) || undefined;
-  const logo =
-    (targetAsset && metadata.data?.get(targetAsset)?.logo) || undefined;
+  const tokenName = targetParsedTokenAccount?.name;
+  const symbol = targetParsedTokenAccount?.symbol;
+  const logo = targetParsedTokenAccount?.logo;
   const readableTargetAddress =
     hexToNativeString(targetAddressHex, targetChain) || "";
   return useMemo(
@@ -74,12 +75,16 @@ export const useTargetInfo = () => {
 };
 
 function Target() {
+  useGetTargetParsedTokenAccounts();
   const classes = useStyles();
   const dispatch = useDispatch();
   const sourceChain = useSelector(selectTransferSourceChain);
   const chains = useMemo(
     () => CHAINS.filter((c) => c.id !== sourceChain),
     [sourceChain]
+  );
+  const { error: targetAssetError, data } = useSelector(
+    selectTransferTargetAssetWrapper
   );
   const {
     targetChain,
@@ -95,6 +100,7 @@ function Target() {
   const isTargetComplete = useSelector(selectTransferIsTargetComplete);
   const shouldLockFields = useSelector(selectTransferShouldLockFields);
   const { statusMessage } = useIsWalletReady(targetChain);
+  const isLoading = !statusMessage && !targetAssetError && !data;
   const { associatedAccountExists, setAssociatedAccountExists } =
     useAssociatedAccountExistsState(
       targetChain,
@@ -120,7 +126,7 @@ function Target() {
         fullWidth
         value={targetChain}
         onChange={handleTargetChange}
-        disabled={shouldLockFields}
+        disabled={true}
         chains={chains}
       />
       <KeyAndBalance chainId={targetChain} />
@@ -168,22 +174,23 @@ function Target() {
           You will have to pay transaction fees on{" "}
           {CHAINS_BY_ID[targetChain].name} to redeem your tokens.
         </Typography>
-        {isEVMChain(targetChain) && (
-          <EthGasEstimateSummary methodType="transfer" chainId={targetChain} />
+        {(isEVMChain(targetChain) || targetChain === CHAIN_ID_TERRA) && (
+          <GasEstimateSummary methodType="transfer" chainId={targetChain} />
         )}
       </Alert>
       <LowBalanceWarning chainId={targetChain} />
+      {targetChain === CHAIN_ID_SOLANA && <SolanaTPSWarning />}
       <ButtonWithLoader
         disabled={!isTargetComplete || !associatedAccountExists}
         onClick={handleNextClick}
-        showLoader={false}
-        error={statusMessage || error}
+        showLoader={isLoading}
+        error={
+          statusMessage || (isLoading ? undefined : error || targetAssetError)
+        }
       >
         Next
       </ButtonWithLoader>
-      {!statusMessage && error === UNREGISTERED_ERROR_MESSAGE ? (
-        <RegisterNowButton />
-      ) : null}
+      {!statusMessage && data && !data.doesExist ? <RegisterNowButton /> : null}
     </>
   );
 }

@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"sort"
+	"strings"
 	"text/tabwriter"
 	"time"
 )
@@ -18,10 +19,12 @@ import (
 
 var (
 	showDetails bool
+	only        []string
 )
 
 func init() {
 	AdminClientListNodes.Flags().BoolVar(&showDetails, "showDetails", false, "Show error counter and contract addresses")
+	AdminClientListNodes.Flags().StringSliceVar(&only, "only", nil, "Show only networks with the given name")
 }
 
 var AdminClientListNodes = &cobra.Command{
@@ -62,13 +65,70 @@ func runListNodes(cmd *cobra.Command, args []string) {
 
 	log.Printf("%d nodes in guardian state set", len(nodes))
 
+	// Check if any node is sending Ropsten metrics
+	var isTestnet bool
+	for _, node := range nodes {
+		for _, network := range node.RawHeartbeat.Networks {
+			if vaa.ChainID(network.Id) == vaa.ChainIDEthereumRopsten {
+				isTestnet = true
+			}
+		}
+	}
+
 	w := tabwriter.NewWriter(os.Stdout, 0, 8, 2, ' ', 0)
 
-	if showDetails {
-		_, _ = w.Write([]byte("Node key\tGuardian key\tNode name\tVersion\tLast seen\tUptime\tSolana\tEthereum\tTerra\tBSC\nPolygon\n"))
-	} else {
-		_, _ = w.Write([]byte("Node key\tGuardian key\tNode name\tVersion\tLast seen\tSolana\tEthereum\tTerra\tBSC\nPolygon\n"))
+	headers := []string{
+		"Node key",
+		"Guardian key",
+		"Node name",
+		"Version",
+		"Last seen",
 	}
+
+	if showDetails {
+		headers = append(headers, "Uptime")
+	}
+
+	type network struct {
+		string
+		vaa.ChainID
+	}
+
+	networks := []network{
+		{"Solana", vaa.ChainIDSolana},
+		{"Ethereum", vaa.ChainIDEthereum},
+		{"Terra", vaa.ChainIDTerra},
+		{"BSC", vaa.ChainIDBSC},
+		{"Polygon", vaa.ChainIDPolygon},
+		{"Avalanche", vaa.ChainIDAvalanche},
+		{"Oasis", vaa.ChainIDOasis},
+	}
+
+	if isTestnet {
+		networks = append(networks, network{"Ropsten", vaa.ChainIDEthereumRopsten})
+		networks = append(networks, network{"Fantom", vaa.ChainIDFantom})
+	}
+
+	if len(only) > 0 {
+		var filtered []network
+		for _, network := range networks {
+			for _, name := range only {
+				if strings.EqualFold(network.string, name) {
+					filtered = append(filtered, network)
+				}
+			}
+		}
+		networks = filtered
+	}
+
+	for _, k := range networks {
+		headers = append(headers, k.string)
+	}
+
+	for _, header := range headers {
+		_, _ = fmt.Fprintf(w, "%s\t", header)
+	}
+	_, _ = fmt.Fprintln(w)
 
 	for _, h := range nodes {
 		if h.RawHeartbeat == nil {
@@ -91,46 +151,32 @@ func runListNodes(cmd *cobra.Command, args []string) {
 			}
 		}
 
-		if showDetails {
-			fmt.Fprintf(w,
-				"%s\t%s\t%s\t%s\t%s\t%s\t%s %d (%d)\t%s %d (%d)\t%s %d (%d)\t%s %d (%d)\t%s %d (%d)\n",
-				h.P2PNodeAddr,
-				h.RawHeartbeat.GuardianAddr,
-				h.RawHeartbeat.NodeName,
-				h.RawHeartbeat.Version,
-				time.Since(last),
-				time.Since(boot),
-				truncAddrs[vaa.ChainIDSolana],
-				heights[vaa.ChainIDSolana],
-				errors[vaa.ChainIDSolana],
-				truncAddrs[vaa.ChainIDEthereum],
-				heights[vaa.ChainIDEthereum],
-				errors[vaa.ChainIDEthereum],
-				truncAddrs[vaa.ChainIDTerra],
-				heights[vaa.ChainIDTerra],
-				errors[vaa.ChainIDTerra],
-				truncAddrs[vaa.ChainIDBSC],
-				heights[vaa.ChainIDBSC],
-				errors[vaa.ChainIDBSC],
-				truncAddrs[vaa.ChainIDPolygon],
-				heights[vaa.ChainIDPolygon],
-				errors[vaa.ChainIDPolygon],
-			)
-		} else {
-			fmt.Fprintf(w,
-				"%s\t%s\t%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\n",
-				h.P2PNodeAddr,
-				h.RawHeartbeat.GuardianAddr,
-				h.RawHeartbeat.NodeName,
-				h.RawHeartbeat.Version,
-				time.Since(last),
-				heights[vaa.ChainIDSolana],
-				heights[vaa.ChainIDEthereum],
-				heights[vaa.ChainIDTerra],
-				heights[vaa.ChainIDBSC],
-				heights[vaa.ChainIDPolygon],
-			)
+		fields := []string{
+			h.P2PNodeAddr,
+			h.RawHeartbeat.GuardianAddr,
+			h.RawHeartbeat.NodeName,
+			h.RawHeartbeat.Version,
+			time.Since(last).String(),
 		}
+
+		if showDetails {
+			fields = append(fields, time.Since(boot).String())
+		}
+
+		for _, n := range networks {
+			if showDetails {
+				fields = append(fields, fmt.Sprintf("%s %d (%d)",
+					truncAddrs[n.ChainID], heights[n.ChainID], errors[n.ChainID]))
+			} else {
+				fields = append(fields, fmt.Sprintf("%d", heights[n.ChainID]))
+			}
+		}
+
+		for _, field := range fields {
+			_, _ = fmt.Fprintf(w, "%s\t", field)
+		}
+
+		_, _ = fmt.Fprintln(w)
 	}
 
 	w.Flush()

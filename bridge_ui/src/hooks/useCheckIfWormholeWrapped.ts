@@ -5,13 +5,14 @@ import {
   getOriginalAssetEth,
   getOriginalAssetSol,
   getOriginalAssetTerra,
+  isEVMChain,
   uint8ArrayToHex,
   WormholeWrappedInfo,
 } from "@certusone/wormhole-sdk";
 import {
   getOriginalAssetEth as getOriginalAssetEthNFT,
   getOriginalAssetSol as getOriginalAssetSolNFT,
-} from "@certusone/wormhole-sdk/lib/nft_bridge";
+} from "@certusone/wormhole-sdk/lib/esm/nft_bridge";
 import { Connection } from "@solana/web3.js";
 import { LCDClient } from "@terra-money/terra.js";
 import { useEffect } from "react";
@@ -36,7 +37,6 @@ import {
   SOL_TOKEN_BRIDGE_ADDRESS,
   TERRA_HOST,
 } from "../utils/consts";
-import { isEVMChain } from "../utils/ethereum";
 
 export interface StateSafeWormholeWrappedInfo {
   isWrapped: boolean;
@@ -79,7 +79,6 @@ function useCheckIfWormholeWrapped(nft?: boolean) {
       return;
     }
     // TODO: loading state, error state
-    dispatch(setSourceWormholeWrappedInfo(undefined));
     let cancelled = false;
     (async () => {
       if (isEVMChain(sourceChain) && provider && sourceAsset) {

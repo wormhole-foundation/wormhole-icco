@@ -9,31 +9,79 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"cloud.google.com/go/bigtable"
 )
 
+// warmCache keeps some data around between invocations, so that we don't have
+// to do a full table scan with each request.
+// https://cloud.google.com/functions/docs/bestpractices/tips#use_global_variables_to_reuse_objects_in_future_invocations
+var warmCache = map[string]map[string]string{}
+var lastCacheReset = time.Now()
+
 // query for last of each rowKey prefix
 func getLatestOfEachEmitterAddress(tbl *bigtable.Table, ctx context.Context, prefix string, keySegments int) map[string]string {
+	// get cache data for query
+	cachePrefix := prefix
+	if prefix == "" {
+		cachePrefix = "*"
+	}
+
+	var rowSet bigtable.RowSet
+	rowSet = bigtable.PrefixRange(prefix)
+	now := time.Now()
+	oneHourAgo := now.Add(-time.Duration(1) * time.Hour)
+	if oneHourAgo.Before(lastCacheReset) {
+		// cache is less than one hour old, use it
+		if cached, ok := warmCache[cachePrefix]; ok {
+			// use the highest possible sequence number as the range end.
+			maxSeq := "9999999999999999"
+			rowSets := bigtable.RowRangeList{}
+			for k, v := range cached {
+				start := fmt.Sprintf("%v:%v", k, v)
+				end := fmt.Sprintf("%v:%v", k, maxSeq)
+				rowSets = append(rowSets, bigtable.NewRange(start, end))
+			}
+			if len(rowSets) >= 1 {
+				rowSet = rowSets
+			}
+		}
+	} else {
+		// cache is more than hour old, don't use it, reset it
+		warmCache = map[string]map[string]string{}
+		lastCacheReset = now
+	}
+
+	// create a time range for query: last 30 days
+	thirtyDays := -time.Duration(24*30) * time.Hour
+	prev := now.Add(thirtyDays)
+	start := time.Date(prev.Year(), prev.Month(), prev.Day(), 0, 0, 0, 0, prev.Location())
+	end := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, maxNano, now.Location())
 
 	mostRecentByKeySegment := map[string]string{}
-	err := tbl.ReadRows(ctx, bigtable.PrefixRange(prefix), func(row bigtable.Row) bool {
+	err := tbl.ReadRows(ctx, rowSet, func(row bigtable.Row) bool {
 
 		keyParts := strings.Split(row.Key(), ":")
 		groupByKey := strings.Join(keyParts[:2], ":")
-		mostRecentByKeySegment[groupByKey] = row.Key()
+		mostRecentByKeySegment[groupByKey] = keyParts[2]
 
 		return true
-		// TODO - add filter to only return rows created within the last 30(?) days
-	}, bigtable.RowFilter(bigtable.StripValueFilter()))
+	}, bigtable.RowFilter(
+		bigtable.ChainFilters(
+			bigtable.CellsPerRowLimitFilter(1),
+			bigtable.TimestampRangeFilter(start, end),
+			bigtable.StripValueFilter(),
+		)))
 
 	if err != nil {
 		log.Fatalf("failed to read recent rows: %v", err)
 	}
+	// update the cache with the latest rows
+	warmCache[cachePrefix] = mostRecentByKeySegment
 	return mostRecentByKeySegment
 }
 
@@ -45,10 +93,10 @@ func fetchMostRecentRows(tbl *bigtable.Table, ctx context.Context, prefix string
 	// key/value pairs are the start/stop rowKeys for range queries
 	rangePairs := map[string]string{}
 
-	for _, highestSequenceKey := range latest {
-		rowKeyParts := strings.Split(highestSequenceKey, ":")
+	for prefixGroup, highestSequence := range latest {
+		rowKeyParts := strings.Split(prefixGroup, ":")
 		// convert the sequence part of the rowkey from a string to an int, so it can be used for math
-		highSequence, _ := strconv.Atoi(rowKeyParts[2])
+		highSequence, _ := strconv.Atoi(highestSequence)
 		lowSequence := highSequence - numRowsToFetch
 		// create a rowKey to use as the start of the range query
 		rangeQueryStart := fmt.Sprintf("%v:%v:%016d", rowKeyParts[0], rowKeyParts[1], lowSequence)
@@ -164,21 +212,6 @@ func Recent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// create bibtable client and open table
-	clientOnce.Do(func() {
-		// Declare a separate err variable to avoid shadowing client.
-		var err error
-		project := os.Getenv("GCP_PROJECT")
-		instance := os.Getenv("BIGTABLE_INSTANCE")
-		client, err = bigtable.NewClient(context.Background(), project, instance)
-		if err != nil {
-			http.Error(w, "Error initializing client", http.StatusInternalServerError)
-			log.Printf("bigtable.NewClient: %v", err)
-			return
-		}
-	})
-	tbl := client.Open("v2Events")
-
 	// use the groupBy value to determine how many segements of the rowkey should be used for indexing results.
 	keySegments := 0
 	if groupBy == "chain" {
@@ -217,7 +250,21 @@ func Recent(w http.ResponseWriter, r *http.Request) {
 	for k, v := range recent {
 		sort.Slice(v, func(i, j int) bool {
 			// bigtable rows dont have timestamps, use a cell timestamp all rows will have.
-			return v[i]["MessagePublication"][0].Timestamp > v[j]["MessagePublication"][0].Timestamp
+			var iTimestamp bigtable.Timestamp
+			var jTimestamp bigtable.Timestamp
+			// rows may have: only MessagePublication, only QuorumState, or both.
+			// find a timestamp for each row, try to use MessagePublication, if it exists:
+			if len(v[i]["MessagePublication"]) >= 1 {
+				iTimestamp = v[i]["MessagePublication"][0].Timestamp
+			} else if len(v[i]["QuorumState"]) >= 1 {
+				iTimestamp = v[i]["QuorumState"][0].Timestamp
+			}
+			if len(v[j]["MessagePublication"]) >= 1 {
+				jTimestamp = v[j]["MessagePublication"][0].Timestamp
+			} else if len(v[j]["QuorumState"]) >= 1 {
+				jTimestamp = v[j]["QuorumState"][0].Timestamp
+			}
+			return iTimestamp > jTimestamp
 		})
 		// trim the result down to the requested amount now that sorting is complete
 		num := len(v)

@@ -6,6 +6,7 @@ import {
   getEmitterAddressSolana,
   getEmitterAddressTerra,
   hexToUint8Array,
+  isEVMChain,
   parseSequenceFromLogEth,
   parseSequenceFromLogSolana,
   parseSequenceFromLogTerra,
@@ -31,6 +32,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { useEthereumProvider } from "../contexts/EthereumProviderContext";
 import { useSolanaWallet } from "../contexts/SolanaWalletContext";
 import {
+  selectTerraFeeDenom,
   selectTransferAmount,
   selectTransferIsSendComplete,
   selectTransferIsSending,
@@ -55,11 +57,10 @@ import {
   SOL_TOKEN_BRIDGE_ADDRESS,
   TERRA_TOKEN_BRIDGE_ADDRESS,
 } from "../utils/consts";
-import { isEVMChain } from "../utils/ethereum";
 import { getSignedVAAWithRetry } from "../utils/getSignedVAAWithRetry";
 import parseError from "../utils/parseError";
 import { signSendAndConfirm } from "../utils/solana";
-import { waitForTerraExecution } from "../utils/terra";
+import { postWithFees, waitForTerraExecution } from "../utils/terra";
 import useTransferTargetAddressHex from "./useTransferTargetAddress";
 
 async function evm(
@@ -216,7 +217,8 @@ async function terra(
   amount: string,
   decimals: number,
   targetChain: ChainId,
-  targetAddress: Uint8Array
+  targetAddress: Uint8Array,
+  feeDenom: string
 ) {
   dispatch(setIsSending(true));
   try {
@@ -229,10 +231,14 @@ async function terra(
       targetChain,
       targetAddress
     );
-    const result = await wallet.post({
-      msgs: [...msgs],
-      memo: "Wormhole - Initiate Transfer",
-    });
+
+    const result = await postWithFees(
+      wallet,
+      msgs,
+      "Wormhole - Initiate Transfer",
+      [feeDenom]
+    );
+
     const info = await waitForTerraExecution(result);
     dispatch(setTransferTx({ id: info.txhash, block: info.height }));
     enqueueSnackbar(null, {
@@ -283,6 +289,7 @@ export function useHandleTransfer() {
   const solanaWallet = useSolanaWallet();
   const solPK = solanaWallet?.publicKey;
   const terraWallet = useConnectedWallet();
+  const terraFeeDenom = useSelector(selectTerraFeeDenom);
   const sourceParsedTokenAccount = useSelector(
     selectTransferSourceParsedTokenAccount
   );
@@ -350,7 +357,8 @@ export function useHandleTransfer() {
         amount,
         decimals,
         targetChain,
-        targetAddress
+        targetAddress,
+        terraFeeDenom
       );
     } else {
     }
@@ -371,6 +379,7 @@ export function useHandleTransfer() {
     originAsset,
     originChain,
     isNative,
+    terraFeeDenom,
   ]);
   return useMemo(
     () => ({

@@ -1,0 +1,2 @@
+ethereum/contracts/*.sol
+ethereum/contracts/**/*.sol

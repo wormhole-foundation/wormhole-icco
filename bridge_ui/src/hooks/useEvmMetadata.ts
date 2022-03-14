@@ -1,12 +1,11 @@
-import { ChainId } from "@certusone/wormhole-sdk";
-import { ethers } from "@certusone/wormhole-sdk/node_modules/ethers";
+import { ChainId, isEVMChain } from "@certusone/wormhole-sdk";
+import { ethers } from "ethers";
 import { useEffect, useMemo, useState } from "react";
 import {
   Provider,
   useEthereumProvider,
 } from "../contexts/EthereumProviderContext";
 import { DataWrapper } from "../store/helpers";
-import { isEVMChain } from "../utils/ethereum";
 import useIsWalletReady from "./useIsWalletReady";
 
 export type EvmMetadata = {
@@ -57,7 +56,7 @@ function useEvmMetadata(
   addresses: string[],
   chainId: ChainId
 ): DataWrapper<Map<string, EvmMetadata>> {
-  const { isReady } = useIsWalletReady(chainId);
+  const { isReady } = useIsWalletReady(chainId, false);
   const { provider } = useEthereumProvider();
 
   const [isFetching, setIsFetching] = useState(false);

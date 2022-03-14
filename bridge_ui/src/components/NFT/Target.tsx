@@ -2,6 +2,7 @@ import {
   CHAIN_ID_SOLANA,
   hexToNativeString,
   hexToUint8Array,
+  isEVMChain,
 } from "@certusone/wormhole-sdk";
 import { makeStyles, TextField, Typography } from "@material-ui/core";
 import { Alert } from "@material-ui/lab";
@@ -11,7 +12,7 @@ import { useCallback, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import useIsWalletReady from "../../hooks/useIsWalletReady";
 import useSyncTargetAddress from "../../hooks/useSyncTargetAddress";
-import { EthGasEstimateSummary } from "../../hooks/useTransactionFees";
+import { GasEstimateSummary } from "../../hooks/useTransactionFees";
 import { incrementStep, setTargetChain } from "../../store/nftSlice";
 import {
   selectNFTIsTargetComplete,
@@ -26,11 +27,11 @@ import {
   selectNFTTargetError,
 } from "../../store/selectors";
 import { CHAINS_BY_ID, CHAINS_WITH_NFT_SUPPORT } from "../../utils/consts";
-import { isEVMChain } from "../../utils/ethereum";
 import ButtonWithLoader from "../ButtonWithLoader";
 import ChainSelect from "../ChainSelect";
 import KeyAndBalance from "../KeyAndBalance";
 import LowBalanceWarning from "../LowBalanceWarning";
+import SolanaTPSWarning from "../SolanaTPSWarning";
 import StepDescription from "../StepDescription";
 
 const useStyles = makeStyles((theme) => ({
@@ -132,10 +133,11 @@ function Target() {
           {CHAINS_BY_ID[targetChain].name} to redeem your NFT.
         </Typography>
         {isEVMChain(targetChain) && (
-          <EthGasEstimateSummary methodType="nft" chainId={targetChain} />
+          <GasEstimateSummary methodType="nft" chainId={targetChain} />
         )}
       </Alert>
       <LowBalanceWarning chainId={targetChain} />
+      {targetChain === CHAIN_ID_SOLANA && <SolanaTPSWarning />}
       <ButtonWithLoader
         disabled={!isTargetComplete} //|| !associatedAccountExists}
         onClick={handleNextClick}

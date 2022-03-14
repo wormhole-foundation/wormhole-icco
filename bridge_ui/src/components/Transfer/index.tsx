@@ -1,3 +1,4 @@
+import { ChainId } from "@certusone/wormhole-sdk";
 import {
   Container,
   Step,
@@ -5,11 +6,11 @@ import {
   StepContent,
   Stepper,
 } from "@material-ui/core";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { useLocation } from "react-router";
 import useCheckIfWormholeWrapped from "../../hooks/useCheckIfWormholeWrapped";
 import useFetchTargetAsset from "../../hooks/useFetchTargetAsset";
-import useGetBalanceEffect from "../../hooks/useGetBalanceEffect";
 import {
   selectTransferActiveStep,
   selectTransferIsRedeemComplete,
@@ -17,7 +18,12 @@ import {
   selectTransferIsSendComplete,
   selectTransferIsSending,
 } from "../../store/selectors";
-import { setStep } from "../../store/transferSlice";
+import {
+  setSourceChain,
+  setStep,
+  setTargetChain,
+} from "../../store/transferSlice";
+import { CHAINS_BY_ID } from "../../utils/consts";
 import Redeem from "./Redeem";
 import RedeemPreview from "./RedeemPreview";
 import Send from "./Send";
@@ -30,7 +36,6 @@ import TargetPreview from "./TargetPreview";
 function Transfer() {
   useCheckIfWormholeWrapped();
   useFetchTargetAsset();
-  useGetBalanceEffect("target");
   const dispatch = useDispatch();
   const activeStep = useSelector(selectTransferActiveStep);
   const isSending = useSelector(selectTransferIsSending);
@@ -39,6 +44,37 @@ function Transfer() {
   const isRedeemComplete = useSelector(selectTransferIsRedeemComplete);
   const preventNavigation =
     (isSending || isSendComplete || isRedeeming) && !isRedeemComplete;
+
+  const { search } = useLocation();
+  const query = useMemo(() => new URLSearchParams(search), [search]);
+  const pathSourceChain = query.get("sourceChain");
+  const pathTargetChain = query.get("targetChain");
+
+  //This effect initializes the state based on the path params
+  useEffect(() => {
+    if (!pathSourceChain && !pathTargetChain) {
+      return;
+    }
+    try {
+      const sourceChain: ChainId =
+        CHAINS_BY_ID[parseFloat(pathSourceChain || "") as ChainId]?.id;
+      const targetChain: ChainId =
+        CHAINS_BY_ID[parseFloat(pathTargetChain || "") as ChainId]?.id;
+
+      if (sourceChain === targetChain) {
+        return;
+      }
+      if (sourceChain) {
+        dispatch(setSourceChain(sourceChain));
+      }
+      if (targetChain) {
+        dispatch(setTargetChain(targetChain));
+      }
+    } catch (e) {
+      console.error("Invalid path params specified.");
+    }
+  }, [pathSourceChain, pathTargetChain, dispatch]);
+
   useEffect(() => {
     if (preventNavigation) {
       window.onbeforeunload = () => true;
@@ -54,7 +90,9 @@ function Transfer() {
           expanded={activeStep >= 0}
           disabled={preventNavigation || isRedeemComplete}
         >
-          <StepButton onClick={() => dispatch(setStep(0))}>Source</StepButton>
+          <StepButton onClick={() => dispatch(setStep(0))} icon={null}>
+            1. Source
+          </StepButton>
           <StepContent>
             {activeStep === 0 ? <Source /> : <SourcePreview />}
           </StepContent>
@@ -63,25 +101,32 @@ function Transfer() {
           expanded={activeStep >= 1}
           disabled={preventNavigation || isRedeemComplete}
         >
-          <StepButton onClick={() => dispatch(setStep(1))}>Target</StepButton>
+          <StepButton
+            disabled={preventNavigation || isRedeemComplete || activeStep === 0}
+            onClick={() => dispatch(setStep(1))}
+            icon={null}
+          >
+            2. Target
+          </StepButton>
           <StepContent>
             {activeStep === 1 ? <Target /> : <TargetPreview />}
           </StepContent>
         </Step>
         <Step expanded={activeStep >= 2} disabled={isSendComplete}>
-          <StepButton onClick={() => dispatch(setStep(2))}>
-            Send tokens
+          <StepButton disabled icon={null}>
+            3. Send tokens
           </StepButton>
           <StepContent>
             {activeStep === 2 ? <Send /> : <SendPreview />}
           </StepContent>
         </Step>
-        <Step expanded={activeStep >= 3}>
+        <Step expanded={activeStep >= 3} completed={isRedeemComplete}>
           <StepButton
             onClick={() => dispatch(setStep(3))}
-            disabled={!isSendComplete}
+            disabled={!isSendComplete || isRedeemComplete}
+            icon={null}
           >
-            Redeem tokens
+            4. Redeem tokens
           </StepButton>
           <StepContent>
             {isRedeemComplete ? <RedeemPreview /> : <Redeem />}

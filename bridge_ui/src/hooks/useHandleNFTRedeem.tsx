@@ -3,8 +3,9 @@ import {
   CHAIN_ID_SOLANA,
   getClaimAddressSolana,
   hexToUint8Array,
+  isEVMChain,
   parseNFTPayload,
-  postVaaSolana,
+  postVaaSolanaWithRetry,
 } from "@certusone/wormhole-sdk";
 import {
   createMetaOnSolana,
@@ -12,7 +13,7 @@ import {
   isNFTVAASolanaNative,
   redeemOnEth,
   redeemOnSolana,
-} from "@certusone/wormhole-sdk/lib/nft_bridge";
+} from "@certusone/wormhole-sdk/lib/esm/nft_bridge";
 import { arrayify } from "@ethersproject/bytes";
 import { Alert } from "@material-ui/lab";
 import { WalletContextState } from "@solana/wallet-adapter-react";
@@ -27,11 +28,11 @@ import { setIsRedeeming, setRedeemTx } from "../store/nftSlice";
 import { selectNFTIsRedeeming, selectNFTTargetChain } from "../store/selectors";
 import {
   getNFTBridgeAddressForChain,
+  MAX_VAA_UPLOAD_RETRIES_SOLANA,
   SOLANA_HOST,
   SOL_BRIDGE_ADDRESS,
   SOL_NFT_BRIDGE_ADDRESS,
 } from "../utils/consts";
-import { isEVMChain } from "../utils/ethereum";
 import { getMetadataAddress } from "../utils/metaplex";
 import parseError from "../utils/parseError";
 import { signSendAndConfirm } from "../utils/solana";
@@ -85,12 +86,13 @@ async function solana(
     const claimInfo = await connection.getAccountInfo(claimAddress);
     let txid;
     if (!claimInfo) {
-      await postVaaSolana(
+      await postVaaSolanaWithRetry(
         connection,
         wallet.signTransaction,
         SOL_BRIDGE_ADDRESS,
         payerAddress,
-        Buffer.from(signedVAA)
+        Buffer.from(signedVAA),
+        MAX_VAA_UPLOAD_RETRIES_SOLANA
       );
       // TODO: how do we retry in between these steps
       const transaction = await redeemOnSolana(
@@ -106,7 +108,7 @@ async function solana(
     const isNative = await isNFTVAASolanaNative(signedVAA);
     if (!isNative) {
       const { parse_vaa } = await import(
-        "@certusone/wormhole-sdk/lib/solana/core/bridge"
+        "@certusone/wormhole-sdk/lib/esm/solana/core/bridge"
       );
       const parsedVAA = parse_vaa(signedVAA);
       const { originChain, originAddress, tokenId } = parseNFTPayload(

@@ -5,15 +5,11 @@ import { COLORS } from "../muiTheme";
 
 const useStyles = makeStyles((theme) => ({
   centeredContainer: {
+    marginTop: theme.spacing(14),
+    marginBottom: theme.spacing(26),
+    minHeight: 208,
     textAlign: "center",
     width: "100%",
-  },
-  header: {
-    marginTop: theme.spacing(2),
-    marginBottom: theme.spacing(4),
-    [theme.breakpoints.down("sm")]: {
-      marginBottom: theme.spacing(4),
-    },
   },
   linearGradient: {
     background: `linear-gradient(to left, ${COLORS.blue}, ${COLORS.green});`,
@@ -25,16 +21,29 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-export default function HeaderText({ children }: { children: ReactChild }) {
+export default function HeaderText({
+  children,
+  white,
+  small,
+  subtitle,
+}: {
+  children: ReactChild;
+  white?: boolean;
+  small?: boolean;
+  subtitle?: string;
+}) {
   const classes = useStyles();
   return (
     <div className={classes.centeredContainer}>
       <Typography
-        variant="h1"
-        className={clsx(classes.header, classes.linearGradient)}
+        variant={small ? "h2" : "h1"}
+        component="h1"
+        className={clsx({ [classes.linearGradient]: !white })}
+        gutterBottom={!!subtitle}
       >
         {children}
       </Typography>
+      {subtitle ? <Typography>{subtitle}</Typography> : null}
     </div>
   );
 }

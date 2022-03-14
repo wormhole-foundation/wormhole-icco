@@ -1,9 +1,13 @@
 import {
   ChainId,
+  CHAIN_ID_AVAX,
   CHAIN_ID_BSC,
   CHAIN_ID_ETH,
+  CHAIN_ID_ETHEREUM_ROPSTEN,
+  CHAIN_ID_POLYGON,
   CHAIN_ID_SOLANA,
   CHAIN_ID_TERRA,
+  CHAIN_ID_OASIS,
 } from "@certusone/wormhole-sdk";
 import { Button, makeStyles, Typography } from "@material-ui/core";
 import { Transaction } from "../store/transferSlice";
@@ -37,12 +41,30 @@ export default function ShowTx({
       ? `https://${CLUSTER === "testnet" ? "goerli." : ""}etherscan.io/tx/${
           tx?.id
         }`
+      : chainId === CHAIN_ID_ETHEREUM_ROPSTEN
+      ? `https://${CLUSTER === "testnet" ? "ropsten." : ""}etherscan.io/tx/${
+          tx?.id
+        }`
       : chainId === CHAIN_ID_BSC
-      ? `https://bscscan.com/tx/${tx?.id}`
+      ? `https://${CLUSTER === "testnet" ? "testnet." : ""}bscscan.com/tx/${
+          tx?.id
+        }`
+      : chainId === CHAIN_ID_POLYGON
+      ? `https://${CLUSTER === "testnet" ? "mumbai." : ""}polygonscan.com/tx/${
+          tx?.id
+        }`
+      : chainId === CHAIN_ID_AVAX
+      ? `https://${CLUSTER === "testnet" ? "testnet." : ""}snowtrace.io/tx/${
+          tx?.id
+        }`
+      : chainId === CHAIN_ID_OASIS
+      ? `https://${
+          CLUSTER === "testnet" ? "testnet." : ""
+        }explorer.emerald.oasis.dev/tx/${tx?.id}`
       : chainId === CHAIN_ID_SOLANA
       ? `https://explorer.solana.com/tx/${tx?.id}${
           CLUSTER === "testnet"
-            ? "?cluster=testnet"
+            ? "?cluster=devnet"
             : CLUSTER === "devnet"
             ? "?cluster=custom&customUrl=http%3A%2F%2Flocalhost%3A8899"
             : ""

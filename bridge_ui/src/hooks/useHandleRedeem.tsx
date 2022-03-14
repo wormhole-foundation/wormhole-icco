@@ -2,7 +2,8 @@ import {
   ChainId,
   CHAIN_ID_SOLANA,
   CHAIN_ID_TERRA,
-  postVaaSolana,
+  isEVMChain,
+  postVaaSolanaWithRetry,
   redeemAndUnwrapOnSolana,
   redeemOnEth,
   redeemOnEthNative,
@@ -23,21 +24,23 @@ import { useEthereumProvider } from "../contexts/EthereumProviderContext";
 import { useSolanaWallet } from "../contexts/SolanaWalletContext";
 import useTransferSignedVAA from "./useTransferSignedVAA";
 import {
+  selectTerraFeeDenom,
   selectTransferIsRedeeming,
   selectTransferTargetChain,
 } from "../store/selectors";
 import { setIsRedeeming, setRedeemTx } from "../store/transferSlice";
 import {
   getTokenBridgeAddressForChain,
+  MAX_VAA_UPLOAD_RETRIES_SOLANA,
   SOLANA_HOST,
   SOL_BRIDGE_ADDRESS,
   SOL_TOKEN_BRIDGE_ADDRESS,
   TERRA_TOKEN_BRIDGE_ADDRESS,
 } from "../utils/consts";
-import { isEVMChain } from "../utils/ethereum";
 import parseError from "../utils/parseError";
 import { signSendAndConfirm } from "../utils/solana";
 import { Alert } from "@material-ui/lab";
+import { postWithFees } from "../utils/terra";
 
 async function evm(
   dispatch: any,
@@ -88,12 +91,13 @@ async function solana(
       throw new Error("wallet.signTransaction is undefined");
     }
     const connection = new Connection(SOLANA_HOST, "confirmed");
-    await postVaaSolana(
+    await postVaaSolanaWithRetry(
       connection,
       wallet.signTransaction,
       SOL_BRIDGE_ADDRESS,
       payerAddress,
-      Buffer.from(signedVAA)
+      Buffer.from(signedVAA),
+      MAX_VAA_UPLOAD_RETRIES_SOLANA
     );
     // TODO: how do we retry in between these steps
     const transaction = isNative
@@ -129,7 +133,8 @@ async function terra(
   dispatch: any,
   enqueueSnackbar: any,
   wallet: ConnectedWallet,
-  signedVAA: Uint8Array
+  signedVAA: Uint8Array,
+  feeDenom: string
 ) {
   dispatch(setIsRedeeming(true));
   try {
@@ -138,10 +143,12 @@ async function terra(
       wallet.terraAddress,
       signedVAA
     );
-    const result = await wallet.post({
-      msgs: [msg],
-      memo: "Wormhole - Complete Transfer",
-    });
+    const result = await postWithFees(
+      wallet,
+      [msg],
+      "Wormhole - Complete Transfer",
+      [feeDenom]
+    );
     dispatch(
       setRedeemTx({ id: result.result.txhash, block: result.result.height })
     );
@@ -164,6 +171,7 @@ export function useHandleRedeem() {
   const solPK = solanaWallet?.publicKey;
   const { signer } = useEthereumProvider();
   const terraWallet = useConnectedWallet();
+  const terraFeeDenom = useSelector(selectTerraFeeDenom);
   const signedVAA = useTransferSignedVAA();
   const isRedeeming = useSelector(selectTransferIsRedeeming);
   const handleRedeemClick = useCallback(() => {
@@ -184,7 +192,7 @@ export function useHandleRedeem() {
         false
       );
     } else if (targetChain === CHAIN_ID_TERRA && !!terraWallet && signedVAA) {
-      terra(dispatch, enqueueSnackbar, terraWallet, signedVAA);
+      terra(dispatch, enqueueSnackbar, terraWallet, signedVAA, terraFeeDenom);
     } else {
     }
   }, [
@@ -196,6 +204,7 @@ export function useHandleRedeem() {
     solanaWallet,
     solPK,
     terraWallet,
+    terraFeeDenom,
   ]);
 
   const handleRedeemNativeClick = useCallback(() => {
@@ -216,7 +225,7 @@ export function useHandleRedeem() {
         true
       );
     } else if (targetChain === CHAIN_ID_TERRA && !!terraWallet && signedVAA) {
-      terra(dispatch, enqueueSnackbar, terraWallet, signedVAA); //TODO isNative = true
+      terra(dispatch, enqueueSnackbar, terraWallet, signedVAA, terraFeeDenom); //TODO isNative = true
     } else {
     }
   }, [
@@ -228,6 +237,7 @@ export function useHandleRedeem() {
     solanaWallet,
     solPK,
     terraWallet,
+    terraFeeDenom,
   ]);
 
   return useMemo(

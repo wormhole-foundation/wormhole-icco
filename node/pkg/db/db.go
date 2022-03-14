@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"github.com/certusone/wormhole/node/pkg/vaa"
 	"github.com/dgraph-io/badger/v3"
+	"strconv"
+	"strings"
 )
 
 type Database struct {
@@ -15,6 +17,37 @@ type VAAID struct {
 	EmitterChain   vaa.ChainID
 	EmitterAddress vaa.Address
 	Sequence       uint64
+}
+
+// VaaIDFromString parses a <chain>/<address>/<sequence> string into a VAAID.
+func VaaIDFromString(s string) (*VAAID, error) {
+	parts := strings.Split(s, "/")
+	if len(parts) != 3 {
+		return nil, errors.New("invalid message id")
+	}
+
+	emitterChain, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return nil, fmt.Errorf("invalid emitter chain: %s", err)
+	}
+
+	emitterAddress, err := vaa.StringToAddress(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("invalid emitter address: %s", err)
+	}
+
+	sequence, err := strconv.ParseUint(parts[2], 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid sequence: %s", err)
+	}
+
+	msgId := &VAAID{
+		EmitterChain:   vaa.ChainID(emitterChain),
+		EmitterAddress: emitterAddress,
+		Sequence:       sequence,
+	}
+
+	return msgId, nil
 }
 
 func VaaIDFromVAA(v *vaa.VAA) *VAAID {
@@ -58,7 +91,12 @@ func (d *Database) StoreSignedVAA(v *vaa.VAA) error {
 
 	b, _ := v.Marshal()
 
-	// TODO: panic if same VAA is stored with different value
+	// We allow overriding of existing VAAs, since there are multiple ways to
+	// acquire signed VAA bytes. For instance, the node may have a signed VAA
+	// via gossip before it reaches quorum on its own. The new entry may have
+	// a different set of signatures, but the same VAA.
+	//
+	// TODO: panic on non-identical signing digest?
 
 	err := d.db.Update(func(txn *badger.Txn) error {
 		if err := txn.Set(VaaIDFromVAA(v).Bytes(), b); err != nil {

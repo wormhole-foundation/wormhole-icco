@@ -2,8 +2,9 @@ import {
   ChainId,
   CHAIN_ID_SOLANA,
   CHAIN_ID_TERRA,
+  isEVMChain,
 } from "@certusone/wormhole-sdk";
-import { Provider } from "@certusone/wormhole-sdk/node_modules/@ethersproject/abstract-provider";
+import { Provider } from "@ethersproject/abstract-provider";
 import { formatUnits } from "@ethersproject/units";
 import { Typography } from "@material-ui/core";
 import { LocalGasStation } from "@material-ui/icons";
@@ -19,7 +20,6 @@ import { getMultipleAccountsRPC } from "../utils/solana";
 import { NATIVE_TERRA_DECIMALS } from "../utils/terra";
 import useIsWalletReady from "./useIsWalletReady";
 import { LCDClient } from "@terra-money/terra.js";
-import { isEVMChain } from "../utils/ethereum";
 
 export type GasEstimate = {
   currentGasPrice: string;
@@ -37,9 +37,14 @@ export type MethodType = "nft" | "createWrapped" | "transfer";
 //rather than a hardcoded value.
 const SOLANA_THRESHOLD_LAMPORTS: bigint = BigInt(300000);
 const ETHEREUM_THRESHOLD_WEI: bigint = BigInt(35000000000000000);
-const TERRA_THRESHOLD_ULUNA: bigint = BigInt(500000);
+const TERRA_THRESHOLD_ULUNA: bigint = BigInt(100000);
+const TERRA_THRESHOLD_UUSD: bigint = BigInt(10000000);
 
-const isSufficientBalance = (chainId: ChainId, balance: bigint | undefined) => {
+const isSufficientBalance = (
+  chainId: ChainId,
+  balance: bigint | undefined,
+  terraFeeDenom?: string
+) => {
   if (balance === undefined || !chainId) {
     return true;
   }
@@ -49,11 +54,31 @@ const isSufficientBalance = (chainId: ChainId, balance: bigint | undefined) => {
   if (isEVMChain(chainId)) {
     return balance > ETHEREUM_THRESHOLD_WEI;
   }
-  if (CHAIN_ID_TERRA === chainId) {
+  if (terraFeeDenom === "uluna") {
     return balance > TERRA_THRESHOLD_ULUNA;
+  }
+  if (terraFeeDenom === "uusd") {
+    return balance > TERRA_THRESHOLD_UUSD;
   }
 
   return true;
+};
+
+type TerraBalance = {
+  denom: string;
+  balance: bigint;
+};
+
+const isSufficientBalanceTerra = (balances: TerraBalance[]) => {
+  return balances.some(({ denom, balance }) => {
+    if (denom === "uluna") {
+      return balance > TERRA_THRESHOLD_ULUNA;
+    }
+    if (denom === "uusd") {
+      return balance > TERRA_THRESHOLD_UUSD;
+    }
+    return false;
+  });
 };
 
 //TODO move to more generic location
@@ -77,18 +102,25 @@ const getBalanceEvm = async (walletAddress: string, provider: Provider) => {
   return provider.getBalance(walletAddress).then((result) => result.toBigInt());
 };
 
-const getBalanceTerra = async (walletAddress: string) => {
-  const TARGET_DENOM = "uluna";
+const getBalancesTerra = async (walletAddress: string) => {
+  const TARGET_DENOMS = ["uluna", "uusd"];
 
   const lcd = new LCDClient(TERRA_HOST);
   return lcd.bank
     .balance(walletAddress)
-    .then((coins) => {
-      // coins doesn't support reduce
-      const balancePairs = coins.map(({ amount, denom }) => [denom, amount]);
-      const targetCoin = balancePairs.find((coin) => coin[0] === TARGET_DENOM);
-      if (targetCoin) {
-        return BigInt(targetCoin[1].toString());
+    .then(([coins]) => {
+      const balances = coins
+        .filter(({ denom }) => {
+          return TARGET_DENOMS.includes(denom);
+        })
+        .map(({ amount, denom }) => {
+          return {
+            denom,
+            balance: BigInt(amount.toString()),
+          };
+        });
+      if (balances) {
+        return balances;
       } else {
         return Promise.reject();
       }
@@ -115,6 +147,7 @@ export default function useTransactionFees(chainId: ChainId) {
   const { walletAddress, isReady } = useIsWalletReady(chainId);
   const { provider } = useEthereumProvider();
   const [balance, setBalance] = useState<bigint | undefined>(undefined);
+  const [terraBalances, setTerraBalances] = useState<TerraBalance[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -157,12 +190,17 @@ export default function useTransactionFees(chainId: ChainId) {
       }
     } else if (chainId === CHAIN_ID_TERRA && isReady && walletAddress) {
       loadStart();
-      getBalanceTerra(walletAddress).then(
-        (result) => {
-          const adjustedresult =
-            result === undefined || result === null ? BigInt(0) : result;
+      getBalancesTerra(walletAddress).then(
+        (results) => {
+          const adjustedResults = results.map(({ denom, balance }) => {
+            return {
+              denom,
+              balance:
+                balance === undefined || balance === null ? BigInt(0) : balance,
+            };
+          });
           setIsLoading(false);
-          setBalance(adjustedresult);
+          setTerraBalances(adjustedResults);
         },
         (error) => {
           setIsLoading(false);
@@ -174,13 +212,16 @@ export default function useTransactionFees(chainId: ChainId) {
 
   const results = useMemo(() => {
     return {
-      isSufficientBalance: isSufficientBalance(chainId, balance),
+      isSufficientBalance:
+        chainId === CHAIN_ID_TERRA
+          ? isSufficientBalanceTerra(terraBalances)
+          : isSufficientBalance(chainId, balance),
       balance,
       balanceString: toBalanceString(balance, chainId),
       isLoading,
       error,
     };
-  }, [balance, chainId, isLoading, error]);
+  }, [balance, terraBalances, chainId, isLoading, error]);
 
   return results;
 }
@@ -209,7 +250,7 @@ export function useEthereumGasPrice(contract: MethodType, chainId: ChainId) {
   return results;
 }
 
-export function EthGasEstimateSummary({
+function EthGasEstimateSummary({
   methodType,
   chainId,
 }: {
@@ -244,7 +285,14 @@ export function EthGasEstimateSummary({
   );
 }
 
-const estimatesByContract = {
+const terraEstimatesByContract = {
+  transfer: {
+    lowGasEstimate: BigInt(50000),
+    highGasEstimate: BigInt(90000),
+  },
+};
+
+const evmEstimatesByContract = {
   transfer: {
     lowGasEstimate: BigInt(80000),
     highGasEstimate: BigInt(130000),
@@ -263,8 +311,9 @@ export async function getGasEstimates(
   provider: Provider,
   contract: MethodType
 ): Promise<GasEstimate | null> {
-  const lowEstimateGasAmount = estimatesByContract[contract].lowGasEstimate;
-  const highEstimateGasAmount = estimatesByContract[contract].highGasEstimate;
+  const lowEstimateGasAmount = evmEstimatesByContract[contract].lowGasEstimate;
+  const highEstimateGasAmount =
+    evmEstimatesByContract[contract].highGasEstimate;
 
   let lowEstimate;
   let highEstimate;
@@ -292,4 +341,59 @@ export async function getGasEstimates(
       : null;
 
   return output;
+}
+
+function TerraGasEstimateSummary({
+  methodType,
+  chainId,
+}: {
+  methodType: MethodType;
+  chainId: ChainId;
+}) {
+  if (methodType === "transfer") {
+    const lowEstimate = formatUnits(
+      terraEstimatesByContract.transfer.lowGasEstimate,
+      NATIVE_TERRA_DECIMALS
+    );
+    const highEstimate = formatUnits(
+      terraEstimatesByContract.transfer.highGasEstimate,
+      NATIVE_TERRA_DECIMALS
+    );
+    return (
+      <Typography
+        component="div"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          marginTop: 8,
+          flexWrap: "wrap",
+        }}
+      >
+        <div>
+          Est. Fees: {lowEstimate} - {highEstimate}{" "}
+          {getDefaultNativeCurrencySymbol(chainId)}
+        </div>
+      </Typography>
+    );
+  } else {
+    return null;
+  }
+}
+
+export function GasEstimateSummary({
+  methodType,
+  chainId,
+}: {
+  methodType: MethodType;
+  chainId: ChainId;
+}) {
+  if (isEVMChain(chainId)) {
+    return <EthGasEstimateSummary chainId={chainId} methodType={methodType} />;
+  } else if (chainId === CHAIN_ID_TERRA) {
+    return (
+      <TerraGasEstimateSummary chainId={chainId} methodType={methodType} />
+    );
+  } else {
+    return null;
+  }
 }

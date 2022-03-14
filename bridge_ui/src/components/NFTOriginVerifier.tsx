@@ -1,15 +1,19 @@
 import {
+  CHAIN_ID_AVAX,
   CHAIN_ID_BSC,
   CHAIN_ID_ETH,
+  CHAIN_ID_POLYGON,
   CHAIN_ID_SOLANA,
+  CHAIN_ID_OASIS,
   hexToNativeString,
+  isEVMChain,
   uint8ArrayToHex,
 } from "@certusone/wormhole-sdk";
 import {
   getOriginalAssetEth,
   getOriginalAssetSol,
   WormholeWrappedNFTInfo,
-} from "@certusone/wormhole-sdk/lib/nft_bridge";
+} from "@certusone/wormhole-sdk/lib/esm/nft_bridge";
 import {
   Button,
   Card,
@@ -41,7 +45,6 @@ import {
 import {
   ethNFTToNFTParsedTokenAccount,
   getEthereumNFT,
-  isEVMChain,
   isNFT,
   isValidEthereumAddress,
 } from "../utils/ethereum";
@@ -51,8 +54,8 @@ import NFTViewer from "./TokenSelectors/NFTViewer";
 
 const useStyles = makeStyles((theme) => ({
   mainCard: {
-    padding: theme.spacing(2),
-    backgroundColor: COLORS.nearBlackWithMinorTransparency,
+    padding: "32px 32px 16px",
+    backgroundColor: COLORS.whiteWithTransparency,
   },
   originHeader: {
     marginTop: theme.spacing(4),
@@ -214,7 +217,7 @@ export default function NFTOriginVerifier() {
   return (
     <div>
       <Container maxWidth="md">
-        <HeaderText>NFT Origin Verifier</HeaderText>
+        <HeaderText white>NFT Origin Verifier</HeaderText>
       </Container>
       <Container maxWidth="sm">
         <Card className={classes.mainCard}>
@@ -299,7 +302,7 @@ export default function NFTOriginVerifier() {
                     href={`https://solscan.io/token/${readableAddress}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    endIcon={<Launch />}
+                    startIcon={<Launch />}
                     className={classes.viewButton}
                     variant="outlined"
                   >
@@ -310,18 +313,40 @@ export default function NFTOriginVerifier() {
                     href={`https://bscscan.com/token/${readableAddress}?a=${originInfo.tokenId}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    endIcon={<Launch />}
+                    startIcon={<Launch />}
                     className={classes.viewButton}
                     variant="outlined"
                   >
                     View on BscScan
                   </Button>
-                ) : (
+                ) : originInfo.chainId === CHAIN_ID_POLYGON ? (
+                  <Button
+                    href={`https://opensea.io/assets/matic/${readableAddress}/${originInfo.tokenId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    startIcon={<Launch />}
+                    className={classes.viewButton}
+                    variant="outlined"
+                  >
+                    View on OpenSea
+                  </Button>
+                ) : originInfo.chainId === CHAIN_ID_AVAX ? (
+                  <Button
+                    href={`https://snowtrace.io/token/${readableAddress}?a=${originInfo.tokenId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    startIcon={<Launch />}
+                    className={classes.viewButton}
+                    variant="outlined"
+                  >
+                    View on Snowtrace
+                  </Button>
+                ) : originInfo.chainId === CHAIN_ID_OASIS ? null : (
                   <Button
                     href={`https://opensea.io/assets/${readableAddress}/${originInfo.tokenId}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    endIcon={<Launch />}
+                    startIcon={<Launch />}
                     className={classes.viewButton}
                     variant="outlined"
                   >

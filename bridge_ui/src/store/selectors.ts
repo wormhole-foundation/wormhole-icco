@@ -1,8 +1,7 @@
-import { CHAIN_ID_SOLANA } from "@certusone/wormhole-sdk";
+import { CHAIN_ID_SOLANA, isEVMChain } from "@certusone/wormhole-sdk";
 import { ethers } from "ethers";
 import { parseUnits } from "ethers/lib/utils";
 import { RootState } from ".";
-import { isEVMChain } from "../utils/ethereum";
 
 /*
  * Attest
@@ -62,11 +61,8 @@ export const selectNFTSourceBalanceString = (state: RootState) =>
 export const selectNFTTargetChain = (state: RootState) => state.nft.targetChain;
 export const selectNFTTargetAddressHex = (state: RootState) =>
   state.nft.targetAddressHex;
-export const selectNFTTargetAsset = (state: RootState) => state.nft.targetAsset;
-export const selectNFTTargetParsedTokenAccount = (state: RootState) =>
-  state.nft.targetParsedTokenAccount;
-export const selectNFTTargetBalanceString = (state: RootState) =>
-  state.nft.targetParsedTokenAccount?.uiAmountString || "";
+export const selectNFTTargetAsset = (state: RootState) =>
+  state.nft.targetAsset.data?.address;
 export const selectNFTTransferTx = (state: RootState) => state.nft.transferTx;
 export const selectNFTSignedVAAHex = (state: RootState) =>
   state.nft.signedVAAHex;
@@ -92,6 +88,18 @@ export const selectNFTSourceError = (state: RootState): string | undefined => {
   if (state.nft.sourceParsedTokenAccount.decimals !== 0) {
     // TODO: more advanced NFT check - also check supply and uri
     return "For non-NFTs, use the Transfer flow";
+  }
+  if (
+    state.nft.sourceParsedTokenAccount?.uri === null ||
+    state.nft.sourceParsedTokenAccount?.uri === undefined
+  ) {
+    return "Failed to load NFT Metadata.";
+  }
+  if (
+    state.nft.sourceParsedTokenAccount?.uri &&
+    state.nft.sourceParsedTokenAccount?.uri.length > 200
+  ) {
+    return "This NFT has a URL longer than the maximum supported length of 200.";
   }
   try {
     // these may trigger error: fractional component exceeds decimals
@@ -121,7 +129,13 @@ export const selectNFTTargetError = (state: RootState) => {
   if (!state.nft.targetChain) {
     return "Select a target chain";
   }
-  if (state.nft.targetChain === CHAIN_ID_SOLANA && !state.nft.targetAsset) {
+  if (state.nft.sourceChain === state.nft.targetChain) {
+    return "Select a different target and source";
+  }
+  if (
+    state.nft.targetChain === CHAIN_ID_SOLANA &&
+    !selectNFTTargetAsset(state)
+  ) {
     // target asset is only required for solana
     // in the cases of new transfers, target asset will not exist and be created on redeem
     // Solana requires the derived address to derive the associated token account which is the target on the vaa
@@ -170,8 +184,10 @@ export const selectTransferTargetChain = (state: RootState) =>
   state.transfer.targetChain;
 export const selectTransferTargetAddressHex = (state: RootState) =>
   state.transfer.targetAddressHex;
-export const selectTransferTargetAsset = (state: RootState) =>
+export const selectTransferTargetAssetWrapper = (state: RootState) =>
   state.transfer.targetAsset;
+export const selectTransferTargetAsset = (state: RootState) =>
+  state.transfer.targetAsset.data?.address;
 export const selectTransferTargetParsedTokenAccount = (state: RootState) =>
   state.transfer.targetParsedTokenAccount;
 export const selectTransferTargetBalanceString = (state: RootState) =>
@@ -209,10 +225,7 @@ export const selectTransferSourceError = (
   if (!state.transfer.sourceParsedTokenAccount.uiAmountString) {
     return "Token amount unavailable";
   }
-  if (state.transfer.sourceParsedTokenAccount.decimals === 0) {
-    // TODO: more advanced NFT check - also check supply and uri
-    return "For NFTs, use the NFT flow";
-  }
+  // no NFT check - NFTs should be blocked by all token pickers
   try {
     // these may trigger error: fractional component exceeds decimals
     if (
@@ -256,12 +269,15 @@ export const selectTransferTargetError = (state: RootState) => {
   if (!state.transfer.targetChain) {
     return "Select a target chain";
   }
-  if (!state.transfer.targetAsset) {
+  if (state.transfer.sourceChain === state.transfer.targetChain) {
+    return "Select a different target and source";
+  }
+  if (!selectTransferTargetAsset(state)) {
     return UNREGISTERED_ERROR_MESSAGE;
   }
   if (
     isEVMChain(state.transfer.targetChain) &&
-    state.transfer.targetAsset === ethers.constants.AddressZero
+    selectTransferTargetAsset(state) === ethers.constants.AddressZero
   ) {
     return UNREGISTERED_ERROR_MESSAGE;
   }
@@ -286,4 +302,12 @@ export const selectSolanaTokenMap = (state: RootState) => {
 
 export const selectTerraTokenMap = (state: RootState) => {
   return state.tokens.terraTokenMap;
+};
+
+export const selectMarketsMap = (state: RootState) => {
+  return state.tokens.marketsMap;
+};
+
+export const selectTerraFeeDenom = (state: RootState) => {
+  return state.fee.terraFeeDenom;
 };

@@ -73,6 +73,10 @@ contract ContributorGetters is ContributorState {
         );
     }
 
+    function getSaleTokenAddress(uint saleId_) public view returns (bytes32 tokenAddress){
+        tokenAddress = _state.sales[saleId_].tokenAddress;
+    }
+
     function getSaleAllocation(uint saleId, uint tokenIndex) public view returns (uint256 allocation){
         return _state.sales[saleId].allocations[tokenIndex];
     }

@@ -2,24 +2,25 @@ package guardiand
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/certusone/wormhole/node/pkg/db"
+	gossipv1 "github.com/certusone/wormhole/node/pkg/proto/gossip/v1"
 	publicrpcv1 "github.com/certusone/wormhole/node/pkg/proto/publicrpc/v1"
 	"github.com/certusone/wormhole/node/pkg/publicrpc"
 	ethcommon "github.com/ethereum/go-ethereum/common"
-	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
-	grpc_zap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
-	grpc_ctxtags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
-	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"go.uber.org/zap"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"math"
+	"math/rand"
 	"net"
+	"net/http"
 	"os"
+	"time"
 
 	"github.com/certusone/wormhole/node/pkg/common"
 	nodev1 "github.com/certusone/wormhole/node/pkg/proto/node/v1"
@@ -29,9 +30,11 @@ import (
 
 type nodePrivilegedService struct {
 	nodev1.UnimplementedNodePrivilegedServiceServer
-	db      *db.Database
-	injectC chan<- *vaa.VAA
-	logger  *zap.Logger
+	db           *db.Database
+	injectC      chan<- *vaa.VAA
+	obsvReqSendC chan *gossipv1.ObservationRequest
+	logger       *zap.Logger
+	signedInC    chan *gossipv1.SignedVAAWithQuorum
 }
 
 // adminGuardianSetUpdateToVAA converts a nodev1.GuardianSetUpdate message to its canonical VAA representation.
@@ -87,7 +90,7 @@ func adminContractUpgradeToVAA(req *nodev1.ContractUpgrade, guardianSetIndex uin
 	}
 
 	newContractAddress := vaa.Address{}
-	copy(newContractAddress[:], req.NewContract)
+	copy(newContractAddress[:], b)
 
 	v := vaa.CreateGovernanceVAA(nonce, sequence, guardianSetIndex,
 		vaa.BodyContractUpgrade{
@@ -163,36 +166,137 @@ func (s *nodePrivilegedService) InjectGovernanceVAA(ctx context.Context, req *no
 		v   *vaa.VAA
 		err error
 	)
-	switch payload := req.Payload.(type) {
-	case *nodev1.InjectGovernanceVAARequest_GuardianSet:
-		v, err = adminGuardianSetUpdateToVAA(payload.GuardianSet, req.CurrentSetIndex, req.Nonce, req.Sequence)
-	case *nodev1.InjectGovernanceVAARequest_ContractUpgrade:
-		v, err = adminContractUpgradeToVAA(payload.ContractUpgrade, req.CurrentSetIndex, req.Nonce, req.Sequence)
-	case *nodev1.InjectGovernanceVAARequest_BridgeRegisterChain:
-		v, err = tokenBridgeRegisterChain(payload.BridgeRegisterChain, req.CurrentSetIndex, req.Nonce, req.Sequence)
-	case *nodev1.InjectGovernanceVAARequest_BridgeContractUpgrade:
-		v, err = tokenBridgeUpgradeContract(payload.BridgeContractUpgrade, req.CurrentSetIndex, req.Nonce, req.Sequence)
-	default:
-		panic(fmt.Sprintf("unsupported VAA type: %T", payload))
+
+	digests := make([][]byte, len(req.Messages))
+
+	for i, message := range req.Messages {
+		switch payload := message.Payload.(type) {
+		case *nodev1.GovernanceMessage_GuardianSet:
+			v, err = adminGuardianSetUpdateToVAA(payload.GuardianSet, req.CurrentSetIndex, message.Nonce, message.Sequence)
+		case *nodev1.GovernanceMessage_ContractUpgrade:
+			v, err = adminContractUpgradeToVAA(payload.ContractUpgrade, req.CurrentSetIndex, message.Nonce, message.Sequence)
+		case *nodev1.GovernanceMessage_BridgeRegisterChain:
+			v, err = tokenBridgeRegisterChain(payload.BridgeRegisterChain, req.CurrentSetIndex, message.Nonce, message.Sequence)
+		case *nodev1.GovernanceMessage_BridgeContractUpgrade:
+			v, err = tokenBridgeUpgradeContract(payload.BridgeContractUpgrade, req.CurrentSetIndex, message.Nonce, message.Sequence)
+		default:
+			panic(fmt.Sprintf("unsupported VAA type: %T", payload))
+		}
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+
+		// Generate digest of the unsigned VAA.
+		digest := v.SigningMsg()
+
+		s.logger.Info("governance VAA constructed",
+			zap.Any("vaa", v),
+			zap.String("digest", digest.String()),
+		)
+
+		s.injectC <- v
+
+		digests[i] = digest.Bytes()
 	}
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+
+	return &nodev1.InjectGovernanceVAAResponse{Digests: digests}, nil
+}
+
+// fetchMissing attempts to backfill a gap by fetching and storing missing signed VAAs from the network.
+// Returns true if the gap was filled, false otherwise.
+func (s *nodePrivilegedService) fetchMissing(
+	ctx context.Context,
+	nodes []string,
+	c *http.Client,
+	chain vaa.ChainID,
+	addr string,
+	seq uint64) (bool, error) {
+
+	// shuffle the list of public RPC endpoints
+	rand.Shuffle(len(nodes), func(i, j int) {
+		nodes[i], nodes[j] = nodes[j], nodes[i]
+	})
+
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+
+	for _, node := range nodes {
+		req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf(
+			"%s/v1/signed_vaa/%d/%s/%d", node, chain, addr, seq), nil)
+		if err != nil {
+			return false, fmt.Errorf("failed to create request: %w", err)
+		}
+
+		resp, err := c.Do(req)
+		if err != nil {
+			s.logger.Warn("failed to fetch missing VAA",
+				zap.String("node", node),
+				zap.String("chain", chain.String()),
+				zap.String("address", addr),
+				zap.Uint64("sequence", seq),
+				zap.Error(err),
+			)
+			continue
+		}
+
+		switch resp.StatusCode {
+		case http.StatusNotFound:
+			resp.Body.Close()
+			continue
+		case http.StatusOK:
+			type getVaaResp struct {
+				VaaBytes string `json:"vaaBytes"`
+			}
+			var respBody getVaaResp
+			if err := json.NewDecoder(resp.Body).Decode(&respBody); err != nil {
+				resp.Body.Close()
+				s.logger.Warn("failed to decode VAA response",
+					zap.String("node", node),
+					zap.String("chain", chain.String()),
+					zap.String("address", addr),
+					zap.Uint64("sequence", seq),
+					zap.Error(err),
+				)
+				continue
+			}
+
+			// base64 decode the VAA bytes
+			vaaBytes, err := base64.StdEncoding.DecodeString(respBody.VaaBytes)
+			if err != nil {
+				resp.Body.Close()
+				s.logger.Warn("failed to decode VAA body",
+					zap.String("node", node),
+					zap.String("chain", chain.String()),
+					zap.String("address", addr),
+					zap.Uint64("sequence", seq),
+					zap.Error(err),
+				)
+				continue
+			}
+
+			s.logger.Info("backfilled VAA",
+				zap.Uint16("chain", uint16(chain)),
+				zap.String("address", addr),
+				zap.Uint64("sequence", seq),
+				zap.Int("numBytes", len(vaaBytes)),
+			)
+
+			// Inject into the gossip signed VAA receive path.
+			// This has the same effect as if the VAA was received from the network
+			// (verifying signature, publishing to BigTable, storing in local DB...).
+			s.signedInC <- &gossipv1.SignedVAAWithQuorum{
+				Vaa: vaaBytes,
+			}
+
+			resp.Body.Close()
+			return true, nil
+		default:
+			resp.Body.Close()
+			return false, fmt.Errorf("unexpected response status: %d", resp.StatusCode)
+		}
 	}
 
-	// Generate digest of the unsigned VAA.
-	digest, err := v.SigningMsg()
-	if err != nil {
-		panic(err)
-	}
-
-	s.logger.Info("governance VAA constructed",
-		zap.Any("vaa", v),
-		zap.String("digest", digest.String()),
-	)
-
-	s.injectC <- v
-
-	return &nodev1.InjectGovernanceVAAResponse{Digest: digest.Bytes()}, nil
+	return false, nil
 }
 
 func (s *nodePrivilegedService) FindMissingMessages(ctx context.Context, req *nodev1.FindMissingMessagesRequest) (*nodev1.FindMissingMessagesResponse, error) {
@@ -211,6 +315,20 @@ func (s *nodePrivilegedService) FindMissingMessages(ctx context.Context, req *no
 		return nil, status.Errorf(codes.Internal, "database operation failed: %v", err)
 	}
 
+	if req.RpcBackfill {
+		c := &http.Client{}
+		unfilled := make([]uint64, 0, len(ids))
+		for _, id := range ids {
+			if ok, err := s.fetchMissing(ctx, req.BackfillNodes, c, vaa.ChainID(req.EmitterChain), emitterAddress.String(), id); err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to backfill VAA: %v", err)
+			} else if ok {
+				continue
+			}
+			unfilled = append(unfilled, id)
+		}
+		ids = unfilled
+	}
+
 	resp := make([]string, len(ids))
 	for i, v := range ids {
 		resp[i] = fmt.Sprintf("%d/%s/%d", req.EmitterChain, emitterAddress, v)
@@ -222,7 +340,7 @@ func (s *nodePrivilegedService) FindMissingMessages(ctx context.Context, req *no
 	}, nil
 }
 
-func adminServiceRunnable(logger *zap.Logger, socketPath string, injectC chan<- *vaa.VAA, db *db.Database, gst *common.GuardianSetState) (supervisor.Runnable, error) {
+func adminServiceRunnable(logger *zap.Logger, socketPath string, injectC chan<- *vaa.VAA, signedInC chan *gossipv1.SignedVAAWithQuorum, obsvReqSendC chan *gossipv1.ObservationRequest, db *db.Database, gst *common.GuardianSetState) (supervisor.Runnable, error) {
 	// Delete existing UNIX socket, if present.
 	fi, err := os.Stat(socketPath)
 	if err == nil {
@@ -255,35 +373,23 @@ func adminServiceRunnable(logger *zap.Logger, socketPath string, injectC chan<- 
 	logger.Info("admin server listening on", zap.String("path", socketPath))
 
 	nodeService := &nodePrivilegedService{
-		injectC: injectC,
-		db:      db,
-		logger:  logger.Named("adminservice"),
+		injectC:      injectC,
+		obsvReqSendC: obsvReqSendC,
+		db:           db,
+		logger:       logger.Named("adminservice"),
+		signedInC:    signedInC,
 	}
 
 	publicrpcService := publicrpc.NewPublicrpcServer(logger, db, gst)
 
-	grpcServer := newGRPCServer(logger)
+	grpcServer := common.NewInstrumentedGRPCServer(logger)
 	nodev1.RegisterNodePrivilegedServiceServer(grpcServer, nodeService)
 	publicrpcv1.RegisterPublicRPCServiceServer(grpcServer, publicrpcService)
 	return supervisor.GRPCServer(grpcServer, l, false), nil
 }
 
-func newGRPCServer(logger *zap.Logger) *grpc.Server {
-	server := grpc.NewServer(
-		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
-			grpc_ctxtags.StreamServerInterceptor(),
-			grpc_prometheus.StreamServerInterceptor,
-			grpc_zap.StreamServerInterceptor(logger),
-		)),
-		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
-			grpc_ctxtags.UnaryServerInterceptor(),
-			grpc_prometheus.UnaryServerInterceptor,
-			grpc_zap.UnaryServerInterceptor(logger),
-		)),
-	)
-
-	grpc_prometheus.EnableHandlingTimeHistogram()
-	grpc_prometheus.Register(server)
-
-	return server
+func (s *nodePrivilegedService) SendObservationRequest(ctx context.Context, req *nodev1.SendObservationRequestRequest) (*nodev1.SendObservationRequestResponse, error) {
+	s.obsvReqSendC <- req.ObservationRequest
+	s.logger.Info("sent observation request", zap.Any("request", req.ObservationRequest))
+	return &nodev1.SendObservationRequestResponse{}, nil
 }

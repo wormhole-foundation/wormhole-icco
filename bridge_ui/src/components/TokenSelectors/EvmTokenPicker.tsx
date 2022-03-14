@@ -4,13 +4,18 @@ import {
   NFTImplementation,
   TokenImplementation,
 } from "@certusone/wormhole-sdk";
-import { WormholeAbi__factory } from "@certusone/wormhole-sdk/lib/ethers-contracts/abi";
+import { WormholeAbi__factory } from "@certusone/wormhole-sdk/lib/esm/ethers-contracts/abi";
 import { getAddress as getEthAddress } from "@ethersproject/address";
 import React, { useCallback } from "react";
+import { useSelector } from "react-redux";
 import { useEthereumProvider } from "../../contexts/EthereumProviderContext";
 import useIsWalletReady from "../../hooks/useIsWalletReady";
 import { DataWrapper } from "../../store/helpers";
 import { NFTParsedTokenAccount } from "../../store/nftSlice";
+import {
+  selectNFTSourceParsedTokenAccount,
+  selectTransferSourceParsedTokenAccount,
+} from "../../store/selectors";
 import { ParsedTokenAccount } from "../../store/transferSlice";
 import {
   getMigrationAssetMap,
@@ -60,6 +65,29 @@ export default function EvmTokenPicker(
   } = props;
   const { provider, signerAddress } = useEthereumProvider();
   const { isReady } = useIsWalletReady(chainId);
+  const selectedTokenAccount: NFTParsedTokenAccount | undefined = useSelector(
+    nft
+      ? selectNFTSourceParsedTokenAccount
+      : selectTransferSourceParsedTokenAccount
+  );
+
+  const shouldDisplayBalance = useCallback(
+    (tokenAccount: NFTParsedTokenAccount) => {
+      const selectedMintMatch =
+        selectedTokenAccount &&
+        selectedTokenAccount.mintKey.toLowerCase() ===
+          tokenAccount.mintKey.toLowerCase();
+      //added just in case we start displaying NFT balances again.
+      const selectedTokenIdMatch =
+        selectedTokenAccount &&
+        selectedTokenAccount.tokenId === tokenAccount.tokenId;
+      return !!(
+        tokenAccount.isNativeAsset || //The native asset amount isn't taken from covalent, so can be trusted.
+        (selectedMintMatch && selectedTokenIdMatch)
+      );
+    },
+    [selectedTokenAccount]
+  );
 
   const isMigrationEligible = useCallback(
     (address: string) => {
@@ -114,13 +142,13 @@ export default function EvmTokenPicker(
       }
       let v1 = false;
       try {
-        v1 = await isWormholev1(provider, account.publicKey, chainId);
+        v1 = await isWormholev1(provider, account.mintKey, chainId);
       } catch (e) {
         //For now, just swallow this one.
       }
-      const migration = isMigrationEligible(account.publicKey);
+      const migration = isMigrationEligible(account.mintKey);
       if (v1 === true && !migration) {
-        return Promise.reject(
+        throw new Error(
           "Wormhole v1 assets cannot be transferred with this bridge."
         );
       }
@@ -132,9 +160,14 @@ export default function EvmTokenPicker(
 
   const RenderComp = useCallback(
     ({ account }: { account: NFTParsedTokenAccount }) => {
-      return BasicAccountRender(account, isMigrationEligible, nft || false);
+      return BasicAccountRender(
+        account,
+        isMigrationEligible,
+        nft || false,
+        shouldDisplayBalance
+      );
     },
-    [nft, isMigrationEligible]
+    [nft, isMigrationEligible, shouldDisplayBalance]
   );
 
   return (

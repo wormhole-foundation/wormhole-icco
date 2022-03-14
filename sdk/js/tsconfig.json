@@ -4,7 +4,7 @@
     "module": "esnext",
     "moduleResolution": "node",
     "declaration": true,
-    "outDir": "./lib",
+    "outDir": "./lib/esm",
     "strict": true,
     "esModuleInterop": true,
     "downlevelIteration": true,
@@ -12,5 +12,5 @@
     "lib": ["dom", "es5", "scripthost", "es2020.bigint"]
   },
   "include": ["src", "types"],
-  "exclude": ["node_modules", "**/__tests__/*"]
+  "exclude": ["node_modules", "**/__tests__/*", "**/__icco_tests__/*"]
 }

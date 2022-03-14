@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"github.com/certusone/wormhole/node/pkg/common"
+	"github.com/certusone/wormhole/node/pkg/db"
 	"github.com/certusone/wormhole/node/pkg/vaa"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -22,6 +23,11 @@ var (
 		prometheus.CounterOpts{
 			Name: "wormhole_aggregation_state_expirations_total",
 			Help: "Total number of expired submitted aggregation states",
+		})
+	aggregationStateLate = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "wormhole_aggregation_state_late_total",
+			Help: "Total number of late aggregation states (cluster achieved consensus without us)",
 		})
 	aggregationStateTimeout = promauto.NewCounter(
 		prometheus.CounterOpts{
@@ -45,6 +51,10 @@ var (
 		}, []string{"addr", "origin", "status"})
 )
 
+const (
+	settlementTime = time.Second * 30
+)
+
 // handleCleanup handles periodic retransmissions and cleanup of VAAs
 func (p *Processor) handleCleanup(ctx context.Context) {
 	p.logger.Info("aggregation state summary", zap.Int("cached", len(p.state.vaaSignatures)))
@@ -54,7 +64,30 @@ func (p *Processor) handleCleanup(ctx context.Context) {
 		delta := time.Since(s.firstObserved)
 
 		switch {
-		case !s.settled && delta.Seconds() >= 30:
+		case !s.submitted && s.ourVAA != nil && delta > settlementTime:
+			// Expire pending VAAs post settlement time if we have a stored quorum VAA.
+			//
+			// This occurs when we observed a message after the cluster has already reached
+			// consensus on it, causing us to never achieve quorum.
+
+			if _, err := p.db.GetSignedVAABytes(*db.VaaIDFromVAA(s.ourVAA)); err == nil {
+				// If we have a stored quorum VAA, we can safely expire the state.
+				//
+				// This is a rare case, and we can safely expire the state, since we
+				// have a quorum VAA.
+				p.logger.Info("Expiring late VAA", zap.String("digest", hash), zap.Duration("delta", delta))
+				aggregationStateLate.Inc()
+				delete(p.state.vaaSignatures, hash)
+				break
+			} else if err != db.ErrVAANotFound {
+				p.logger.Error("failed to look up VAA in database",
+					zap.String("digest", hash),
+					zap.Error(err),
+				)
+			}
+
+			fallthrough
+		case !s.settled && delta > settlementTime:
 			// After 30 seconds, the VAA is considered settled - it's unlikely that more observations will
 			// arrive, barring special circumstances. This is a better time to count misses than submission,
 			// because we submit right when we quorum rather than waiting for all observations to arrive.
@@ -97,11 +130,15 @@ func (p *Processor) handleCleanup(ctx context.Context) {
 						}
 					}
 
-					go func(v *vaa.VAA, hasSigs, wantSigs int, quorum bool, missing []string) {
-						if err := p.notifier.MissingSignaturesOnTransaction(v, hasSigs, wantSigs, quorum, missing); err != nil {
-							p.logger.Error("failed to send notification", zap.Error(err))
-						}
-					}(s.ourVAA, hasSigs, wantSigs, quorum, missing)
+					// Send notification for individual message when quorum has failed or
+					// more than one node is missing.
+					if !quorum || len(missing) > 1 {
+						go func(v *vaa.VAA, hasSigs, wantSigs int, quorum bool, missing []string) {
+							if err := p.notifier.MissingSignaturesOnTransaction(v, hasSigs, wantSigs, quorum, missing); err != nil {
+								p.logger.Error("failed to send notification", zap.Error(err))
+							}
+						}(s.ourVAA, hasSigs, wantSigs, quorum, missing)
+					}
 				}
 			}
 
@@ -129,7 +166,7 @@ func (p *Processor) handleCleanup(ctx context.Context) {
 			p.logger.Info("expiring submitted VAA", zap.String("digest", hash), zap.Duration("delta", delta))
 			delete(p.state.vaaSignatures, hash)
 			aggregationStateExpiration.Inc()
-		case !s.submitted && ((s.ourMsg != nil && s.retryCount >= 2880 /* 24 hours */) || (s.ourMsg == nil && s.retryCount >= 10 /* 5 minutes */)):
+		case !s.submitted && ((s.ourMsg != nil && s.retryCount >= 14400 /* 120 hours */) || (s.ourMsg == nil && s.retryCount >= 10 /* 5 minutes */)):
 			// Clearly, this horse is dead and continued beatings won't bring it closer to quorum.
 			p.logger.Info("expiring unsubmitted VAA after exhausting retries", zap.String("digest", hash), zap.Duration("delta", delta))
 			delete(p.state.vaaSignatures, hash)

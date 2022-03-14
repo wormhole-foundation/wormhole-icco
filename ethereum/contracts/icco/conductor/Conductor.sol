@@ -287,4 +287,8 @@ contract Conductor is ConductorGovernance, ICCOStructs {
 
         return false;
     }
+
+    function saleExists(saleId) public view returns (bool exists) {
+        exists = (saleId < getNextSaleId());
+    }
 }

@@ -52,14 +52,13 @@ export async function secureContributeOnEth(
 
   // confirm that the contribution is for the correct sale token
   const saleInit = await contributor.sales(saleId);
-  const chainId = saleInit.acceptedTokensChains[tokenIndex] as ChainId;
-  const thisSalesTokenAddress = hexToNativeString(
+  const saleTokenChainId = saleInit.tokenChain as ChainId;
+  const salesTokenAddress = hexToNativeString(
     saleInit.tokenAddress.slice(2),
-    chainId
+    saleTokenChainId
   );
 
-  if (thisSalesTokenAddress?.toLowerCase() !== expectedSaleTokenAddress.toLowerCase()) {
-    console.log("SHIET", thisSalesTokenAddress, expectedSaleTokenAddress)
+  if (salesTokenAddress?.toLowerCase() !== expectedSaleTokenAddress.toLowerCase()) {
     throw Error("wrong sale token address for provided saleID");
   }
 

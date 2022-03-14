@@ -167,9 +167,9 @@ export async function prepareBuyersForMixedContributionTest(
   await Promise.all(
     wrapIndices.map(async (index): Promise<void> => {
       return wrapEth(
-        buyers[index].wallet,
         buyers[index].collateralAddress,
-        buyers[index].contribution
+        buyers[index].contribution,
+        buyers[index].wallet
       );
     })
   );
@@ -505,8 +505,8 @@ export async function secureContributeAllTokensOnEth(
             saleId,
             tokenIndex,
             contributions[tokenIndex],
-            config.wallet,
-            saleTokenAddress
+            saleTokenAddress,
+            config.wallet
           );
         }
       )
@@ -589,8 +589,8 @@ export async function createSaleOnEthAndInit(
         async (config): Promise<ethers.ContractReceipt> => {
           return initSaleOnEth(
             ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
-            config.wallet,
-            saleInitVaa
+            saleInitVaa,
+            config.wallet
           );
         }
       )
@@ -669,8 +669,8 @@ export async function attestAndCollectContributions(
   {
     const receipts = await collectContributionsOnEth(
       ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
-      conductorConfig.wallet,
-      signedVaas
+      signedVaas,
+      conductorConfig.wallet
     );
   }
   return;
@@ -694,8 +694,8 @@ async function _sealOrAbortSaleOnEth(
 
   const sealReceipt = await sealSaleOnEth(
     ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
-    conductorConfig.wallet,
-    saleId
+    saleId,
+    conductorConfig.wallet
   );
 
   // we have token transfers and saleSealed vaas. first grab
@@ -743,14 +743,14 @@ export async function sealOrAbortSaleOnEth(
 
   return sealSaleAndParseReceiptOnEth(
     ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
-    conductorConfig.wallet,
     saleId,
     ETH_CORE_BRIDGE_ADDRESS,
     ETH_TOKEN_BRIDGE_ADDRESS,
     WORMHOLE_RPC_HOSTS,
     {
       transport: NodeHttpTransport(),
-    }
+    },
+    conductorConfig.wallet
   );
 }
 

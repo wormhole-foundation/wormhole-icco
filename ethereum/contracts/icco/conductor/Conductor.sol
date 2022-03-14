@@ -151,6 +151,8 @@ contract Conductor is ConductorGovernance, ICCOStructs {
     }
 
     function abortSaleBeforeStartTime(uint saleId) public payable returns (uint wormholeSequence) {
+        require(saleExists(saleId), "sale not initiated");
+
         ConductorStructs.Sale memory sale = sales(saleId);
 
         require(!sale.isSealed && !sale.isAborted, "already sealed / aborted");
@@ -170,6 +172,8 @@ contract Conductor is ConductorGovernance, ICCOStructs {
     }
 
     function sealSale(uint saleId) public payable returns (uint wormholeSequence) {
+        require(saleExists(saleId), "sale not initiated");
+
         ConductorStructs.Sale memory sale = sales(saleId);
 
         require(!sale.isSealed && !sale.isAborted, "already sealed / aborted");
@@ -264,9 +268,11 @@ contract Conductor is ConductorGovernance, ICCOStructs {
     }
 
     function claimRefund(uint saleId) public {
-        ConductorStructs.Sale memory sale = sales(saleId);
-        require(sale.isAborted, "sale not aborted");
+        // REVIEW
+        require(saleExists(saleId), "sale not initiated");
 
+        ConductorStructs.Sale memory sale = sales(saleId);
+        require(sale.isAborted, "token sale is not aborted");
         require(!sale.refundIsClaimed, "already claimed");
         require(msg.sender == address(uint160(uint256(sale.refundRecipient))), "not refund recipient");
 

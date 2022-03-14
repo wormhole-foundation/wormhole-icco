@@ -775,6 +775,24 @@ contract("ICCO", function (accounts) {
     
     let SALE_SEALED_PAYLOAD;
 
+    it('conductor should not seal a sale for a non-existent saleID', async function () {
+        const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+
+        let failed = false
+        try {
+            // try to seal a non-existent sale
+            let tx = await initialized.methods.sealSale(SALE_ID + 10).send({
+                from : SELLER,
+                gasLimit : GAS_LIMIT
+            });
+        } catch(e) {
+            assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert sale not initiated")
+            failed = true
+        }
+
+        assert.ok(failed)
+    })
+
     it('conductor should seal the sale correctly and distribute tokens', async function () {
         // test variables
         const expectedContributorBalanceBefore = "0";
@@ -797,7 +815,7 @@ contract("ICCO", function (accounts) {
         assert.ok(!saleBefore.isSealed);
 
         // seal the sale
-        let tx = await initialized.methods.sealSale(0).send({
+        let tx = await initialized.methods.sealSale(SALE_ID).send({
             from : SELLER,
             gasLimit : GAS_LIMIT
         });

@@ -81,7 +81,6 @@ contract Conductor is ConductorGovernance, ICCOStructs {
         });
         // populate tokens array
         for(uint i = 0; i < acceptedTokens.length; i++) {
-            // REVIEW
             require(acceptedTokens[i].conversionRate > 0, "conversion rate cannot be zero");
             sale.acceptedTokensChains[i] = acceptedTokens[i].tokenChain;
             sale.acceptedTokensAddresses[i] = acceptedTokens[i].tokenAddress;
@@ -137,7 +136,6 @@ contract Conductor is ConductorGovernance, ICCOStructs {
         require(!sale.isAborted, "sale was aborted");
         require(block.timestamp > sale.saleEnd, "sale has not ended yet");
 
-        // REVIEW
         require(conSealed.contributions.length > 0, "no contributions");
         require(!saleContributionIsCollected(conSealed.saleID, conSealed.contributions[0].tokenIndex), "already collected contribution");
 
@@ -268,7 +266,6 @@ contract Conductor is ConductorGovernance, ICCOStructs {
     }
 
     function claimRefund(uint saleId) public {
-        // REVIEW
         require(saleExists(saleId), "sale not initiated");
 
         ConductorStructs.Sale memory sale = sales(saleId);

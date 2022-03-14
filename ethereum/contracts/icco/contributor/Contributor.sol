@@ -23,8 +23,6 @@ contract Contributor is ContributorGovernance, ICCOStructs {
         require(verifyConductorVM(vm), "invalid emitter");
 
         SaleInit memory saleInit = parseSaleInit(vm.payload);
-
-        // REVIEW
         require(!saleExists(saleInit.saleID), "sale already initiated");
 
         ContributorStructs.Sale memory sale = ContributorStructs.Sale({
@@ -46,7 +44,6 @@ contract Contributor is ContributorGovernance, ICCOStructs {
         });
 
         for (uint i = 0; i < saleInit.acceptedTokens.length; i++) {
-            // REVIEW
             if (saleInit.acceptedTokens[i].tokenChain == chainId()) {
                 address tokenAddress = address(uint160(uint256(saleInit.acceptedTokens[i].tokenAddress)));
                 (, bytes memory queriedTotalSupply) = tokenAddress.staticcall(abi.encodeWithSelector(IERC20.totalSupply.selector));
@@ -62,7 +59,6 @@ contract Contributor is ContributorGovernance, ICCOStructs {
     }
 
     function contribute(uint saleId, uint tokenIndex, uint amount) public {
-        // REVIEW
         require(saleExists(saleId), "sale not initiated");
 
         (, bool isAborted) = getSaleStatus(saleId);
@@ -99,7 +95,6 @@ contract Contributor is ContributorGovernance, ICCOStructs {
     }
 
     function attestContributions(uint saleId) public payable returns (uint wormholeSequence) {
-        // REVIEW
         require(saleExists(saleId), "sale not initiated");
 
         (bool isSealed, bool isAborted) = getSaleStatus(saleId);
@@ -238,7 +233,6 @@ contract Contributor is ContributorGovernance, ICCOStructs {
     }
 
     function claimAllocation(uint saleId, uint tokenIndex) public {
-        // REVIEW
         require(saleExists(saleId), "sale not initiated");
 
         (bool isSealed, bool isAborted) = getSaleStatus(saleId);
@@ -271,7 +265,6 @@ contract Contributor is ContributorGovernance, ICCOStructs {
     }
 
     function claimRefund(uint saleId, uint tokenIndex) public {
-        // REVIEW
         require(saleExists(saleId), "sale not initiated");
 
         (, bool isAborted) = getSaleStatus(saleId);

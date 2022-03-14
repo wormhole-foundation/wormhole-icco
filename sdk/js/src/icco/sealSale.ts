@@ -12,8 +12,8 @@ import { getSaleFromConductorOnEth } from "./getters";
 
 export async function sealSaleOnEth(
   conductorAddress: string,
-  wallet: ethers.Wallet,
-  saleId: ethers.BigNumberish
+  saleId: ethers.BigNumberish,
+  wallet: ethers.Wallet
 ): Promise<ethers.ContractReceipt> {
   const conductor = Conductor__factory.connect(conductorAddress, wallet);
 
@@ -41,14 +41,14 @@ export interface SealSaleResult {
 
 export async function sealSaleAndParseReceiptOnEth(
   conductorAddress: string,
-  wallet: ethers.Wallet,
   saleId: ethers.BigNumberish,
   coreBridgeAddress: string,
   tokenBridgeAddress: string,
   wormholeHosts: string[],
-  extraGrpcOpts: any = {}
+  extraGrpcOpts: any = {},
+  wallet: ethers.Wallet
 ): Promise<SealSaleResult> {
-  const receipt = await sealSaleOnEth(conductorAddress, wallet, saleId);
+  const receipt = await sealSaleOnEth(conductorAddress, saleId, wallet);
 
   const sale = await getSaleFromConductorOnEth(
     conductorAddress,

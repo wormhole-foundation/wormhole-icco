@@ -1,6 +1,11 @@
 import { ethers } from "ethers";
 import { Contributor__factory, ERC20__factory } from "../ethers-contracts";
-import { ChainId, hexToNativeString } from "..";
+import {
+  ChainId,
+  getSaleFromContributorOnEth,
+  hexToNativeString,
+  nativeToHexString,
+} from "..";
 
 export async function contributeOnEth(
   contributorAddress: string,
@@ -11,14 +16,18 @@ export async function contributeOnEth(
 ): Promise<ethers.ContractReceipt> {
   const contributor = Contributor__factory.connect(contributorAddress, wallet);
 
-  const saleInit = await contributor.sales(saleId);
-  if (!saleInit.saleID.eq(saleId)) {
+  const sale = await getSaleFromContributorOnEth(
+    contributorAddress,
+    wallet.provider,
+    saleId
+  );
+  if (!ethers.BigNumber.from(sale.saleId).eq(saleId)) {
     throw Error("saleInit not found on contributor");
   }
 
-  const chainId = saleInit.acceptedTokensChains[tokenIndex] as ChainId;
+  const chainId = sale.acceptedTokensChains[tokenIndex] as ChainId;
   const collateralAddress = hexToNativeString(
-    saleInit.acceptedTokensAddresses[tokenIndex].slice(2),
+    ethers.utils.hexlify(sale.acceptedTokensAddresses[tokenIndex]).slice(2),
     chainId
   );
   if (
@@ -39,36 +48,40 @@ export async function contributeOnEth(
   return tx.wait();
 }
 
-
 export async function secureContributeOnEth(
   contributorAddress: string,
   saleId: ethers.BigNumberish,
   tokenIndex: number,
   amount: ethers.BigNumberish,
-  wallet: ethers.Wallet,
-  expectedSaleTokenAddress: string
+  saleTokenAddress: string,
+  wallet: ethers.Wallet
 ): Promise<ethers.ContractReceipt> {
-  const contributor = Contributor__factory.connect(contributorAddress, wallet);
-
   // confirm that the contribution is for the correct sale token
-  const saleInit = await contributor.sales(saleId);
-  const saleTokenChainId = saleInit.tokenChain as ChainId;
-  const salesTokenAddress = hexToNativeString(
-    saleInit.tokenAddress.slice(2),
-    saleTokenChainId
+  const sale = await getSaleFromContributorOnEth(
+    contributorAddress,
+    wallet.provider,
+    saleId
   );
 
-  if (salesTokenAddress?.toLowerCase() !== expectedSaleTokenAddress.toLowerCase()) {
-    throw Error("wrong sale token address for provided saleID");
+  const actual = ethers.utils.hexlify(sale.tokenAddress).slice(2);
+  const expected = nativeToHexString(
+    saleTokenAddress,
+    sale.tokenChain as ChainId
+  );
+  if (expected === null) {
+    throw Error("cannot convert expecteSaleTokenAddress to hex string");
+  }
+
+  if (expected !== actual) {
+    throw Error("wrong sale token address for provided saleId");
   }
 
   // now contribute
-  const tx = await contributeOnEth(
-      contributorAddress,
-      saleId,
-      tokenIndex,
-      amount,
-      wallet
+  return contributeOnEth(
+    contributorAddress,
+    saleId,
+    tokenIndex,
+    amount,
+    wallet
   );
-  return tx;
 }

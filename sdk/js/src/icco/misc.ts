@@ -10,9 +10,9 @@ export function nativeToUint8Array(
 }
 
 export async function wrapEth(
-  wallet: ethers.Wallet,
   wethAddress: string,
-  amount: string
+  amount: string,
+  wallet: ethers.Wallet
 ): Promise<void> {
   const weth = IWETH__factory.connect(wethAddress, wallet);
   await weth.deposit({

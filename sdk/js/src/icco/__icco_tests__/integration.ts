@@ -272,7 +272,7 @@ describe("Integration Tests", () => {
             );
             expect(reconciled).toBeTruthy();
           }
-          
+
           // hold your horses again
           await waitForSaleToEnd(contributorConfigs, saleInit, 5);
 
@@ -479,7 +479,7 @@ describe("Integration Tests", () => {
             );
             expect(allocationsReconciled).toBeTruthy();
           }
-          
+
           ethProvider.destroy();
           bscProvider.destroy();
 
@@ -617,7 +617,7 @@ describe("Integration Tests", () => {
             saleDuration,
             acceptedTokens
           );
-          
+
           // balance check
           {
             const buyerBalancesBefore = await getCollateralBalancesOnEth(
@@ -916,7 +916,7 @@ describe("Integration Tests", () => {
             );
             expect(reconciled).toBeTruthy();
           }
-          
+
           // abort the sale for contributors and verify getters
           {
             // get sale info before aborting
@@ -1011,8 +1011,8 @@ describe("Integration Tests", () => {
               // try to seal the sale and expect a revert
               await sealSaleOnEth(
                 ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
-                conductorConfig.wallet,
-                saleInit.saleId
+                saleInit.saleId,
+                conductorConfig.wallet
               );
             } catch (error) {
               const errorMsg: string = error.toString();
@@ -1083,7 +1083,7 @@ describe("Integration Tests", () => {
             );
             expect(reconciled).toBeTruthy();
           }
-          
+
           ethProvider.destroy();
           bscProvider.destroy();
           done();

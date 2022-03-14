@@ -14,7 +14,7 @@ export interface Sale {
   recipient: ethers.BytesLike;
   refundRecipient: ethers.BytesLike;
   // accepted tokens
-  acceptedTokenChains: number[];
+  acceptedTokensChains: number[];
   acceptedTokensAddresses: ethers.BytesLike[];
   acceptedTokensConversionRates: ethers.BigNumberish[];
   // state

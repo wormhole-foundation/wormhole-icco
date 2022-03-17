@@ -5,6 +5,7 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 import "../../libraries/external/BytesLib.sol";
 
@@ -15,7 +16,7 @@ import "./ContributorGovernance.sol";
 
 import "../shared/ICCOStructs.sol";
 
-contract Contributor is ContributorGovernance, ICCOStructs {
+contract Contributor is ContributorGovernance, ICCOStructs, ReentrancyGuard {
     function initSale(bytes memory saleInitVaa) public {
         (IWormhole.VM memory vm, bool valid, string memory reason) = wormhole().parseAndVerifyVM(saleInitVaa);
 
@@ -58,7 +59,7 @@ contract Contributor is ContributorGovernance, ICCOStructs {
         setSale(saleInit.saleID, sale);
     }
 
-    function contribute(uint saleId, uint tokenIndex, uint amount) public {
+    function contribute(uint saleId, uint tokenIndex, uint amount) public nonReentrant { 
         require(saleExists(saleId), "sale not initiated");
 
         (, bool isAborted) = getSaleStatus(saleId);

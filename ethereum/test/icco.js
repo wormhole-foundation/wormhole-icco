@@ -2379,6 +2379,12 @@ contract("ICCO", function (accounts) {
         const tokenFourChainId = "4";
         const tokenFourAddress = "0x000000000000000000000000b3d6f09d390a12b8ea927736987439ad09a1724a";
         const tokenFourConversionRate = "1000000000000000000";
+        const tokenFiveChainId = "4";
+        const tokenFiveAddress = "0x000000000000000000000000ddb64fe46a91d46ee29420539fc25fd07c5fea3e";
+        const tokenFiveConversionRate = "200000000000000000";
+        const tokenSixChainId = "4";
+        const tokenSixAddress = "0x000000000000000000000000ddb64fe46a91d46ee29420539fc25fd07c5fea3e";
+        const tokenSixConversionRate = "200000000000000000";
         const saleRecipient = "0x00000000000000000000000022d491bde2303f2f43325b2108d26f1eaba1e32b";
         const refundRecipient = "0x00000000000000000000000022d491bde2303f2f43325b2108d26f1eaba1e32b";
 
@@ -2421,6 +2427,20 @@ contract("ICCO", function (accounts) {
         assert.equal(tokenFourInfo.tokenChain, tokenFourChainId);
         assert.equal(tokenFourInfo.tokenAddress, tokenFourAddress);
         assert.equal(tokenFourInfo.conversionRate, tokenFourConversionRate);
+
+        // token five info
+        const tokenFiveInfo = parsed.acceptedTokens[4];
+
+        assert.equal(tokenFiveInfo.tokenChain, tokenFiveChainId);
+        assert.equal(tokenFiveInfo.tokenAddress, tokenFiveAddress);
+        assert.equal(tokenFiveInfo.conversionRate, tokenFiveConversionRate);
+
+        // token six info
+        const tokenSixInfo = parsed.acceptedTokens[5];
+
+        assert.equal(tokenSixInfo.tokenChain, tokenSixChainId);
+        assert.equal(tokenSixInfo.tokenAddress, tokenSixAddress);
+        assert.equal(tokenSixInfo.conversionRate, tokenSixConversionRate);
     });
 
     it('parse saleSealed payload from vaa (cross chain)', async function() {

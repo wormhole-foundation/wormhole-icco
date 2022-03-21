@@ -11,7 +11,7 @@ contract ICCOStructs {
     struct Token {
         uint16 tokenChain;
         bytes32 tokenAddress;
-        uint256 conversionRate;
+        uint128 conversionRate;
     }
 
     struct Contribution {
@@ -124,7 +124,7 @@ contract ICCOStructs {
         saleInit.saleEnd = encoded.toUint256(index);
         index += 32;
 
-        uint len = 1 + 66 * uint256(uint8(encoded[index]));
+        uint len = 1 + 50 * uint256(uint8(encoded[index]));
         saleInit.acceptedTokens = parseTokens(encoded.slice(index, len));
         index += len;
 
@@ -150,16 +150,16 @@ contract ICCOStructs {
     }
 
     function parseTokens(bytes memory encoded) public pure returns (Token[] memory tokens) {
-        require(encoded.length % 66 == 1, "invalid Token[]");
+        require(encoded.length % 50 == 1, "invalid Token[]");
 
         uint8 len = uint8(encoded[0]);
 
         tokens = new Token[](len);
 
         for (uint i = 0; i < len; i++) {
-            tokens[i].tokenAddress   = encoded.toBytes32( 1 + i * 66);
-            tokens[i].tokenChain     = encoded.toUint16( 33 + i * 66);
-            tokens[i].conversionRate = encoded.toUint256(35 + i * 66);
+            tokens[i].tokenAddress   = encoded.toBytes32( 1 + i * 50);
+            tokens[i].tokenChain     = encoded.toUint16( 33 + i * 50);
+            tokens[i].conversionRate = encoded.toUint128(35 + i * 50);
         }
     }
 

@@ -53,7 +53,7 @@ contract Conductor is ConductorGovernance, ICCOStructs {
             require(tokenAmount == balanceAfter - balanceBefore, "fee-on-transfer tokens are not supported");
 
         }
-
+        
         // init sale
         saleId = useSaleId();
         ConductorStructs.Sale memory sale = ConductorStructs.Sale({
@@ -67,7 +67,7 @@ contract Conductor is ConductorGovernance, ICCOStructs {
 
             acceptedTokensChains : new uint16[](acceptedTokens.length),
             acceptedTokensAddresses : new bytes32[](acceptedTokens.length),
-            acceptedTokensConversionRates : new uint256[](acceptedTokens.length),
+            acceptedTokensConversionRates : new uint128[](acceptedTokens.length),
             contributions : new uint[](acceptedTokens.length),
             contributionsCollected : new bool[](acceptedTokens.length),
 

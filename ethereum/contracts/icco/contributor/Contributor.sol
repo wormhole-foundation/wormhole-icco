@@ -36,7 +36,7 @@ contract Contributor is ContributorGovernance, ICCOStructs, ReentrancyGuard {
             saleEnd : saleInit.saleEnd,
             acceptedTokensChains : new uint16[](saleInit.acceptedTokens.length),
             acceptedTokensAddresses : new bytes32[](saleInit.acceptedTokens.length),
-            acceptedTokensConversionRates : new uint256[](saleInit.acceptedTokens.length),
+            acceptedTokensConversionRates : new uint128[](saleInit.acceptedTokens.length),
             recipient : saleInit.recipient,
             refundRecipient : saleInit.refundRecipient,
             isSealed : false,

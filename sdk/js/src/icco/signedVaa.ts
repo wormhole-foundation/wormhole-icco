@@ -3,7 +3,7 @@ import { AcceptedToken, Allocation, SaleInit, SaleSealed } from "./structs";
 import { ChainId, importCoreWasm, uint8ArrayToHex } from "..";
 
 const VAA_PAYLOAD_NUM_ACCEPTED_TOKENS = 195;
-const VAA_PAYLOAD_ACCEPTED_TOKEN_BYTES_LENGTH = 66;
+const VAA_PAYLOAD_ACCEPTED_TOKEN_BYTES_LENGTH = 50;
 
 export async function extractVaaPayload(
   signedVaa: Uint8Array
@@ -34,7 +34,7 @@ export async function parseSaleInit(signedVaa: Uint8Array): Promise<SaleInit> {
 
   const numAcceptedTokens = buffer.readUInt8(VAA_PAYLOAD_NUM_ACCEPTED_TOKENS);
   const recipientIndex =
-    VAA_PAYLOAD_NUM_ACCEPTED_TOKENS + numAcceptedTokens * 66 + 1;
+    VAA_PAYLOAD_NUM_ACCEPTED_TOKENS + numAcceptedTokens * VAA_PAYLOAD_ACCEPTED_TOKEN_BYTES_LENGTH + 1;
   return {
     payloadId: buffer.readUInt8(0),
     saleId: ethers.BigNumber.from(payload.slice(1, 33)).toString(),
@@ -70,7 +70,7 @@ function parseAcceptedTokens(
       tokenAddress: uint8ArrayToHex(payload.slice(startIndex, startIndex + 32)),
       tokenChain: buffer.readUInt16BE(startIndex + 32),
       conversionRate: ethers.BigNumber.from(
-        payload.slice(startIndex + 34, startIndex + 66)
+        payload.slice(startIndex + 34, startIndex + VAA_PAYLOAD_ACCEPTED_TOKEN_BYTES_LENGTH)
       ).toString(),
     };
     tokens.push(token);

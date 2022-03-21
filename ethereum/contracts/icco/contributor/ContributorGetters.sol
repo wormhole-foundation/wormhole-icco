@@ -51,7 +51,7 @@ contract ContributorGetters is ContributorState {
         return _state.sales[saleId_];
     }
 
-    function getSaleAcceptedTokenInfo(uint saleId_, uint tokenIndex) public view returns (uint16 tokenChainId, bytes32 tokenAddress, uint256 conversionRate){
+    function getSaleAcceptedTokenInfo(uint saleId_, uint tokenIndex) public view returns (uint16 tokenChainId, bytes32 tokenAddress, uint128 conversionRate){
         return (
             _state.sales[saleId_].acceptedTokensChains[tokenIndex],
             _state.sales[saleId_].acceptedTokensAddresses[tokenIndex],

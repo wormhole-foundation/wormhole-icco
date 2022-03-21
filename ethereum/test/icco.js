@@ -396,8 +396,8 @@ contract("ICCO", function (accounts) {
         index += 4
 
         // conversion rate
-        assert.equal(parseInt(log.payload.substr(index, 64), 16), parseInt(tokenOneConversionRate));
-        index += 64
+        assert.equal(parseInt(log.payload.substr(index, 32), 16), parseInt(tokenOneConversionRate));
+        index += 32
 
         // token address
         assert.equal(log.payload.substr(index, 64), web3.eth.abi.encodeParameter("address", CONTRIBUTED_TOKEN_TWO.address).substring(2));
@@ -408,8 +408,8 @@ contract("ICCO", function (accounts) {
         index += 4
 
         // conversion rate
-        assert.equal(parseInt(log.payload.substr(index, 64), 16), parseInt(tokenTwoConversionRate));
-        index += 64
+        assert.equal(parseInt(log.payload.substr(index, 32), 16), parseInt(tokenTwoConversionRate));
+        index += 32
 
         // recipient of proceeds
         assert.equal(log.payload.substr(index, 64), web3.eth.abi.encodeParameter("address", saleRecipient).substring(2));
@@ -449,7 +449,7 @@ contract("ICCO", function (accounts) {
 
         assert.equal(nextSaleId, SALE_ID + 1)
     })
-
+    
     let INIT_SALE_VM;
     
     it('should init a sale in the contributor', async function () {
@@ -1079,8 +1079,8 @@ contract("ICCO", function (accounts) {
         index += 4
 
         // conversion rate
-        assert.equal(parseInt(log.payload.substr(index, 64), 16), parseInt(tokenOneConversionRate));
-        index += 64
+        assert.equal(parseInt(log.payload.substr(index, 32), 16), parseInt(tokenOneConversionRate));
+        index += 32
 
         // token address
         assert.equal(log.payload.substr(index, 64), web3.eth.abi.encodeParameter("address", CONTRIBUTED_TOKEN_TWO.address).substring(2));
@@ -1091,8 +1091,8 @@ contract("ICCO", function (accounts) {
         index += 4
 
         // conversion rate
-        assert.equal(parseInt(log.payload.substr(index, 64), 16), parseInt(tokenTwoConversionRate));
-        index += 64
+        assert.equal(parseInt(log.payload.substr(index, 32), 16), parseInt(tokenTwoConversionRate));
+        index += 32
 
         // recipient of proceeds
         assert.equal(log.payload.substr(index, 64), web3.eth.abi.encodeParameter("address", saleRecipient).substring(2));
@@ -1706,8 +1706,8 @@ contract("ICCO", function (accounts) {
         index += 4
 
         // conversion rate
-        assert.equal(parseInt(log.payload.substr(index, 64), 16), parseInt(tokenOneConversionRate));
-        index += 64
+        assert.equal(parseInt(log.payload.substr(index, 32), 16), parseInt(tokenOneConversionRate));
+        index += 32
 
         // token address
         assert.equal(log.payload.substr(index, 64), web3.eth.abi.encodeParameter("address", CONTRIBUTED_TOKEN_TWO.address).substring(2));
@@ -1718,8 +1718,8 @@ contract("ICCO", function (accounts) {
         index += 4
 
         // conversion rate
-        assert.equal(parseInt(log.payload.substr(index, 64), 16), parseInt(tokenTwoConversionRate));
-        index += 64
+        assert.equal(parseInt(log.payload.substr(index, 32), 16), parseInt(tokenTwoConversionRate));
+        index += 32
 
         // recipient of proceeds
         assert.equal(log.payload.substr(index, 64), web3.eth.abi.encodeParameter("address", saleRecipient).substring(2));
@@ -2354,19 +2354,19 @@ contract("ICCO", function (accounts) {
     it('parse saleInit from vaa (cross chain)', async function() {
         const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
 
-        const vmPayload = "0x0100000000000000000000000000000000000000000000000000000000000000020000000000000000000000002d8be6bf0baa74e0a907016679cae9190e80dd0a00020000000000000000000000000000000000000000000000000de0b6b3a76400000000000000000000000000000000000000000000000000008ac7230489e800000000000000000000000000000000000000000000000000000000000000000240000000000000000000000000000000000000000000000000000000000000027c04000000000000000000000000ddb64fe46a91d46ee29420539fc25fd07c5fea3e00020000000000000000000000000000000000000000000000000de0b6b3a7640000000000000000000000000000ddb64fe46a91d46ee29420539fc25fd07c5fea3e000400000000000000000000000000000000000000000000000002c68af0bb1400000000000000000000000000008a5bbc20ad253e296f61601e868a3206b2d4774c000200000000000000000000000000000000000000000000000002c68af0bb1400000000000000000000000000003d9e7a12daa29a8b2b1bfaa9dc97ce018853ab3100040000000000000000000000000000000000000000000000000de0b6b3a764000000000000000000000000000090f8bf6a479f320ead074411a4b0e7944ea8c9c100000000000000000000000090f8bf6a479f320ead074411a4b0e7944ea8c9c1";
+        const vmPayload = "0x01000000000000000000000000000000000000000000000000000000000000000000000000000000000000000083752ecafebf4707258dedffbd9c7443148169db00020000000000000000000000000000000000000000000000000de0b6b3a76400000000000000000000000000000000000000000000000000008ac7230489e8000000000000000000000000000000000000000000000000000000000000000001a900000000000000000000000000000000000000000000000000000000000001e506000000000000000000000000ddb64fe46a91d46ee29420539fc25fd07c5fea3e000200000000000000000de0b6b3a7640000000000000000000000000000ddb64fe46a91d46ee29420539fc25fd07c5fea3e0004000000000000000002c68af0bb1400000000000000000000000000008a5bbc20ad253e296f61601e868a3206b2d4774c0002000000000000000002c68af0bb140000000000000000000000000000b3d6f09d390a12b8ea927736987439ad09a1724a000400000000000000000de0b6b3a7640000000000000000000000000000ddb64fe46a91d46ee29420539fc25fd07c5fea3e0004000000000000000002c68af0bb140000000000000000000000000000ddb64fe46a91d46ee29420539fc25fd07c5fea3e0004000000000000000002c68af0bb14000000000000000000000000000022d491bde2303f2f43325b2108d26f1eaba1e32b00000000000000000000000022d491bde2303f2f43325b2108d26f1eaba1e32b";
         const parsed = await initialized.methods.parseSaleInit(vmPayload).call();
 
         // test variables
         const tokenDecimals = 18;
         const payloadIdType1 = "1";
-        const saleId = "2";
-        const saleTokenAddress = "0x0000000000000000000000002d8be6bf0baa74e0a907016679cae9190e80dd0a";
+        const saleId = "0";
+        const saleTokenAddress = "0x00000000000000000000000083752ecafebf4707258dedffbd9c7443148169db";
         const saleTokenChain = "2";
         const saleTokenAmount = 1;
         const minimumRaiseAmount = 10;
-        const saleStart = "576";
-        const saleEnd = "636";
+        const saleStart = "425";
+        const saleEnd = "485";
         const tokenOneChainId = "2";
         const tokenOneAddress = "0x000000000000000000000000ddb64fe46a91d46ee29420539fc25fd07c5fea3e";
         const tokenOneConversionRate = "1000000000000000000";
@@ -2377,10 +2377,10 @@ contract("ICCO", function (accounts) {
         const tokenThreeAddress = "0x0000000000000000000000008a5bbc20ad253e296f61601e868a3206b2d4774c";
         const tokenThreeConversionRate = "200000000000000000";
         const tokenFourChainId = "4";
-        const tokenFourAddress = "0x0000000000000000000000003d9e7a12daa29a8b2b1bfaa9dc97ce018853ab31";
+        const tokenFourAddress = "0x000000000000000000000000b3d6f09d390a12b8ea927736987439ad09a1724a";
         const tokenFourConversionRate = "1000000000000000000";
-        const saleRecipient = "0x00000000000000000000000090f8bf6a479f320ead074411a4b0e7944ea8c9c1";
-        const refundRecipient = "0x00000000000000000000000090f8bf6a479f320ead074411a4b0e7944ea8c9c1";
+        const saleRecipient = "0x00000000000000000000000022d491bde2303f2f43325b2108d26f1eaba1e32b";
+        const refundRecipient = "0x00000000000000000000000022d491bde2303f2f43325b2108d26f1eaba1e32b";
 
         // verify data in the parsed payload
         assert.equal(parsed.payloadID, payloadIdType1);

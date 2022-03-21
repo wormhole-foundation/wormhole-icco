@@ -25,7 +25,7 @@ contract ConductorStructs {
         // solidity does not handle struct arrays in storage well
         uint16[] acceptedTokensChains;
         bytes32[] acceptedTokensAddresses;
-        uint256[] acceptedTokensConversionRates;
+        uint128[] acceptedTokensConversionRates;
         // contributions
         uint[] contributions;
         bool[] contributionsCollected;

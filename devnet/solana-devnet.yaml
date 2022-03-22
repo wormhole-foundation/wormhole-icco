@@ -62,6 +62,9 @@ spec:
             - --bpf-program
             - Ex9bCdVMSfx7EzB3pgSi2R4UHwJAXvTw18rBQm5YQ8gK
             - /opt/solana/deps/wormhole_migration.so
+            - --bpf-program
+            - 22mamxmojFWBdbGqaxTH46HBAgAY2bJRiGJJHfNRNQ95
+            - /opt/solana/deps/icco_contributor.so
             - --log
           ports:
             - containerPort: 8001

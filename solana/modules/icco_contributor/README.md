@@ -7,7 +7,7 @@ EMITTER_ADDRESS="11111111111111111111111111111115" BRIDGE_ADDRESS="Bridge1p5gheX
 or
 EMITTER_ADDRESS="11111111111111111111111111111115" BRIDGE_ADDRESS="Bridge1p5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o" cargo build
 or
-EMITTER_ADDRESS="11111111111111111111111111111115" BRIDGE_ADDRESS="Bridge1p5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o" cargo build=bpf
+EMITTER_ADDRESS="11111111111111111111111111111115" BRIDGE_ADDRESS="Bridge1p5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o" cargo build-bpf
 ```
 
 To verify that wasm builds:
@@ -45,4 +45,17 @@ add following lines to appropriate places in RUN command:
     --mount=type=cache,target=modules/icco_contributor/target \
     cargo build-bpf --manifest-path "modules/icco_contributor/program/Cargo.toml" -- --locked && \
     cp modules/icco_contributor/target/deploy/icco_contributor.so /opt/solana/deps/icco_contributor.so && \
+```
+
+OPTIONALLY - Deploying contributor contract to tilt devnet with new address:
+
+```
+in solana directory:
+
+0. Only need to do once, Copy secret key and contract key to tilt location
+kubectl cp -c devnet keys/solana-devnet.json  solana-devnet-0:/root/.config/solana/id.json
+1. Copy bpf and contract address to tilt
+kubectl cp -c devnet modules/icco_contributor/target/deploy/icco_contributor.so solana-devnet-0:/usr/src/
+2. deploy to solana devnet
+kubectl exec -c devnet solana-devnet-0 -- solana program deploy -u l /usr/src/icco_contributor.so
 ```

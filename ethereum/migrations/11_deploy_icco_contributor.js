@@ -3,6 +3,7 @@ require('dotenv').config({ path: "../.env" });
 const TokenSaleContributor = artifacts.require("TokenSaleContributor");
 const ContributorImplementation = artifacts.require("ContributorImplementation");
 const ContributorSetup = artifacts.require("ContributorSetup");
+const ICCOStructs = artifacts.require("ICCOStructs")
 
 const TokenSaleConductor = artifacts.require("TokenSaleConductor");
 
@@ -15,6 +16,10 @@ const governanceChainId = process.env.ICCO_CONTRIBUTOR_INIT_GOV_CHAIN_ID;
 const governanceContract = process.env.ICCO_CONTRIBUTOR_INIT_GOV_CONTRACT; // bytes32
 
 module.exports = async function (deployer) {
+    // deploy ICCOStructs library and link to the implementation
+    await deployer.deploy(ICCOStructs);
+    await deployer.link(ICCOStructs, ContributorImplementation)
+
     // deploy contributor implementation
     await deployer.deploy(ContributorImplementation);
 

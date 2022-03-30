@@ -16,14 +16,14 @@ import "./ContributorGovernance.sol";
 
 import "../shared/ICCOStructs.sol";
 
-contract Contributor is ContributorGovernance, ICCOStructs, ReentrancyGuard {
+contract Contributor is ContributorGovernance, ReentrancyGuard {
     function initSale(bytes memory saleInitVaa) public {
         (IWormhole.VM memory vm, bool valid, string memory reason) = wormhole().parseAndVerifyVM(saleInitVaa);
 
         require(valid, reason);
         require(verifyConductorVM(vm), "invalid emitter");
 
-        SaleInit memory saleInit = parseSaleInit(vm.payload);
+        ICCOStructs.SaleInit memory saleInit = ICCOStructs.parseSaleInit(vm.payload);
         require(!saleExists(saleInit.saleID), "sale already initiated");
 
         ContributorStructs.Sale memory sale = ContributorStructs.Sale({
@@ -32,6 +32,7 @@ contract Contributor is ContributorGovernance, ICCOStructs, ReentrancyGuard {
             tokenChain : saleInit.tokenChain,
             tokenAmount : saleInit.tokenAmount,
             minRaise : saleInit.minRaise,
+            maxRaise : saleInit.maxRaise,
             saleStart : saleInit.saleStart,
             saleEnd : saleInit.saleEnd,
             acceptedTokensChains : new uint16[](saleInit.acceptedTokens.length),
@@ -41,7 +42,8 @@ contract Contributor is ContributorGovernance, ICCOStructs, ReentrancyGuard {
             refundRecipient : saleInit.refundRecipient,
             isSealed : false,
             isAborted : false,
-            allocations : new uint256[](saleInit.acceptedTokens.length)
+            allocations : new uint256[](saleInit.acceptedTokens.length),
+            excessContributions : new uint256[](saleInit.acceptedTokens.length)
         });
 
         for (uint i = 0; i < saleInit.acceptedTokens.length; i++) {
@@ -98,13 +100,10 @@ contract Contributor is ContributorGovernance, ICCOStructs, ReentrancyGuard {
     function attestContributions(uint saleId) public payable returns (uint wormholeSequence) {
         require(saleExists(saleId), "sale not initiated");
 
-        (bool isSealed, bool isAborted) = getSaleStatus(saleId);
-        require(!isSealed && !isAborted, "already sealed / aborted");
-
-        (, uint saleEnd) = getSaleTimeframe(saleId);
-        require(block.timestamp > saleEnd, "sale has not yet ended");
-
         ContributorStructs.Sale memory sale = sales(saleId);
+
+        require(!sale.isSealed && !sale.isAborted, "already sealed / aborted");
+        require(block.timestamp > sale.saleEnd, "sale has not yet ended");
 
         uint nativeTokens = 0;
         uint chainId = chainId(); // cache from storage
@@ -114,11 +113,11 @@ contract Contributor is ContributorGovernance, ICCOStructs, ReentrancyGuard {
             }
         }
 
-        ContributionsSealed memory consSealed = ContributionsSealed({
+        ICCOStructs.ContributionsSealed memory consSealed = ICCOStructs.ContributionsSealed({
             payloadID : 2,
             saleID : saleId,
             chainID : uint16(chainId),
-            contributions : new Contribution[](nativeTokens)
+            contributions : new ICCOStructs.Contribution[](nativeTokens)
         });
 
         uint ci = 0;
@@ -132,7 +131,7 @@ contract Contributor is ContributorGovernance, ICCOStructs, ReentrancyGuard {
 
         wormholeSequence = wormhole().publishMessage{
             value : msg.value
-        }(0, encodeContributionsSealed(consSealed), 15);
+        }(0, ICCOStructs.encodeContributionsSealed(consSealed), 15);
     }
 
     function saleSealed(bytes memory saleSealedVaa) public payable {
@@ -141,7 +140,7 @@ contract Contributor is ContributorGovernance, ICCOStructs, ReentrancyGuard {
         require(valid, reason);
         require(verifyConductorVM(vm), "invalid emitter");
 
-        SaleSealed memory sealedSale = parseSaleSealed(vm.payload);
+        ICCOStructs.SaleSealed memory sealedSale = ICCOStructs.parseSaleSealed(vm.payload);
 
         // confirm the allocated sale tokens are in this contract
         ContributorStructs.Sale memory sale = sales(sealedSale.saleID);
@@ -168,10 +167,11 @@ contract Contributor is ContributorGovernance, ICCOStructs, ReentrancyGuard {
 
             uint tokenAllocation;
             for (uint i = 0; i < sealedSale.allocations.length; i++) {
-                Allocation memory allo = sealedSale.allocations[i];
+                ICCOStructs.Allocation memory allo = sealedSale.allocations[i];
                 if (sale.acceptedTokensChains[allo.tokenIndex] == thisChainId) {
                     tokenAllocation += allo.allocation;
                     setSaleAllocation(sealedSale.saleID, allo.tokenIndex, allo.allocation);
+                    setExcessContribution(sealedSale.saleID, allo.tokenIndex, allo.excessContribution);
                 }
             }
 
@@ -184,10 +184,12 @@ contract Contributor is ContributorGovernance, ICCOStructs, ReentrancyGuard {
             // raised funds are payed out on this chain
             for (uint i = 0; i < sale.acceptedTokensAddresses.length; i++) {
                 if (sale.acceptedTokensChains[i] == thisChainId) {
+                    // send contributions less excess owed to contributors
+                    uint256 totalContributionsLessExcess = getSaleTotalContribution(sale.saleID, i) - getSaleExcessContribution(sale.saleID, i);
                     SafeERC20.safeTransfer(
                         IERC20(address(uint160(uint256(sale.acceptedTokensAddresses[i])))),
                         address(uint160(uint256(sale.recipient))),
-                        getSaleTotalContribution(sale.saleID, i)
+                        totalContributionsLessExcess
                     );
                 }
             }
@@ -199,10 +201,11 @@ contract Contributor is ContributorGovernance, ICCOStructs, ReentrancyGuard {
 
             for (uint i = 0; i < sale.acceptedTokensAddresses.length; i++) {
                 if (sale.acceptedTokensChains[i] == thisChainId) {
-                    uint totalContributions = (getSaleTotalContribution(sale.saleID, i) / 1e10) * 1e10;
+                    // send contributions less excess owed to contributors
+                    uint totalContributionsLessExcess = ((getSaleTotalContribution(sale.saleID, i) - getSaleExcessContribution(sale.saleID, i)) / 1e10) * 1e10;
 
                     // transfer over wormhole token bridge
-                    SafeERC20.safeApprove(IERC20(address(uint160(uint256(sale.acceptedTokensAddresses[i])))), address(tknBridge), totalContributions);
+                    SafeERC20.safeApprove(IERC20(address(uint160(uint256(sale.acceptedTokensAddresses[i])))), address(tknBridge), totalContributionsLessExcess);
 
                     require(valueSent >= messageFee, "insufficient wormhole messaging fees");
                     valueSent -= messageFee;
@@ -211,7 +214,7 @@ contract Contributor is ContributorGovernance, ICCOStructs, ReentrancyGuard {
                         value : messageFee
                     }(
                         address(uint160(uint256(sale.acceptedTokensAddresses[i]))),
-                        totalContributions,
+                        totalContributionsLessExcess,
                         conductorChainId,
                         sale.recipient,
                         0,
@@ -228,7 +231,7 @@ contract Contributor is ContributorGovernance, ICCOStructs, ReentrancyGuard {
         require(valid, reason);
         require(verifyConductorVM(vm), "invalid emitter");
 
-        SaleAborted memory abortedSale = parseSaleAborted(vm.payload);
+        ICCOStructs.SaleAborted memory abortedSale = ICCOStructs.parseSaleAborted(vm.payload);
 
         setSaleAborted(abortedSale.saleID);
     }
@@ -248,21 +251,27 @@ contract Contributor is ContributorGovernance, ICCOStructs, ReentrancyGuard {
 
         setAllocationClaimed(saleId, tokenIndex, msg.sender);
 
-        uint256 thisAllocation = (getSaleAllocation(saleId, tokenIndex) * getSaleContribution(saleId, tokenIndex, msg.sender)) / getSaleTotalContribution(saleId, tokenIndex);
-
         ContributorStructs.Sale memory sale = sales(saleId);
 
-        address tokenAddress;
-        if (sale.tokenChain == chainId()) {
-            // normal token transfer on same chain
-            tokenAddress = address(uint160(uint256(sale.tokenAddress)));
-        } else {
-            // identify wormhole token bridge wrapper
-            tokenAddress = tokenBridge().wrappedAsset(sale.tokenChain, sale.tokenAddress);
-            require(tokenAddress != address(0), "sale token is not attested");
-        }
+        // cache contribution variables since they're used to calculate
+        // the allocation and excess contribution
+        uint256 thisContribution = getSaleContribution(saleId, tokenIndex, msg.sender);
+        uint256 totalContribution = getSaleTotalContribution(saleId, tokenIndex);
 
-        SafeERC20.safeTransfer(IERC20(tokenAddress), msg.sender, thisAllocation);
+        // calculate the allocation and send to the contributor
+        uint256 thisAllocation = (getSaleAllocation(saleId, tokenIndex) * thisContribution) / totalContribution;
+        SafeERC20.safeTransfer(IERC20(address(uint160(uint256(sale.tokenAddress)))), msg.sender, thisAllocation);
+
+        // return any excess contributions 
+        uint256 excessContribution = getSaleExcessContribution(saleId, tokenIndex);
+        if (excessContribution > 0){
+            // calculate how much excess to refund
+            uint256 thisExcessContribution = (excessContribution * thisContribution) / totalContribution;
+
+            // grab the contributed token address  
+            (, bytes32 tokenAddressBytes, ) = getSaleAcceptedTokenInfo(saleId, tokenIndex);
+            SafeERC20.safeTransfer(IERC20(address(uint160(uint256(tokenAddressBytes)))), msg.sender, thisExcessContribution);
+        }
     }
 
     function claimRefund(uint saleId, uint tokenIndex) public {
@@ -283,7 +292,7 @@ contract Contributor is ContributorGovernance, ICCOStructs, ReentrancyGuard {
         // refund tokens
         SafeERC20.safeTransfer(IERC20(tokenAddress), msg.sender, getSaleContribution(saleId, tokenIndex, msg.sender));
     }
-
+    
     function verifyConductorVM(IWormhole.VM memory vm) internal view returns (bool) {
         if (conductorContract() == vm.emitterAddress && conductorChainId() == vm.emitterChainId) {
             return true;

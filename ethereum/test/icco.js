@@ -1746,7 +1746,7 @@ contract("ICCO", function (accounts) {
         assert.equal(log.payload.substr(index, 2), payloadIdType1)
         index += 2
 
-        // sale id, should == 1 since it's the second sale
+        // sale id, should == 1 since it's the third sale
         SALE_3_ID = SALE_2_ID + 1;
         assert.equal(parseInt(log.payload.substr(index, 64), 16), SALE_3_ID); 
         index += 64
@@ -1873,7 +1873,7 @@ contract("ICCO", function (accounts) {
             0
         );
 
-        // initialize the second sale
+        // initialize the third sale
         let tx = await initialized.methods.initSale("0x"+vm).send({
             from : SELLER,
             gasLimit : GAS_LIMIT
@@ -2405,7 +2405,7 @@ contract("ICCO", function (accounts) {
             0
         );
 
-        // initialize the second sale
+        // initialize the fourth sale
         let tx = await initialized.methods.initSale("0x"+vm).send({
             from : SELLER,
             gasLimit : GAS_LIMIT
@@ -2460,22 +2460,32 @@ contract("ICCO", function (accounts) {
         assert.ok(!saleStatus.isSealed);
         assert.ok(!saleStatus.isAborted);
     })
+
+    BUYER_THREE = accounts[3]; 
     
     it('should accept contributions in the contributor during the fourth sale timeframe', async function () {
         await advanceTimeAndBlock(5);
 
         // test variables
         const tokenOneContributionAmount = "2000";
-        const tokenTwoContributionAmount = "2000";
+        const tokenOneContributionAmount2 = "4000";
+        const tokenTwoContributionAmount = "1000";
 
         const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
 
+        // mint some contributed tokens to the third buyer
+        await CONTRIBUTED_TOKEN_ONE.mint(BUYER_THREE, tokenOneContributionAmount2);
+
+        // approve contributed tokens
         await CONTRIBUTED_TOKEN_ONE.approve(TokenSaleContributor.address, tokenOneContributionAmount, {
             from:BUYER_ONE
         })
+        await CONTRIBUTED_TOKEN_ONE.approve(TokenSaleContributor.address, tokenOneContributionAmount2, {
+            from:BUYER_THREE
+        })
         await CONTRIBUTED_TOKEN_TWO.approve(TokenSaleContributor.address, tokenTwoContributionAmount, {
             from:BUYER_TWO
-        })   
+        })
 
         // contribute tokens to the sale
         let tx = await initialized.methods.contribute(SALE_4_ID, TOKEN_ONE_INDEX, parseInt(tokenOneContributionAmount)).send({
@@ -2483,7 +2493,12 @@ contract("ICCO", function (accounts) {
             gasLimit : GAS_LIMIT
         })
 
-        let tx2 = await initialized.methods.contribute(SALE_4_ID, TOKEN_TWO_INDEX, parseInt(tokenTwoContributionAmount)).send({
+        let tx2 = await initialized.methods.contribute(SALE_4_ID, TOKEN_ONE_INDEX, parseInt(tokenOneContributionAmount2)).send({
+            from : BUYER_THREE,
+            gasLimit : GAS_LIMIT
+        })
+
+        let tx3 = await initialized.methods.contribute(SALE_4_ID, TOKEN_TWO_INDEX, parseInt(tokenTwoContributionAmount)).send({
             from : BUYER_TWO,
             gasLimit : GAS_LIMIT
         })
@@ -2492,15 +2507,17 @@ contract("ICCO", function (accounts) {
         const totalContributionsTokenOne = await initialized.methods.getSaleTotalContribution(SALE_4_ID, TOKEN_ONE_INDEX).call();
         const totalContributionsTokenTwo = await initialized.methods.getSaleTotalContribution(SALE_4_ID, TOKEN_TWO_INDEX).call();
 
-        assert.equal(totalContributionsTokenOne, parseInt(tokenOneContributionAmount));
+        assert.equal(totalContributionsTokenOne, parseInt(tokenOneContributionAmount)+parseInt(tokenOneContributionAmount2));
         assert.equal(totalContributionsTokenTwo, parseInt(tokenTwoContributionAmount));
 
         // verify getSaleContribution
         const buyerOneContribution = await initialized.methods.getSaleContribution(SALE_4_ID, TOKEN_ONE_INDEX, BUYER_ONE).call();
         const buyerTwoContribution = await initialized.methods.getSaleContribution(SALE_4_ID, TOKEN_TWO_INDEX, BUYER_TWO).call();
+        const buyerThreeContribution = await initialized.methods.getSaleContribution(SALE_4_ID, TOKEN_ONE_INDEX, BUYER_THREE).call();
 
         assert.equal(buyerOneContribution, parseInt(tokenOneContributionAmount));
         assert.equal(buyerTwoContribution, parseInt(tokenTwoContributionAmount));
+        assert.equal(buyerThreeContribution, parseInt(tokenOneContributionAmount2));
     })
         
     let CONTRIBUTIONS_PAYLOAD_4;
@@ -2509,8 +2526,8 @@ contract("ICCO", function (accounts) {
         await advanceTimeAndBlock(10);
 
         // test variables
-        const tokenOneContributionAmount = "2000";
-        const tokenTwoContributionAmount = "2000";
+        const tokenOneContributionAmount = "6000"; // sum of both contributions
+        const tokenTwoContributionAmount = "1000";
         const acceptedTokenLength = "2";
         const payloadIdType2 = "02";
 
@@ -2568,8 +2585,8 @@ contract("ICCO", function (accounts) {
    
     it('conductor should collect fourth sale contributions correctly', async function () {
         // test variables
-        const tokenOneContributionAmount = "2000";
-        const tokenTwoContributionAmount = "2000";
+        const tokenOneContributionAmount = "6000"; // both contributions
+        const tokenTwoContributionAmount = "1000";
 
         const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
 
@@ -2674,12 +2691,12 @@ contract("ICCO", function (accounts) {
 
     it('contributor should seal the fourth sale correctly', async function () {
         // test variables
-        const expectedAllocationTokenOne = "200";
-        const expectedAllocationTokenTwo = "800";
-        const expectedExcessTokenOne = "800";
-        const expectedExcessTokenTwo = "800";
-        const expectedRecipientTokenOneBalanceChange = "1200";
-        const expectedRecipientTokenTwoBalanceChange = "1200";
+        const expectedAllocationTokenOne = "600";
+        const expectedAllocationTokenTwo = "400";
+        const expectedExcessTokenOne = "2400";
+        const expectedExcessTokenTwo = "400"; 
+        const expectedRecipientTokenOneBalanceChange = "3600";
+        const expectedRecipientTokenTwoBalanceChange = "600";
 
         const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
 
@@ -2744,10 +2761,15 @@ contract("ICCO", function (accounts) {
     it('contributor should distribute tokens correctly and excess contributions correctly', async function () {
         // test variables 
         const expectedContributorSaleTokenBalanceChange = "1000";
-        const expectedBuyerOneSaleTokenBalanceChange= "200";
-        const expectedBuyerTwoSaleTokenBalanceChange = "800";
-        const expectedContributionOneBalanceChange = "800"; // should be the same for buyer1 balance change
-        const expectedContributionTwoBalanceChange = "800"; // should be the same for buyer2 balance change
+        const expectedBuyerOneSaleTokenBalanceChange = "200"; // 20% of total allocation (1x mult)
+        const expectedBuyerTwoSaleTokenBalanceChange = "400"; // 40% of total contribution (4x mult)
+        const expectedBuyerThreeSaleTokenBalanceChange = "400";  // 40% of total contributon (1x mult) 
+
+        // expected refunds from excess contributions
+        // 10k contributions - 6k maxRaise = 4k in refunds (multiplier applied)
+        const expectedBuyerOneContributionTokenBalanceChange = "800"; 
+        const expectedBuyerTwoContributionTokenBalanceChange = "400"; // 1600 "contributions" but 400 tokens 
+        const expectedBuyerThreeContributionTokenBalanceChange = "1600"; 
         
         const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
 
@@ -2755,46 +2777,65 @@ contract("ICCO", function (accounts) {
         const contributorSaleBalanceBefore = await SOLD_TOKEN.balanceOf(TokenSaleContributor.address);
         const buyerOneSaleBalanceBefore = await SOLD_TOKEN.balanceOf(BUYER_ONE);
         const buyerTwoSaleBalanceBefore = await SOLD_TOKEN.balanceOf(BUYER_TWO);
+        const buyerThreeSaleBalanceBefore = await SOLD_TOKEN.balanceOf(BUYER_THREE);
+
         const buyerOneContributionBalanceBefore = await CONTRIBUTED_TOKEN_ONE.balanceOf(BUYER_ONE);
         const buyerTwoContributionBalanceBefore = await CONTRIBUTED_TOKEN_TWO.balanceOf(BUYER_TWO);
+        const buyerThreeContributionBalanceBefore = await CONTRIBUTED_TOKEN_ONE.balanceOf(BUYER_THREE);
 
         // verify allocationIsClaimed before claiming allocation
-        const isAllocationClaimedTokenOneBefore = await initialized.methods.allocationIsClaimed(SALE_4_ID, TOKEN_ONE_INDEX, BUYER_ONE).call();
-        const isAllocationClaimedTokenTwoBefore = await initialized.methods.allocationIsClaimed(SALE_4_ID, TOKEN_TWO_INDEX, BUYER_TWO).call();
+        const isAllocationClaimedBuyerOneBefore = await initialized.methods.allocationIsClaimed(SALE_4_ID, TOKEN_ONE_INDEX, BUYER_ONE).call();
+        const isAllocationClaimedBuyerTwoBefore = await initialized.methods.allocationIsClaimed(SALE_4_ID, TOKEN_TWO_INDEX, BUYER_TWO).call();
+        const isAllocationClaimedBuyerThreeBefore = await initialized.methods.allocationIsClaimed(SALE_4_ID, TOKEN_ONE_INDEX, BUYER_THREE).call();
         
-        assert.ok(!isAllocationClaimedTokenOneBefore);
-        assert.ok(!isAllocationClaimedTokenTwoBefore);
+        assert.ok(!isAllocationClaimedBuyerOneBefore);
+        assert.ok(!isAllocationClaimedBuyerTwoBefore);
+        assert.ok(!isAllocationClaimedBuyerThreeBefore);
 
         // claim allocations for both tokens
-        await initialized.methods.claimAllocation(SALE_4_ID, TOKEN_TWO_INDEX).send({
-            from : BUYER_TWO,
-            gasLimit : GAS_LIMIT
-        })
-
         await initialized.methods.claimAllocation(SALE_4_ID, TOKEN_ONE_INDEX).send({
             from : BUYER_ONE,
             gasLimit : GAS_LIMIT
         })
 
-        // check balances after claiming allocations and excess contributions
+        await initialized.methods.claimAllocation(SALE_4_ID, TOKEN_ONE_INDEX).send({
+            from : BUYER_THREE,
+            gasLimit : GAS_LIMIT
+        })
+
+        await initialized.methods.claimAllocation(SALE_4_ID, TOKEN_TWO_INDEX).send({
+            from : BUYER_TWO,
+            gasLimit : GAS_LIMIT
+        })
+
+        // check that sale token allocations were distributed correctly
         const contributorSaleBalanceAfter = await SOLD_TOKEN.balanceOf(TokenSaleContributor.address);
         const buyerOneSaleBalanceAfter = await SOLD_TOKEN.balanceOf(BUYER_ONE);
         const buyerTwoSaleBalanceAfter = await SOLD_TOKEN.balanceOf(BUYER_TWO);
-        const buyerOneContributionBalanceAfter = await CONTRIBUTED_TOKEN_ONE.balanceOf(BUYER_ONE);
-        const buyerTwoContributionBalanceAfter = await CONTRIBUTED_TOKEN_TWO.balanceOf(BUYER_TWO);
-
+        const buyerThreeSaleBalanceAfter = await SOLD_TOKEN.balanceOf(BUYER_THREE);
+        
         assert.equal(contributorSaleBalanceBefore - contributorSaleBalanceAfter, expectedContributorSaleTokenBalanceChange);
         assert.equal(buyerOneSaleBalanceAfter - buyerOneSaleBalanceBefore, expectedBuyerOneSaleTokenBalanceChange);
         assert.equal(buyerTwoSaleBalanceAfter - buyerTwoSaleBalanceBefore, expectedBuyerTwoSaleTokenBalanceChange);
-        assert.equal(buyerOneContributionBalanceAfter - buyerOneContributionBalanceBefore, expectedContributionOneBalanceChange);
-        assert.equal(buyerTwoContributionBalanceAfter - buyerTwoContributionBalanceBefore, expectedContributionTwoBalanceChange);
+        assert.equal(buyerThreeSaleBalanceAfter - buyerThreeSaleBalanceBefore, expectedBuyerThreeSaleTokenBalanceChange);
+
+        // check that excess contributions were distributed correctly
+        const buyerOneContributionBalanceAfter = await CONTRIBUTED_TOKEN_ONE.balanceOf(BUYER_ONE);
+        const buyerTwoContributionBalanceAfter = await CONTRIBUTED_TOKEN_TWO.balanceOf(BUYER_TWO);
+        const buyerThreeContributionBalanceAfter = await CONTRIBUTED_TOKEN_ONE.balanceOf(BUYER_THREE);
+
+        assert.equal(buyerOneContributionBalanceAfter - buyerOneContributionBalanceBefore, expectedBuyerOneContributionTokenBalanceChange);
+        assert.equal(buyerTwoContributionBalanceAfter - buyerTwoContributionBalanceBefore, expectedBuyerTwoContributionTokenBalanceChange);
+        assert.equal(buyerThreeContributionBalanceAfter - buyerThreeContributionBalanceBefore, expectedBuyerThreeContributionTokenBalanceChange);
 
         // verify allocationIsClaimed after claiming allocation
-        const isAllocationClaimedTokenOneAfter = await initialized.methods.allocationIsClaimed(SALE_4_ID, TOKEN_ONE_INDEX, BUYER_ONE).call();
-        const isAllocationClaimedTokenTwoAfter = await initialized.methods.allocationIsClaimed(SALE_4_ID, TOKEN_TWO_INDEX, BUYER_TWO).call();
+        const isAllocationClaimedBuyerOneAfter = await initialized.methods.allocationIsClaimed(SALE_4_ID, TOKEN_ONE_INDEX, BUYER_ONE).call();
+        const isAllocationClaimedBuyerTwoAfter = await initialized.methods.allocationIsClaimed(SALE_4_ID, TOKEN_TWO_INDEX, BUYER_TWO).call();
+        const isAllocationClaimedBuyerThreeAfter = await initialized.methods.allocationIsClaimed(SALE_4_ID, TOKEN_ONE_INDEX, BUYER_THREE).call();
         
-        assert.ok(isAllocationClaimedTokenOneAfter);
-        assert.ok(isAllocationClaimedTokenTwoAfter);
+        assert.ok(isAllocationClaimedBuyerOneAfter);
+        assert.ok(isAllocationClaimedBuyerTwoAfter);
+        assert.ok(isAllocationClaimedBuyerThreeAfter);
     })
  
     it('conductor should not allow a sale to abort after the sale start time', async function () {

@@ -251,18 +251,7 @@ contract Contributor is ContributorGovernance, ICCOStructs, ReentrancyGuard {
         uint256 thisAllocation = (getSaleAllocation(saleId, tokenIndex) * getSaleContribution(saleId, tokenIndex, msg.sender)) / getSaleTotalContribution(saleId, tokenIndex);
 
         ContributorStructs.Sale memory sale = sales(saleId);
-
-        address tokenAddress;
-        if (sale.tokenChain == chainId()) {
-            // normal token transfer on same chain
-            tokenAddress = address(uint160(uint256(sale.tokenAddress)));
-        } else {
-            // identify wormhole token bridge wrapper
-            tokenAddress = tokenBridge().wrappedAsset(sale.tokenChain, sale.tokenAddress);
-            require(tokenAddress != address(0), "sale token is not attested");
-        }
-
-        SafeERC20.safeTransfer(IERC20(tokenAddress), msg.sender, thisAllocation);
+        SafeERC20.safeTransfer(IERC20(address(uint160(uint256(sale.tokenAddress)))), msg.sender, thisAllocation);
     }
 
     function claimRefund(uint saleId, uint tokenIndex) public {

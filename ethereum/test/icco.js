@@ -1,7 +1,6 @@
 const jsonfile = require('jsonfile');
 const elliptic = require('elliptic');
 const { assert } = require('chai');
-const { ethers } = require('ethers');
 
 const Wormhole = artifacts.require("Wormhole");
 const TokenBridge = artifacts.require("TokenBridge");
@@ -15,19 +14,24 @@ const ICCOStructs = artifacts.require("ICCOStructs");
 const ConductorImplementation = artifacts.require("ConductorImplementation");
 const ContributorImplementation = artifacts.require("ContributorImplementation");
 
+// library upgrade test
+const MockICCOStructs = artifacts.require("MockICCOStructs");
+const MockConductorImplementation2 = artifacts.require("MockConductorImplementation2");
+const MockContributorImplementation2 = artifacts.require("MockContributorImplementation2");
+
 const testSigner1PK = "cfb12303a19cde580bb4dd771639b0d26bc68353645571a8cff516ab2ee113a0";
 
 const WormholeImplementationFullABI = jsonfile.readFileSync("build/contracts/Implementation.json").abi
 const ConductorImplementationFullABI = jsonfile.readFileSync("build/contracts/ConductorImplementation.json").abi
 const ContributorImplementationFullABI = jsonfile.readFileSync("build/contracts/ContributorImplementation.json").abi
 
+// global variables 
+const TEST_CHAIN_ID = "2";
+const TEST_GOVERNANCE_CHAIN_ID = "1";
+const TEST_GOVERNANCE_CONTRACT = "0x0000000000000000000000000000000000000000000000000000000000000004";
+const GAS_LIMIT = "3000000";
 
 contract("ICCO", function (accounts) {
-    const TEST_CHAIN_ID = "2";
-    const TEST_GOVERNANCE_CHAIN_ID = "1";
-    const TEST_GOVERNANCE_CONTRACT = "0x0000000000000000000000000000000000000000000000000000000000000004";
-    const GAS_LIMIT = "3000000";
-
     const WORMHOLE = new web3.eth.Contract(WormholeImplementationFullABI, Wormhole.address);
     
     it("conductor should be initialized with the correct values", async function () {
@@ -2742,7 +2746,6 @@ contract("ICCO", function (accounts) {
         const expectedContributorSaleTokenBalanceChange = "1000";
         const expectedBuyerOneSaleTokenBalanceChange= "200";
         const expectedBuyerTwoSaleTokenBalanceChange = "800";
-
         const expectedContributionOneBalanceChange = "800"; // should be the same for buyer1 balance change
         const expectedContributionTwoBalanceChange = "800"; // should be the same for buyer2 balance change
         
@@ -2773,7 +2776,7 @@ contract("ICCO", function (accounts) {
             gasLimit : GAS_LIMIT
         })
 
-        // check balances before claiming allocations and excess contributions
+        // check balances after claiming allocations and excess contributions
         const contributorSaleBalanceAfter = await SOLD_TOKEN.balanceOf(TokenSaleContributor.address);
         const buyerOneSaleBalanceAfter = await SOLD_TOKEN.balanceOf(BUYER_ONE);
         const buyerTwoSaleBalanceAfter = await SOLD_TOKEN.balanceOf(BUYER_TWO);
@@ -3058,6 +3061,132 @@ contract("ICCO", function (accounts) {
         }
 
         assert.ok(failed)
+    })
+});
+
+contract("ICCO Library Upgrade", function (accounts) {
+    it("conductor should accept a valid upgrade with library changes", async function () {
+        const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+
+        // deploy mock contracts and link ICCOStructs library
+        const structs = await MockICCOStructs.new();
+        await MockConductorImplementation2.link(structs, structs.address);
+        const mock = await MockConductorImplementation2.new();
+
+        let data = [
+            "0x",
+            "0000000000000000000000000000000000000000000000546f6b656e53616c65",
+            "02",
+            web3.eth.abi.encodeParameter("uint16", TEST_CHAIN_ID).substring(2 + (64 - 4)),
+            web3.eth.abi.encodeParameter("address", mock.address).substring(2),
+        ].join('')
+
+        const vm = await signAndEncodeVM(
+            1,
+            1,
+            TEST_GOVERNANCE_CHAIN_ID,
+            TEST_GOVERNANCE_CONTRACT,
+            0,
+            data,
+            [
+                testSigner1PK
+            ],
+            0,
+            0
+        );
+
+        // confirm that the implementation address changes
+        let before = await web3.eth.getStorageAt(TokenSaleConductor.address, "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc");
+
+        assert.equal(before.toLowerCase(), ConductorImplementation.address.toLowerCase());
+
+        await initialized.methods.upgrade("0x" + vm).send({
+            value: 0,
+            from: accounts[0],
+            gasLimit: GAS_LIMIT
+        });
+
+        let after = await web3.eth.getStorageAt(TokenSaleConductor.address, "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc");
+
+        assert.equal(after.toLowerCase(), mock.address.toLowerCase());
+
+        // call new conductor methods to confirm the upgrade was successful
+        const mockImpl = new web3.eth.Contract(MockConductorImplementation2.abi, TokenSaleConductor.address);
+
+        let isUpgraded = await mockImpl.methods.testNewImplementationActive().call();
+        let isConductorUpgraded = await mockImpl.methods.upgradeSuccessful().call();
+
+        assert.ok(isUpgraded);
+        assert.ok(isConductorUpgraded);
+
+        // call new method in mock ICCO structs to confirm library upgrade was successful
+        const mockICCOLib = new web3.eth.Contract(MockICCOStructs.abi, structs.address);
+
+        let isLibraryUpgraded = await mockICCOLib.methods.testNewLibraryActive().call();
+
+        assert.ok(isLibraryUpgraded);
+    })
+
+    it("contributor should accept a valid upgrade with library changes", async function () {
+        const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
+
+        // deploy mock contracts and link ICCOStructs library
+        const structs = await MockICCOStructs.new();
+        await MockContributorImplementation2.link(structs, structs.address);
+        const mock = await MockContributorImplementation2.new();
+
+        let data = [
+            "0x",
+            "0000000000000000000000000000000000000000000000546f6b656e53616c65",
+            "03",
+            web3.eth.abi.encodeParameter("uint16", TEST_CHAIN_ID).substring(2 + (64 - 4)),
+            web3.eth.abi.encodeParameter("address", mock.address).substring(2),
+        ].join('')
+
+        const vm = await signAndEncodeVM(
+            1,
+            1,
+            TEST_GOVERNANCE_CHAIN_ID,
+            TEST_GOVERNANCE_CONTRACT,
+            0,
+            data,
+            [
+                testSigner1PK
+            ],
+            0,
+            0
+        );
+
+        // confirm that the implementation address changes
+        let before = await web3.eth.getStorageAt(TokenSaleContributor.address, "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc");
+
+        assert.equal(before.toLowerCase(), ContributorImplementation.address.toLowerCase());
+
+        await initialized.methods.upgrade("0x" + vm).send({
+            value: 0,
+            from: accounts[0],
+            gasLimit: GAS_LIMIT
+        });
+
+        let after = await web3.eth.getStorageAt(TokenSaleContributor.address, "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc");
+
+        assert.equal(after.toLowerCase(), mock.address.toLowerCase());
+
+        // // call new contributor methods to confirm the upgrade was successful
+        const mockImpl = new web3.eth.Contract(MockContributorImplementation2.abi, TokenSaleContributor.address);
+
+        let isUpgraded = await mockImpl.methods.testNewImplementationActive().call();
+        let isContributorUpgraded = await mockImpl.methods.upgradeSuccessful().call();
+
+        assert.ok(isUpgraded);
+        assert.ok(isContributorUpgraded);
+
+        // call new method in ICCO structs to confirm library upgrade was successful
+        const mockICCOLib = new web3.eth.Contract(MockICCOStructs.abi, structs.address);
+
+        let isLibraryUpgraded = await mockICCOLib.methods.testNewLibraryActive().call();
+
+        assert.ok(isLibraryUpgraded);
     })
 });
     

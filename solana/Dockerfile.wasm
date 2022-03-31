@@ -67,6 +67,16 @@ RUN --mount=type=cache,target=/root/.cache \
 	--mount=type=cache,target=modules/nft_bridge/target \
     cd modules/nft_bridge/program && /usr/local/cargo/bin/wasm-pack build --target nodejs -d nodejs -- --features wasm --locked
 
+# Compile icco_contributor
+RUN --mount=type=cache,target=/root/.cache \
+	--mount=type=cache,target=modules/icco_contributor/target \
+    cd modules/icco_contributor/program && /usr/local/cargo/bin/wasm-pack build --target bundler -d bundler -- --features wasm --locked && \
+    cd bundler && sed -i $SED_REMOVE_INVALID_REFERENCE icco_contributor_bg.js
+
+RUN --mount=type=cache,target=/root/.cache \
+	--mount=type=cache,target=modules/icco_contributor/target \
+    cd modules/icco_contributor/program && /usr/local/cargo/bin/wasm-pack build --target nodejs -d nodejs -- --features wasm --locked
+
 # Compile pyth2wormhole
 RUN --mount=type=cache,target=/root/.cache \
 	--mount=type=cache,target=pyth2wormhole/target \

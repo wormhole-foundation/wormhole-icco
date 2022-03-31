@@ -33,15 +33,15 @@ library ICCOStructs {
         // sale token address
         address token;
         // token amount being sold
-        uint tokenAmount;
+        uint256 tokenAmount;
         // min raise amount
-        uint minRaise;
+        uint256 minRaise;
         // max token amount
-        uint maxRaise;
+        uint256 maxRaise;
         // timestamp raise start
-        uint saleStart;
+        uint256 saleStart;
         // timestamp raise end
-        uint saleEnd;
+        uint256 saleEnd;
         // recipient of proceeds
         address recipient;
         // refund recipient in cse the sale is aborted

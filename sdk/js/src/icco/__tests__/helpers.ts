@@ -383,24 +383,18 @@ export async function createSaleOnEthAndGetVaa(
   tokenAddress: string,
   amount: ethers.BigNumberish,
   minRaise: ethers.BigNumberish,
+  maxRaise: ethers.BigNumberish,
   saleStart: ethers.BigNumberish,
   saleEnd: ethers.BigNumberish,
   acceptedTokens: AcceptedToken[]
 ): Promise<Uint8Array> {
-  // approve
-  /*
-  {
-    const tx = await token.approve(ETH_TOKEN_SALE_CONDUCTOR_ADDRESS, amount);
-    const receipt = await tx.wait();
-  }
-  */
-
   // create
   const receipt = await createSaleOnEth(
     ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
     tokenAddress,
     amount,
     minRaise,
+    maxRaise,
     saleStart,
     saleEnd,
     acceptedTokens,
@@ -408,7 +402,7 @@ export async function createSaleOnEthAndGetVaa(
     seller.address,
     seller
   );
-
+ 
   return getSignedVaaFromReceiptOnEth(
     chainId,
     ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
@@ -557,6 +551,7 @@ export async function createSaleOnEthAndInit(
   saleTokenAddress: string,
   tokenAmount: string,
   minRaise: string,
+  maxRaise: string,
   saleStart: number,
   saleDuration: number,
   acceptedTokens: AcceptedToken[]
@@ -575,6 +570,7 @@ export async function createSaleOnEthAndInit(
     saleTokenAddress,
     ethers.utils.parseUnits(tokenAmount, decimals),
     ethers.utils.parseUnits(minRaise),
+    ethers.utils.parseUnits(maxRaise),
     saleStart,
     saleEnd,
     acceptedTokens
@@ -712,16 +708,6 @@ async function _sealOrAbortSaleOnEth(
     conductorConfig.wallet.provider,
     saleId
   );
-
-  /*
-  return {
-    sealed: sale.isSealed,
-    aborted: sale.isAborted,
-    conductorChainId: conductorConfig.chainId,
-    bridgeSequences: sequences,
-    conductorSequence: conductorSequence,
-  };
-  */
   return;
 }
 

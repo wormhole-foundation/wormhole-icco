@@ -260,7 +260,17 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
 
         // calculate the allocation and send to the contributor
         uint256 thisAllocation = (getSaleAllocation(saleId, tokenIndex) * thisContribution) / totalContribution;
-        SafeERC20.safeTransfer(IERC20(address(uint160(uint256(sale.tokenAddress)))), msg.sender, thisAllocation);
+
+        // fetch the wormhole sale token address for this contributor
+        address tokenAddress;
+        if (sale.tokenChain == chainId()) {
+            // normal token transfer on same chain
+            tokenAddress = address(uint160(uint256(sale.tokenAddress)));
+        } else {
+            // identify wormhole token bridge wrapper
+            tokenAddress = tokenBridge().wrappedAsset(sale.tokenChain, sale.tokenAddress);
+        }
+        SafeERC20.safeTransfer(IERC20(tokenAddress), msg.sender, thisAllocation);
 
         // return any excess contributions 
         uint256 excessContribution = getSaleExcessContribution(saleId, tokenIndex);

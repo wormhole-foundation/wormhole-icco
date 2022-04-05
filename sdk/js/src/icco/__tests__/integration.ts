@@ -148,6 +148,7 @@ describe("Integration Tests", () => {
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY2, ethProvider),
               collateralAddress: WETH_ADDRESS,
               contribution: "6",
+              tokenIndex: 0
             },
             // native wbnb
             {
@@ -155,6 +156,7 @@ describe("Integration Tests", () => {
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY3, bscProvider),
               collateralAddress: WBNB_ADDRESS,
               contribution: "20",
+              tokenIndex: 1
             },
             // wormhole wrapped bnb
             {
@@ -162,6 +164,7 @@ describe("Integration Tests", () => {
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY3, ethProvider),
               collateralAddress: wormholeWrapped.wbnbOnEth,
               contribution: "3",
+              tokenIndex: 2
             },
             // wormhole wrapped weth
             {
@@ -169,6 +172,7 @@ describe("Integration Tests", () => {
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY2, bscProvider),
               collateralAddress: wormholeWrapped.wethOnBsc,
               contribution: "5",
+              tokenIndex: 3
             },
             // and another native wbnb contribution
             {
@@ -176,6 +180,7 @@ describe("Integration Tests", () => {
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY4, bscProvider),
               collateralAddress: WBNB_ADDRESS,
               contribution: "6",
+              tokenIndex: 1
             },
             // and ANOTHER native wbnb contribution
             {
@@ -183,6 +188,7 @@ describe("Integration Tests", () => {
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY5, bscProvider),
               collateralAddress: WBNB_ADDRESS,
               contribution: "9",
+              tokenIndex: 1
             },
           ];
 
@@ -296,9 +302,10 @@ describe("Integration Tests", () => {
             let expectedErrorExists = false;
             try {
               // buyers contribute
-              const contributionSuccessful = await contributeAllTokensOnEth(
+              const contributionSuccessful = await secureContributeAllTokensOnEth(
                 saleInit,
-                buyers
+                buyers,
+                tokenAddress
               );
             } catch (error: any) {
               const errorMsg: string = error.error.toString();
@@ -404,7 +411,7 @@ describe("Integration Tests", () => {
             }
             expect(expectedErrorExists).toBeTruthy();
           }
-          
+           
           // redeem token transfer vaas
           {
             const receipts = await redeemCrossChainAllocations(
@@ -455,6 +462,7 @@ describe("Integration Tests", () => {
 
           // balance check of distributed token to buyers
           {
+            
             const buyerBalancesBefore = await getAllocationBalancesOnEth(
               saleInit,
               buyers
@@ -469,6 +477,7 @@ describe("Integration Tests", () => {
               saleInit,
               buyers
             );
+
             const allGreaterThan = buyerBalancesAfter
               .map((balance, index) => {
                 return ethers.BigNumber.from(balance).gt(
@@ -490,8 +499,7 @@ describe("Integration Tests", () => {
           }
 
           // balance check collateral tokens paid to contributors
-          // if maxRaise is exceeded
-          
+          // if maxRaise is exceeded 
           {
             // check to see if maxRaise threshold was hit
             const conductorSale = await getSaleFromConductorOnEth(
@@ -502,6 +510,7 @@ describe("Integration Tests", () => {
             const contributions = conductorSale.contributions;
             const tokenConversions = conductorSale.acceptedTokensConversionRates;
             const adjustment = ethers.utils.parseUnits("1");
+
             // compute the total contributions for the sale
             const totalContributions = contributions.map((contribution, i) => {
               return ethers.BigNumber.from(contribution).mul(tokenConversions[i]).div(adjustment)
@@ -578,6 +587,7 @@ describe("Integration Tests", () => {
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY2, ethProvider),
               collateralAddress: WETH_ADDRESS,
               contribution: "3",
+              tokenIndex: 0
             },
             // native wbnb
             {
@@ -585,6 +595,7 @@ describe("Integration Tests", () => {
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY3, bscProvider),
               collateralAddress: WBNB_ADDRESS,
               contribution: "10",
+              tokenIndex: 1
             },
             // wormhole wrapped bnb
             {
@@ -592,6 +603,7 @@ describe("Integration Tests", () => {
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY3, ethProvider),
               collateralAddress: wormholeWrapped.wbnbOnEth,
               contribution: "5",
+              tokenIndex: 2
             },
             // wormhole wrapped weth
             {
@@ -599,6 +611,7 @@ describe("Integration Tests", () => {
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY2, bscProvider),
               collateralAddress: wormholeWrapped.wethOnBsc,
               contribution: "2.99999999",
+              tokenIndex: 3
             },
             // and another native wbnb contribution
             {
@@ -606,6 +619,7 @@ describe("Integration Tests", () => {
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY4, bscProvider),
               collateralAddress: WBNB_ADDRESS,
               contribution: "3",
+              tokenIndex: 1
             },
             // and ANOTHER native wbnb contribution
             {
@@ -613,6 +627,7 @@ describe("Integration Tests", () => {
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY5, bscProvider),
               collateralAddress: WBNB_ADDRESS,
               contribution: "2",
+              tokenIndex: 1
             },
           ];
 
@@ -746,8 +761,8 @@ describe("Integration Tests", () => {
 
           const buyerBalancesBefore = await getCollateralBalancesOnEth(buyers);
 
-          const claimed: boolean[] = [false, false, false, false];
-          // EPXECT ERROR: claim one refund (from first buyer), but error if claimed again
+          const claimed: boolean[] = [false, false, false, false, false, false];
+          // EXPECT ERROR claim one refund (from first buyer), but error if claimed again
           {
             const buyerIndex = 0;
             claimed[buyerIndex] = await claimOneContributorRefundOnEth(
@@ -781,7 +796,7 @@ describe("Integration Tests", () => {
             claimed
           );
           expect(refundSuccessful).toBeTruthy();
-
+         
           const buyerBalancesAfter = await getCollateralBalancesOnEth(buyers);
           const allGreaterThan = buyerBalancesAfter
             .map((balance, index) => {
@@ -802,8 +817,6 @@ describe("Integration Tests", () => {
             buyerBalancesAfter
           );
           expect(reconciled).toBeTruthy();
-
-          // TODO: try to refund again. expect error when failed
 
           ethProvider.destroy();
           bscProvider.destroy();
@@ -850,6 +863,7 @@ describe("Integration Tests", () => {
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY3, bscProvider),
               collateralAddress: WBNB_ADDRESS,
               contribution: "20",
+              tokenIndex: 0
             },
           ];
 

@@ -23,8 +23,6 @@ const ContributorImplementationFullABI = jsonfile.readFileSync("build/contracts/
 
 contract("ICCO", function (accounts) {
     const TEST_CHAIN_ID = "2";
-    const TEST_GOVERNANCE_CHAIN_ID = "1";
-    const TEST_GOVERNANCE_CONTRACT = "0x0000000000000000000000000000000000000000000000000000000000000004";
     const GAS_LIMIT = "2000000";
 
     const WORMHOLE = new web3.eth.Contract(WormholeImplementationFullABI, Wormhole.address);
@@ -43,12 +41,6 @@ contract("ICCO", function (accounts) {
         // tokenBridge
         const tokenbridge = await initialized.methods.tokenBridge().call();
         assert.equal(tokenbridge, TokenBridge.address);
-
-        // governance
-        const governanceChainId = await initialized.methods.governanceChainId().call();
-        assert.equal(governanceChainId, TEST_GOVERNANCE_CHAIN_ID);
-        const governanceContract = await initialized.methods.governanceContract().call();
-        assert.equal(governanceContract, TEST_GOVERNANCE_CONTRACT);
     })
 
     it("contributor should be initialized with the correct values", async function () {
@@ -71,45 +63,35 @@ contract("ICCO", function (accounts) {
         // tokenBridge
         const tokenbridge = await initialized.methods.tokenBridge().call();
         assert.equal(tokenbridge, (await TokenBridge.deployed()).address);
-
-        // governance
-        const governanceChainId = await initialized.methods.governanceChainId().call();
-        assert.equal(governanceChainId, TEST_GOVERNANCE_CHAIN_ID);
-        const governanceContract = await initialized.methods.governanceContract().call();
-        assert.equal(governanceContract, TEST_GOVERNANCE_CONTRACT);
     })
 
     it("conductor should register a contributor implementation correctly", async function () {
+        const contributorAddress = web3.eth.abi.encodeParameter(
+            "bytes32", "0x000000000000000000000000" + TokenSaleContributor.address.substr(2)
+        )
+
         const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
-
-        let data = [
-            "0x",
-            "0000000000000000000000000000000000000000000000546f6b656e53616c65",
-            "01",
-            "0000",
-            web3.eth.abi.encodeParameter("uint16", TEST_CHAIN_ID).substring(2 + (64 - 4)),
-            web3.eth.abi.encodeParameter("bytes32", "0x000000000000000000000000" + TokenSaleContributor.address.substr(2)).substring(2),
-        ].join('')
-
-        const vm = await signAndEncodeVM(
-            1,
-            1,
-            TEST_GOVERNANCE_CHAIN_ID,
-            TEST_GOVERNANCE_CONTRACT,
-            0,
-            data,
-            [
-                testSigner1PK
-            ],
-            0,
-            0
-        );
 
         let before = await initialized.methods.contributorContracts(TEST_CHAIN_ID).call();
 
         assert.equal(before, "0x0000000000000000000000000000000000000000000000000000000000000000");
 
-        await initialized.methods.registerChain("0x" + vm).send({
+        // attempt to register a chain from non-owner account
+        let failed = false
+        try {
+            let tx = await initialized.methods.registerChain(TEST_CHAIN_ID, contributorAddress).send({
+                value: 0,
+                from: accounts[1],
+                gasLimit: GAS_LIMIT
+            })
+        } catch(e) {
+            assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert caller is not the owner");
+            failed = true
+        }
+
+        assert.ok(failed)
+
+        await initialized.methods.registerChain(TEST_CHAIN_ID, contributorAddress).send({
             value: 0,
             from: accounts[0],
             gasLimit: GAS_LIMIT
@@ -118,40 +100,47 @@ contract("ICCO", function (accounts) {
         let after = await initialized.methods.contributorContracts(TEST_CHAIN_ID).call();
 
         assert.equal(after.substr(26).toLowerCase(), TokenSaleContributor.address.substr(2).toLowerCase());
+
+        // attempt to register a contributor a second time
+        failed = false
+        try {
+            let tx = await initialized.methods.registerChain(TEST_CHAIN_ID, contributorAddress).send({
+                value: 0,
+                from: accounts[0],
+                gasLimit: GAS_LIMIT
+            })
+        } catch(e) {
+            assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert chain already registered");
+            failed = true
+        };
     })
 
     it("conductor should accept a valid upgrade", async function () {
         const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
 
+        // deploy the mock contract
         const mock = await MockConductorImplementation.new();
 
-        let data = [
-            "0x",
-            "0000000000000000000000000000000000000000000000546f6b656e53616c65",
-            "02",
-            web3.eth.abi.encodeParameter("uint16", TEST_CHAIN_ID).substring(2 + (64 - 4)),
-            web3.eth.abi.encodeParameter("address", mock.address).substring(2),
-        ].join('')
+         // attempt to upgrade a chain from non-owner account
+        let failed = false
+        try {
+            let tx = await initialized.methods.upgrade(TEST_CHAIN_ID, mock.address).send({
+                value: 0,
+                from: accounts[1],
+                gasLimit: GAS_LIMIT
+            })
+        } catch(e) {
+            assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert caller is not the owner");
+            failed = true
+        }
 
-        const vm = await signAndEncodeVM(
-            1,
-            1,
-            TEST_GOVERNANCE_CHAIN_ID,
-            TEST_GOVERNANCE_CONTRACT,
-            0,
-            data,
-            [
-                testSigner1PK
-            ],
-            0,
-            0
-        );
+        assert.ok(failed)
 
         let before = await web3.eth.getStorageAt(TokenSaleConductor.address, "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc");
 
         assert.equal(before.toLowerCase(), ConductorImplementation.address.toLowerCase());
 
-        await initialized.methods.upgrade("0x" + vm).send({
+        await initialized.methods.upgrade(TEST_CHAIN_ID, mock.address).send({
             value: 0,
             from: accounts[0],
             gasLimit: GAS_LIMIT
@@ -173,33 +162,23 @@ contract("ICCO", function (accounts) {
 
         const mock = await MockContributorImplementation.new();
 
-        let data = [
-            "0x",
-            "0000000000000000000000000000000000000000000000546f6b656e53616c65",
-            "03",
-            web3.eth.abi.encodeParameter("uint16", TEST_CHAIN_ID).substring(2 + (64 - 4)),
-            web3.eth.abi.encodeParameter("address", mock.address).substring(2),
-        ].join('')
-
-        const vm = await signAndEncodeVM(
-            1,
-            1,
-            TEST_GOVERNANCE_CHAIN_ID,
-            TEST_GOVERNANCE_CONTRACT,
-            0,
-            data,
-            [
-                testSigner1PK
-            ],
-            0,
-            0
-        );
+        let failed = false
+        try {
+            let tx = await initialized.methods.upgrade(TEST_CHAIN_ID, mock.address).send({
+                value: 0,
+                from: accounts[1],
+                gasLimit: GAS_LIMIT
+            })
+        } catch(e) {
+            assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert caller is not the owner");
+            failed = true
+        }
 
         let before = await web3.eth.getStorageAt(TokenSaleContributor.address, "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc");
 
         assert.equal(before.toLowerCase(), ContributorImplementation.address.toLowerCase());
 
-        await initialized.methods.upgrade("0x" + vm).send({
+        await initialized.methods.upgrade(TEST_CHAIN_ID, mock.address).send({
             value: 0,
             from: accounts[0],
             gasLimit: GAS_LIMIT

@@ -11,8 +11,6 @@ const TokenBridge = artifacts.require("TokenBridge");
 
 const chainId = process.env.ICCO_CONTRIBUTOR_INIT_CHAIN_ID;
 const conductorChainId = process.env.ICCO_CONDUCTOR_INIT_CHAIN_ID;
-const governanceChainId = process.env.ICCO_CONTRIBUTOR_INIT_GOV_CHAIN_ID;
-const governanceContract = process.env.ICCO_CONTRIBUTOR_INIT_GOV_CONTRACT; // bytes32
 
 module.exports = async function (deployer) {
     // deploy contributor implementation
@@ -29,9 +27,7 @@ module.exports = async function (deployer) {
         conductorChainId,
         "0x000000000000000000000000" + (await TokenSaleConductor.deployed()).address.substr(2),
         (await Wormhole.deployed()).address,
-        (await TokenBridge.deployed()).address,
-        governanceChainId,
-        governanceContract
+        (await TokenBridge.deployed()).address
     ).encodeABI();
 
     // deploy conductor proxy

@@ -11,8 +11,8 @@ import "../../bridge/BridgeImplementation.sol";
 import "./ConductorState.sol";
 
 contract ConductorGetters is ConductorState {
-    function governanceActionIsConsumed(bytes32 hash) public view returns (bool) {
-        return _state.consumedGovernanceActions[hash];
+    function owner() public view returns (address) {
+        return _state.owner;
     }
 
     function isInitialized(address impl) public view returns (bool) {
@@ -29,14 +29,6 @@ contract ConductorGetters is ConductorState {
 
     function chainId() public view returns (uint16){
         return _state.provider.chainId;
-    }
-
-    function governanceChainId() public view returns (uint16){
-        return _state.provider.governanceChainId;
-    }
-
-    function governanceContract() public view returns (bytes32){
-        return _state.provider.governanceContract;
     }
 
     function contributorContracts(uint16 chainId_) public view returns (bytes32){

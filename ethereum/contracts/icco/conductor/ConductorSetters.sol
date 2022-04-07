@@ -12,20 +12,16 @@ contract ConductorSetters is ConductorState, Context {
         _state.owner = owner_;
     }
 
+    function setContributor(uint16 chainId, bytes32 emitter) internal {
+        _state.contributorImplementations[chainId] = emitter;
+    }
+
     function setInitialized(address implementatiom) internal {
         _state.initializedImplementations[implementatiom] = true;
     }
 
-    function setGovernanceActionConsumed(bytes32 hash) internal {
-        _state.consumedGovernanceActions[hash] = true;
-    }
-
     function setChainId(uint16 chainId) internal {
         _state.provider.chainId = chainId;
-    }
-
-    function setContributorImplementation(uint16 chainId, bytes32 contributorContract) internal {
-        _state.contributorImplementations[chainId] = contributorContract;
     }
 
     function setWormhole(address wh) internal {
@@ -55,11 +51,7 @@ contract ConductorSetters is ConductorState, Context {
 
     function setRefundClaimed(uint saleId) internal {
         _state.sales[saleId].refundIsClaimed = true;
-    }
-
-    function setContributor(uint16 chainId, bytes32 emitter) internal {
-        _state.contributorImplementations[chainId] = emitter;
-    }
+    }   
 
     function setNextSaleId(uint nextSaleId) internal {
         _state.nextSaleId = nextSaleId;

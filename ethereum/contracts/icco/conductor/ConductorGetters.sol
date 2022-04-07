@@ -15,10 +15,6 @@ contract ConductorGetters is ConductorState {
         return _state.owner;
     }
 
-    function governanceActionIsConsumed(bytes32 hash) public view returns (bool) {
-        return _state.consumedGovernanceActions[hash];
-    }
-
     function isInitialized(address impl) public view returns (bool) {
         return _state.initializedImplementations[impl];
     }

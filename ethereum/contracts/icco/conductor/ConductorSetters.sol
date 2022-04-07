@@ -5,8 +5,13 @@ pragma solidity ^0.8.0;
 
 import "./ConductorState.sol";
 import "../shared/ICCOStructs.sol";
+import "@openzeppelin/contracts/utils/Context.sol";
 
-contract ConductorSetters is ConductorState {
+contract ConductorSetters is ConductorState, Context {
+    function setOwner(address owner_) internal {
+        _state.owner = owner_;
+    }
+
     function setInitialized(address implementatiom) internal {
         _state.initializedImplementations[implementatiom] = true;
     }
@@ -17,14 +22,6 @@ contract ConductorSetters is ConductorState {
 
     function setChainId(uint16 chainId) internal {
         _state.provider.chainId = chainId;
-    }
-
-    function setGovernanceChainId(uint16 chainId) internal {
-        _state.provider.governanceChainId = chainId;
-    }
-
-    function setGovernanceContract(bytes32 governanceContract) internal {
-        _state.provider.governanceContract = governanceContract;
     }
 
     function setContributorImplementation(uint16 chainId, bytes32 contributorContract) internal {

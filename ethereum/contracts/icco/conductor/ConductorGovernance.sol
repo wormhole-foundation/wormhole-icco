@@ -3,6 +3,7 @@
 
 pragma solidity ^0.8.0;
 
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Upgrade.sol";
@@ -22,8 +23,9 @@ contract ConductorGovernance is ConductorGetters, ConductorSetters, ERC1967Upgra
     bytes32 constant module = 0x0000000000000000000000000000000000000000000000546f6b656e53616c65;
 
     // Execute a RegisterChain governance message
-    function registerChain(bytes memory encodedVM) public {
-        (IWormhole.VM memory vm, bool valid, string memory reason) = verifyGovernanceVM(encodedVM);
+    function registerChain() public onlyOwner {
+        return;
+        /*(IWormhole.VM memory vm, bool valid, string memory reason) = verifyGovernanceVM(encodedVM);
         require(valid, reason);
 
         setGovernanceActionConsumed(vm.hash);
@@ -34,11 +36,16 @@ contract ConductorGovernance is ConductorGetters, ConductorSetters, ERC1967Upgra
         require(chain.chainId == chainId() || chain.chainId == 0, "invalid chain id");
         require(contributorContracts(chain.emitterChainID) == bytes32(0), "chain already registered");
 
-        setContributor(chain.emitterChainID, chain.emitterAddress);
+        setContributor(chain.emitterChainID, chain.emitterAddress);*/
+    }
+
+    modifier onlyOwner() {
+        require(owner() == _msgSender(), "caller is not the owner");
+        _;
     }
 
     // Execute a UpgradeContract governance message
-    function upgrade(bytes memory encodedVM) public {
+    /*function upgrade(bytes memory encodedVM) public {
         (IWormhole.VM memory vm, bool valid, string memory reason) = verifyGovernanceVM(encodedVM);
         require(valid, reason);
 
@@ -136,5 +143,5 @@ contract ConductorGovernance is ConductorGetters, ConductorSetters, ERC1967Upgra
         index += 32;
 
         require(encoded.length == index, "invalid ConductorUpgrade: wrong length");
-    }
+    }*/
 }

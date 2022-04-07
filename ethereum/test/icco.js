@@ -43,15 +43,9 @@ contract("ICCO", function (accounts) {
         // tokenBridge
         const tokenbridge = await initialized.methods.tokenBridge().call();
         assert.equal(tokenbridge, TokenBridge.address);
-
-        // governance
-        const governanceChainId = await initialized.methods.governanceChainId().call();
-        assert.equal(governanceChainId, TEST_GOVERNANCE_CHAIN_ID);
-        const governanceContract = await initialized.methods.governanceContract().call();
-        assert.equal(governanceContract, TEST_GOVERNANCE_CONTRACT);
     })
 
-    it("contributor should be initialized with the correct values", async function () {
+    /*it("contributor should be initialized with the correct values", async function () {
         const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
 
         // chain id
@@ -71,56 +65,29 @@ contract("ICCO", function (accounts) {
         // tokenBridge
         const tokenbridge = await initialized.methods.tokenBridge().call();
         assert.equal(tokenbridge, (await TokenBridge.deployed()).address);
-
-        // governance
-        const governanceChainId = await initialized.methods.governanceChainId().call();
-        assert.equal(governanceChainId, TEST_GOVERNANCE_CHAIN_ID);
-        const governanceContract = await initialized.methods.governanceContract().call();
-        assert.equal(governanceContract, TEST_GOVERNANCE_CONTRACT);
-    })
+    })*/
 
     it("conductor should register a contributor implementation correctly", async function () {
+        // web3.eth.abi.encodeParameter("uint16", TEST_CHAIN_ID).substring(2 + (64 - 4)),
+        // web3.eth.abi.encodeParameter("bytes32", "0x000000000000000000000000" + TokenSaleContributor.address.substr(2)).substring(2)
         const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
-
-        let data = [
-            "0x",
-            "0000000000000000000000000000000000000000000000546f6b656e53616c65",
-            "01",
-            "0000",
-            web3.eth.abi.encodeParameter("uint16", TEST_CHAIN_ID).substring(2 + (64 - 4)),
-            web3.eth.abi.encodeParameter("bytes32", "0x000000000000000000000000" + TokenSaleContributor.address.substr(2)).substring(2),
-        ].join('')
-
-        const vm = await signAndEncodeVM(
-            1,
-            1,
-            TEST_GOVERNANCE_CHAIN_ID,
-            TEST_GOVERNANCE_CONTRACT,
-            0,
-            data,
-            [
-                testSigner1PK
-            ],
-            0,
-            0
-        );
 
         let before = await initialized.methods.contributorContracts(TEST_CHAIN_ID).call();
 
         assert.equal(before, "0x0000000000000000000000000000000000000000000000000000000000000000");
 
-        await initialized.methods.registerChain("0x" + vm).send({
+        await initialized.methods.registerChain().send({
             value: 0,
-            from: accounts[0],
+            from: accounts[1],
             gasLimit: GAS_LIMIT
         });
 
-        let after = await initialized.methods.contributorContracts(TEST_CHAIN_ID).call();
+        /*let after = await initialized.methods.contributorContracts(TEST_CHAIN_ID).call();
 
-        assert.equal(after.substr(26).toLowerCase(), TokenSaleContributor.address.substr(2).toLowerCase());
+        assert.equal(after.substr(26).toLowerCase(), TokenSaleContributor.address.substr(2).toLowerCase());*/
     })
 
-    it("conductor should accept a valid upgrade", async function () {
+    /*it("conductor should accept a valid upgrade", async function () {
         const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
 
         const mock = await MockConductorImplementation.new();
@@ -2485,7 +2452,7 @@ contract("ICCO", function (accounts) {
         const alloFour = parsed.allocations[3];
         assert.equal(alloFour.tokenIndex, tokenFourIndex);
         assert.equal(ethers.utils.formatUnits(alloFour.allocation, tokenDecimals), tokenFourAllo);
-    });
+    });*/
 });
 
 const signAndEncodeVM = async function (

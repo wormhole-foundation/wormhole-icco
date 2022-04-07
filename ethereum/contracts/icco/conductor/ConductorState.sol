@@ -20,6 +20,8 @@ contract ConductorStorage {
     struct State {
         Provider provider;
 
+        address owner;
+
         // Mapping of consumed governance actions
         mapping(bytes32 => bool) consumedGovernanceActions;
 

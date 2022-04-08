@@ -15,6 +15,10 @@ contract ContributorGetters is ContributorState {
         return _state.owner;
     }
 
+    function authority() public view returns (address) {
+        return _state.authority;
+    }
+
     function isInitialized(address impl) public view returns (bool) {
         return _state.initializedImplementations[impl];
     }

@@ -24,7 +24,7 @@ const ContributorImplementationFullABI = jsonfile.readFileSync("build/contracts/
 contract("ICCO", function (accounts) {
     const TEST_CHAIN_ID = "2";
     const GAS_LIMIT = "2000000";
-
+    const CONDUCTOR_BYTES32_ADDRESS = "0x000000000000000000000000" + TokenSaleConductor.address.substr(2);
     const WORMHOLE = new web3.eth.Contract(WormholeImplementationFullABI, Wormhole.address);
     
     it("conductor should be initialized with the correct values", async function () {
@@ -544,16 +544,18 @@ contract("ICCO", function (accounts) {
             from:BUYER_TWO
         })   
 
-        // contribute tokens to the sale
-        let tx = await initialized.methods.contribute(SALE_ID, TOKEN_ONE_INDEX, parseInt(tokenOneContributionAmount)).send({
+        // perform "kyc" and contribute to the token sale
+        const kycSig1 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_ID, TOKEN_ONE_INDEX, tokenOneContributionAmount, BUYER_ONE, testSigner1PK);
+        let tx = await initialized.methods.contribute(SALE_ID, TOKEN_ONE_INDEX, parseInt(tokenOneContributionAmount), kycSig1).send({
             from : BUYER_ONE,
             gasLimit : GAS_LIMIT
-        })
+        });
 
-        let tx2 = await initialized.methods.contribute(SALE_ID, TOKEN_TWO_INDEX, parseInt(tokenTwoContributionAmount)).send({
+        const kycSig2 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_ID, TOKEN_TWO_INDEX, tokenTwoContributionAmount, BUYER_TWO, testSigner1PK);
+        let tx2 = await initialized.methods.contribute(SALE_ID, TOKEN_TWO_INDEX, parseInt(tokenTwoContributionAmount), kycSig2).send({
             from : BUYER_TWO,
             gasLimit : GAS_LIMIT
-        })
+        });
 
         // verify getSaleTotalContribution after contributing
         const totalContributionsTokenOne = await initialized.methods.getSaleTotalContribution(SALE_ID, TOKEN_ONE_INDEX).call();
@@ -569,6 +571,32 @@ contract("ICCO", function (accounts) {
         assert.equal(buyerOneContribution, parseInt(tokenOneContributionAmount));
         assert.equal(buyerTwoContribution, parseInt(tokenTwoContributionAmount));
     })
+
+    it('should not accept contributions without proper KYC signature', async function () {
+        // test variables
+        const tokenOneContributionAmount = "10000";
+
+        const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
+
+        await CONTRIBUTED_TOKEN_ONE.approve(TokenSaleContributor.address, tokenOneContributionAmount, {
+            from:BUYER_ONE
+        })
+
+        let failed = false;
+        try {
+            // perform "kyc" and contribute to the token sale
+            const kycSig1 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_ID, TOKEN_ONE_INDEX, tokenOneContributionAmount, BUYER_ONE, accounts[0]);
+            let tx = await initialized.methods.contribute(SALE_ID, TOKEN_ONE_INDEX, parseInt(tokenOneContributionAmount), kycSig1).send({
+                from : BUYER_ONE,
+                gasLimit : GAS_LIMIT
+            });
+        } catch(e) {
+            assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert unauthorized contributor");
+            failed = true;
+        }
+
+        assert.ok(failed);
+    })
     
     it('should not accept contributions in the contributor for non-existent saleIDs', async function () {
         // test variables
@@ -579,7 +607,8 @@ contract("ICCO", function (accounts) {
 
         let failed = false;
         try {
-            await initialized.methods.contribute(incorrect_sale_id, TOKEN_ONE_INDEX, tokenOneContributionAmount).send({
+            const kycSig1 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_ID, TOKEN_ONE_INDEX, tokenOneContributionAmount, BUYER_TWO, testSigner1PK);
+            await initialized.methods.contribute(incorrect_sale_id, TOKEN_ONE_INDEX, tokenOneContributionAmount, kycSig1).send({
                 from : BUYER_TWO,
                 gasLimit : GAS_LIMIT
             })
@@ -601,7 +630,8 @@ contract("ICCO", function (accounts) {
  
         let failed = false;
         try {
-            await initialized.methods.contribute(SALE_ID, TOKEN_TWO_INDEX, tokenTwoContributionAmount).send({
+            const kycSig1 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_ID, TOKEN_TWO_INDEX, tokenTwoContributionAmount, BUYER_TWO, testSigner1PK);
+            await initialized.methods.contribute(SALE_ID, TOKEN_TWO_INDEX, tokenTwoContributionAmount, kycSig1).send({
                 from : BUYER_TWO,
                 gasLimit : GAS_LIMIT
             })
@@ -1207,12 +1237,14 @@ contract("ICCO", function (accounts) {
         })   
 
         // contribute tokens to the sale
-        let tx = await initialized.methods.contribute(SALE_2_ID, TOKEN_ONE_INDEX, parseInt(tokenOneContributionAmount)).send({
+        const kycSig1 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_2_ID, TOKEN_ONE_INDEX, tokenOneContributionAmount, BUYER_ONE, testSigner1PK);
+        let tx = await initialized.methods.contribute(SALE_2_ID, TOKEN_ONE_INDEX, parseInt(tokenOneContributionAmount), kycSig1).send({
             from : BUYER_ONE,
             gasLimit : GAS_LIMIT
         })
-
-        let tx2 = await initialized.methods.contribute(SALE_2_ID, TOKEN_TWO_INDEX, parseInt(tokenTwoContributionAmount)).send({
+        
+        const kycSig2 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_2_ID, TOKEN_TWO_INDEX, tokenTwoContributionAmount, BUYER_TWO, testSigner1PK);
+        let tx2 = await initialized.methods.contribute(SALE_2_ID, TOKEN_TWO_INDEX, parseInt(tokenTwoContributionAmount), kycSig2).send({
             from : BUYER_TWO,
             gasLimit : GAS_LIMIT
         })
@@ -1879,12 +1911,14 @@ contract("ICCO", function (accounts) {
         })   
 
         // contribute tokens to the sale
-        let tx = await initialized.methods.contribute(SALE_3_ID, TOKEN_ONE_INDEX, parseInt(tokenOneContributionAmount)).send({
+        const kycSig1 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_3_ID, TOKEN_ONE_INDEX, tokenOneContributionAmount, BUYER_ONE, testSigner1PK);
+        let tx = await initialized.methods.contribute(SALE_3_ID, TOKEN_ONE_INDEX, parseInt(tokenOneContributionAmount), kycSig1).send({
             from : BUYER_ONE,
             gasLimit : GAS_LIMIT
         })
 
-        let tx2 = await initialized.methods.contribute(SALE_3_ID, TOKEN_TWO_INDEX, parseInt(tokenTwoContributionAmount)).send({
+        const kycSig2 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_3_ID, TOKEN_TWO_INDEX, tokenTwoContributionAmount, BUYER_TWO, testSigner1PK);
+        let tx2 = await initialized.methods.contribute(SALE_3_ID, TOKEN_TWO_INDEX, parseInt(tokenTwoContributionAmount), kycSig2).send({
             from : BUYER_TWO,
             gasLimit : GAS_LIMIT
         })
@@ -1953,7 +1987,8 @@ contract("ICCO", function (accounts) {
         let failed = false
         try {
             // try to contribute tokens to the sale
-            await initialized.methods.contribute(SALE_3_ID, TOKEN_ONE_INDEX, parseInt(tokenOneContributionAmount)).send({
+            const kycSig1 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_3_ID, TOKEN_ONE_INDEX, tokenOneContributionAmount, BUYER_ONE, testSigner1PK);
+            await initialized.methods.contribute(SALE_3_ID, TOKEN_ONE_INDEX, parseInt(tokenOneContributionAmount), kycSig1).send({
                 from : BUYER_ONE,
                 gasLimit : GAS_LIMIT
             })   
@@ -2466,6 +2501,38 @@ contract("ICCO", function (accounts) {
         assert.equal(ethers.utils.formatUnits(alloFour.allocation, tokenDecimals), tokenFourAllo);
     });
 });
+
+const signContribution = async function (
+    conductorAddress,
+    saleId,
+    tokenIndex,
+    amount,
+    buyerAddress,
+    signer
+) {
+    const body = [
+        web3.eth.abi.encodeParameter("bytes32", conductorAddress).substring(2),
+        web3.eth.abi.encodeParameter("uint256", saleId).substring(2),
+        web3.eth.abi.encodeParameter("uint256", tokenIndex).substring(2),
+        web3.eth.abi.encodeParameter("uint256", amount).substring(2),
+        web3.eth.abi.encodeParameter("address", buyerAddress).substring(2 + (64 - 40))
+    ]
+
+    // compute the hash
+    const hash = web3.utils.soliditySha3("0x" + body.join(""));
+
+    const ec = new elliptic.ec("secp256k1");
+    const key = ec.keyFromPrivate(signer);
+    const signature = key.sign(hash.substr(2), {canonical: true});
+
+    const packSig = [
+        zeroPadBytes(signature.r.toString(16), 32),
+        zeroPadBytes(signature.s.toString(16), 32),
+        web3.eth.abi.encodeParameter("uint8", signature.recoveryParam).substr(2 + (64 - 2)),
+    ]
+
+    return "0x" + packSig.join("");
+}
 
 const signAndEncodeVM = async function (
     timestamp,

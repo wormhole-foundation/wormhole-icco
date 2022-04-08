@@ -16,6 +16,10 @@ contract ContributorSetters is ContributorState, Context {
         _state.owner = owner_;
     }
 
+    function setAuthority(address authority) internal {
+        _state.authority = authority;
+    }
+
     function setChainId(uint16 chainId) internal {
         _state.provider.chainId = chainId;
     }

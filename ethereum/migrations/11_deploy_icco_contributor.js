@@ -11,6 +11,7 @@ const TokenBridge = artifacts.require("TokenBridge");
 
 const chainId = process.env.ICCO_CONTRIBUTOR_INIT_CHAIN_ID;
 const conductorChainId = process.env.ICCO_CONDUCTOR_INIT_CHAIN_ID;
+const kycSignerKey = process.env.ICCO_KYC_SIGNER;
 
 module.exports = async function (deployer) {
     // deploy contributor implementation
@@ -26,6 +27,7 @@ module.exports = async function (deployer) {
         chainId,
         conductorChainId,
         "0x000000000000000000000000" + (await TokenSaleConductor.deployed()).address.substr(2),
+        kycSignerKey,
         (await Wormhole.deployed()).address,
         (await TokenBridge.deployed()).address
     ).encodeABI();

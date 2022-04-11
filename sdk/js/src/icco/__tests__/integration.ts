@@ -63,7 +63,7 @@ import {
 import { attestContributionsOnEth } from "../attestContributions";
 import { sealSaleOnEth } from "../sealSale";
 import { formatUnits, parseUnits } from "ethers/lib/utils";
-import { ConductorSale } from "../structs";
+import { ConductorSale, makeAcceptedToken } from "../structs";
 
 // ten minutes? nobody got time for that
 jest.setTimeout(600000);
@@ -209,6 +209,18 @@ describe("Integration Tests", () => {
             buyers
           );
 
+          // add fake terra and solana tokens to acceptedTokens 
+          /*acceptedTokens.push(makeAcceptedToken(
+              3,
+              'terra13nkgqrfymug724h8pprpexqj9h629sa3ncw7sh',
+              "1"
+          ));
+          acceptedTokens.push(makeAcceptedToken(
+              1,
+              '2WDq7wSs9zYrpx2kbHDA4RUTRch2CCTP6ZWaH4GNfnQQ',
+              ".4"
+          ));*/
+
           // conductor lives in CHAIN_ID_ETH
           const conductorConfig = contributorConfigs[0];
 
@@ -243,6 +255,7 @@ describe("Integration Tests", () => {
             saleDuration,
             acceptedTokens
           );
+          console.log("Parsed Sale Init:", saleInit);
 
           // balance check
           {
@@ -426,6 +439,7 @@ describe("Integration Tests", () => {
             saleResult,
             contributorConfigs
           );
+          console.info("Parsed Sale Sealed:", saleSealed);
 
           const recipientBalanceAfter = await getRefundRecipientBalanceOnEth(
             saleInit,
@@ -682,6 +696,7 @@ describe("Integration Tests", () => {
             saleDuration,
             acceptedTokens
           );
+          console.log("Parsed Sale Init:", saleInit);
 
           // balance check
           {
@@ -925,6 +940,7 @@ describe("Integration Tests", () => {
             saleDuration,
             acceptedTokens
           );
+          console.log("Parsed Sale Init:", saleInit);
 
           // abort the sale in the conductor and verify getters
           let abortEarlyReceipt: ethers.ContractReceipt | undefined = undefined;

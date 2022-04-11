@@ -594,8 +594,9 @@ export async function createSaleOnEthAndInit(
     acceptedTokens
   );
 
+  console.info("Sale Init VAA:", Buffer.from(saleInitVaa).toString("hex"));
+
   const saleInit = await parseSaleInit(saleInitVaa);
-  // console.info("saleInit", saleInit);
 
   {
     const receipts = await Promise.all(
@@ -678,7 +679,7 @@ export async function attestAndCollectContributions(
         receipt
       );
     })
-  );
+  ); 
 
   {
     const receipts = await collectContributionsOnEth(

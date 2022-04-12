@@ -9,9 +9,6 @@ const TokenBridge = artifacts.require("TokenBridge");
 const chainId = process.env.ICCO_CONDUCTOR_INIT_CHAIN_ID;
 
 module.exports = async function (deployer) {
-    // deploy conductor setup
-    await deployer.deploy(ConductorSetup);
-
     // deploy conductor implementation
     await deployer.deploy(ConductorImplementation);
 

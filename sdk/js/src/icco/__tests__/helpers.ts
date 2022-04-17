@@ -86,6 +86,7 @@ export interface EthContributorConfig extends EthConfig {
 export interface EthBuyerConfig extends EthConfig {
   collateralAddress: string;
   contribution: string;
+  tokenIndex: number;
 }
 
 enum BalanceChange {
@@ -128,6 +129,9 @@ export async function makeAcceptedTokensFromConfigs(
 ): Promise<AcceptedToken[]> {
   const acceptedTokens: AcceptedToken[] = [];
 
+  // create map to record which accepted tokens have been created 
+  const tokenMap: Map<number, string[]> = new Map<number, string[]>();
+
   for (const buyer of potentialBuyers) {
     const info = await getOriginalAssetEth(
       ETH_TOKEN_BRIDGE_ADDRESS,
@@ -145,6 +149,19 @@ export async function makeAcceptedTokensFromConfigs(
     });
     if (contributor === undefined) {
       throw Error("cannot find native token in contributor config");
+    }
+
+    if (!tokenMap.has(buyer.chainId)) {
+        const addressArray: string[] = [buyer.collateralAddress];
+        tokenMap.set(buyer.chainId, addressArray);
+    } else {
+        const addressArray = tokenMap.get(buyer.chainId) || [];
+        if (!addressArray.includes(buyer.collateralAddress)) {
+            addressArray.push(buyer.collateralAddress);
+            tokenMap.set(buyer.chainId, addressArray);
+        } else {
+            continue;
+        }
     }
 
     acceptedTokens.push(
@@ -383,24 +400,18 @@ export async function createSaleOnEthAndGetVaa(
   tokenAddress: string,
   amount: ethers.BigNumberish,
   minRaise: ethers.BigNumberish,
+  maxRaise: ethers.BigNumberish,
   saleStart: ethers.BigNumberish,
   saleEnd: ethers.BigNumberish,
   acceptedTokens: AcceptedToken[]
 ): Promise<Uint8Array> {
-  // approve
-  /*
-  {
-    const tx = await token.approve(ETH_TOKEN_SALE_CONDUCTOR_ADDRESS, amount);
-    const receipt = await tx.wait();
-  }
-  */
-
   // create
   const receipt = await createSaleOnEth(
     ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
     tokenAddress,
     amount,
     minRaise,
+    maxRaise,
     saleStart,
     saleEnd,
     acceptedTokens,
@@ -408,7 +419,7 @@ export async function createSaleOnEthAndGetVaa(
     seller.address,
     seller
   );
-
+ 
   return getSignedVaaFromReceiptOnEth(
     chainId,
     ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
@@ -452,12 +463,12 @@ export async function contributeAllTokensOnEth(
   {
     const receipts = await Promise.all(
       buyers.map(
-        async (config, tokenIndex): Promise<ethers.ContractReceipt> => {
+        async (config, i): Promise<ethers.ContractReceipt> => {
           return contributeOnEth(
             ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
             saleId,
-            tokenIndex,
-            contributions[tokenIndex],
+            i,
+            contributions[i],
             config.wallet
           );
         }
@@ -469,8 +480,8 @@ export async function contributeAllTokensOnEth(
   const expected = await getAllContributions(saleInit, buyers);
 
   return buyers
-    .map((config, tokenIndex): boolean => {
-      return contributions[tokenIndex].eq(expected[tokenIndex]);
+    .map((config, i): boolean => {
+      return contributions[i].eq(expected[i]);
     })
     .reduce((prev, curr): boolean => {
       return prev && curr;
@@ -499,15 +510,16 @@ export async function secureContributeAllTokensOnEth(
   {
     const receipts = await Promise.all(
       buyers.map(
-        async (config, tokenIndex): Promise<ethers.ContractReceipt> => {
-          return secureContributeOnEth(
+        async (config, i): Promise<ethers.ContractReceipt> => {
+          const tx = await secureContributeOnEth(
             ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
             saleId,
-            tokenIndex,
-            contributions[tokenIndex],
+            config.tokenIndex,
+            contributions[i],
             saleTokenAddress,
             config.wallet
           );
+          return tx;
         }
       )
     );
@@ -517,8 +529,8 @@ export async function secureContributeAllTokensOnEth(
   const expected = await getAllContributions(saleInit, buyers);
 
   return buyers
-    .map((config, tokenIndex): boolean => {
-      return contributions[tokenIndex].eq(expected[tokenIndex]);
+    .map((config, i): boolean => {
+      return contributions[i].eq(expected[i]);
     })
     .reduce((prev, curr): boolean => {
       return prev && curr;
@@ -557,6 +569,7 @@ export async function createSaleOnEthAndInit(
   saleTokenAddress: string,
   tokenAmount: string,
   minRaise: string,
+  maxRaise: string,
   saleStart: number,
   saleDuration: number,
   acceptedTokens: AcceptedToken[]
@@ -575,13 +588,15 @@ export async function createSaleOnEthAndInit(
     saleTokenAddress,
     ethers.utils.parseUnits(tokenAmount, decimals),
     ethers.utils.parseUnits(minRaise),
+    ethers.utils.parseUnits(maxRaise),
     saleStart,
     saleEnd,
     acceptedTokens
   );
 
+  console.info("Sale Init VAA:", Buffer.from(saleInitVaa).toString("hex"));
+
   const saleInit = await parseSaleInit(saleInitVaa);
-  // console.info("saleInit", saleInit);
 
   {
     const receipts = await Promise.all(
@@ -664,7 +679,7 @@ export async function attestAndCollectContributions(
         receipt
       );
     })
-  );
+  ); 
 
   {
     const receipts = await collectContributionsOnEth(
@@ -712,16 +727,6 @@ async function _sealOrAbortSaleOnEth(
     conductorConfig.wallet.provider,
     saleId
   );
-
-  /*
-  return {
-    sealed: sale.isSealed,
-    aborted: sale.isAborted,
-    conductorChainId: conductorConfig.chainId,
-    bridgeSequences: sequences,
-    conductorSequence: conductorSequence,
-  };
-  */
   return;
 }
 
@@ -885,14 +890,14 @@ export async function getAllContributions(
 ): Promise<ethers.BigNumberish[]> {
   const saleId = saleInit.saleId;
   const contributions = await Promise.all(
-    buyers.map(async (config, tokenIndex): Promise<ethers.BigNumber> => {
+    buyers.map(async (config, i): Promise<ethers.BigNumber> => {
       const wallet = config.wallet;
 
       return getSaleContributionOnEth(
         ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
         wallet.provider,
         saleId,
-        tokenIndex,
+        config.tokenIndex,
         wallet.address
       );
     })
@@ -902,20 +907,20 @@ export async function getAllContributions(
   });
 }
 
-export async function getAllAlocations(
+export async function getAllAllocations(
   saleInit: SaleInit,
   buyers: EthBuyerConfig[]
 ): Promise<ethers.BigNumberish[]> {
   const saleId = saleInit.saleId;
   const allocations = await Promise.all(
-    buyers.map(async (config, tokenIndex): Promise<ethers.BigNumber> => {
+    buyers.map(async (config, i): Promise<ethers.BigNumber> => {
       const wallet = config.wallet;
 
       return getSaleWalletAllocationOnEth(
         ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
         wallet.provider,
         saleId,
-        tokenIndex,
+        config.tokenIndex,
         wallet.address
       );
     })
@@ -953,7 +958,7 @@ export async function allocationsReconcile(
   before: ethers.BigNumberish[],
   after: ethers.BigNumberish[]
 ): Promise<boolean> {
-  const expected = await getAllAlocations(saleInit, buyers);
+  const expected = await getAllAllocations(saleInit, buyers);
 
   return buyers
     .map((config, index): boolean => {
@@ -998,13 +1003,13 @@ export async function claimAllAllocationsOnEth(
   const saleId = saleSealed.saleId;
 
   const isClaimed = await Promise.all(
-    buyers.map(async (config, tokenIndex): Promise<boolean> => {
+    buyers.map(async (config, i): Promise<boolean> => {
       const wallet = config.wallet;
 
       const receipt = await claimAllocationOnEth(
         ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
         saleId,
-        tokenIndex,
+        config.tokenIndex,
         wallet
       );
 
@@ -1012,7 +1017,7 @@ export async function claimAllAllocationsOnEth(
         ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
         wallet.provider,
         saleId,
-        tokenIndex,
+        config.tokenIndex,
         wallet.address
       );
     })
@@ -1069,15 +1074,15 @@ export async function getAllocationBalancesOnEth(
 export async function claimOneContributorRefundOnEth(
   saleInit: SaleInit,
   buyers: EthBuyerConfig[],
-  tokenIndex: number
+  buyerIndex: number
 ) {
   const saleId = saleInit.saleId;
-  const wallet = buyers[tokenIndex].wallet;
+  const wallet = buyers[buyerIndex].wallet;
 
   const receipt = await claimContributorRefundOnEth(
     ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
     saleInit.saleId,
-    tokenIndex,
+    buyers[buyerIndex].tokenIndex,
     wallet
   );
 
@@ -1085,7 +1090,7 @@ export async function claimOneContributorRefundOnEth(
     ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
     wallet.provider,
     saleId,
-    tokenIndex,
+    buyers[buyerIndex].tokenIndex,
     wallet.address
   );
 }
@@ -1098,12 +1103,12 @@ export async function claimAllBuyerRefundsOnEth(
   const saleId = saleInit.saleId;
 
   const isClaimed = await Promise.all(
-    buyers.map(async (config, tokenIndex): Promise<boolean> => {
-      if (claimed !== undefined && claimed[tokenIndex]) {
+    buyers.map(async (config, i): Promise<boolean> => {
+      if (claimed !== undefined && claimed[i]) {
         return true;
       }
 
-      return claimOneContributorRefundOnEth(saleInit, buyers, tokenIndex);
+      return claimOneContributorRefundOnEth(saleInit, buyers, i);
     })
   );
 

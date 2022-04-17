@@ -3,8 +3,6 @@
 
 pragma solidity ^0.8.0;
 
-import "../shared/ICCOStructs.sol";
-
 contract ConductorStructs {
     struct Sale {
         // Sale ID
@@ -17,6 +15,8 @@ contract ConductorStructs {
         uint256 tokenAmount;
         // min raise amount
         uint256 minRaise;
+        // max raise amount
+        uint256 maxRaise;
         // timestamp raise start
         uint256 saleStart;
         // timestamp raise end
@@ -72,5 +72,6 @@ contract ConductorStructs {
         uint256 totalContribution;
         uint256 totalAllocated;
         uint256 dust;
+        uint256 totalExcessContribution;
     }
 }

@@ -4,7 +4,6 @@
 pragma solidity ^0.8.0;
 
 import "./ConductorState.sol";
-import "../shared/ICCOStructs.sol";
 
 contract ConductorSetters is ConductorState {
     function setInitialized(address implementatiom) internal {

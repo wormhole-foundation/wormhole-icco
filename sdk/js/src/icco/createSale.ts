@@ -2,7 +2,7 @@ import { ethers } from "ethers";
 import { Conductor__factory, ERC20__factory } from "../ethers-contracts";
 import { ChainId, getForeignAssetEth } from "..";
 import { nativeToUint8Array } from "./misc";
-import { AcceptedToken, SaleInit, makeAcceptedToken } from "./structs";
+import { AcceptedToken, SaleInit, makeAcceptedToken, Raise } from "./structs";
 
 export { AcceptedToken, SaleInit };
 
@@ -37,6 +37,7 @@ export async function createSaleOnEth(
   tokenAddress: string,
   amount: ethers.BigNumberish,
   minRaise: ethers.BigNumberish,
+  maxRaise: ethers.BigNumberish,
   saleStart: ethers.BigNumberish,
   saleEnd: ethers.BigNumberish,
   acceptedTokens: AcceptedToken[],
@@ -51,17 +52,23 @@ export async function createSaleOnEth(
     const receipt = await tx.wait();
   }
 
+  // create a struct to pass to createSale
+  const raise: Raise = {
+    token: tokenAddress,
+    tokenAmount: amount,
+    minRaise: minRaise,
+    maxRaise: maxRaise,
+    saleStart: ethers.BigNumber.from(saleStart),
+    saleEnd: ethers.BigNumber.from(saleEnd),
+    recipient: recipientAddress,
+    refundRecipient: refundRecipientAddress
+  } 
+
   // now create
   const conductor = Conductor__factory.connect(conductorAddress, wallet);
   const tx = await conductor.createSale(
-    tokenAddress,
-    amount,
-    minRaise,
-    saleStart,
-    saleEnd,
-    acceptedTokens,
-    recipientAddress,
-    refundRecipientAddress
+    raise,
+    acceptedTokens
   );
 
   return tx.wait();

@@ -62,6 +62,8 @@ import {
 } from "../getters";
 import { attestContributionsOnEth } from "../attestContributions";
 import { sealSaleOnEth } from "../sealSale";
+import { formatUnits, parseUnits } from "ethers/lib/utils";
+import { ConductorSale, makeAcceptedToken } from "../structs";
 
 // ten minutes? nobody got time for that
 jest.setTimeout(600000);
@@ -146,6 +148,7 @@ describe("Integration Tests", () => {
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY2, ethProvider),
               collateralAddress: WETH_ADDRESS,
               contribution: "6",
+              tokenIndex: 0
             },
             // native wbnb
             {
@@ -153,6 +156,7 @@ describe("Integration Tests", () => {
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY3, bscProvider),
               collateralAddress: WBNB_ADDRESS,
               contribution: "20",
+              tokenIndex: 1
             },
             // wormhole wrapped bnb
             {
@@ -160,6 +164,7 @@ describe("Integration Tests", () => {
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY3, ethProvider),
               collateralAddress: wormholeWrapped.wbnbOnEth,
               contribution: "3",
+              tokenIndex: 2
             },
             // wormhole wrapped weth
             {
@@ -167,6 +172,7 @@ describe("Integration Tests", () => {
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY2, bscProvider),
               collateralAddress: wormholeWrapped.wethOnBsc,
               contribution: "5",
+              tokenIndex: 3
             },
             // and another native wbnb contribution
             {
@@ -174,6 +180,7 @@ describe("Integration Tests", () => {
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY4, bscProvider),
               collateralAddress: WBNB_ADDRESS,
               contribution: "6",
+              tokenIndex: 1
             },
             // and ANOTHER native wbnb contribution
             {
@@ -181,6 +188,7 @@ describe("Integration Tests", () => {
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY5, bscProvider),
               collateralAddress: WBNB_ADDRESS,
               contribution: "9",
+              tokenIndex: 1
             },
           ];
 
@@ -201,6 +209,18 @@ describe("Integration Tests", () => {
             buyers
           );
 
+          // add fake terra and solana tokens to acceptedTokens 
+          /*acceptedTokens.push(makeAcceptedToken(
+              3,
+              'terra13nkgqrfymug724h8pprpexqj9h629sa3ncw7sh',
+              "1"
+          ));
+          acceptedTokens.push(makeAcceptedToken(
+              1,
+              '2WDq7wSs9zYrpx2kbHDA4RUTRch2CCTP6ZWaH4GNfnQQ',
+              ".4"
+          ));*/
+
           // conductor lives in CHAIN_ID_ETH
           const conductorConfig = contributorConfigs[0];
 
@@ -216,6 +236,7 @@ describe("Integration Tests", () => {
           //const tokenAddress = TEST_ERC20;
           const tokenAmount = "1";
           const minRaise = "10"; // eth units
+          const maxRaise = "14";
           const saleDuration = 60; // seconds
 
           // get the time
@@ -229,10 +250,12 @@ describe("Integration Tests", () => {
             tokenAddress,
             tokenAmount,
             minRaise,
+            maxRaise,
             saleStart,
             saleDuration,
             acceptedTokens
           );
+          console.log("Parsed Sale Init:", saleInit);
 
           // balance check
           {
@@ -275,7 +298,7 @@ describe("Integration Tests", () => {
 
           // hold your horses again
           await waitForSaleToEnd(contributorConfigs, saleInit, 5);
-
+          
           // EXPECTED ERROR: sale has ended if anyone tries to contribute after the sale
           {
             // specific prep so buyers can make contributions from their respective wallets
@@ -292,11 +315,12 @@ describe("Integration Tests", () => {
             let expectedErrorExists = false;
             try {
               // buyers contribute
-              const contributionSuccessful = await contributeAllTokensOnEth(
+              const contributionSuccessful = await secureContributeAllTokensOnEth(
                 saleInit,
-                buyers
+                buyers,
+                tokenAddress
               );
-            } catch (error) {
+            } catch (error: any) {
               const errorMsg: string = error.error.toString();
               if (errorMsg.endsWith("sale has ended")) {
                 expectedErrorExists = true;
@@ -306,7 +330,7 @@ describe("Integration Tests", () => {
             }
             expect(expectedErrorExists).toBeTruthy();
           }
-
+          
           // before sealing the sale, check the balance of the distribution token
           // on the refundRecipient address. Then check again to double-check the dust
           // calculation after allocations have been sent
@@ -314,7 +338,7 @@ describe("Integration Tests", () => {
             saleInit,
             conductorConfig
           );
-
+     
           // now seal the sale
           const saleResult = await sealOrAbortSaleOnEth(
             saleInit,
@@ -323,16 +347,14 @@ describe("Integration Tests", () => {
           );
           expect(saleResult.sale.isSealed).toBeTruthy();
 
-          //console.info("saleResult", saleResult);
-
           // we need to make sure the distribution token is attested before we consider seling it cross-chain
           await attestSaleToken(
             tokenAddress,
             conductorConfig,
             contributorConfigs
           );
-
-          // EXPECT ERROR: should not be able to seal the sale before allocations have been send to contributors
+          
+          // EXPECT ERROR: should not be able to seal the sale before allocations have been sent to contributors
           {
             let expectedErrorExists = false;
             try {
@@ -346,7 +368,7 @@ describe("Integration Tests", () => {
                 saleResult,
                 relevantConfigs
               );
-            } catch (error) {
+            } catch (error: any) {
               const errorMsg: string = error.error.toString();
               if (errorMsg.endsWith("sale token balance must be non-zero")) {
                 expectedErrorExists = true;
@@ -392,7 +414,7 @@ describe("Integration Tests", () => {
                 saleResult,
                 relevantConfigs
               );
-            } catch (error) {
+            } catch (error: any) {
               const errorMsg: string = error.error.toString();
               if (errorMsg.endsWith("insufficient sale token balance")) {
                 expectedErrorExists = true;
@@ -402,7 +424,7 @@ describe("Integration Tests", () => {
             }
             expect(expectedErrorExists).toBeTruthy();
           }
-
+           
           // redeem token transfer vaas
           {
             const receipts = await redeemCrossChainAllocations(
@@ -417,6 +439,7 @@ describe("Integration Tests", () => {
             saleResult,
             contributorConfigs
           );
+          console.info("Parsed Sale Sealed:", saleSealed);
 
           const recipientBalanceAfter = await getRefundRecipientBalanceOnEth(
             saleInit,
@@ -428,6 +451,7 @@ describe("Integration Tests", () => {
 
           {
             const tokenAmount = ethers.BigNumber.from(saleInit.tokenAmount);
+
             const totalAllocated = saleSealed.allocations
               .map((item): ethers.BigNumber => {
                 return ethers.BigNumber.from(item.allocation);
@@ -435,6 +459,7 @@ describe("Integration Tests", () => {
               .reduce((prev, curr): ethers.BigNumber => {
                 return prev.add(curr);
               });
+
             expect(tokenAmount.gte(totalAllocated)).toBeTruthy();
 
             const dust = tokenAmount.sub(totalAllocated);
@@ -443,13 +468,19 @@ describe("Integration Tests", () => {
             ).toBeTruthy();
           }
 
+          // balance check contributed tokens in case 
+          // the maxRaise threshold is exceeded
+          const buyerCollateralBalancesBefore = await getCollateralBalancesOnEth(
+            buyers
+          );
+
           // balance check of distributed token to buyers
           {
+            
             const buyerBalancesBefore = await getAllocationBalancesOnEth(
               saleInit,
               buyers
             );
-
             const claimsSuccessful = await claimAllAllocationsOnEth(
               saleSealed,
               buyers
@@ -460,6 +491,7 @@ describe("Integration Tests", () => {
               saleInit,
               buyers
             );
+
             const allGreaterThan = buyerBalancesAfter
               .map((balance, index) => {
                 return ethers.BigNumber.from(balance).gt(
@@ -480,6 +512,45 @@ describe("Integration Tests", () => {
             expect(allocationsReconciled).toBeTruthy();
           }
 
+          // balance check collateral tokens paid to contributors
+          // if maxRaise is exceeded 
+          {
+            // check to see if maxRaise threshold was hit
+            const conductorSale = await getSaleFromConductorOnEth(
+              ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
+              conductorConfig.wallet.provider,
+              saleInit.saleId
+            );
+            const contributions = conductorSale.contributions;
+            const tokenConversions = conductorSale.acceptedTokensConversionRates;
+            const adjustment = ethers.utils.parseUnits("1");
+
+            // compute the total contributions for the sale
+            const totalContributions = contributions.map((contribution, i) => {
+              return ethers.BigNumber.from(contribution).mul(tokenConversions[i]).div(adjustment)
+              }).reduce((prev, curr) => {
+              return prev.add(curr);
+            });
+
+            if (totalContributions.gt(ethers.utils.parseUnits(maxRaise))) {
+                console.log("Checking if excess contributions were paid out...")
+                // do balance check here
+                const buyerCollateralBalancesAfter = await getCollateralBalancesOnEth(
+                  buyers
+                );
+                const allGreaterThan = buyerCollateralBalancesAfter
+                  .map((balance, index) => {
+                    return ethers.BigNumber.from(balance).gt(
+                    buyerCollateralBalancesBefore[index]
+                    );
+                  })
+                  .reduce((prev, curr) => {
+                    return prev && curr;
+                  });
+                expect(allGreaterThan).toBeTruthy();
+            }
+          }
+          
           ethProvider.destroy();
           bscProvider.destroy();
 
@@ -530,6 +601,7 @@ describe("Integration Tests", () => {
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY2, ethProvider),
               collateralAddress: WETH_ADDRESS,
               contribution: "3",
+              tokenIndex: 0
             },
             // native wbnb
             {
@@ -537,6 +609,7 @@ describe("Integration Tests", () => {
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY3, bscProvider),
               collateralAddress: WBNB_ADDRESS,
               contribution: "10",
+              tokenIndex: 1
             },
             // wormhole wrapped bnb
             {
@@ -544,6 +617,7 @@ describe("Integration Tests", () => {
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY3, ethProvider),
               collateralAddress: wormholeWrapped.wbnbOnEth,
               contribution: "5",
+              tokenIndex: 2
             },
             // wormhole wrapped weth
             {
@@ -551,6 +625,7 @@ describe("Integration Tests", () => {
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY2, bscProvider),
               collateralAddress: wormholeWrapped.wethOnBsc,
               contribution: "2.99999999",
+              tokenIndex: 3
             },
             // and another native wbnb contribution
             {
@@ -558,6 +633,7 @@ describe("Integration Tests", () => {
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY4, bscProvider),
               collateralAddress: WBNB_ADDRESS,
               contribution: "3",
+              tokenIndex: 1
             },
             // and ANOTHER native wbnb contribution
             {
@@ -565,6 +641,7 @@ describe("Integration Tests", () => {
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY5, bscProvider),
               collateralAddress: WBNB_ADDRESS,
               contribution: "2",
+              tokenIndex: 1
             },
           ];
 
@@ -600,6 +677,7 @@ describe("Integration Tests", () => {
           //const tokenAddress = TEST_ERC20;
           const tokenAmount = "1";
           const minRaise = "10"; // eth units
+          const maxRaise = "100";
           const saleDuration = 60; // seconds
 
           // get the time
@@ -613,10 +691,12 @@ describe("Integration Tests", () => {
             tokenAddress,
             tokenAmount,
             minRaise,
+            maxRaise,
             saleStart,
             saleDuration,
             acceptedTokens
           );
+          console.log("Parsed Sale Init:", saleInit);
 
           // balance check
           {
@@ -696,8 +776,8 @@ describe("Integration Tests", () => {
 
           const buyerBalancesBefore = await getCollateralBalancesOnEth(buyers);
 
-          const claimed: boolean[] = [false, false, false, false];
-          // EPXECT ERROR: claim one refund (from first buyer), but error if claimed again
+          const claimed: boolean[] = [false, false, false, false, false, false];
+          // EXPECT ERROR claim one refund (from first buyer), but error if claimed again
           {
             const buyerIndex = 0;
             claimed[buyerIndex] = await claimOneContributorRefundOnEth(
@@ -713,7 +793,7 @@ describe("Integration Tests", () => {
                 buyers,
                 buyerIndex
               );
-            } catch (error) {
+            } catch (error: any) {
               const errorMsg = error.toString();
               if (errorMsg.endsWith("refund already claimed")) {
                 expectedErrorExists = true;
@@ -731,7 +811,7 @@ describe("Integration Tests", () => {
             claimed
           );
           expect(refundSuccessful).toBeTruthy();
-
+         
           const buyerBalancesAfter = await getCollateralBalancesOnEth(buyers);
           const allGreaterThan = buyerBalancesAfter
             .map((balance, index) => {
@@ -752,8 +832,6 @@ describe("Integration Tests", () => {
             buyerBalancesAfter
           );
           expect(reconciled).toBeTruthy();
-
-          // TODO: try to refund again. expect error when failed
 
           ethProvider.destroy();
           bscProvider.destroy();
@@ -800,6 +878,7 @@ describe("Integration Tests", () => {
               wallet: new ethers.Wallet(ETH_PRIVATE_KEY3, bscProvider),
               collateralAddress: WBNB_ADDRESS,
               contribution: "20",
+              tokenIndex: 0
             },
           ];
 
@@ -835,6 +914,7 @@ describe("Integration Tests", () => {
           //const tokenAddress = TEST_ERC20;
           const tokenAmount = "1";
           const minRaise = "10"; // eth units
+          const maxRaise = "100";
           const saleDuration = 30; // seconds
 
           // we need to make sure the distribution token is attested before we consider selling it cross-chain
@@ -855,10 +935,12 @@ describe("Integration Tests", () => {
             tokenAddress,
             tokenAmount,
             minRaise,
+            maxRaise,
             saleStart + 20, // 20 second duration
             saleDuration,
             acceptedTokens
           );
+          console.log("Parsed Sale Init:", saleInit);
 
           // abort the sale in the conductor and verify getters
           let abortEarlyReceipt: ethers.ContractReceipt | undefined = undefined;
@@ -967,7 +1049,7 @@ describe("Integration Tests", () => {
             try {
               // try to contribute funds and expect a revert
               await contributeAllTokensOnEth(saleInit, buyers);
-            } catch (error) {
+            } catch (error: any) {
               const errorMsg: string = error.error.toString();
               if (errorMsg.endsWith("sale was aborted")) {
                 expectedErrorExists = true;
@@ -995,7 +1077,7 @@ describe("Integration Tests", () => {
                 saleInit.saleId,
                 contributorConfigs[0].wallet
               );
-            } catch (error) {
+            } catch (error: any) {
               const errorMsg: string = error.error.toString();
               if (errorMsg.endsWith("already sealed / aborted")) {
                 expectedErrorExists = true;
@@ -1014,7 +1096,7 @@ describe("Integration Tests", () => {
                 saleInit.saleId,
                 conductorConfig.wallet
               );
-            } catch (error) {
+            } catch (error: any) {
               const errorMsg: string = error.toString();
               if (errorMsg.endsWith("already sealed / aborted")) {
                 expectedErrorExists = true;

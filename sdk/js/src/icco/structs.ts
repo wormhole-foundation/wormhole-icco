@@ -2,6 +2,17 @@ import { ethers } from "ethers";
 import { ChainId } from "..";
 import { nativeToUint8Array } from "./misc";
 
+export interface Raise {
+    token: string;
+    tokenAmount: ethers.BigNumberish;
+    minRaise: ethers.BigNumberish;
+    maxRaise: ethers.BigNumberish;
+    saleStart: ethers.BigNumberish;
+    saleEnd: ethers.BigNumberish;
+    recipient: string;
+    refundRecipient: string;
+};
+
 export interface Sale {
   // sale init
   saleId: ethers.BigNumberish;
@@ -9,6 +20,7 @@ export interface Sale {
   tokenChain: number;
   tokenAmount: ethers.BigNumberish;
   minRaise: ethers.BigNumberish;
+  maxRaise: ethers.BigNumberish;
   saleStart: ethers.BigNumberish;
   saleEnd: ethers.BigNumberish;
   recipient: ethers.BytesLike;
@@ -30,6 +42,7 @@ export interface ConductorSale extends Sale {
 
 export interface ContributorSale extends Sale {
   allocations: ethers.BigNumberish[];
+  excessContributions: ethers.BigNumberish[];
 }
 
 export interface AcceptedToken {
@@ -45,6 +58,7 @@ export interface SaleInit {
   tokenChain: number;
   tokenAmount: ethers.BigNumberish;
   minRaise: ethers.BigNumberish;
+  maxRaise: ethers.BigNumberish;
   saleStart: ethers.BigNumberish;
   saleEnd: ethers.BigNumberish;
   acceptedTokens: AcceptedToken[];
@@ -55,6 +69,7 @@ export interface SaleInit {
 export interface Allocation {
   tokenIndex: number;
   allocation: ethers.BigNumberish;
+  excessContribution: ethers.BigNumberish;
 }
 
 export interface SaleSealed {

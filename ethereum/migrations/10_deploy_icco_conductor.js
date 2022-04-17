@@ -5,12 +5,17 @@ const ConductorImplementation = artifacts.require("ConductorImplementation");
 const ConductorSetup = artifacts.require("ConductorSetup");
 const Wormhole = artifacts.require("Wormhole");
 const TokenBridge = artifacts.require("TokenBridge");
+const ICCOStructs = artifacts.require("ICCOStructs")
 
 const chainId = process.env.ICCO_CONDUCTOR_INIT_CHAIN_ID;
 const governanceChainId = process.env.ICCO_CONDUCTOR_INIT_GOV_CHAIN_ID;
 const governanceContract = process.env.ICCO_CONDUCTOR_INIT_GOV_CONTRACT; // bytes32
 
 module.exports = async function (deployer) {
+    // deploy ICCOStructs library
+    await deployer.deploy(ICCOStructs);
+    await deployer.link(ICCOStructs, ConductorImplementation)
+
     // deploy conductor implementation
     await deployer.deploy(ConductorImplementation);
 

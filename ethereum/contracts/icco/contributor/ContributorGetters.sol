@@ -81,6 +81,10 @@ contract ContributorGetters is ContributorState {
         return _state.sales[saleId].allocations[tokenIndex];
     }
 
+    function getSaleExcessContribution(uint saleId, uint tokenIndex) public view returns (uint256 allocation){
+        return _state.sales[saleId].excessContributions[tokenIndex];
+    }
+
     function getSaleTotalContribution(uint saleId, uint tokenIndex) public view returns (uint256 contributed){
         return _state.totalContributions[saleId][tokenIndex];
     }
@@ -96,5 +100,4 @@ contract ContributorGetters is ContributorState {
     function allocationIsClaimed(uint saleId, uint tokenIndex, address contributor) public view returns (bool){
         return _state.allocationIsClaimed[saleId][tokenIndex][contributor];
     }
-
 }

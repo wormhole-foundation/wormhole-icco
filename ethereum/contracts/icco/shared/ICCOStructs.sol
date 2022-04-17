@@ -5,7 +5,7 @@ pragma solidity ^0.8.0;
 
 import "../../libraries/external/BytesLib.sol";
 
-contract ICCOStructs {
+library ICCOStructs {
     using BytesLib for bytes;
 
     struct Token {
@@ -25,6 +25,27 @@ contract ICCOStructs {
         uint8 tokenIndex;
         // amount of sold tokens allocated to contributors on this chain
         uint256 allocation;
+        // excess contributions refunded to contributors on this chain
+        uint256 excessContribution;
+    }
+
+    struct Raise {
+        // sale token address
+        address token;
+        // token amount being sold
+        uint256 tokenAmount;
+        // min raise amount
+        uint256 minRaise;
+        // max token amount
+        uint256 maxRaise;
+        // timestamp raise start
+        uint256 saleStart;
+        // timestamp raise end
+        uint256 saleEnd;
+        // recipient of proceeds
+        address recipient;
+        // refund recipient in cse the sale is aborted
+        address refundRecipient;
     }
 
     struct SaleInit {
@@ -40,6 +61,8 @@ contract ICCOStructs {
         uint256 tokenAmount;
         // min raise amount
         uint256 minRaise;
+        // max raise amount
+        uint256 maxRaise;
         // timestamp raise start
         uint256 saleStart;
         // timestamp raise end
@@ -87,6 +110,7 @@ contract ICCOStructs {
             saleInit.tokenChain,
             saleInit.tokenAmount,
             saleInit.minRaise,
+            saleInit.maxRaise,
             saleInit.saleStart,
             saleInit.saleEnd,
             encodeTokens(saleInit.acceptedTokens),
@@ -116,6 +140,9 @@ contract ICCOStructs {
         index += 32;
 
         saleInit.minRaise = encoded.toUint256(index);
+        index += 32;
+
+        saleInit.maxRaise = encoded.toUint256(index);
         index += 32;
 
         saleInit.saleStart = encoded.toUint256(index);
@@ -235,7 +262,7 @@ contract ICCOStructs {
         ss.saleID = encoded.toUint256(index);
         index += 32;
 
-        uint len = 1 + 33 * uint256(uint8(encoded[index]));
+        uint len = 1 + 65 * uint256(uint8(encoded[index]));
         ss.allocations = parseAllocations(encoded.slice(index, len));
         index += len;
 
@@ -248,21 +275,23 @@ contract ICCOStructs {
             encoded = abi.encodePacked(
                 encoded,
                 allocations[i].tokenIndex,
-                allocations[i].allocation
+                allocations[i].allocation,
+                allocations[i].excessContribution
             );
         }
     }
 
     function parseAllocations(bytes memory encoded) public pure returns (Allocation[] memory allos) {
-        require(encoded.length % 33 == 1, "invalid Allocation[]");
+        require(encoded.length % 65 == 1, "invalid Allocation[]");
 
         uint8 len = uint8(encoded[0]);
 
         allos = new Allocation[](len);
 
         for (uint i = 0; i < len; i++) {
-            allos[i].tokenIndex = encoded.toUint8(1 + i * 33);
-            allos[i].allocation = encoded.toUint256(2 + i * 33);
+            allos[i].tokenIndex = encoded.toUint8(1 + i * 65);
+            allos[i].allocation = encoded.toUint256(2 + i * 65);
+            allos[i].excessContribution = encoded.toUint256(34 + i * 65);
         }
     }
 

@@ -15,42 +15,37 @@ import "./ConductorGovernance.sol";
 
 import "../shared/ICCOStructs.sol";
 
-contract Conductor is ConductorGovernance, ICCOStructs {
+contract Conductor is ConductorGovernance {
     function createSale(
-        address token,
-        uint tokenAmount,
-        uint minRaise,
-        uint saleStart,
-        uint saleEnd,
-        Token[] memory acceptedTokens,
-        address recipient,
-        address refundRecipient
+        ICCOStructs.Raise memory raise,
+        ICCOStructs.Token[] memory acceptedTokens   
     ) public payable returns (
         uint saleId,
         uint wormholeSequence
     ) {
         // input validation
-        require(block.timestamp < saleStart, "sale start must be in the future");
-        require(saleStart < saleEnd, "sale end must be after sale start");
-        require(tokenAmount > 0, "amount must be > 0");
+        require(block.timestamp < raise.saleStart, "sale start must be in the future");
+        require(raise.saleStart < raise.saleEnd, "sale end must be after sale start");
+        require(raise.tokenAmount > 0, "amount must be > 0");
         require(acceptedTokens.length > 0, "must accept at least one token");
         require(acceptedTokens.length < 255, "too many tokens");
-
+        require(raise.maxRaise > raise.minRaise, "maxRaise must be > minRaise");
+         
         { // token deposit context to avoid stack too deep errors
 
             // query own token balance before transfer
-            (,bytes memory queriedBalanceBefore) = token.staticcall(abi.encodeWithSelector(IERC20.balanceOf.selector, address(this)));
+            (,bytes memory queriedBalanceBefore) = raise.token.staticcall(abi.encodeWithSelector(IERC20.balanceOf.selector, address(this)));
             uint256 balanceBefore = abi.decode(queriedBalanceBefore, (uint256));
 
             // deposit tokens
-            SafeERC20.safeTransferFrom(IERC20(token), msg.sender, address(this), tokenAmount);
+            SafeERC20.safeTransferFrom(IERC20(raise.token), msg.sender, address(this), raise.tokenAmount);
 
             // query own token balance after transfer
-            (,bytes memory queriedBalanceAfter) = token.staticcall(abi.encodeWithSelector(IERC20.balanceOf.selector, address(this)));
+            (,bytes memory queriedBalanceAfter) = raise.token.staticcall(abi.encodeWithSelector(IERC20.balanceOf.selector, address(this)));
             uint256 balanceAfter = abi.decode(queriedBalanceAfter, (uint256));
 
             // revert if token has fee
-            require(tokenAmount == balanceAfter - balanceBefore, "fee-on-transfer tokens are not supported");
+            require(raise.tokenAmount == balanceAfter - balanceBefore, "fee-on-transfer tokens are not supported");
 
         }
         
@@ -58,12 +53,13 @@ contract Conductor is ConductorGovernance, ICCOStructs {
         saleId = useSaleId();
         ConductorStructs.Sale memory sale = ConductorStructs.Sale({
             saleID : saleId,
-            tokenAddress : bytes32(uint256(uint160(token))),
+            tokenAddress : bytes32(uint256(uint160(raise.token))),
             tokenChain : chainId(),
-            tokenAmount : tokenAmount,
-            minRaise: minRaise,
-            saleStart : saleStart,
-            saleEnd : saleEnd,
+            tokenAmount : raise.tokenAmount,
+            minRaise: raise.minRaise,
+            maxRaise: raise.maxRaise,
+            saleStart : raise.saleStart,
+            saleEnd : raise.saleEnd,
 
             acceptedTokensChains : new uint16[](acceptedTokens.length),
             acceptedTokensAddresses : new bytes32[](acceptedTokens.length),
@@ -71,14 +67,15 @@ contract Conductor is ConductorGovernance, ICCOStructs {
             contributions : new uint[](acceptedTokens.length),
             contributionsCollected : new bool[](acceptedTokens.length),
 
-            recipient : bytes32(uint256(uint160(recipient))),
-            refundRecipient : bytes32(uint256(uint160(refundRecipient))),
+            recipient : bytes32(uint256(uint160(raise.recipient))),
+            refundRecipient : bytes32(uint256(uint160(raise.refundRecipient))),
 
             isSealed :  false,
             isAborted : false,
 
             refundIsClaimed : false
         });
+
         // populate tokens array
         for(uint i = 0; i < acceptedTokens.length; i++) {
             require(acceptedTokens[i].conversionRate > 0, "conversion rate cannot be zero");
@@ -91,33 +88,35 @@ contract Conductor is ConductorGovernance, ICCOStructs {
         setSale(saleId, sale);
 
         // attest sale info on wormhole
-        SaleInit memory saleInit = SaleInit({
+        ICCOStructs.SaleInit memory saleInit = ICCOStructs.SaleInit({
             // PayloadID uint8 = 1
             payloadID : 1,
             // Sale ID
             saleID : saleId,
             // Address of the token. Left-zero-padded if shorter than 32 bytes
-            tokenAddress : bytes32(uint256(uint160(token))),
+            tokenAddress : bytes32(uint256(uint160(raise.token))),
             // Chain ID of the token
             tokenChain : chainId(),
             // token amount being sold
-            tokenAmount : tokenAmount,
+            tokenAmount : raise.tokenAmount,
             // min raise amount
-            minRaise: minRaise,
+            minRaise: raise.minRaise,
+            // max raise amount
+            maxRaise: raise.maxRaise,
             // timestamp raise start
-            saleStart : saleStart,
+            saleStart : raise.saleStart,
             // timestamp raise end
-            saleEnd : saleEnd,
+            saleEnd : raise.saleEnd,
             // accepted Tokens
             acceptedTokens : acceptedTokens,
             // recipient of proceeds
-            recipient : bytes32(uint256(uint160(recipient))),
+            recipient : bytes32(uint256(uint160(raise.recipient))),
             // refund recipient in case the sale is aborted
-            refundRecipient : bytes32(uint256(uint160(refundRecipient)))
+            refundRecipient : bytes32(uint256(uint160(raise.refundRecipient)))
         });
         wormholeSequence = wormhole().publishMessage{
             value : msg.value
-        }(0, encodeSaleInit(saleInit), 15);
+        }(0, ICCOStructs.encodeSaleInit(saleInit), 15);
     }
 
     function collectContribution(bytes memory encodedVm) public {
@@ -126,7 +125,7 @@ contract Conductor is ConductorGovernance, ICCOStructs {
         require(valid, reason);
         require(verifyContributorVM(vm), "invalid emitter");
 
-        ContributionsSealed memory conSealed = parseContributionsSealed(vm.payload);
+        ICCOStructs.ContributionsSealed memory conSealed = ICCOStructs.parseContributionsSealed(vm.payload);
 
         require(conSealed.chainID == vm.emitterChainId, "contribution from wrong chain id");
 
@@ -163,7 +162,7 @@ contract Conductor is ConductorGovernance, ICCOStructs {
         IWormhole wormhole = wormhole();
         wormholeSequence = wormhole.publishMessage{
             value : msg.value
-        }(0, encodeSaleAborted(SaleAborted({
+        }(0, ICCOStructs.encodeSaleAborted(ICCOStructs.SaleAborted({
             payloadID : 4,
             saleID : saleId
         })), 15);
@@ -190,15 +189,22 @@ contract Conductor is ConductorGovernance, ICCOStructs {
             accounting.messageFee = wormhole.messageFee();
             accounting.valueSent = msg.value;
 
-            SaleSealed memory saleSealed = SaleSealed({
+            // this determines refund payments
+            // the default value for accounting.excessContribution is zero
+            if (accounting.totalContribution > sale.maxRaise) {
+                accounting.totalExcessContribution = accounting.totalContribution - sale.maxRaise;
+            }
+
+            ICCOStructs.SaleSealed memory saleSealed = ICCOStructs.SaleSealed({
                 payloadID : 3,
                 saleID : saleId,
-                allocations : new Allocation[](sale.acceptedTokensAddresses.length)
+                allocations : new ICCOStructs.Allocation[](sale.acceptedTokensAddresses.length)
             });
 
             // sale succeeded - payout token allocations to contributor contracts
             for(uint i = 0; i < sale.acceptedTokensAddresses.length; i++) {
                 uint allocation = sale.tokenAmount * (sale.contributions[i] * sale.acceptedTokensConversionRates[i] / 1e18) / accounting.totalContribution;
+                uint excessContribution = accounting.totalExcessContribution * sale.contributions[i] / accounting.totalContribution;
 
                 if(allocation > 0) {
 
@@ -230,9 +236,10 @@ contract Conductor is ConductorGovernance, ICCOStructs {
                     accounting.totalAllocated += allocation;
                 }
 
-                saleSealed.allocations[i] = Allocation({
+                saleSealed.allocations[i] = ICCOStructs.Allocation({
                     tokenIndex : uint8(i),
-                    allocation : allocation
+                    allocation : allocation,
+                    excessContribution : excessContribution
                 });
             }
             // transfer dust back to refund recipient
@@ -250,7 +257,7 @@ contract Conductor is ConductorGovernance, ICCOStructs {
             // attest sale success on wormhole
             wormholeSequence = wormhole.publishMessage{
                 value : accounting.messageFee
-            }(0, encodeSaleSealed(saleSealed), 15);
+            }(0, ICCOStructs.encodeSaleSealed(saleSealed), 15);
         } else {
             // set saleAborted
             setSaleAborted(sale.saleID);
@@ -258,7 +265,7 @@ contract Conductor is ConductorGovernance, ICCOStructs {
             // attest sale aborted on wormhole
             wormholeSequence = wormhole.publishMessage{
                 value : msg.value
-            }(0, encodeSaleAborted(SaleAborted({
+            }(0, ICCOStructs.encodeSaleAborted(ICCOStructs.SaleAborted({
                 payloadID : 4,
                 saleID : saleId
             })), 15);
@@ -277,7 +284,7 @@ contract Conductor is ConductorGovernance, ICCOStructs {
 
         SafeERC20.safeTransfer(IERC20(address(uint160(uint256(sale.tokenAddress)))), msg.sender, sale.tokenAmount);
     }
-
+    
     function useSaleId() internal returns(uint256 saleId) {
         saleId = getNextSaleId();
         setNextSaleId(saleId + 1);

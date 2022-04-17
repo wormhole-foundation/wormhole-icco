@@ -101,7 +101,7 @@ contract Contributor is ContributorGovernance, ICCOStructs, ReentrancyGuard {
 
         // bypass stack too deep  
         {
-            // verify KYC was peformed
+            // verify authority has signed contribution 
             bytes memory encodedHashData = abi.encodePacked(conductorContract(), saleId, tokenIndex, amount, msg.sender); 
             require(verifySignature(encodedHashData, sig) == authority(), "unauthorized contributor");
         }

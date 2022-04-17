@@ -55,7 +55,7 @@ export async function secureContributeOnEth(
   amount: ethers.BigNumberish,
   saleTokenAddress: string,
   wallet: ethers.Wallet
-): Promise<ethers.ContractReceipt> {
+): Promise<ethers.ContractReceipt> { 
   // confirm that the contribution is for the correct sale token
   const sale = await getSaleFromContributorOnEth(
     contributorAddress,

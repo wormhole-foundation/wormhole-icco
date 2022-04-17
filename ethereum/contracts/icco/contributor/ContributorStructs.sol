@@ -3,8 +3,6 @@
 
 pragma solidity ^0.8.0;
 
-import "../shared/ICCOStructs.sol";
-
 contract ContributorStructs {
     struct Sale {
         // Sale ID
@@ -17,6 +15,8 @@ contract ContributorStructs {
         uint256 tokenAmount;
         // min raise amount
         uint256 minRaise;
+        // max raise amount
+        uint256 maxRaise;
         // timestamp raise start
         uint256 saleStart;
         // timestamp raise end
@@ -37,6 +37,7 @@ contract ContributorStructs {
         bool isAborted;
 
         uint256[] allocations;
+        uint256[] excessContributions;
     }
 
     struct ContributorUpgrade {

@@ -18,6 +18,7 @@ export async function getSaleFromConductorOnEth(
     tokenChain: sale.tokenChain,
     tokenAmount: sale.tokenAmount,
     minRaise: sale.minRaise,
+    maxRaise: sale.maxRaise,
     saleStart: sale.saleStart,
     saleEnd: sale.saleEnd,
     recipient: sale.recipient,
@@ -51,6 +52,7 @@ export async function getSaleFromContributorOnEth(
     tokenChain: sale.tokenChain,
     tokenAmount: sale.tokenAmount,
     minRaise: sale.minRaise,
+    maxRaise: sale.maxRaise,
     saleStart: sale.saleStart,
     saleEnd: sale.saleEnd,
     recipient: sale.recipient,
@@ -61,6 +63,7 @@ export async function getSaleFromContributorOnEth(
     isSealed: sale.isSealed,
     isAborted: sale.isAborted,
     allocations: sale.allocations,
+    excessContributions: sale.excessContributions
   };
 }
 

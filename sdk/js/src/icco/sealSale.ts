@@ -72,6 +72,8 @@ export async function sealSaleAndParseReceiptOnEth(
   );
   const sealSaleVaa = result.vaaBytes;
 
+  console.info("Seal Sale VAA:", Buffer.from(sealSaleVaa).toString("hex"));
+
   // doing it serially for ease of putting into the map
   const mapped = new Map<ChainId, Uint8Array[]>();
   for (const sequence of sequences) {

@@ -4,7 +4,6 @@
 pragma solidity ^0.8.0;
 
 import "./ContributorState.sol";
-import "../shared/ICCOStructs.sol";
 
 contract ContributorSetters is ContributorState {
     function setInitialized(address implementatiom) internal {
@@ -70,5 +69,9 @@ contract ContributorSetters is ContributorState {
 
     function setSaleAllocation(uint saleId, uint tokenIndex, uint allocation) internal {
         _state.sales[saleId].allocations[tokenIndex] = allocation;
+    }
+
+    function setExcessContribution(uint saleId, uint tokenIndex, uint excessContribution) internal {
+        _state.sales[saleId].excessContributions[tokenIndex] = excessContribution;
     }
 }

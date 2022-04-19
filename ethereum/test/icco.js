@@ -20,6 +20,7 @@ const MockConductorImplementation2 = artifacts.require("MockConductorImplementat
 const MockContributorImplementation2 = artifacts.require("MockContributorImplementation2");
 
 const testSigner1PK = "cfb12303a19cde580bb4dd771639b0d26bc68353645571a8cff516ab2ee113a0";
+const kycSignerPK = "b0057716d5917badaf911b193b12b910811c1497b5bada8d7711f758981c3773";
 
 const WormholeImplementationFullABI = jsonfile.readFileSync("build/contracts/Implementation.json").abi
 const ConductorImplementationFullABI = jsonfile.readFileSync("build/contracts/ConductorImplementation.json").abi
@@ -595,26 +596,26 @@ contract("ICCO", function (accounts) {
 
 
         // perform "kyc" and contribute to the token sale for BUYER_ONE
-        const kycSig1 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_ID, TOKEN_ONE_INDEX, tokenOneContributionAmount[0], BUYER_ONE, testSigner1PK);
+        const kycSig1 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_ID, TOKEN_ONE_INDEX, tokenOneContributionAmount[0], BUYER_ONE, kycSignerPK);
         await initialized.methods.contribute(SALE_ID, TOKEN_ONE_INDEX, parseInt(tokenOneContributionAmount[0]), kycSig1).send({
             from : BUYER_ONE,
             gasLimit : GAS_LIMIT
         });
 
-        const kycSig2 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_ID, TOKEN_ONE_INDEX, tokenOneContributionAmount[1], BUYER_ONE, testSigner1PK);
+        const kycSig2 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_ID, TOKEN_ONE_INDEX, tokenOneContributionAmount[1], BUYER_ONE, kycSignerPK);
         await initialized.methods.contribute(SALE_ID, TOKEN_ONE_INDEX, parseInt(tokenOneContributionAmount[1]), kycSig2).send({
             from : BUYER_ONE,
             gasLimit : GAS_LIMIT
         });
 
-        const kycSig3 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_ID, TOKEN_TWO_INDEX, tokenTwoContributionAmount[1], BUYER_ONE, testSigner1PK);
+        const kycSig3 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_ID, TOKEN_TWO_INDEX, tokenTwoContributionAmount[1], BUYER_ONE, kycSignerPK);
         await initialized.methods.contribute(SALE_ID, TOKEN_TWO_INDEX, parseInt(tokenTwoContributionAmount[1]), kycSig3).send({
             from : BUYER_ONE,
             gasLimit : GAS_LIMIT
         });
 
         // perform "kyc" and contribute tokens to the sale for BUYER_TWO
-        const kycSig4 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_ID, TOKEN_TWO_INDEX, tokenTwoContributionAmount[0], BUYER_TWO, testSigner1PK);
+        const kycSig4 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_ID, TOKEN_TWO_INDEX, tokenTwoContributionAmount[0], BUYER_TWO, kycSignerPK);
         await initialized.methods.contribute(SALE_ID, TOKEN_TWO_INDEX, parseInt(tokenTwoContributionAmount[0]), kycSig4).send({
             from : BUYER_TWO,
             gasLimit : GAS_LIMIT
@@ -672,7 +673,7 @@ contract("ICCO", function (accounts) {
 
         let failed = false;
         try {
-            const kycSig1 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_ID, TOKEN_ONE_INDEX, tokenOneContributionAmount, BUYER_TWO, testSigner1PK);
+            const kycSig1 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_ID, TOKEN_ONE_INDEX, tokenOneContributionAmount, BUYER_TWO, kycSignerPK);
             await initialized.methods.contribute(incorrect_sale_id, TOKEN_ONE_INDEX, tokenOneContributionAmount, kycSig1).send({
                 from : BUYER_TWO,
                 gasLimit : GAS_LIMIT
@@ -695,7 +696,7 @@ contract("ICCO", function (accounts) {
  
         let failed = false;
         try {
-            const kycSig1 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_ID, TOKEN_TWO_INDEX, tokenTwoContributionAmount, BUYER_TWO, testSigner1PK);
+            const kycSig1 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_ID, TOKEN_TWO_INDEX, tokenTwoContributionAmount, BUYER_TWO, kycSignerPK);
             await initialized.methods.contribute(SALE_ID, TOKEN_TWO_INDEX, tokenTwoContributionAmount, kycSig1).send({
                 from : BUYER_TWO,
                 gasLimit : GAS_LIMIT
@@ -1364,26 +1365,26 @@ contract("ICCO", function (accounts) {
 
 
         // perform "kyc" and contribute tokens to the sale for BUYER_ONE
-        const kycSig1 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_2_ID, TOKEN_ONE_INDEX, tokenOneContributionAmount[0], BUYER_ONE, testSigner1PK);
+        const kycSig1 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_2_ID, TOKEN_ONE_INDEX, tokenOneContributionAmount[0], BUYER_ONE, kycSignerPK);
         await initialized.methods.contribute(SALE_2_ID, TOKEN_ONE_INDEX, parseInt(tokenOneContributionAmount[0]), kycSig1).send({
             from : BUYER_ONE,
             gasLimit : GAS_LIMIT
         })
 
-        const kycSig2 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_2_ID, TOKEN_ONE_INDEX, tokenOneContributionAmount[1], BUYER_ONE, testSigner1PK);
+        const kycSig2 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_2_ID, TOKEN_ONE_INDEX, tokenOneContributionAmount[1], BUYER_ONE, kycSignerPK);
         await initialized.methods.contribute(SALE_2_ID, TOKEN_ONE_INDEX, parseInt(tokenOneContributionAmount[1]), kycSig2).send({
             from : BUYER_ONE,
             gasLimit : GAS_LIMIT
         })
 
-        const kycSig3 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_2_ID, TOKEN_TWO_INDEX, tokenTwoContributionAmount[1], BUYER_ONE, testSigner1PK);
+        const kycSig3 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_2_ID, TOKEN_TWO_INDEX, tokenTwoContributionAmount[1], BUYER_ONE, kycSignerPK);
         await initialized.methods.contribute(SALE_2_ID, TOKEN_TWO_INDEX, parseInt(tokenTwoContributionAmount[1]), kycSig3).send({
             from : BUYER_ONE,
             gasLimit : GAS_LIMIT
         })
 
         // perform "kyc" and contribute tokens to the sale for BUYER_TWO
-        const kycSig4 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_2_ID, TOKEN_TWO_INDEX, tokenTwoContributionAmount[0], BUYER_TWO, testSigner1PK);
+        const kycSig4 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_2_ID, TOKEN_TWO_INDEX, tokenTwoContributionAmount[0], BUYER_TWO, kycSignerPK);
         await initialized.methods.contribute(SALE_2_ID, TOKEN_TWO_INDEX, parseInt(tokenTwoContributionAmount[0]), kycSig4).send({
             from : BUYER_TWO,
             gasLimit : GAS_LIMIT
@@ -2107,13 +2108,13 @@ contract("ICCO", function (accounts) {
         })   
 
         // contribute tokens to the sale
-        const kycSig1 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_3_ID, TOKEN_ONE_INDEX, tokenOneContributionAmount, BUYER_ONE, testSigner1PK);
+        const kycSig1 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_3_ID, TOKEN_ONE_INDEX, tokenOneContributionAmount, BUYER_ONE, kycSignerPK);
         await initialized.methods.contribute(SALE_3_ID, TOKEN_ONE_INDEX, parseInt(tokenOneContributionAmount), kycSig1).send({
             from : BUYER_ONE,
             gasLimit : GAS_LIMIT
         })
 
-        const kycSig2 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_3_ID, TOKEN_TWO_INDEX, tokenTwoContributionAmount, BUYER_TWO, testSigner1PK);
+        const kycSig2 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_3_ID, TOKEN_TWO_INDEX, tokenTwoContributionAmount, BUYER_TWO, kycSignerPK);
         await initialized.methods.contribute(SALE_3_ID, TOKEN_TWO_INDEX, parseInt(tokenTwoContributionAmount), kycSig2).send({
             from : BUYER_TWO,
             gasLimit : GAS_LIMIT
@@ -2183,7 +2184,7 @@ contract("ICCO", function (accounts) {
         let failed = false
         try {
             // try to contribute tokens to the sale
-            const kycSig1 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_3_ID, TOKEN_ONE_INDEX, tokenOneContributionAmount, BUYER_ONE, testSigner1PK);
+            const kycSig1 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_3_ID, TOKEN_ONE_INDEX, tokenOneContributionAmount, BUYER_ONE, kycSignerPK);
             await initialized.methods.contribute(SALE_3_ID, TOKEN_ONE_INDEX, parseInt(tokenOneContributionAmount), kycSig1).send({
                 from : BUYER_ONE,
                 gasLimit : GAS_LIMIT
@@ -2608,26 +2609,26 @@ contract("ICCO", function (accounts) {
 
 
         // perform "kyc" and contribute tokens to the sale for BUYER_ONE
-        const kycSig1 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_4_ID, TOKEN_ONE_INDEX, tokenOneContributionAmount[0], BUYER_ONE, testSigner1PK);
+        const kycSig1 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_4_ID, TOKEN_ONE_INDEX, tokenOneContributionAmount[0], BUYER_ONE, kycSignerPK);
         await initialized.methods.contribute(SALE_4_ID, TOKEN_ONE_INDEX, parseInt(tokenOneContributionAmount[0]), kycSig1).send({
             from : BUYER_ONE,
             gasLimit : GAS_LIMIT
         });
 
-        const kycSig2 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_4_ID, TOKEN_ONE_INDEX, tokenOneContributionAmount[1], BUYER_ONE, testSigner1PK);
+        const kycSig2 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_4_ID, TOKEN_ONE_INDEX, tokenOneContributionAmount[1], BUYER_ONE, kycSignerPK);
         await initialized.methods.contribute(SALE_4_ID, TOKEN_ONE_INDEX, parseInt(tokenOneContributionAmount[1]), kycSig2).send({
             from : BUYER_ONE,
             gasLimit : GAS_LIMIT
         });
 
-        const kycSig3 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_4_ID, TOKEN_TWO_INDEX, tokenTwoContributionAmount[1], BUYER_ONE, testSigner1PK);
+        const kycSig3 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_4_ID, TOKEN_TWO_INDEX, tokenTwoContributionAmount[1], BUYER_ONE, kycSignerPK);
         await initialized.methods.contribute(SALE_4_ID, TOKEN_TWO_INDEX, parseInt(tokenTwoContributionAmount[1]), kycSig3).send({
             from : BUYER_ONE,
             gasLimit : GAS_LIMIT
         })
 
         // perform "kyc" and contribute tokens to the sale for BUYER_TWO
-        const kycSig4 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_4_ID, TOKEN_TWO_INDEX, tokenTwoContributionAmount[0], BUYER_TWO, testSigner1PK);
+        const kycSig4 = await signContribution(CONDUCTOR_BYTES32_ADDRESS, SALE_4_ID, TOKEN_TWO_INDEX, tokenTwoContributionAmount[0], BUYER_TWO, kycSignerPK);
         await initialized.methods.contribute(SALE_4_ID, TOKEN_TWO_INDEX, parseInt(tokenTwoContributionAmount[0]), kycSig4).send({
             from : BUYER_TWO,
             gasLimit : GAS_LIMIT

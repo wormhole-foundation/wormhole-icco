@@ -13,18 +13,15 @@ contract ConductorSetup is ConductorSetters, ERC1967Upgrade {
         address implementation,
         uint16 chainId,
         address wormhole,
-        address tokenBridge,
-        uint16 governanceChainId,
-        bytes32 governanceContract
+        address tokenBridge
     ) public {
+        setOwner(_msgSender());
+
         setChainId(chainId);
 
         setWormhole(wormhole);
 
         setTokenBridge(tokenBridge);
-
-        setGovernanceChainId(governanceChainId);
-        setGovernanceContract(governanceContract);
 
         _upgradeTo(implementation);
     }

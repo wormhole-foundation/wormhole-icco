@@ -4,26 +4,23 @@
 pragma solidity ^0.8.0;
 
 import "./ContributorState.sol";
+import "@openzeppelin/contracts/utils/Context.sol";
 
-contract ContributorSetters is ContributorState {
+contract ContributorSetters is ContributorState, Context {
     function setInitialized(address implementatiom) internal {
         _state.initializedImplementations[implementatiom] = true;
     }
 
-    function setGovernanceActionConsumed(bytes32 hash) internal {
-        _state.consumedGovernanceActions[hash] = true;
+    function setOwner(address owner_) internal {
+        _state.owner = owner_;
+    }
+
+    function setAuthority(address authority) internal {
+        _state.authority = authority;
     }
 
     function setChainId(uint16 chainId) internal {
         _state.provider.chainId = chainId;
-    }
-
-    function setGovernanceChainId(uint16 chainId) internal {
-        _state.provider.governanceChainId = chainId;
-    }
-
-    function setGovernanceContract(bytes32 governanceContract) internal {
-        _state.provider.governanceContract = governanceContract;
     }
 
     function setConductorChainId(uint16 chainId) internal {

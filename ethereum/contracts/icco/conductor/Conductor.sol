@@ -278,7 +278,7 @@ contract Conductor is ConductorGovernance {
         ConductorStructs.Sale memory sale = sales(saleId);
         require(sale.isAborted, "token sale is not aborted");
         require(!sale.refundIsClaimed, "already claimed");
-        require(msg.sender == address(uint160(uint256(sale.refundRecipient))), "not refund recipient");
+        require(msg.sender == address(uint160(uint256(sale.refundRecipient))), "not refund recipient"); 
 
         setRefundClaimed(saleId);
 

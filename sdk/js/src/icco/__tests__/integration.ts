@@ -21,6 +21,7 @@ import {
   ETH_TOKEN_BRIDGE_ADDRESS,
   ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
   ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
+  KYC_PRIVATE_KEYS,
   TEST_ERC20,
   WBNB_ADDRESS,
   WETH_ADDRESS,
@@ -55,6 +56,7 @@ import {
   abortSaleEarlyAtContributors,
   abortSaleEarlyAtConductor,
   deployTokenOnEth,
+  signContribution
 } from "./helpers";
 import {
   getSaleFromConductorOnEth,
@@ -189,7 +191,7 @@ describe("Integration Tests", () => {
               collateralAddress: WBNB_ADDRESS,
               contribution: "9",
               tokenIndex: 1
-            },
+            }
           ];
 
           // specific prep so buyers can make contributions from their respective wallets
@@ -255,7 +257,9 @@ describe("Integration Tests", () => {
             saleDuration,
             acceptedTokens
           );
+
           console.log("Parsed Sale Init:", saleInit);
+
 
           // balance check
           {
@@ -270,9 +274,11 @@ describe("Integration Tests", () => {
             const contributionSuccessful = await secureContributeAllTokensOnEth(
               saleInit,
               buyers,
-              tokenAddress // sale token
+              tokenAddress, // sale token,
+              ETH_NODE_URL
             );
             expect(contributionSuccessful).toBeTruthy();
+          
 
             const buyerBalancesAfter = await getCollateralBalancesOnEth(buyers);
             const allLessThan = buyerBalancesAfter
@@ -318,7 +324,8 @@ describe("Integration Tests", () => {
               const contributionSuccessful = await secureContributeAllTokensOnEth(
                 saleInit,
                 buyers,
-                tokenAddress
+                tokenAddress, // sale token,
+                ETH_NODE_URL
               );
             } catch (error: any) {
               const errorMsg: string = error.error.toString();
@@ -711,7 +718,8 @@ describe("Integration Tests", () => {
             const contributionSuccessful = await secureContributeAllTokensOnEth(
               saleInit,
               buyers,
-              tokenAddress // sale token
+              tokenAddress, // sale token
+              ETH_NODE_URL
             );
             expect(contributionSuccessful).toBeTruthy();
 
@@ -982,7 +990,8 @@ describe("Integration Tests", () => {
             const contributionSuccessful = await secureContributeAllTokensOnEth(
               saleInit,
               buyers,
-              tokenAddress // sale token
+              tokenAddress, // sale token
+              ETH_NODE_URL
             );
             expect(contributionSuccessful).toBeTruthy();
 
@@ -1048,8 +1057,13 @@ describe("Integration Tests", () => {
             let expectedErrorExists = false;
             try {
               // try to contribute funds and expect a revert
-              await contributeAllTokensOnEth(saleInit, buyers);
-            } catch (error: any) {
+              await secureContributeAllTokensOnEth(
+                saleInit, 
+                buyers, 
+                tokenAddress, // sale token,
+                ETH_NODE_URL
+              );
+            } catch (error) {
               const errorMsg: string = error.error.toString();
               if (errorMsg.endsWith("sale was aborted")) {
                 expectedErrorExists = true;

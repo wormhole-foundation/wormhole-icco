@@ -12,7 +12,8 @@ export async function contributeOnEth(
   saleId: ethers.BigNumberish,
   tokenIndex: number,
   amount: ethers.BigNumberish,
-  wallet: ethers.Wallet
+  wallet: ethers.Wallet,
+  signature: ethers.BytesLike
 ): Promise<ethers.ContractReceipt> {
   const contributor = Contributor__factory.connect(contributorAddress, wallet);
 
@@ -44,7 +45,7 @@ export async function contributeOnEth(
     const receipt = await tx.wait();
   }
 
-  const tx = await contributor.contribute(saleId, tokenIndex, amount);
+  const tx = await contributor.contribute(saleId, tokenIndex, amount, signature);
   return tx.wait();
 }
 
@@ -54,8 +55,9 @@ export async function secureContributeOnEth(
   tokenIndex: number,
   amount: ethers.BigNumberish,
   saleTokenAddress: string,
-  wallet: ethers.Wallet
-): Promise<ethers.ContractReceipt> { 
+  wallet: ethers.Wallet,
+  signature: ethers.BytesLike
+): Promise<ethers.ContractReceipt> {
   // confirm that the contribution is for the correct sale token
   const sale = await getSaleFromContributorOnEth(
     contributorAddress,
@@ -82,6 +84,7 @@ export async function secureContributeOnEth(
     saleId,
     tokenIndex,
     amount,
-    wallet
+    wallet,
+    signature
   );
 }

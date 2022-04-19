@@ -17,6 +17,8 @@ import "./ContributorGovernance.sol";
 import "../shared/ICCOStructs.sol";
 
 contract Contributor is ContributorGovernance, ReentrancyGuard {
+    using BytesLib for bytes;
+
     function initSale(bytes memory saleInitVaa) public {
         (IWormhole.VM memory vm, bool valid, string memory reason) = wormhole().parseAndVerifyVM(saleInitVaa);
 
@@ -61,7 +63,29 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
         setSale(saleInit.saleID, sale);
     }
 
-    function contribute(uint saleId, uint tokenIndex, uint amount) public nonReentrant { 
+    function verifySignature(bytes memory encodedHashData, bytes memory sig) public view returns (address key) {
+        require(sig.length == 65, "incorrect signature length"); 
+        require(encodedHashData.length > 0, "no hash data");
+
+        // compute hash from encoded data
+        bytes32 hash_ = keccak256(encodedHashData); 
+        
+        // parse v, r, s
+        uint8 index = 0;
+
+        bytes32 r = sig.toBytes32(index);
+        index += 32;
+
+        bytes32 s = sig.toBytes32(index);
+        index += 32;
+
+        uint8 v = sig.toUint8(index) + 27;
+
+        // information from key 
+        key = ecrecover(hash_, v, r, s);
+    }
+
+    function contribute(uint saleId, uint tokenIndex, uint amount, bytes memory sig) public nonReentrant { 
         require(saleExists(saleId), "sale not initiated");
 
         (, bool isAborted) = getSaleStatus(saleId);
@@ -75,7 +99,14 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
 
         (uint16 tokenChain, bytes32 tokenAddressBytes,) = getSaleAcceptedTokenInfo(saleId, tokenIndex);
 
-        require(tokenChain == chainId(), "this token can not be contributed on this chain");        
+        require(tokenChain == chainId(), "this token can not be contributed on this chain");   
+
+        // bypass stack too deep  
+        {
+            // verify authority has signed contribution 
+            bytes memory encodedHashData = abi.encodePacked(conductorContract(), saleId, tokenIndex, amount, msg.sender); 
+            require(verifySignature(encodedHashData, sig) == authority(), "unauthorized contributor");
+        }
 
         // query own token balance before transfer
         address tokenAddress = address(uint160(uint256(tokenAddressBytes)));

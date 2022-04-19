@@ -8,8 +8,6 @@ const TokenBridge = artifacts.require("TokenBridge");
 const ICCOStructs = artifacts.require("ICCOStructs")
 
 const chainId = process.env.ICCO_CONDUCTOR_INIT_CHAIN_ID;
-const governanceChainId = process.env.ICCO_CONDUCTOR_INIT_GOV_CHAIN_ID;
-const governanceContract = process.env.ICCO_CONDUCTOR_INIT_GOV_CONTRACT; // bytes32
 
 module.exports = async function (deployer) {
     // deploy ICCOStructs library
@@ -28,11 +26,8 @@ module.exports = async function (deployer) {
         ConductorImplementation.address,
         chainId,
         (await Wormhole.deployed()).address,
-        (await TokenBridge.deployed()).address,
-        governanceChainId,
-        governanceContract
+        (await TokenBridge.deployed()).address
     ).encodeABI();
 
-    // deploy conductor proxy
     await deployer.deploy(TokenSaleConductor, ConductorSetup.address, conductorInitData);
 };

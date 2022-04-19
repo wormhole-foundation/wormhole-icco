@@ -961,6 +961,15 @@ describe("Integration Tests", () => {
             );
             expect(conductorSaleBefore.isAborted).toBeFalsy();
 
+            const conductorSale = await getSaleFromConductorOnEth(
+              ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
+              conductorConfig.wallet.provider,
+              saleInit.saleId
+            );
+
+            // confirm that the sale initiator is set to the conductorConfig wallet
+            expect(conductorSale.initiator===conductorConfig.wallet.address).toBeTruthy();
+
             // abort the sale early in the conductor
             abortEarlyReceipt = await abortSaleEarlyAtConductor(
               saleInit,

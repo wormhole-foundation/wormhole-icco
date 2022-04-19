@@ -35,6 +35,7 @@ export interface Sale {
 }
 
 export interface ConductorSale extends Sale {
+  initiator: string,
   contributions: ethers.BigNumberish[];
   contributionsCollected: boolean[];
   refundIsClaimed: boolean;

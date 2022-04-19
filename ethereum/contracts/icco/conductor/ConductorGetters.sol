@@ -13,7 +13,7 @@ import "./ConductorState.sol";
 contract ConductorGetters is ConductorState {
     function owner() public view returns (address) {
         return _state.owner;
-    }
+    } 
 
     function isInitialized(address impl) public view returns (bool) {
         return _state.initializedImplementations[impl];

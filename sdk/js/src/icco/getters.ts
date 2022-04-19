@@ -21,6 +21,7 @@ export async function getSaleFromConductorOnEth(
     maxRaise: sale.maxRaise,
     saleStart: sale.saleStart,
     saleEnd: sale.saleEnd,
+    initiator: sale.initiator,
     recipient: sale.recipient,
     refundRecipient: sale.refundRecipient,
     acceptedTokensChains: sale.acceptedTokensChains,

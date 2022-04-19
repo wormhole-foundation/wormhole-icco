@@ -67,6 +67,7 @@ contract Conductor is ConductorGovernance {
             contributions : new uint[](acceptedTokens.length),
             contributionsCollected : new bool[](acceptedTokens.length),
 
+            initiator : msg.sender,
             recipient : bytes32(uint256(uint160(raise.recipient))),
             refundRecipient : bytes32(uint256(uint160(raise.refundRecipient))),
 
@@ -119,6 +120,28 @@ contract Conductor is ConductorGovernance {
         }(0, ICCOStructs.encodeSaleInit(saleInit), 15);
     }
 
+    function abortSaleBeforeStartTime(uint saleId) public payable returns (uint wormholeSequence) {
+        require(saleExists(saleId), "sale not initiated");
+
+        ConductorStructs.Sale memory sale = sales(saleId);
+
+        require(sale.initiator == msg.sender, "only initiator can abort the sale early");
+        require(!sale.isSealed && !sale.isAborted, "already sealed / aborted");
+        require(block.timestamp < sale.saleStart, "sale cannot be aborted once it has started");
+
+        // set saleAborted
+        setSaleAborted(sale.saleID);   
+
+        // attest sale aborted on wormhole
+        IWormhole wormhole = wormhole();
+        wormholeSequence = wormhole.publishMessage{
+            value : msg.value
+        }(0, ICCOStructs.encodeSaleAborted(ICCOStructs.SaleAborted({
+            payloadID : 4,
+            saleID : saleId
+        })), 15);
+    }
+
     function collectContribution(bytes memory encodedVm) public {
         (IWormhole.VM memory vm, bool valid, string memory reason) = wormhole().parseAndVerifyVM(encodedVm);
 
@@ -145,28 +168,7 @@ contract Conductor is ConductorGovernance {
                 conSealed.contributions[i].contributed
             );
         }
-    }
-
-    function abortSaleBeforeStartTime(uint saleId) public payable returns (uint wormholeSequence) {
-        require(saleExists(saleId), "sale not initiated");
-
-        ConductorStructs.Sale memory sale = sales(saleId);
-
-        require(!sale.isSealed && !sale.isAborted, "already sealed / aborted");
-        require(block.timestamp < sale.saleStart, "sale cannot be aborted once it has started");
-
-        // set saleAborted
-        setSaleAborted(sale.saleID);   
-
-        // attest sale aborted on wormhole
-        IWormhole wormhole = wormhole();
-        wormholeSequence = wormhole.publishMessage{
-            value : msg.value
-        }(0, ICCOStructs.encodeSaleAborted(ICCOStructs.SaleAborted({
-            payloadID : 4,
-            saleID : saleId
-        })), 15);
-    }
+    } 
 
     function sealSale(uint saleId) public payable returns (uint wormholeSequence) {
         require(saleExists(saleId), "sale not initiated");
@@ -278,11 +280,10 @@ contract Conductor is ConductorGovernance {
         ConductorStructs.Sale memory sale = sales(saleId);
         require(sale.isAborted, "token sale is not aborted");
         require(!sale.refundIsClaimed, "already claimed");
-        require(msg.sender == address(uint160(uint256(sale.refundRecipient))), "not refund recipient"); 
 
         setRefundClaimed(saleId);
 
-        SafeERC20.safeTransfer(IERC20(address(uint160(uint256(sale.tokenAddress)))), msg.sender, sale.tokenAmount);
+        SafeERC20.safeTransfer(IERC20(address(uint160(uint256(sale.tokenAddress)))), address(uint160(uint256(sale.refundRecipient))), sale.tokenAmount);
     }
     
     function useSaleId() internal returns(uint256 saleId) {

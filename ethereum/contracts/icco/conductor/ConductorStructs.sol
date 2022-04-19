@@ -29,6 +29,8 @@ contract ConductorStructs {
         // contributions
         uint[] contributions;
         bool[] contributionsCollected;
+        // sale initiator - can abort the sale before saleStart
+        address initiator;
         // recipient of proceeds
         bytes32 recipient;
         // refund recipient in case the sale is aborted

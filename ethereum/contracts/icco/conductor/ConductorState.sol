@@ -20,6 +20,7 @@ contract ConductorStorage {
     struct State {
         Provider provider;
 
+        // contract deployer
         address owner;
 
         // Mapping of consumed governance actions

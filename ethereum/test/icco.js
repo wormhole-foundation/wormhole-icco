@@ -570,7 +570,7 @@ contract("ICCO", function (accounts) {
     })
      
     it('should accept contributions in the contributor during the sale timeframe', async function () {
-        await advanceTimeAndBlock(5);
+        await wait(5);
 
         // test variables
         const tokenOneContributionAmount = ["5000", "5000"];
@@ -687,7 +687,7 @@ contract("ICCO", function (accounts) {
     }) 
      
     it('should not accept contributions after the sale has ended', async function () {
-        await advanceTimeAndBlock(10);
+        await wait(10);
 
         // test variables
         const tokenTwoContributionAmount = 5000;
@@ -1339,7 +1339,7 @@ contract("ICCO", function (accounts) {
     })
     
     it('should accept contributions in the contributor during the second sale timeframe', async function () {
-        await advanceTimeAndBlock(5);
+        await wait(5);
 
         // test variables
         const tokenOneContributionAmount = ["500", "500"];
@@ -1411,7 +1411,7 @@ contract("ICCO", function (accounts) {
     let CONTRIBUTIONS_PAYLOAD_2;
 
     it('should attest contributions for second sale correctly', async function () {
-        await advanceTimeAndBlock(10);
+        await wait(10);
 
         // test variables
         const tokenOneContributionAmount = 1000;
@@ -2092,7 +2092,7 @@ contract("ICCO", function (accounts) {
 
     it('should accept contributions after sale period starts and before aborting the sale (block timestamps out of sync test)', async function () {
         // this test simulates block timestamps being out of sync cross-chain
-        await advanceTimeAndBlock(5);
+        await wait(5);
 
         // test variables
         const tokenOneContributionAmount = "100";
@@ -2198,7 +2198,7 @@ contract("ICCO", function (accounts) {
     })
 
     it('contributor should not allow contributions to be attested after sale is aborted early', async function () {
-        await advanceTimeAndBlock(10);
+        await wait(10);
 
         const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
    
@@ -2584,7 +2584,7 @@ contract("ICCO", function (accounts) {
     })
     
     it('should accept contributions in the contributor during the fourth sale timeframe', async function () {
-        await advanceTimeAndBlock(5);
+        await wait(5);
 
         // test variables
         const tokenOneContributionAmount = ["2000", "4000"];
@@ -2655,7 +2655,7 @@ contract("ICCO", function (accounts) {
     let CONTRIBUTIONS_PAYLOAD_4;
 
     it('should attest contributions for fourth sale correctly', async function () {
-        await advanceTimeAndBlock(10);
+        await wait(10);
 
         // test variables
         const tokenOneContributionAmount = "6000"; // sum of both contributions
@@ -3022,7 +3022,7 @@ contract("ICCO", function (accounts) {
         })
 
         // wait for the sale to start
-        await advanceTimeAndBlock(6);
+        await wait(6);
 
         let failed = false
         try {
@@ -3406,12 +3406,21 @@ function zeroPadBytes(value, length) {
     return value;
 }
 
-advanceTimeAndBlock = async (time) => {
-    await advanceTime(time);
-    await advanceBlock();
+wait = async (time) => {
+  // await advanceTimeAndBlock(time);
+  await timeout(time * 1000);
+};
 
-    return Promise.resolve(web3.eth.getBlock('latest'));
-}
+timeout = async (ms) => {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+};
+
+advanceTimeAndBlock = async (time) => {
+  await advanceTime(time);
+  await advanceBlock();
+
+  return Promise.resolve(web3.eth.getBlock("latest"));
+};
 
 advanceTime = (time) => {
     return new Promise((resolve, reject) => {

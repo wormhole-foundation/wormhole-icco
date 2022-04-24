@@ -19,7 +19,7 @@ build: node_modules ${SOURCE_FILES}
 	cp $< $@
 
 wormhole/ethereum/build:
-	git clone --depth 1 --branch dev.v2 --single-branch git@github.com:certusone/wormhole.git
+	git clone --depth 1 --branch dev.v2 --single-branch https://github.com/certusone/wormhole.git
 	cd wormhole/ethereum && npm ci && npm run build && make .env
 
 .PHONY: test
@@ -30,7 +30,8 @@ test: .env build wormhole/ethereum/build
 	sleep 5
 	cd wormhole/ethereum && npm run migrate
 	npm test || (pkill -f ganache-cli && exit 1)
-	pkill -f ganache-cli || true
+	pkill -f ganache-cli
+	exit 0
 
 .PHONY: tilt-deploy
 tilt-deploy: .env build

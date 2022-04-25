@@ -3,9 +3,19 @@
 #![allow(unused_imports)]
 
 use crate::{
-    accounts::{AuthoritySigner, CustodySigner, EmitterAccount},
+    messages::{
+        SaleInit,
+    },
+    accounts::{
+        AuthoritySigner,
+        CustodySigner,
+        EmitterAccount
+    },
     instructions::init_icco_sale,
-    types::{EndpointRegistration, WrappedMeta},
+    types::{
+        EndpointRegistration,
+//        WrappedMeta
+    },
 };
 use borsh::BorshDeserialize;
 use bridge::{
@@ -153,9 +163,9 @@ pub fn init_icco_sale_ix(
         },
         &bridge_id,
     );
-
     let ix = init_icco_sale(
         program_id,
+        SaleInit::get_init_sale_sale_id(&vaa.payload),
         Pubkey::from_str(payer.as_str()).unwrap(),
         message_key,
         program_id, // Pubkey::new(&vaa.emitter_address),

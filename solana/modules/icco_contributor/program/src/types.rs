@@ -37,6 +37,21 @@ impl Owned for SaleState {
     }
 }
 
+
+/// icco contribution state. Writeable in contribute, redeem, refund.
+#[derive(Default, Clone, Copy, BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+pub struct ContributionState {
+    pub amount: u128,
+    pub is_redeemed_or_refunded: u8,
+}
+
+impl Owned for ContributionState {
+    fn owner(&self) -> AccountOwner {
+        AccountOwner::This
+    }
+}
+
+
 /// Chain + AccountPubkey.
 #[derive(Default, Clone, Copy, BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 pub struct EndpointRegistration {

@@ -45,6 +45,31 @@ impl<'b, const STATE: AccountState> Seeded<&SaleStateDerivationData>
 
 
 ///-------------------------------------------------------------------
+/// icco Contribution state. PDA <= "contribution", SaleId, contributor, token
+pub type ContributionStateAccount<'b, const STATE: AccountState> =
+    Data<'b, ContributionState, { STATE }>;
+
+pub struct ContributionStateAccountDerivationData {
+    pub sale_id: u128,
+    pub contributor: Pubkey,
+    pub token: Pubkey,
+}
+
+impl<'b, const STATE: AccountState> Seeded<&ContributionStateAccountDerivationData>
+    for ContributionStateAccount<'b, { STATE }>
+{
+    fn seeds(accs: &ContributionStateAccountDerivationData) -> Vec<Vec<u8>> {
+        vec![
+            String::from("state").as_bytes().to_vec(),
+            accs.sale_id.to_be_bytes().to_vec(),
+            accs.contributor.to_bytes().to_vec(),
+            accs.token.to_bytes().to_vec(),
+        ]
+    }
+}
+
+
+///-------------------------------------------------------------------
 /// Custody Account.
 pub type CustodyAccount<'b, const STATE: AccountState> = Data<'b, SplAccount, { STATE }>;
 

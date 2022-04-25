@@ -44,7 +44,9 @@ use solana_program::{
     account_info::AccountInfo,
     // program_error::ProgramError,
     pubkey::Pubkey,
+    sysvar::clock::Clock,
 };
+
 use solitaire::{
     SolitaireError,
     CreationLamports::Exempt,
@@ -76,6 +78,7 @@ pub struct InitIccoSale<'b> {
     pub sale_state: SaleStateAccount<'b, { AccountState::Uninitialized }>,   // Must not be created yet
     // TBD
     pub init_sale_vaa: ClaimableVAA<'b, SaleInit>,
+    pub clock: Sysvar<'b, Clock>,
 }
 
 impl<'a> From<&InitIccoSale<'a>> for SaleStateDerivationData {

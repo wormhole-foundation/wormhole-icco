@@ -17,7 +17,7 @@ Using wormhole we can bridge this gap - Allow users to contribute assets on all 
 We want to implement a generalized, trustless cross-chain mechanism for token sales.
 
 * Allow contributions of whitelisted assets on all supported chains
-  * Users dont need to maintain multiple wallets, but can conveniently participate from their native environment.
+  * Users don't need to maintain multiple wallets, but can conveniently participate from their native environment.
 * Issue a token on wormhole chain and leverage the wormholes token bridge to distribute them to all participants on their chains.
 
 ## Non-Goals
@@ -28,9 +28,9 @@ We want to implement a generalized, trustless cross-chain mechanism for token sa
 
 There are two programs needed to model this.
 
-* A`TokenSaleConductor`, which lives on one chain (It can exist on all chains, however it only needs to be invoked on one to initiate a sale).
+* A `TokenSaleConductor`, which lives on one chain (It can exist on all chains, however it only needs to be invoked on one to initiate a sale).
   * It holds the tokens that are up for sale and maintains and collects the state around the sale.
-* `TokenSaleContributor`contracts live on all chains. 
+* `TokenSaleContributor` contracts live on all chains. 
   * Collects contributions, distributes tokens to contributors after the sale has ended and the token allocation has been bridged.
 
 ## Detailed Design
@@ -44,35 +44,35 @@ To create a sale, a user invokes the `createSale()` method on the sale conductor
   * An end time for when contributions will no loner be accepted
   * A minimum USD amount to raise
   * A maximum USD amount to raise
-  * The address that can claim the proceeds of the sale.
+  * The address that can claim the proceeds of the sale
   * The address that should receive the offered tokens in case the minimum raise amount is not met
 * An array of accepted tokens on each chain + the USD conversion rate which they are accepted at
 
-The`createSale()`method deposits the offered tokens, assigns an ID which identifies the sale and attests a`SaleInit`paket over the wormhole. This paket contains all the information from above.
+The `createSale()` method deposits the offered tokens, assigns an ID which identifies the sale and attests a `SaleInit` packet over the wormhole. This packet contains all the information from above.
 The sale information is also stored locally.
 
-The attested`SaleInit`paket is submitted to the`TokenSaleContributor`contracts. The contributor contracts stores the sale information locally which is relevant to its chain.
+The attested `SaleInit` packet is submitted to the `TokenSaleContributor` contracts. The contributor contracts stores the sale information locally which is relevant to its chain.
 
-The `TokenSaleConductor`contract can terminate the sale by calling `abortSaleBeforeStartTime()` before the sale period begins. 
+The `TokenSaleConductor` contract can terminate the sale by calling `abortSaleBeforeStartTime()` before the sale period begins. 
 
 During the start and end timestamp the contributor contracts accept contributions in the specified tokens.
 
-After the sale duration anyone can call the`attestContributions()`method on the contributor, which attests a`Contribution`paket over the wormhole.
+After the sale duration anyone can call the `attestContributions()` method on the contributor, which attests a `Contribution` packet over the wormhole.
 
-The`TokenSaleConductor`now collects the`Contributions`pakets from all chains & tokens.
+The `TokenSaleConductor` now collects the `Contributions` packets from all chains & tokens.
 
-After all contributions have been collected, anyone can call the`sealSale()`method on the Conductor.
-The method evaluates whether the minimum raise amount has been met using the conversion rates specified initially (a later version could use rates from an oracle at closing). In case it was successfull it:
+After all contributions have been collected, anyone can call the `sealSale()` method on the Conductor.
+The method evaluates whether the minimum raise amount has been met using the conversion rates specified initially (a later version could use rates from an oracle at closing). In case it was successful it:
 
 * calculates allocations and excess contributions (if total contributions sum to a value larger than the maximum raise amount)
     * excess contributions are calculated by taking the difference between the maximum raise amount and the total contributions. 
-    Each contributor recieves excess contributions proportional to their contribution amount (individualContribution / totalContributions * totalExcessContributions)
-* emits a`SaleSealed`paket - indicated to the Contributor contracts that the sale was successfull
+    Each contributor receives excess contributions proportional to their contribution amount (individualContribution / totalContributions * totalExcessContributions)
+* emits a `SaleSealed` packet - indicated to the Contributor contracts that the sale was successful
 * bridges the relevant share of offered tokens to the Contributor contracts.
 
 Or in case the goal was not met, it:
 
-* emits a`SaleAborted`packet.
+* emits a `SaleAborted` packet.
 
 The Contributor contracts has two functions to consume the relevant attestations:
 

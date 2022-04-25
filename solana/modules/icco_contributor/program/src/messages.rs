@@ -61,9 +61,10 @@ impl DeserializePayload for SaleInit {
 
 // Accessor methods to no-copy-read from slice directly.
 impl SaleInit {
-    // pub fn get_sale_id(&self, bf: &[u8]) -> (u128, u128) {
-    //     read_u256(&bf[1..])
-    // }
+    // This is used in wasm layer. Even though it looks redundand.
+    pub fn get_init_sale_sale_id(bf: &[u8]) -> u128 {
+         read_u256(&bf[1..]).0
+    }
 
     pub fn get_token_address(&self, bf: &[u8]) -> Pubkey {
         Pubkey::new(&bf[33..])

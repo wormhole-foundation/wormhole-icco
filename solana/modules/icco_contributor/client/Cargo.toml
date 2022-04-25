@@ -15,9 +15,9 @@ solana-program = "=1.9.4"
 solana-sdk = "=1.9.4"
 solana-cli-config = "=1.9.4"
 #solitaire = { path = "../../../solitaire/program" }
-solitaire = { git = "https://github.com/certusone/wormhole", branch="feat/token-bridge-proxy" }
+solitaire = { git = "https://github.com/certusone/wormhole" }
 #solitaire-client = { path = "../../../solitaire/client" }
-solitaire-client = { git = "https://github.com/certusone/wormhole", branch="feat/token-bridge-proxy" }
+solitaire-client = { git = "https://github.com/certusone/wormhole" }
 solana-clap-utils = "=1.9.4"
 hex = "0.4.3"
 spl-token-metadata = { path = "../token-metadata" }

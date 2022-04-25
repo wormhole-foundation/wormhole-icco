@@ -33,7 +33,7 @@ sdk/js/src/icco/__tests__/tilt.json:
 ## Deploy Contracts to Tilt
 tilt-deploy: ethereum terra
 	@if ! pgrep tilt; then echo "Error: tilt not running. Start it before running tests"; exit 1; fi
-	cd ethereum && make tilt-deploy
+	cd ethereum && make tilt-deploy && npx truffle exec scripts/register_tilt_contributors.js --network eth_devnet
 #	cd terra && make terrad-deploy
 #	cd ethereum && node scripts/
 

@@ -11,7 +11,7 @@
   "repository": "https://github.com/certusone/wormhole-icco/tree/main/sdk/js",
   "scripts": {
     "build-contracts": "npm run build --prefix ../../ethereum && node scripts/copyContracts.js && typechain --target=ethers-v5 --out-dir=src/ethers-contracts contracts/*.json",
-    "build-abis": "typechain --target=ethers-v5 --out-dir=src/ethers-contracts/abi src/abi/Wormhole.abi.json",
+    "build-abis": "typechain --target=ethers-v5 --out-dir=src/ethers-contracts/abi",
     "build-deps": "npm run build-abis && npm run build-contracts",
     "build-lib": "tsc -p tsconfig.json && tsc -p tsconfig-cjs.json && node scripts/copyEthersTypes.js",
     "build-all": "npm run build-deps && npm run build-lib",

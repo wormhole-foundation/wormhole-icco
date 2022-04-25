@@ -32,8 +32,8 @@ pub struct Initialize<'b> {
 
 // Config account and InitializeData - only stores bridge address.
 #[derive(BorshDeserialize, BorshSerialize, Default)]
-pub struct InitializeData {
-    pub bridge: Pubkey,
+pub struct InitializeContributorData {
+    pub bridge: Pubkey,     // Not sure if Bridge is needed. We can access it?
     pub conductor: Pubkey,
 }
 
@@ -43,7 +43,7 @@ impl<'b> InstructionContext<'b> for Initialize<'b> {
 pub fn initialize(
     ctx: &ExecutionContext,
     accs: &mut Initialize,
-    data: InitializeData,
+    data: InitializeContributorData,
 ) -> Result<()> {
     //  bbrp - local only. Print bridge and conductor.
 // msg!("bbrp in icco initialize {} {}", data.bridge, data.conductor);

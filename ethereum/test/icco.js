@@ -4960,6 +4960,85 @@ contract("ICCO", function (accounts) {
 
     assert.ok(failed);
   });
+
+  it("conductor should not accept sale start/end times larger than uint64", async function () {
+    // test variables
+    const saleStart = "100000000000000000000000";
+    const saleEnd = "100000000000000000000001";
+    const saleTokenAmount = "10";
+    const minimumTokenRaise = "2000";
+    const maximumTokenRaise = "30000";
+    const tokenOneConversionRate = "1000000000000000000";
+    const saleRecipient = accounts[0];
+    const refundRecipient = accounts[0];
+    const tokenDecimals = 18;
+    const mintAccount = SELLER;
+    const tokenSequence = 0; // set to 0 for the test
+    const tokenChainId = 0; // set to 0 for the test
+    const nativeContractAddress = "0x00"; // set to 0 for the test
+
+    const initialized = new web3.eth.Contract(
+      ConductorImplementationFullABI,
+      TokenSaleConductor.address
+    );
+
+    // create sale token again
+    const saleTokenMintAmount = "2000";
+    const soldToken = await TokenImplementation.new();
+    const soldTokenName = "Sold Token";
+    const soldTokenSymbol = "SOLD";
+
+    await soldToken.initialize(
+      soldTokenName,
+      soldTokenSymbol,
+      tokenDecimals,
+      tokenSequence,
+      mintAccount,
+      tokenChainId,
+      nativeContractAddress
+    );
+    await soldToken.mint(SELLER, saleTokenMintAmount);
+    await soldToken.approve(TokenSaleConductor.address, saleTokenAmount);
+
+    // create array (solidity struct) for sale params
+    const saleParams = [
+      soldToken.address,
+      saleTokenAmount,
+      minimumTokenRaise,
+      maximumTokenRaise,
+      saleStart,
+      saleEnd,
+      saleRecipient,
+      refundRecipient,
+    ];
+
+    // create accepted tokens array
+    const acceptedTokens = [
+      [
+        TEST_CHAIN_ID,
+        "0x000000000000000000000000" + CONTRIBUTED_TOKEN_ONE.address.substr(2),
+        tokenOneConversionRate,
+      ]
+    ];
+
+    let failed = false;
+    try {
+      // try to create a sale with sale start/end times larger than uint64
+      await initialized.methods.createSale(saleParams, acceptedTokens).send({
+        value: "0",
+        from: SELLER,
+        gasLimit: GAS_LIMIT,
+      });
+    } catch (e) {
+      assert.equal(
+        e.message,
+        "Returned error: VM Exception while processing transaction: revert saleStart too far in the future"
+      );
+      failed = true;
+    }
+
+    assert.ok(failed);
+  })
 });
 
 contract("ICCO Library Upgrade", function (accounts) {

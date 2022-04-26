@@ -10,52 +10,50 @@ Token sales are one of the major applications of today's blockchains.
 Currently they are either conducted on a single chain in a trustless fashion or in a centralized fashion with support to contribute tokens from multiple chains.
 Using wormhole we can bridge this gap - Allow users to contribute assets on all supported chains and issue a token that we can bridge to all chains for them to claim after the sale has been concluded.
 
-
-
 ## Goals
 
 We want to implement a generalized, trustless cross-chain mechanism for token sales.
 
-* Allow contributions of whitelisted assets on all supported chains
-  * Users don't need to maintain multiple wallets, but can conveniently participate from their native environment.
-* Issue a token on wormhole chain and leverage the wormholes token bridge to distribute them to all participants on their chains.
+- Allow contributions of whitelisted assets on all supported chains
+  - Users don't need to maintain multiple wallets, but can conveniently participate from their native environment.
+- Issue a token on wormhole chain and leverage the wormhole token bridge to distribute them to all participants on their chains.
 
 ## Non-Goals
 
-* Automatically relay messages across chains. The design assumes there is always a party interested in synchronizing the data across chains, let it be the token issuer or an investor who wants to claim its tokens.
+- Automatically relay messages across chains. The design assumes there is always a party interested in synchronizing the data across chains, let it be the token issuer or an investor who wants to claim its tokens.
 
 ## Overview
 
 There are two programs needed to model this.
 
-* A `TokenSaleConductor`, which lives on one chain (It can exist on all chains, however it only needs to be invoked on one to initiate a sale).
-  * It holds the tokens that are up for sale and maintains and collects the state around the sale.
-* `TokenSaleContributor` contracts live on all chains. 
-  * Collects contributions, distributes tokens to contributors after the sale has ended and the token allocation has been bridged.
+- A `TokenSaleConductor`, which lives on one chain (It can exist on all chains, however it only needs to be invoked on one to initiate a sale).
+  - It holds the tokens that are up for sale and maintains and collects the state around the sale.
+- `TokenSaleContributor` contracts live on all chains.
+  - Collects contributions, distributes tokens to contributors after the sale has ended and the token allocation has been bridged.
 
 ## Detailed Design
 
 To create a sale, a user invokes the `createSale()` method on the sale conductor. It takes the following set or arguments:
 
-* A `Raise` struct with the following arguments:
-  * Offered token address
-  * Offered token amount 
-  * A start time for when contributions can be accepted
-  * An end time for when contributions will no loner be accepted
-  * A minimum USD amount to raise
-  * A maximum USD amount to raise
-  * The address that can claim the proceeds of the sale
-  * The address that should receive the offered tokens in case the minimum raise amount is not met
-* An array of accepted tokens on each chain + the USD conversion rate which they are accepted at
+- A `Raise` struct with the following arguments:
+  - Offered token address
+  - Offered token amount
+  - A start time for when contributions can be accepted
+  - An end time for when contributions will no loner be accepted
+  - A minimum USD amount to raise
+  - A maximum USD amount to raise
+  - The address that can claim the proceeds of the sale
+  - The address that should receive the offered tokens in case the minimum raise amount is not met
+- An array of accepted tokens on each chain + the USD conversion rate which they are accepted at
 
 The `createSale()` method deposits the offered tokens, assigns an ID which identifies the sale and attests a `SaleInit` packet over the wormhole. This packet contains all the information from above.
 The sale information is also stored locally.
 
 The attested `SaleInit` packet is submitted to the `TokenSaleContributor` contracts. The contributor contracts stores the sale information locally which is relevant to its chain.
 
-The `TokenSaleConductor` contract can terminate the sale by calling `abortSaleBeforeStartTime()` before the sale period begins. 
+The `TokenSaleConductor` contract can terminate the sale by calling `abortSaleBeforeStartTime()` before the sale period begins. Only the wallet that called `createSale()` can invoke this method.
 
-During the start and end timestamp the contributor contracts accept contributions in the specified tokens.
+During the start and end timestamp the `TokenSaleContributor` contracts accept contributions in the specified tokens. The `contribute()` method takes an argument `bytes memory sig` which is a third party signature stating that KYC was performed for a particular contribution. The `TokenSaleContributor` calls `verifySignature` to recover a public key from the passed signature. If the public key matches the `authority` address in the `TokenSaleContributor` state, the contribution is permitted.
 
 After the sale duration anyone can call the `attestContributions()` method on the contributor, which attests a `Contribution` packet over the wormhole.
 
@@ -64,89 +62,98 @@ The `TokenSaleConductor` now collects the `Contributions` packets from all chain
 After all contributions have been collected, anyone can call the `sealSale()` method on the Conductor.
 The method evaluates whether the minimum raise amount has been met using the conversion rates specified initially (a later version could use rates from an oracle at closing). In case it was successful it:
 
-* calculates allocations and excess contributions (if total contributions sum to a value larger than the maximum raise amount)
-    * excess contributions are calculated by taking the difference between the maximum raise amount and the total contributions. 
-    Each contributor receives excess contributions proportional to their contribution amount (individualContribution / totalContributions * totalExcessContributions)
-* emits a `SaleSealed` packet - indicated to the Contributor contracts that the sale was successful
-* bridges the relevant share of offered tokens to the Contributor contracts.
+- Calculates allocations and excess contributions (if total contributions sum to a value larger than the maximum raise amount)
+  - Excess contributions are calculated by taking the difference between the maximum raise amount and the total contributions.
+    Each contributor receives excess contributions proportional to their contribution amount (individualContribution / totalContributions \* totalExcessContributions)
+- Emits a `SaleSealed` packet - indicated to the Contributor contracts that the sale was successful
+- Bridges the relevant share of offered tokens to the Contributor contracts
 
 Or in case the goal was not met, it:
 
-* emits a `SaleAborted` packet.
+- Emits a `SaleAborted` packet.
+- Allows a permissionless method `claimRefund` to be called for the `refundRecipient`
 
 The Contributor contracts has two functions to consume the relevant attestations:
 
-* `saleSealed()`
-  * Starts to accept claims of users acquired tokens via `claimAllocation()`
-    * Also pays out excess contributions 
-  * Bridges the raised funds over to the recipient
-* `saleAborted()`
-  * Starts to accept refund claims via `claimRefund()`
-
-
+- `saleSealed()`
+  - Starts to accept claims of users acquired tokens via `claimAllocation()`
+    - Also pays out excess contributions
+  - Bridges the raised funds over to the recipient
+- `saleAborted()`
+  - Starts to accept refund claims via `claimRefund()`
 
 ### API / database schema
 
 **TokenSaleConductor**:
 
-* `createSale(ICCOStructs.Raise memory raise, ICCOStructs.Token[] acceptedTokens)`
-* `collectContributions(vaa Contributions)`
-* `abortSaleBeforeStartTime(uint saleId)`
-* `sealSale(uint saleId)`
-* `claimRefund(uint saleId)`
-* `saleExists(uint saleId)`
+- `createSale(ICCOStructs.Raise memory raise, ICCOStructs.Token[] acceptedTokens)`
+- `collectContributions(vaa Contributions)`
+- `abortSaleBeforeStartTime(uint saleId)`
+- `sealSale(uint saleId)`
+- `claimRefund(uint saleId)`
+- `saleExists(uint saleId)`
 
-Governance:
-* `registerChain(vaa RegisterChain)`
-* `upgrade(vaa ConductorUpgrade)`
+Owner Only:
+
+- `registerChain(uint16 contributorChainId, bytes32 contributorAddress)`
+- `upgrade(uint16 conductorChainId, address newImplementation)`
+- `updateConsistencyLevel(uint16 conductorChainId, uint8 newConsistencyLevel)`
+- `transferOwnership(uint16 conductorChainId, address newOwner)`
 
 **TokenSaleContributor**:
 
-* `initSale(vaa SaleInit)`
-* `contribute(uint saleId, uint tokenIndex, uint amount)`
-* `attestContributions(uint saleId)`
-* `saleSealed(vaa SaleSealed)`
-* `saleAborted(vaa SaleAborted)`
-* `claimAllocation(uint saleId, uint tokenIndex)`
-* `claimRefund(uint saleId, uint tokenIndex)`
-* `saleExists(uint saleId)`
+- `initSale(vaa SaleInit)`
+- `verifySignature(bytes memory encodedHashData, bytes memory sig)`
+- `contribute(uint saleId, uint tokenIndex, uint amount, bytes memory sig)`
+- `attestContributions(uint saleId)`
+- `saleSealed(vaa SaleSealed)`
+- `saleAborted(vaa SaleAborted)`
+- `claimAllocation(uint saleId, uint tokenIndex)`
+- `claimRefund(uint saleId, uint tokenIndex)`
+- `saleExists(uint saleId)`
 
-Governance:
-* `upgrade(vaa ContributorUpgrade)`
+Owner Only:
+
+- `upgrade(uint16 contributorChainId, address newImplementation)`
+- `updateConsistencyLevel(uint16 contributorChainId, uint8 newConsistencyLevel)`
+- `updateAuthority(uint16 contributorChainId, address newAuthority)`
+- `transferOwnership(uint16 contributorChainId, address newOwner)`
 
 ---
 
 **Structs**:
 
-* Token
-  * uint16 chainId
-  * bytes32 address
-  * uint256 conversionRate
+- Token
 
-* Contribution
-  * uint8 tokenIndex (index in accepted tokens array)
-  * uint256 contributedAmount
-  
-* Allocation
-  * uint8 tokenIndex (index in accepted tokens array)
-  * uint256 allocation (amount distributed to contributors on this chain)
-  * uint256 excessContribution (excess contributions refunded to contributors on this chain)
+  - uint16 chainId
+  - bytes32 address
+  - uint256 conversionRate
 
-* Raise
-  * address token (sale token address)
-  * uint256 tokenAmount (token amount being sold)
-  * uint256 minRaise (min raise amount)
-  * uint256 maxRaise (max raise amount)
-  * uint256 saleStart (timestamp raise start)
-  * uint256 saleEnd (timestamp raise end)
-  * address recipient (recipient of sale proceeds)
-  * address refundRecipient (refund recipient in case the sale is aborted)
+- Contribution
+  - uint8 tokenIndex (index in accepted tokens array)
+  - uint256 contributedAmount
+- Allocation
+
+  - uint8 tokenIndex (index in accepted tokens array)
+  - uint256 allocation (amount distributed to contributors on this chain)
+  - uint256 excessContribution (excess contributions refunded to contributors on this chain)
+
+- Raise
+  - address token (sale token address)
+  - uint256 tokenAmount (token amount being sold)
+  - uint256 minRaise (min raise amount)
+  - uint256 maxRaise (max raise amount)
+  - uint256 saleStart (timestamp raise start)
+  - uint256 saleEnd (timestamp raise end)
+  - address recipient (recipient of sale proceeds)
+  - address refundRecipient (refund recipient in case the sale is aborted)
 
 ---
 
 **Payloads**:
 
 SaleInit:
+
 ```
 // PayloadID uint8 = 1
 uint8 payloadID;
@@ -177,19 +184,20 @@ uint8 tokensLen;
   // conversion rate for the token
   uint256 conversionRate;
 
-// recipient of proceeds 
+// recipient of proceeds
 bytes32 recipient;
 // refund recipient in case the sale is aborted
 bytes32 refundRecipient;
 ```
 
 ContributionsSealed:
+
 ```
 // PayloadID uint8 = 2
 uint8 payloadID;
 // Sale ID
 uint256 saleID;
-// Chain ID 
+// Chain ID
 uint16 chainID;
 
 // local contributions length
@@ -203,6 +211,7 @@ uint8 contributionsLen;
 ```
 
 SaleSealed:
+
 ```
 // PayloadID uint8 = 3
 uint8 payloadID;
@@ -222,57 +231,10 @@ uint8 allocationsLen;
 ```
 
 SaleAborted:
+
 ```
 // PayloadID uint8 = 4
 uint8 payloadID;
 // Sale ID
 uint256 saleID;
-```
-
-RegisterChain:
-```
-// Gov Header
-// Module Identifier  ("TokenSale" left-padded)
-Module [32]byte 
-// Governance Action ID (1 for RegisterChain)
-Action uint8 = 1
-// Target Chain (Where the governance action should be applied)
-// (0 is a valid value for all chains) 
-ChainId uint16
-
-// Packet
-// Emitter Chain ID
-EmitterChainID uint16
-// Emitter address. Left-zero-padded if shorter than 32 bytes
-EmitterAddress [32]uint8
-```
-
-ConductorUpgrade:
-```
-// Header
-// Module Identifier  ("TokenSale" left-padded)
-Module [32]byte 
-// Governance Action ID (2 for ConductorUpgrade)
-Action uint8 = 2
-// Target Chain  (Where the governance action should be applied)
-ChainId uint16
-
-// Packet
-// Address of the new contract
-NewContract [32]uint8
-```
-
-ContributorUpgrade:
-```
-// Header
-// Module Identifier  ("TokenSale" left-padded)
-Module [32]byte 
-// Governance Action ID (3 for ContributorUpgrade)
-Action uint8 = 3
-// Target Chain  (Where the governance action should be applied)
-ChainId uint16
-
-// Packet
-// Address of the new contract
-NewContract [32]uint8
 ```

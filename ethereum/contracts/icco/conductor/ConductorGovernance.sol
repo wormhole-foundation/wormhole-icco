@@ -16,13 +16,15 @@ import "./ConductorStructs.sol";
 import "../../interfaces/IWormhole.sol";
 
 contract ConductorGovernance is ConductorGetters, ConductorSetters, ERC1967Upgrade {
+    event ContractUpgraded(address indexed oldContract, address indexed newContract);
+    event ConsistencyLevelUpdated(uint8 indexed oldLevel, uint8 indexed newLevel);
+    event OwnershipTransfered(address indexed oldOwner, address indexed newOwner);
+
     // register contributor contract
     function registerChain(uint16 contributorChainId, bytes32 contributorAddress) public onlyOwner {
         require(contributorContracts(contributorChainId) == bytes32(0), "chain already registered");
         setContributor(contributorChainId, contributorAddress);
-    }  
-
-    event ContractUpgraded(address indexed oldContract, address indexed newContract);
+    }   
 
     function upgrade(uint16 conductorChainId, address newImplementation) public onlyOwner {
         require(conductorChainId == chainId(), "wrong chain id");
@@ -43,14 +45,22 @@ contract ConductorGovernance is ConductorGetters, ConductorSetters, ERC1967Upgra
         require(conductorChainId == chainId(), "wrong chain id");
         require(newConsistencyLevel > 0, "newConsistencyLevel must be > 0");
 
+        uint8 currentConsistencyLevel = consistencyLevel();
+
         setConsistencyLevel(newConsistencyLevel);    
+
+        emit ConsistencyLevelUpdated(currentConsistencyLevel, newConsistencyLevel);
     }
 
     function transferOwnership(uint16 conductorChainId, address newOwner) public onlyOwner {
         require(conductorChainId == chainId(), "wrong chain id"); 
         require(newOwner != address(0), "new owner cannot be the zero address");
+
+        address currentOwner = owner();
         
         setOwner(newOwner);
+
+        emit OwnershipTransfered(currentOwner, newOwner);
     }
 
     modifier onlyOwner() {

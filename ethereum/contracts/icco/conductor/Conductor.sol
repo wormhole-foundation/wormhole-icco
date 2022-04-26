@@ -26,6 +26,7 @@ contract Conductor is ConductorGovernance {
         // input validation
         require(block.timestamp < raise.saleStart, "sale start must be in the future");
         require(raise.saleStart < raise.saleEnd, "sale end must be after sale start");
+        require(raise.saleStart <= 2**63-1, "saleStart too far in the future");
         require(raise.tokenAmount > 0, "amount must be > 0");
         require(acceptedTokens.length > 0, "must accept at least one token");
         require(acceptedTokens.length < 255, "too many tokens");

@@ -41,8 +41,8 @@ fn read_u256(buf: &[u8]) -> (u128, u128) {
 #[derive(PartialEq, Debug)]
 #[allow(non_snake_case)]
 pub struct SaleInit {
-    payload_id: u8, // Sale ID
-    token_cnt: u8,
+    payload_id: u8,     // 1
+    pub token_cnt: u8,
     pub sale_id: u128,
 }
 

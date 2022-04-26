@@ -9,6 +9,11 @@ pub enum Error {
     VAAAlreadyExecuted,
     VAAInvalidEmitterChain,
     VAAInvalid,
+    InvalidTokenAddress,
+    InvalidTokenIndex,
+    SaleSealedOrAborted,
+    SaleHasNotStarted,
+    SaleHasEnded,
 }
 
 /// Errors thrown by the program will bubble up to the solitaire wrapper, which needs a way to

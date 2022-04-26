@@ -39,6 +39,20 @@ contract ConductorGovernance is ConductorGetters, ConductorSetters, ERC1967Upgra
         emit ContractUpgraded(currentImplementation, newImplementation);
     }
 
+    function updateConsistencyLevel(uint16 conductorChainId, uint8 newConsistencyLevel) public onlyOwner {
+        require(conductorChainId == chainId(), "wrong chain id");
+        require(newConsistencyLevel > 0, "newConsistencyLevel must be > 0");
+
+        setConsistencyLevel(newConsistencyLevel);    
+    }
+
+    function transferOwnership(uint16 conductorChainId, address newOwner) public onlyOwner {
+        require(conductorChainId == chainId(), "wrong chain id"); 
+        require(newOwner != address(0), "new owner cannot be the zero address");
+        
+        setOwner(newOwner);
+    }
+
     modifier onlyOwner() {
         require(owner() == _msgSender(), "caller is not the owner");
         _;

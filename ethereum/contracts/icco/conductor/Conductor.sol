@@ -117,7 +117,7 @@ contract Conductor is ConductorGovernance {
         });
         wormholeSequence = wormhole().publishMessage{
             value : msg.value
-        }(0, ICCOStructs.encodeSaleInit(saleInit), 15);
+        }(0, ICCOStructs.encodeSaleInit(saleInit), consistencyLevel()); 
     }
 
     function abortSaleBeforeStartTime(uint saleId) public payable returns (uint wormholeSequence) {
@@ -139,7 +139,7 @@ contract Conductor is ConductorGovernance {
         }(0, ICCOStructs.encodeSaleAborted(ICCOStructs.SaleAborted({
             payloadID : 4,
             saleID : saleId
-        })), 15);
+        })), consistencyLevel());
     }
 
     function collectContribution(bytes memory encodedVm) public {
@@ -259,7 +259,7 @@ contract Conductor is ConductorGovernance {
             // attest sale success on wormhole
             wormholeSequence = wormhole.publishMessage{
                 value : accounting.messageFee
-            }(0, ICCOStructs.encodeSaleSealed(saleSealed), 15);
+            }(0, ICCOStructs.encodeSaleSealed(saleSealed), consistencyLevel());
         } else {
             // set saleAborted
             setSaleAborted(sale.saleID);
@@ -270,7 +270,7 @@ contract Conductor is ConductorGovernance {
             }(0, ICCOStructs.encodeSaleAborted(ICCOStructs.SaleAborted({
                 payloadID : 4,
                 saleID : saleId
-            })), 15);
+            })), consistencyLevel());
         }
     }
 

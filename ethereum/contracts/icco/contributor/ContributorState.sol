@@ -24,8 +24,8 @@ contract ContributorStorage {
         Provider provider;
 
         address owner;
-        
         address authority;
+        uint8 consistencyLevel;
 
         // Mapping of consumed governance actions
         mapping(bytes32 => bool) consumedGovernanceActions;

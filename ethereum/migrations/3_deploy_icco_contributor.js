@@ -13,6 +13,7 @@ const WormholeAddresses = require(`${ethereumRootPath}/wormhole-addresses.js`);
 const chainId = process.env.CONTRIBUTOR_CHAIN_ID;
 const conductorChainId = process.env.CONDUCTOR_CHAIN_ID;
 const kycSigner = process.env.KYC_SIGNER;
+const consistencyLevel = process.env.CONSISTENCY_LEVEL;
 
 const fs = require("fs");
 
@@ -64,7 +65,8 @@ module.exports = async function (deployer, network) {
       conductorAddress,
       kycSigner,
       addresses.wormhole,
-      addresses.tokenBridge
+      addresses.tokenBridge,
+      consistencyLevel,
     )
     .encodeABI();
 

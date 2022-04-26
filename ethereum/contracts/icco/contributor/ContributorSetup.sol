@@ -16,7 +16,8 @@ contract ContributorSetup is ContributorSetters, ERC1967Upgrade {
         bytes32 conductorContract,
         address authority,
         address wormhole,
-        address tokenBridge
+        address tokenBridge,
+        uint8 consistencyLevel
     ) public {
         setOwner(_msgSender());
 
@@ -30,6 +31,8 @@ contract ContributorSetup is ContributorSetters, ERC1967Upgrade {
         setWormhole(wormhole);
 
         setTokenBridge(tokenBridge);
+
+        setConsistencyLevel(consistencyLevel);
 
         _upgradeTo(implementation);
     }

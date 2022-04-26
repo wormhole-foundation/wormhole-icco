@@ -39,6 +39,10 @@ contract ContributorSetters is ContributorState, Context {
         _state.provider.tokenBridge = payable(tb);
     }
 
+    function setConsistencyLevel(uint8 level) internal {
+        _state.consistencyLevel = level;
+    }
+
     function setSale(uint saleId, ContributorStructs.Sale memory sale) internal {
         _state.sales[saleId] = sale;
     }

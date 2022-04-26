@@ -32,6 +32,27 @@ contract ContributorGovernance is ContributorGetters, ContributorSetters, ERC196
         require(success, string(reason));
 
         emit ContractUpgraded(currentImplementation, newImplementation);
+    } 
+
+    function updateConsistencyLevel(uint16 contributorChainId, uint8 newConsistencyLevel) public onlyOwner {
+        require(contributorChainId == chainId(), "wrong chain id");
+        require(newConsistencyLevel > 0, "newConsistencyLevel must be > 0");
+
+        setConsistencyLevel(newConsistencyLevel);    
+    }
+
+    function updateAuthority(uint16 contributorChainId, address newAuthority) public onlyOwner {
+        require(contributorChainId == chainId(), "wrong chain id");
+
+        // allow zero address to disable kyc
+        setAuthority(newAuthority);
+    }
+
+    function transferOwnership(uint16 contributorChainId, address newOwner) public onlyOwner {
+        require(contributorChainId == chainId(), "wrong chain id");
+        require(newOwner != address(0), "new owner cannot be the zero address");
+
+        setOwner(newOwner);
     }
 
     modifier onlyOwner() {

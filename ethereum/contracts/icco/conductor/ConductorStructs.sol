@@ -40,32 +40,6 @@ contract ConductorStructs {
         bool refundIsClaimed;
     }
 
-    struct RegisterChain {
-        // Governance Header
-        // module: "TokenSale" left-padded
-        bytes32 module;
-        // governance action: 1
-        uint8 action;
-        // governance paket chain id: this or 0
-        uint16 chainId;
-        // Chain ID
-        uint16 emitterChainID;
-        // Emitter address. Left-zero-padded if shorter than 32 bytes
-        bytes32 emitterAddress;
-    }
-
-    struct ConductorUpgrade {
-        // Governance Header
-        // module: "TokenSale" left-padded
-        bytes32 module;
-        // governance action: 2 for ConductorUpgrade
-        uint8 action;
-        // governance paket chain id
-        uint16 chainId;
-        // Address of the new contract
-        bytes32 newContract;
-    }
-
     struct InternalAccounting {
         // fees
         uint256 messageFee;

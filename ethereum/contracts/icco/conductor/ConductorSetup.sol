@@ -13,7 +13,8 @@ contract ConductorSetup is ConductorSetters, ERC1967Upgrade {
         address implementation,
         uint16 chainId,
         address wormhole,
-        address tokenBridge
+        address tokenBridge,
+        uint8 consistencyLevel
     ) public {
         setOwner(_msgSender());
 
@@ -22,6 +23,8 @@ contract ConductorSetup is ConductorSetters, ERC1967Upgrade {
         setWormhole(wormhole);
 
         setTokenBridge(tokenBridge);
+
+        setConsistencyLevel(consistencyLevel);
 
         _upgradeTo(implementation);
     }

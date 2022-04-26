@@ -7,6 +7,7 @@ const ICCOStructs = artifacts.require("ICCOStructs");
 
 const ethereumRootPath = `${__dirname}/..`;
 const WormholeAddresses = require(`${ethereumRootPath}/wormhole-addresses.js`);
+const consistencyLevel = process.env.CONSISTENCY_LEVEL;
 
 const chainId = process.env.CONDUCTOR_CHAIN_ID;
 
@@ -38,7 +39,8 @@ module.exports = async function (deployer, network) {
       ConductorImplementation.address,
       chainId,
       addresses.wormhole,
-      addresses.tokenBridge
+      addresses.tokenBridge,
+      consistencyLevel,
     )
     .encodeABI();
 

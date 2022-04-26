@@ -31,6 +31,10 @@ contract ConductorGetters is ConductorState {
         return _state.provider.chainId;
     }
 
+    function consistencyLevel() public view returns (uint8) {
+        return _state.consistencyLevel;
+    }
+
     function contributorContracts(uint16 chainId_) public view returns (bytes32){
         return _state.contributorImplementations[chainId_];
     }

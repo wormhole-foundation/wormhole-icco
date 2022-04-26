@@ -22,6 +22,8 @@ contract ConductorStorage {
 
         // contract deployer
         address owner;
+        // # of confirmations for wormhole messages
+        uint8 consistencyLevel;
 
         // Mapping of consumed governance actions
         mapping(bytes32 => bool) consumedGovernanceActions;

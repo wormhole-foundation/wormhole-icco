@@ -31,6 +31,10 @@ contract ConductorSetters is ConductorState, Context {
         _state.provider.tokenBridge = payable(tb);
     }
 
+    function setConsistencyLevel(uint8 level) internal {
+        _state.consistencyLevel = level;
+    }
+
     function setSale(uint saleId, ConductorStructs.Sale memory sale) internal {
         _state.sales[saleId] = sale;
     }

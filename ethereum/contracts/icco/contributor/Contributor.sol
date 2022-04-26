@@ -63,7 +63,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
         setSale(saleInit.saleID, sale);
     }
 
-    function verifySignature(bytes memory encodedHashData, bytes memory sig) public view returns (address key) {
+    function verifySignature(bytes memory encodedHashData, bytes memory sig) public pure returns (address key) {
         require(sig.length == 65, "incorrect signature length"); 
         require(encodedHashData.length > 0, "no hash data");
 
@@ -162,7 +162,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
 
         wormholeSequence = wormhole().publishMessage{
             value : msg.value
-        }(0, ICCOStructs.encodeContributionsSealed(consSealed), 15);
+        }(0, ICCOStructs.encodeContributionsSealed(consSealed), consistencyLevel());
     }
 
     function saleSealed(bytes memory saleSealedVaa) public payable {
@@ -345,5 +345,4 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
     function saleExists(uint saleId) public view returns (bool exists) {
         exists = (getSaleTokenAddress(saleId) != bytes32(0));
     }
-
 }

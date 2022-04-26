@@ -31,6 +31,10 @@ contract ContributorGetters is ContributorState {
         return ITokenBridge(payable(_state.provider.tokenBridge));
     }
 
+    function consistencyLevel() public view returns (uint8) {
+        return _state.consistencyLevel;
+    }
+
     function chainId() public view returns (uint16){
         return _state.provider.chainId;
     }

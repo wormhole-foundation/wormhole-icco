@@ -39,17 +39,4 @@ contract ContributorStructs {
         uint256[] allocations;
         uint256[] excessContributions;
     }
-
-    struct ContributorUpgrade {
-        // Governance Header
-        // module: "TokenSale" left-padded
-        bytes32 module;
-        // governance action: 3 for ContributorUpgrade
-        uint8 action;
-        // governance paket chain id
-        uint16 chainId;
-
-        // Address of the new contract
-        bytes32 newContract;
-    }
 }

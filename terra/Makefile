@@ -7,9 +7,9 @@ WASMS=$(patsubst %, artifacts/%.wasm, $(PACKAGES))
 
 -include ../Makefile.help
 
-.PHONY: artifacts
+.PHONY: build
 ## Build contracts.
-artifacts: artifacts/checksums.txt
+build: artifacts/checksums.txt
 
 VALID_mainnet=1
 VALID_testnet=1
@@ -51,6 +51,4 @@ test:
 
 .PHONY: clean
 clean:
-	rm -f $(WASMS)
-	rm -f artifacts/checksums.txt
-	rm -rf tools/node_modules
+	rm -f $(WASMS) artifacts/checksums.txt tools/node_modules

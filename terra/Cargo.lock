@@ -428,7 +428,7 @@ dependencies = [
 [[package]]
 name = "cw20-wrapped"
 version = "0.1.0"
-source = "git+https://github.com/certusone/wormhole?branch=feat/token-bridge-proxy#ef08c8550c4c8c460a0a2ab0952d0772adae3bdb"
+source = "git+https://github.com/certusone/wormhole?branch=feat/token-bridge-proxy"
 dependencies = [
  "cosmwasm-std",
  "cosmwasm-storage",
@@ -1426,7 +1426,7 @@ dependencies = [
 [[package]]
 name = "token-bridge-terra"
 version = "0.1.0"
-source = "git+https://github.com/certusone/wormhole?branch=feat/token-bridge-proxy#ef08c8550c4c8c460a0a2ab0952d0772adae3bdb"
+source = "git+https://github.com/certusone/wormhole?branch=feat/token-bridge-proxy"
 dependencies = [
  "bigint",
  "cosmwasm-std",
@@ -1776,7 +1776,7 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 [[package]]
 name = "wormhole-bridge-terra"
 version = "0.1.0"
-source = "git+https://github.com/certusone/wormhole?branch=feat/token-bridge-proxy#ef08c8550c4c8c460a0a2ab0952d0772adae3bdb"
+source = "git+https://github.com/certusone/wormhole?branch=feat/token-bridge-proxy"
 dependencies = [
  "cosmwasm-std",
  "cosmwasm-storage",

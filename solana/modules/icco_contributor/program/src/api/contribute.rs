@@ -14,7 +14,9 @@ use crate::{
         CustodyAccountDerivationData,
         ContributionStateAccount,
         ContributionStateAccountDerivationData,
+        AuthoritySigner,
     },
+    errors::Error::*,
     types::*,
 };
 
@@ -62,6 +64,7 @@ pub struct ContributeIccoSale<'b> {
 
     pub from: Mut<Data<'b, SplAccount, { AccountState::Initialized }>>,     // From account
     pub mint: Mut<Data<'b, SplMint, { AccountState::Initialized }>>,        // From token
+    pub authority_signer: AuthoritySigner<'b>,
 
     pub custody_signer: CustodySigner<'b>,
     pub custody: Mut<CustodyAccount<'b, { AccountState::MaybeInitialized }>>,   // TBD Move custody Account init to separate call. By Sale creator before init sale. In case sale creator needs to pay for it.
@@ -80,6 +83,7 @@ impl<'a> From<&ContributeIccoSale<'a>> for SaleStateDerivationData {
 impl<'a> From<&ContributeIccoSale<'a>> for CustodyAccountDerivationData {
     fn from(accs: &ContributeIccoSale<'a>) -> Self {
         CustodyAccountDerivationData {
+            sale_id: accs.init_sale_vaa.sale_id,
             mint: *accs.mint.info().key,
         }
     }
@@ -98,7 +102,8 @@ impl<'a> From<&ContributeIccoSale<'a>> for ContributionStateAccountDerivationDat
 
 #[derive(BorshDeserialize, BorshSerialize, Default)]
 pub struct ContributeIccoSaleData {
-    amount: u128,
+    amount: u64,
+    token_idx: u8,
 }
 
 impl<'b> InstructionContext<'b> for ContributeIccoSale<'b> {
@@ -110,6 +115,34 @@ pub fn contribute_icco_sale(
     data: ContributeIccoSaleData,
 ) -> Result<()> {
     msg!("bbrp in contribute_icco_sale!");
+
+    // Check sale status.
+    if accs.sale_state.is_sealed || accs.sale_state.is_aborted {
+        return Err(SaleSealedOrAborted.into());
+    }
+
+    // Check if sale started.
+    // require(block.timestamp >= start, "sale not yet started");
+    // require(block.timestamp <= end, "sale has ended");
+    let now_time = accs.clock.unix_timestamp as u128;       // i64 ->u128
+    if now_time < accs.init_sale_vaa.get_sale_start(&accs.init_sale_vaa.meta().payload[..]).0 {
+        return Err(SaleHasNotStarted.into());
+    }
+    if now_time > accs.init_sale_vaa.get_sale_end(&accs.init_sale_vaa.meta().payload[..]).0 {
+        return Err(SaleHasEnded.into());
+    }
+
+    // Make sure token Idx matches passed in token mint addr.
+    let token_idx = data.token_idx;
+    if token_idx >= accs.init_sale_vaa.token_cnt {
+        return Err(InvalidTokenIndex.into());
+    }
+    let token_idx = usize::from(token_idx);
+    let &token_addr = &accs.init_sale_vaa.get_accepted_token_address(token_idx, &accs.init_sale_vaa.meta().payload[..]);
+    let token_chain = accs.init_sale_vaa.get_accepted_token_chain(token_idx, &accs.init_sale_vaa.meta().payload[..]);
+    if &token_addr != accs.mint.info().key || token_chain != CHAIN_ID_SOLANA {
+        return Err(InvalidTokenAddress.into());
+    }
 
     // Create and init custody account as needed.
     // https://github.com/certusone/wormhole/blob/1792141307c3979b1f267af3e20cfc2f011d7051/solana/modules/token_bridge/program/src/api/transfer.rs#L159
@@ -130,7 +163,16 @@ pub fn contribute_icco_sale(
         accs.contribution_state.create(&(&*accs).into(), ctx, accs.payer.key, Exempt)?;
     }
 
-    // TBD Do the from->custody non-WH transfer.
+    // TBD Transfer tokens  from->custody non-WH transfer.
+    let transfer_ix = spl_token::instruction::transfer(
+        &spl_token::id(),
+        accs.from.info().key,
+        accs.custody.info().key,
+        accs.authority_signer.key,
+        &[],
+        data.amount,
+    )?;
+    invoke_seeded(&transfer_ix, ctx, &accs.authority_signer, None)?;
 
     // store new amount.
     accs.contribution_state.amount = accs.contribution_state.amount + data.amount;

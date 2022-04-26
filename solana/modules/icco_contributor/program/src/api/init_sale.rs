@@ -29,14 +29,10 @@ use crate::{
         SaleStateAccount,
         SaleStateDerivationData,
     },
-};
-
-use crate:: {
     errors::Error::{
         VAAInvalidEmitterChain,
-    }
+    },
 };
-
 
 use solana_program::msg;
 

@@ -27,8 +27,8 @@ impl Owned for Config {
 /// icco sale state. Writeable in init, seal, abort.
 #[derive(Default, Clone, Copy, BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 pub struct SaleState {
-    pub is_sealed: u8,
-    pub is_aborted: u8,
+    pub is_sealed: bool,
+    pub is_aborted: bool,
 }
 
 impl Owned for SaleState {
@@ -41,7 +41,7 @@ impl Owned for SaleState {
 /// icco contribution state. Writeable in contribute, redeem, refund.
 #[derive(Default, Clone, Copy, BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 pub struct ContributionState {
-    pub amount: u128,
+    pub amount: u64,
     pub is_redeemed_or_refunded: u8,
 }
 

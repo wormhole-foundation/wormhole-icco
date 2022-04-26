@@ -74,6 +74,7 @@ impl<'b, const STATE: AccountState> Seeded<&ContributionStateAccountDerivationDa
 pub type CustodyAccount<'b, const STATE: AccountState> = Data<'b, SplAccount, { STATE }>;
 
 pub struct CustodyAccountDerivationData {
+    pub sale_id: u128,
     pub mint: Pubkey,
 }
 

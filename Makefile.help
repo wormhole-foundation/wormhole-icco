@@ -1,4 +1,4 @@
-## This help screen
+## List All Commands
 help:
 	@printf "Available targets:\n\n"
 	@awk '/^[a-zA-Z\-\_0-9%:\\]+/ { \

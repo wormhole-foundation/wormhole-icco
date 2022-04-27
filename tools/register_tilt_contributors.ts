@@ -70,14 +70,12 @@ async function main() {
       contributorAddress,
       wallet
     );
-    console.log("tx", receipt.blockHash);
 
     const check = await getContributorContractOnEth(
       tilt.conductorAddress,
       provider,
       emitter.chainId
     );
-    console.log(check);
   }
 
   return;

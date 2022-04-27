@@ -10,11 +10,8 @@ clean:
 	cd ethereum && make clean
 	cd terra && make clean
 	cd sdk/js && rm -rf node_modules contracts lib src/icco/__tests__/tilt.json
-<<<<<<< Updated upstream
-=======
 	cd tools && rm -rf node_modules lib
 	rm -f tilt.json
->>>>>>> Stashed changes
 
 .PHONY: ethereum
 ## Build Ethereum contracts

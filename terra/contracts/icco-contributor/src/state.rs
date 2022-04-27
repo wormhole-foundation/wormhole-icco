@@ -1,16 +1,17 @@
-use cosmwasm_std::{StdResult, Storage, Uint256};
+use cosmwasm_std::{StdResult, Storage, Uint128};
 use cw_storage_plus::{Item, Map, U8Key};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use terraswap::asset::AssetInfo;
 use wormhole::byte_utils::ByteUtils;
 
-use crate::shared::{AcceptedToken, SaleCore, SaleStatus, SaleTimes};
+use icco::common::{AcceptedToken, SaleCore, SaleStatus, SaleTimes};
 
 // per sale_id and token_index, we need to track a buyer's contribution, as well as whether
 // he has been refunded or his allocations have been claimed
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct BuyerStatus {
-    pub contribution: Uint256,
+    pub contribution: Uint128,
     pub allocation_is_claimed: bool,
     pub refund_is_claimed: bool,
 }
@@ -21,6 +22,7 @@ pub struct Config {
     pub token_bridge_contract: HumanAddr,
     pub conductor_chain: u16,
     pub conductor_address: Vec<u8>,
+    pub owner: HumanAddr,
 }
 
 pub struct SaleMessage<'a> {
@@ -33,24 +35,30 @@ pub struct UpgradeContract {
     pub new_contract: u64,
 }
 */
+pub struct UserAction;
+
+impl UserAction {
+    pub const CONTRIBUTE: u8 = 1;
+}
 
 pub type HumanAddr = String;
 pub type SaleId<'a> = &'a [u8];
 pub type TokenIndexKey<'a> = (SaleId<'a>, U8Key);
 pub type BuyerTokenIndexKey<'a> = (SaleId<'a>, U8Key, &'a HumanAddr);
 
-pub const CHAIN_ID: u16 = 3;
-
 pub const CONFIG: Item<Config> = Item::new("config");
 pub const SALES: Map<SaleId, SaleCore> = Map::new("sales");
 pub const SALE_STATUSES: Map<SaleId, SaleStatus> = Map::new("sale_statuses");
 pub const SALE_TIMES: Map<SaleId, SaleTimes> = Map::new("sale_times");
-pub const ACCEPTED_TOKENS: Map<(SaleId, U8Key), AcceptedToken> = Map::new("accepted_tokens");
-pub const TOTAL_CONTRIBUTIONS: Map<TokenIndexKey, Uint256> = Map::new("total_contributions");
-pub const TOTAL_ALLOCATIONS: Map<TokenIndexKey, Uint256> = Map::new("total_allocations");
-//const BUYER_STATUS: Map<BuyerTokenIndexKey, BuyerStatus> = Map::new("buyer_statuses");
+pub const ACCEPTED_ASSETS: Map<TokenIndexKey, AssetInfo> = Map::new("accepted_tokens");
+pub const ACCEPTED_TOKENS: Map<TokenIndexKey, AcceptedToken> = Map::new("accepted_tokens");
+pub const TOTAL_CONTRIBUTIONS: Map<TokenIndexKey, Uint128> = Map::new("total_contributions");
+pub const TOTAL_ALLOCATIONS: Map<TokenIndexKey, Uint128> = Map::new("total_allocations");
+pub const BUYER_STATUSES: Map<BuyerTokenIndexKey, BuyerStatus> = Map::new("buyer_statuses");
+//pub const USER_ACTIONS: Map<SaleId, u8> = Map::new("user_actions");
+//pub const TOKEN_CONTRIBUTE_TMP = Item<> = Item::new("token_contribute_tmp");
 
-pub const ZERO_AMOUNT: Uint256 = Uint256::zero();
+pub const ZERO_AMOUNT: Uint128 = Uint128::zero();
 
 pub fn load_accepted_token(
     storage: &dyn Storage,
@@ -64,7 +72,7 @@ pub fn load_total_contribution(
     storage: &dyn Storage,
     sale_id: &[u8],
     token_index: u8,
-) -> StdResult<Uint256> {
+) -> StdResult<Uint128> {
     TOTAL_CONTRIBUTIONS.load(storage, (sale_id, token_index.into()))
 }
 
@@ -72,7 +80,7 @@ pub fn load_total_allocation(
     storage: &dyn Storage,
     sale_id: &[u8],
     token_index: u8,
-) -> StdResult<Uint256> {
+) -> StdResult<Uint128> {
     TOTAL_ALLOCATIONS.load(storage, (sale_id, token_index.into()))
 }
 

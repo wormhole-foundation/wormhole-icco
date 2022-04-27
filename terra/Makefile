@@ -47,7 +47,7 @@ tools/node_modules: tools/package-lock.json
 ## Run linter and unit tests
 test:
 #	cargo clippy
-	cargo test
+	cargo test -- --nocapture
 
 .PHONY: clean
 clean:

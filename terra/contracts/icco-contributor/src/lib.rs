@@ -6,7 +6,6 @@ mod error;
 mod execute;
 mod msg;
 mod query;
-mod shared;
 mod state;
 
 #[cfg(test)]

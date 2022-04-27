@@ -1,3 +1,9 @@
+use cosmwasm_std::testing::{mock_env, mock_info};
+use cosmwasm_std::{from_binary, Binary, StdResult, Uint128, Uint256};
+use std::string::String;
+
+use icco::common::{SaleAborted, SaleSealed};
+
 use crate::{
     contract::{execute, instantiate, query},
     msg::{
@@ -5,16 +11,9 @@ use crate::{
         SaleRegistryResponse, SaleStatusResponse, SaleTimesResponse, TotalAllocationResponse,
         TotalContributionResponse,
     },
-    shared::{SaleAborted, SaleSealed},
     state::SaleMessage,
     testing::mock_querier::mock_dependencies,
 };
-use cosmwasm_std::testing::{mock_env, mock_info};
-use cosmwasm_std::{from_binary, to_binary, Binary, StdResult, Uint256};
-
-use std::string::String;
-
-use wormhole::byte_utils::ByteUtils;
 
 /*
 
@@ -142,11 +141,10 @@ use wormhole::byte_utils::ByteUtils;
     saleAborted vaa 0x010000000001003f2c65c95e0309fec40c863e6f9d318141c7febc648f87f9f65ba43e64c33840574e461593dffc11a8d577bd0c8e9fe9368b5789fd2cc30e6fe0faf1699af53400000004900000000000020000000000000000000000005f8e26facc23fa4cbd87b8d9dbbd33d5047abde100000000000000030f040000000000000000000000000000000000000000000000000000000000000001
 */
 
-const ADDRESS_ZERO: [u8; 32] = [0u8; 32];
-
 #[test]
 fn proper_initialization() -> StdResult<()> {
     let mut deps = mock_dependencies(&[]);
+    let info = mock_info("creator", &[]);
 
     let conductor_chain = 2u16;
     let conductor_address = "0000000000000000000000005f8e26facc23fa4cbd87b8d9dbbd33d5047abde1";
@@ -154,14 +152,12 @@ fn proper_initialization() -> StdResult<()> {
     let conductor_address = conductor_address.as_slice();
 
     let msg = InstantiateMsg {
-        gov_chain: 1,
-        gov_address: Binary::from(Vec::from(ADDRESS_ZERO)),
         wormhole_contract: String::new(),
         token_bridge_contract: String::new(),
         conductor_chain: conductor_chain,
         conductor_address: Binary::from(conductor_address),
+        owner: info.sender.to_string(),
     };
-    let info = mock_info("creator", &[]);
 
     let response = instantiate(deps.as_mut(), mock_env(), info, msg.clone())?;
     assert_eq!(
@@ -189,25 +185,22 @@ fn proper_initialization() -> StdResult<()> {
 #[test]
 fn init_sale() -> StdResult<()> {
     let mut deps = mock_dependencies(&[]);
-
-    let env = mock_env();
     let info = mock_info("creator", &[]);
 
     let conductor_chain = 2u16;
-    let conductor_address = "0000000000000000000000005f8e26facc23fa4cbd87b8d9dbbd33d5047abde1";
+    let conductor_address = "000000000000000000000000f19a2a01b70519f67adb309a994ec8c69a967e8b";
     let conductor_address = hex::decode(conductor_address).unwrap();
     let conductor_address = conductor_address.as_slice();
 
     let msg = InstantiateMsg {
-        gov_chain: 1,
-        gov_address: Binary::from(Vec::from(ADDRESS_ZERO)),
         wormhole_contract: String::new(),
         token_bridge_contract: String::new(),
         conductor_chain: conductor_chain,
         conductor_address: Binary::from(conductor_address),
+        owner: info.sender.to_string(),
     };
 
-    let response = instantiate(deps.as_mut(), env.clone(), info, msg)?;
+    let response = instantiate(deps.as_mut(), mock_env(), info, msg)?;
     assert_eq!(
         response.messages.len(),
         0,
@@ -215,35 +208,33 @@ fn init_sale() -> StdResult<()> {
     );
 
     let signed_vaa = "\
-        01000000000100fd75a4cd9fe22519fbe7856267f59d0e0bf9931bf8a7733de4\
-        e7b576451ae1b3309c9adee5c96e82e9b06b03fa16e189e3fe9eff132c1f9ce9\
-        22710524a6476300000003880000000000020000000000000000000000005f8e\
-        26facc23fa4cbd87b8d9dbbd33d5047abde100000000000000000f0100000000\
+        01000000000100ae0eda623b8aae9bde03c68922ac218bb0c3aa9c5ea0a70a7a\
+        caea0a46d0915a7b3a06758250e44e6c543a37ea1097b85be6f75bd07127b802\
+        38ed6e6b73cbc00000000563000000000002000000000000000000000000f19a\
+        2a01b70519f67adb309a994ec8c69a967e8b00000000000000000f0100000000\
         0000000000000000000000000000000000000000000000000000000000000000\
         000000000000000083752ecafebf4707258dedffbd9c7443148169db00020000\
         000000000000000000000000000000000000000000000de0b6b3a76400000000\
         000000000000000000000000000000000000000000008ac7230489e800000000\
-        00000000000000000000000000000000000000000000000000000000038c0000\
-        0000000000000000000000000000000000000000000000000000000003c80600\
+        00000000000000000000000000000000000000000000c249fdd3277800000000\
+        0000000000000000000000000000000000000000000000000000000005670000\
+        0000000000000000000000000000000000000000000000000000000005a30400\
         0000000000000000000000ddb64fe46a91d46ee29420539fc25fd07c5fea3e00\
         0200000000000000000de0b6b3a7640000000000000000000000000000ddb64f\
         e46a91d46ee29420539fc25fd07c5fea3e0004000000000000000002c68af0bb\
         1400000000000000000000000000008a5bbc20ad253e296f61601e868a3206b2\
         d4774c0002000000000000000002c68af0bb1400000000000000000000000000\
         003d9e7a12daa29a8b2b1bfaa9dc97ce018853ab31000400000000000000000d\
-        e0b6b3a7640000000000000000000000000000ddb64fe46a91d46ee29420539f\
-        c25fd07c5fea3e0004000000000000000002c68af0bb14000000000000000000\
-        0000000000ddb64fe46a91d46ee29420539fc25fd07c5fea3e00040000000000\
-        00000002c68af0bb14000000000000000000000000000022d491bde2303f2f43\
-        325b2108d26f1eaba1e32b00000000000000000000000022d491bde2303f2f43\
-        325b2108d26f1eaba1e32b";
+        e0b6b3a764000000000000000000000000000022d491bde2303f2f43325b2108\
+        d26f1eaba1e32b00000000000000000000000022d491bde2303f2f43325b2108\
+        d26f1eaba1e32b";
     let signed_vaa = hex::decode(signed_vaa).unwrap();
 
     let info = mock_info("addr0001", &[]);
     let msg = ExecuteMsg::InitSale {
         data: Binary::from(signed_vaa.as_slice()),
     };
-    let _response = execute(deps.as_mut(), env.clone(), info, msg)?;
+    let _response = execute(deps.as_mut(), mock_env(), info, msg)?;
 
     let sale_id = "0000000000000000000000000000000000000000000000000000000000000000";
     let sale_id = hex::decode(sale_id).unwrap();
@@ -344,10 +335,13 @@ fn init_sale() -> StdResult<()> {
     let min_raise = Uint256::from(10_000_000_000_000_000_000u128);
     assert_eq!(sale.min_raise, min_raise, "sale.min_raise != expected");
 
-    let sale_start = 908u64;
+    let max_raise = Uint256::from(10_000_000_000_000_000_000u128);
+    assert_eq!(sale.min_raise, max_raise, "sale.max_raise != expected");
+
+    let sale_start = 1383u64;
     assert_eq!(sale.sale_start, sale_start, "sale.sale_start != expected");
 
-    let sale_end = 968u64;
+    let sale_end = 1443u64;
     assert_eq!(sale.sale_end, sale_end, "sale.sale_end != expected");
 
     let recipient = "00000000000000000000000022d491bde2303f2f43325b2108d26f1eaba1e32b";
@@ -380,8 +374,6 @@ fn init_sale() -> StdResult<()> {
         "000000000000000000000000ddb64fe46a91d46ee29420539fc25fd07c5fea3e",
         "0000000000000000000000008a5bbc20ad253e296f61601e868a3206b2d4774c",
         "0000000000000000000000003d9e7a12daa29a8b2b1bfaa9dc97ce018853ab31",
-        "000000000000000000000000ddb64fe46a91d46ee29420539fc25fd07c5fea3e",
-        "000000000000000000000000ddb64fe46a91d46ee29420539fc25fd07c5fea3e",
     ]);
     let accepted_token_chains = Vec::from([2u16, 4u16, 2u16, 4u16, 4u16, 4u16]);
     let accepted_token_conversion_rates = Vec::from([
@@ -389,8 +381,6 @@ fn init_sale() -> StdResult<()> {
         200_000_000_000_000_000u128,
         200_000_000_000_000_000u128,
         1_000_000_000_000_000_000u128,
-        200_000_000_000_000_000u128,
-        200_000_000_000_000_000u128,
     ]);
 
     let n_accepted_tokens = accepted_token_addresses.len();
@@ -432,7 +422,7 @@ fn init_sale() -> StdResult<()> {
         let total_contribution: TotalContributionResponse = from_binary(&response)?;
         assert_eq!(
             total_contribution.amount,
-            Uint256::zero(),
+            Uint128::zero(),
             "total_contribution.amount != 0"
         );
 
@@ -447,7 +437,7 @@ fn init_sale() -> StdResult<()> {
         let total_allocation: TotalAllocationResponse = from_binary(&response)?;
         assert_eq!(
             total_allocation.amount,
-            Uint256::zero(),
+            Uint128::zero(),
             "total_allocation.amount != 0"
         );
     }

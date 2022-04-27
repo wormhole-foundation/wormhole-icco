@@ -30,6 +30,7 @@ pub fn query_sale_registry(deps: Deps, sale_id: &Binary) -> StdResult<SaleRegist
             token_chain: sale.token_chain,
             token_amount: sale.token_amount,
             min_raise: sale.min_raise,
+            max_raise: sale.max_raise,
             sale_start: sale.times.start,
             sale_end: sale.times.end,
             recipient: sale.recipient,

@@ -1,5 +1,8 @@
 [workspace]
-members = ["contracts/icco-contributor"]
+members = [
+    "packages/*",
+    "contracts/icco-contributor"
+]
 
 [profile.release]
 opt-level = 3

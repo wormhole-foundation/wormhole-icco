@@ -15,9 +15,6 @@ use crate::{
     state::{Config, CONFIG},
 };
 
-// Chain ID of Terra
-pub const CHAIN_ID: u16 = 3;
-
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Response> {
     Ok(Response::new())
@@ -27,14 +24,15 @@ pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Respons
 pub fn instantiate(
     deps: DepsMut,
     _env: Env,
-    _info: MessageInfo,
+    info: MessageInfo,
     msg: InstantiateMsg,
 ) -> StdResult<Response> {
     let cfg = Config {
         wormhole_contract: msg.wormhole_contract,
         token_bridge_contract: msg.token_bridge_contract,
         conductor_chain: msg.conductor_chain,
-        conductor_address: msg.conductor_address.as_slice().to_vec(),
+        conductor_address: msg.conductor_address.into(),
+        owner: info.sender.to_string(),
     };
     CONFIG.save(deps.storage, &cfg)?;
 

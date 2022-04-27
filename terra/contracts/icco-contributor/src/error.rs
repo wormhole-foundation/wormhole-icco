@@ -47,6 +47,12 @@ pub enum ContributorError {
 
     #[error("WrongChain")]
     WrongChain,
+
+    #[error("NonexistentToken")]
+    NonexistentToken,
+
+    #[error("NonexistentDenom")]
+    NonexistentDenom,
 }
 
 impl ContributorError {

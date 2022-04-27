@@ -1,15 +1,14 @@
 [package]
-name = "icco-contributor"
+name = "icco"
 version = "0.1.0"
 edition = "2018"
-description = "Wormhole ICCO Contributor"
+description = "Common ICCO Types"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [features]
 backtraces = ["cosmwasm-std/backtraces"]
-# use library feature to disable all init/handle/query exports
 library = []
 
 [dependencies]
@@ -27,10 +26,6 @@ generic-array = { version = "0.14.4" }
 hex = "0.4.2"
 lazy_static = "1.4.0"
 bigint = "4"
-
-wormhole-bridge-terra = { git = "https://github.com/certusone/wormhole", branch = "feat/token-bridge-proxy", features = ["library"]}
-token-bridge-terra = { git = "https://github.com/certusone/wormhole", branch="feat/token-bridge-proxy", features = ["library"] }
-icco = { path = "../../packages/icco", features = ["library"] }
 
 [dev-dependencies]
 cosmwasm-vm = { version = "0.16.0", default-features = false }

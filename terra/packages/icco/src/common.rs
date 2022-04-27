@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use cosmwasm_std::{Api, CanonicalAddr, DepsMut, StdError, StdResult, Uint128, Uint256};
 use terraswap::asset::{Asset, AssetInfo};
 
-use wormhole::byte_utils::ByteUtils;
+use crate::byte_utils::ByteUtils;
 
 // Chain ID of Terra
 pub const CHAIN_ID: u16 = 3;

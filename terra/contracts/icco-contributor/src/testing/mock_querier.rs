@@ -26,20 +26,6 @@ pub fn mock_dependencies(
 
 pub struct WasmMockQuerier {
     base: MockQuerier<Empty>,
-    minter_querier: MinterQuerier,
-}
-
-#[derive(Clone, Default)]
-pub struct MinterQuerier {
-    minter_addr: String,
-}
-
-impl MinterQuerier {
-    pub fn new(minter: String) -> Self {
-        MinterQuerier {
-            minter_addr: minter,
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -85,13 +71,6 @@ impl WasmMockQuerier {
 
 impl WasmMockQuerier {
     pub fn new(base: MockQuerier<Empty>) -> Self {
-        WasmMockQuerier {
-            base,
-            minter_querier: MinterQuerier::default(),
-        }
-    }
-
-    pub fn with_anc_minter(&mut self, minter: String) {
-        self.minter_querier = MinterQuerier::new(minter);
+        WasmMockQuerier { base }
     }
 }

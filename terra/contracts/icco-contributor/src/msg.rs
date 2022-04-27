@@ -6,15 +6,13 @@ use std::string::String;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
-    // governance contract details
-    pub gov_chain: u16,
-    pub gov_address: Binary,
-
     pub wormhole_contract: String,
     pub token_bridge_contract: String,
 
     pub conductor_chain: u16,
     pub conductor_address: Binary,
+
+    pub owner: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -26,7 +24,7 @@ pub enum ExecuteMsg {
     Contribute {
         sale_id: Binary,
         token_index: u8,
-        amount: Uint256,
+        amount: Uint128,
     },
     AttestContributions {
         sale_id: Binary,
@@ -78,6 +76,7 @@ pub struct SaleRegistryResponse {
     pub token_chain: u16,
     pub token_amount: Uint256,
     pub min_raise: Uint256,
+    pub max_raise: Uint256,
     pub sale_start: u64,
     pub sale_end: u64,
     pub recipient: Vec<u8>,
@@ -115,7 +114,7 @@ pub struct AcceptedTokenResponse {
 pub struct TotalContributionResponse {
     pub id: Vec<u8>,
     pub token_index: u8,
-    pub amount: Uint256,
+    pub amount: Uint128,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -123,5 +122,5 @@ pub struct TotalContributionResponse {
 pub struct TotalAllocationResponse {
     pub id: Vec<u8>,
     pub token_index: u8,
-    pub amount: Uint256,
+    pub amount: Uint128,
 }

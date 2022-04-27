@@ -1,24 +1,44 @@
 use cosmwasm_std::{
     to_binary, Binary, CosmosMsg, Deps, DepsMut, Env, MessageInfo, Order, QueryRequest, Response,
-    StdError, StdResult, Storage, Uint256, WasmMsg, WasmQuery,
+    StdError, StdResult, Storage, Uint128, WasmMsg, WasmQuery,
+};
+use terraswap::{
+    asset::AssetInfo,
+    querier::{query_balance, query_token_balance},
 };
 
+use token_bridge_terra::contract::coins_after_tax;
 use wormhole::{
     msg::{ExecuteMsg as WormholeExecuteMsg, QueryMsg as WormholeQueryMsg},
     state::ParsedVAA,
 };
 
+use icco::common::{
+    AcceptedToken, ContributionsSealed, SaleAborted, SaleInit, SaleSealed, SaleStatus, CHAIN_ID,
+};
+
 use crate::{
     error::ContributorError,
-    shared::{AcceptedToken, ContributionsSealed, SaleAborted, SaleInit, SaleSealed, SaleStatus},
     state::{
-        SaleMessage, TokenIndexKey, ACCEPTED_TOKENS, CHAIN_ID, CONFIG, SALES, SALE_STATUSES,
-        SALE_TIMES, TOTAL_ALLOCATIONS, TOTAL_CONTRIBUTIONS, ZERO_AMOUNT,
+        load_accepted_token,
+        SaleMessage,
+        TokenIndexKey,
+        UserAction,
+        ACCEPTED_ASSETS,
+        ACCEPTED_TOKENS,
+        CONFIG,
+        SALES,
+        SALE_STATUSES,
+        SALE_TIMES,
+        TOTAL_ALLOCATIONS,
+        TOTAL_CONTRIBUTIONS, //USER_ACTIONS,
+        ZERO_AMOUNT,
     },
 };
 
 // nonce means nothing?
 const WORMHOLE_NONCE: u32 = 0;
+const NATIVE_DENOM_START_INDEX: usize = 28;
 
 pub fn init_sale(deps: DepsMut, env: Env, _info: MessageInfo, vaa: &Binary) -> StdResult<Response> {
     let parsed = parse_vaa(deps.as_ref(), env.block.time.seconds(), vaa)?;
@@ -62,8 +82,28 @@ pub fn init_sale(deps: DepsMut, env: Env, _info: MessageInfo, vaa: &Binary) -> S
 
         let key: TokenIndexKey = (sale_id, token_index.into());
         if token.chain == CHAIN_ID {
-            // TODO: check if token is actual CW20
+            let querier = &deps.querier;
+            let this = env.contract.address.clone();
+
+            // attempt to check balances to verify existence
+            let asset_info = token.make_asset_info(deps.api)?;
+            match asset_info.clone() {
+                AssetInfo::NativeToken { denom } => {
+                    if query_balance(querier, this, denom).is_err() {
+                        return ContributorError::NonexistentDenom.std_err();
+                    }
+                }
+                AssetInfo::Token { contract_addr } => {
+                    let validated = deps.api.addr_validate(contract_addr.as_str())?;
+                    if query_token_balance(querier, validated, this).is_err() {
+                        return ContributorError::NonexistentToken.std_err();
+                    }
+                }
+            }
+
+            ACCEPTED_ASSETS.save(storage, key.clone(), &asset_info)?;
         }
+
         ACCEPTED_TOKENS.save(storage, key.clone(), &token)?;
         TOTAL_CONTRIBUTIONS.save(storage, key.clone(), &ZERO_AMOUNT)?;
         TOTAL_ALLOCATIONS.save(storage, key.clone(), &ZERO_AMOUNT)?;
@@ -77,22 +117,27 @@ pub fn init_sale(deps: DepsMut, env: Env, _info: MessageInfo, vaa: &Binary) -> S
         .add_attribute("token_address", hex::encode(&sale.token_address)))
 }
 
+// TODO : add signature argument
 pub fn contribute(
     mut deps: DepsMut,
     env: Env,
     info: MessageInfo,
     sale_id: &[u8],
     token_index: u8,
-    amount: Uint256,
+    amount: Uint128,
 ) -> StdResult<Response> {
-    // TODO : add signature argument
-    let storage = deps.storage;
-    let status = SALE_STATUSES.load(storage, sale_id)?;
+    //if USER_ACTIONS.load(deps.storage, sale_id).is_ok() {
+    //    return Err(StdError::generic_err("user action exists"));
+    //}
+
+    //USER_ACTIONS.save(deps.storage, sale_id, &UserAction::CONTRIBUTE);
+
+    let status = SALE_STATUSES.load(deps.storage, sale_id)?;
     if status.is_aborted {
         return ContributorError::SaleAborted.std_err();
     }
 
-    let times = SALE_TIMES.load(storage, sale_id)?;
+    let times = SALE_TIMES.load(deps.storage, sale_id)?;
     let now = env.block.time.seconds();
     if now < times.start {
         return ContributorError::SaleNotStarted.std_err();
@@ -100,17 +145,87 @@ pub fn contribute(
         return ContributorError::SaleEnded.std_err();
     }
 
-    let token = ACCEPTED_TOKENS.load(storage, (sale_id, token_index.into()))?;
-    if token.chain != CHAIN_ID {
-        return ContributorError::WrongChain.std_err();
+    let asset_info = ACCEPTED_ASSETS.load(deps.storage, (sale_id, token_index.into()))?;
+
+    //let token = ACCEPTED_TOKENS.load(deps.storage, (sale_id, token_index.into()))?;
+    //if token.chain != CHAIN_ID {
+    //    return ContributorError::WrongChain.std_err();
+    //}
+
+    match asset_info {
+        AssetInfo::NativeToken { denom } => {
+            contribute_native(deps, env, info, sale_id, token_index, &denom, amount)
+        }
+        AssetInfo::Token { contract_addr } => contribute_token(
+            deps,
+            env,
+            info,
+            sale_id,
+            token_index,
+            &contract_addr,
+            amount,
+        ),
     }
 
+    /*
+    let new_balance: BalanceResponse =
+        deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
+            contract_addr: state.token_address.clone(),
+            msg: to_binary(&TokenQuery::Balance {
+                address: env.contract.address.to_string(),
+            })?,
+        }))?;
+
+    */
     //assert!(USER_ACTION.load(deps.storage).is_err());
+}
+
+pub fn contribute_native(
+    mut deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    sale_id: &[u8],
+    token_index: u8,
+    denom: &String,
+    amount: Uint128,
+) -> StdResult<Response> {
+    // TODO: do I handle reply after this?
+    // USER_ACTIONS.remove(deps.storage, sale_id)?
+    Ok(Response::new()
+        .add_attribute("action", "contribute_native")
+        .add_attribute("sale_id", Binary::from(sale_id).to_base64())
+        .add_attribute("denom", denom)
+        .add_attribute("amount", amount.to_string()))
+}
+
+pub fn contribute_token(
+    mut deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    sale_id: &[u8],
+    token_index: u8,
+    contract_addr: &String,
+    amount: Uint128,
+) -> StdResult<Response> {
+    // check balance
+    /*
+    let balance: BalanceResponse = deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
+        contract_addr: contract_addr.clone(),
+        msg: to_binary(&TokenQuery::Balance {
+            address: env.contract.address.to_string(),
+        })?,
+    }))?;
+    */
+
+    let querier = &deps.querier;
+    let validated = deps.api.addr_validate(contract_addr.as_str())?;
+    let balance = query_token_balance(querier, validated, env.contract.address.clone())?;
 
     Ok(Response::new()
-        .add_attribute("action", "contribute")
+        .add_attribute("action", "contribute_token")
         .add_attribute("sale_id", Binary::from(sale_id).to_base64())
-        .add_attribute("token_address", Binary::from(token.address).to_base64()))
+        .add_attribute("contract_addr", contract_addr.clone())
+        .add_attribute("amount", amount.to_string()))
 }
 
 pub fn attest_contributions(
@@ -354,3 +469,19 @@ fn parse_vaa(deps: Deps, block_time: u64, data: &Binary) -> StdResult<ParsedVAA>
     }))?;
     Ok(vaa)
 }
+
+/*
+fn query_cw20_balance(
+    deps: Deps,
+    contract_addr: String,
+    wallet_addr: String,
+) -> StdResult<BalanceResponse> {
+    let balance: BalanceResponse = deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
+        contract_addr: contract_addr.clone(),
+        msg: to_binary(&TokenQuery::Balance {
+            address: wallet_addr.clone(),
+        })?,
+    }))?;
+    Ok(balance)
+}
+*/

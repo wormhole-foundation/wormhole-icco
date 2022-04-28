@@ -168,7 +168,8 @@ pub fn init_icco_sale_ix(
         SaleInit::get_init_sale_sale_id(&vaa.payload),
         Pubkey::from_str(payer.as_str()).unwrap(),
         message_key,
-        program_id, // Pubkey::new(&vaa.emitter_address),
+        Pubkey::new(&vaa.emitter_address),
+        vaa.emitter_chain,
         vaa.sequence,
     );
     JsValue::from_serde(&ix).unwrap()

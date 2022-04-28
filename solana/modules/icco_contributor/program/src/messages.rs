@@ -41,7 +41,7 @@ fn read_u256(buf: &[u8]) -> (u128, u128) {
 #[derive(PartialEq, Debug)]
 #[allow(non_snake_case)]
 pub struct SaleInit {
-    payload_id: u8,     // 1
+    pub payload_id: u8,     // 1
     pub token_cnt: u8,
     pub sale_id: u128,
 }
@@ -53,7 +53,7 @@ impl DeserializePayload for SaleInit {
         let r = SaleInit {
             payload_id: buf[0],
             token_cnt: buf[176],
-            sale_id: read_u256(&buf[1..]).0,
+            sale_id: read_u256(&buf[1..]).1,
         };
         Ok(r)
     }
@@ -63,7 +63,7 @@ impl DeserializePayload for SaleInit {
 impl SaleInit {
     // This is used in wasm layer. Even though it looks redundand.
     pub fn get_init_sale_sale_id(bf: &[u8]) -> u128 {
-         read_u256(&bf[1..]).0
+         read_u256(&bf[1..]).1
     }
 
     pub fn get_token_address(&self, bf: &[u8]) -> Pubkey {

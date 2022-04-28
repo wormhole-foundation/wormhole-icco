@@ -7,6 +7,7 @@ use solitaire::SolitaireError;
 #[derive(Debug)]
 pub enum Error {
     VAAAlreadyExecuted,
+    VAAInvalidPayloadId,
     VAAInvalidEmitterChain,
     VAAInvalid,
     InvalidTokenAddress,

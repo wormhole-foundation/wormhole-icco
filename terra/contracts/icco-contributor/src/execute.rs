@@ -20,7 +20,6 @@ use icco::common::{
 use crate::{
     error::ContributorError,
     state::{
-        load_accepted_token,
         SaleMessage,
         TokenIndexKey,
         UserAction,
@@ -154,7 +153,7 @@ pub fn contribute(
 
     match asset_info {
         AssetInfo::NativeToken { denom } => {
-            contribute_native(deps, env, info, sale_id, token_index, &denom, amount)
+            contribute_native(deps, env, info, sale_id, token_index, &denom)
         }
         AssetInfo::Token { contract_addr } => contribute_token(
             deps,
@@ -166,18 +165,6 @@ pub fn contribute(
             amount,
         ),
     }
-
-    /*
-    let new_balance: BalanceResponse =
-        deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
-            contract_addr: state.token_address.clone(),
-            msg: to_binary(&TokenQuery::Balance {
-                address: env.contract.address.to_string(),
-            })?,
-        }))?;
-
-    */
-    //assert!(USER_ACTION.load(deps.storage).is_err());
 }
 
 pub fn contribute_native(
@@ -187,15 +174,28 @@ pub fn contribute_native(
     sale_id: &[u8],
     token_index: u8,
     denom: &String,
-    amount: Uint128,
 ) -> StdResult<Response> {
-    // TODO: do I handle reply after this?
-    // USER_ACTIONS.remove(deps.storage, sale_id)?
-    Ok(Response::new()
-        .add_attribute("action", "contribute_native")
-        .add_attribute("sale_id", Binary::from(sale_id).to_base64())
-        .add_attribute("denom", denom)
-        .add_attribute("amount", amount.to_string()))
+    // we don't care about the amount in contribute (can be zero)
+    // as long as we have some amount in the transaction
+    let result = info
+        .funds
+        .iter()
+        .find(|c| c.denom == *denom)
+        .map(|c| Uint128::from(c.amount));
+
+    match result {
+        Some(funded) => {
+            // something
+            Ok(Response::new()
+                .add_attribute("action", "contribute_native")
+                .add_attribute("sale_id", Binary::from(sale_id).to_base64())
+                .add_attribute("denom", denom)
+                .add_attribute("amount", funded.to_string()))
+        }
+        None => {
+            return ContributorError::InsufficientFunds.std_err();
+        }
+    }
 }
 
 pub fn contribute_token(

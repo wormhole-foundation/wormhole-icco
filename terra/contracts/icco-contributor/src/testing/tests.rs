@@ -151,12 +151,13 @@ fn proper_initialization() -> StdResult<()> {
     let conductor_address = hex::decode(conductor_address).unwrap();
     let conductor_address = conductor_address.as_slice();
 
+    let owner = info.sender.to_string();
     let msg = InstantiateMsg {
         wormhole_contract: String::new(),
         token_bridge_contract: String::new(),
         conductor_chain: conductor_chain,
         conductor_address: Binary::from(conductor_address),
-        owner: info.sender.to_string(),
+        owner: owner.clone(),
     };
 
     let response = instantiate(deps.as_mut(), mock_env(), info, msg.clone())?;
@@ -175,6 +176,7 @@ fn proper_initialization() -> StdResult<()> {
         ConfigResponse {
             conductor_chain,
             conductor_address: conductor_address.to_vec(),
+            owner: owner.clone(),
         },
         "config != ConfigResponse"
     );

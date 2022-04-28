@@ -202,6 +202,7 @@ describe("Solana dev Tests", () => {
 
         const decimals = 9;
         const saleEnd = saleStart + saleDuration;
+        console.info("--> Sale Start: ", saleStart);
         const saleInitVaa = await createSaleOnEthAndGetVaa(
           conductorConfig.wallet,
           conductorConfig.chainId,

@@ -54,7 +54,9 @@ use solana_program::{
         Instruction,
     },
     pubkey::Pubkey,
+    msg,
 };
+
 use solitaire::{
     processors::seeded::Seeded,
     AccountState,
@@ -201,14 +203,17 @@ pub fn init_icco_sale(
     payer: Pubkey,
     payload_message: Pubkey,
     emitter: Pubkey,
+    emitter_chain: u16,
     sequence: u64,
 ) -> Instruction {
     let config_key = ConfigAccount::<'_, { AccountState::Initialized }>::key(None, &program_id);
-    let state_key = SaleStateAccount::<'_, { AccountState::Uninitialized }>::key(&SaleStateDerivationData{sale_id:sale_id}, &program_id);
+    let state_key = SaleStateAccount::<'_, { AccountState::MaybeInitialized }>::key(&SaleStateDerivationData{sale_id: sale_id}, &program_id);
+    msg!("state_key: {:?}", state_key);
+    
     let claim = Claim::<'_, { AccountState::Uninitialized }>::key(
         &ClaimDerivationData {
             emitter_address: emitter.to_bytes(),
-            emitter_chain: CHAIN_ID_SOLANA,
+            emitter_chain: emitter_chain,
             sequence,
         },
         &program_id,
@@ -222,7 +227,7 @@ pub fn init_icco_sale(
             AccountMeta::new(state_key, false),
             AccountMeta::new_readonly(payload_message, false),
             AccountMeta::new(claim, false),
-            AccountMeta::new(program_id, false),
+//            AccountMeta::new(program_id, false),
             AccountMeta::new_readonly(solana_program::sysvar::rent::id(), false),
             AccountMeta::new_readonly(solana_program::sysvar::clock::id(), false),
             AccountMeta::new_readonly(solana_program::system_program::id(), false),

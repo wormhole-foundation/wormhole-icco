@@ -14,9 +14,10 @@ import {
   CHAIN_ID_ETH,
   ixFromRust,
   setDefaultWasm,
-  sleepFor,
   postVaaSolanaWithRetry,
-} from "../..";
+} from "@certusone/wormhole-sdk";
+
+import { sleepFor } from "../misc";
 
 import {
   vaa_address,
@@ -28,7 +29,7 @@ import { Token, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { Keypair, Connection, PublicKey, Transaction } from "@solana/web3.js";
 
 import { ethers } from "ethers";
-import { getContributorContractAsHexStringOnEth } from "../getters";
+// import { getContributorContractAsHexStringOnEth } from "../getters";
 import {
   BSC_NODE_URL,
   ETH_NODE_URL,
@@ -39,11 +40,15 @@ import {
   ETH_PRIVATE_KEY5,
   ETH_TOKEN_BRIDGE_ADDRESS,
   ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
-  ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
-  TEST_ERC20,
+  // ETH_TOKEN_SALE_CONTRIBUTOR_ADDRESS,
+  //  TEST_ERC20,
   WBNB_ADDRESS,
   WETH_ADDRESS,
 } from "../__tests__/consts";
+
+//import { registerChainOnEth } from "../../../../../sdk/js/lib/cjs/icco/registerChain";
+//import { registerChainOnEth } from "../../../";
+
 import {
   createSaleOnEthAndGetVaa,
   EthBuyerConfig,
@@ -76,6 +81,7 @@ import {
   // abortSaleEarlyAtConductor,
   deployTokenOnEth,
 } from "../__tests__/helpers";
+import { MsgInstantiateContract } from "@terra-money/terra.js";
 
 setDefaultWasm("node");
 //import { init_icco_sale_ix } from "icco_contributor";
@@ -95,7 +101,7 @@ const solanaConnection = new Connection(
 
 describe("Solana dev Tests", () => {
   // This is just mock call into solana icco contract to pass hardcoded VAA. It won't pass ovnership test.
-  test("call into init_icco_sale with hardcoded VAA", (done) => {
+  xtest("call into init_icco_sale with hardcoded VAA", (done) => {
     (async () => {
       //      try {
       console.log("bbrp -->> hc init_icco_sale");
@@ -142,7 +148,7 @@ describe("Solana dev Tests", () => {
     })();
   });
 
-  xtest("call into init_icco_sale", (done) => {
+  test("call into init_icco_sale", (done) => {
     (async () => {
       try {
         console.log("bbrp -->> init_icco_sale");

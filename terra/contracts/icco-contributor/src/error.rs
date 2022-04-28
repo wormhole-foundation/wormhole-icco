@@ -53,6 +53,9 @@ pub enum ContributorError {
 
     #[error("NonexistentDenom")]
     NonexistentDenom,
+
+    #[error("InsufficientFunds")]
+    InsufficientFunds,
 }
 
 impl ContributorError {

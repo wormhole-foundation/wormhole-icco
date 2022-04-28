@@ -66,6 +66,7 @@ pub enum QueryMsg {
 pub struct ConfigResponse {
     pub conductor_chain: u16,
     pub conductor_address: Vec<u8>,
+    pub owner: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

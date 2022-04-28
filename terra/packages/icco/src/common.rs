@@ -1,7 +1,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use cosmwasm_std::{Api, CanonicalAddr, DepsMut, StdError, StdResult, Uint128, Uint256};
+use cosmwasm_std::{Api, CanonicalAddr, StdError, StdResult, Uint128, Uint256};
 use terraswap::asset::{Asset, AssetInfo};
 
 use crate::byte_utils::ByteUtils;

@@ -1,0 +1,16 @@
+{
+    "compilerOptions": {
+      "target": "es2016",
+      "module": "es2015",
+      "strict": true,
+      "moduleResolution": "node",
+      "esModuleInterop": true,
+      "skipLibCheck": true,
+      "outDir": "lib",
+      "forceConsistentCasingInFileNames": true
+    },
+    "include": ["deploy.ts"],
+    "exclude": [
+        "node_modules"
+      ]
+  }

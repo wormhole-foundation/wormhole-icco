@@ -110,6 +110,13 @@ pub fn init_icco_sale(
         return Err(VAAInvalidEmitterChain.into());
     }
 
+
+    let now_time = accs.clock.unix_timestamp;
+    let start_time = accs.init_sale_vaa.get_sale_start(&accs.init_sale_vaa.meta().payload[..]).1 as i64;
+    let end_time = accs.init_sale_vaa.get_sale_end(&accs.init_sale_vaa.meta().payload[..]).1 as i64;
+    msg!("time: {:?} start: {:?} end: {:?}", now_time, start_time, end_time);
+
+
     let sale_id = accs.init_sale_vaa.sale_id;
     msg!("sale_id: {:?}", sale_id);
 

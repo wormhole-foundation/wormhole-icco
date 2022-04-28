@@ -52,12 +52,42 @@ impl DeserializePayload for SaleInit {
     fn deserialize(buf: &mut &[u8]) -> Result<Self> {
         let r = SaleInit {
             payload_id: buf[0],
-            token_cnt: buf[176],
+            token_cnt: buf[227],
             sale_id: read_u256(&buf[1..]).1,
         };
         Ok(r)
     }
 }
+/*
+/// Current encode from conductor for initSale VAA: 
+    function encodeSaleInit(SaleInit memory saleInit) public pure returns (bytes memory encoded) {
+        return abi.encodePacked(
+            uint8(1),                   1b      0
+            saleInit.saleID,            32b     1
+            saleInit.tokenAddress,      32b     33
+            saleInit.tokenChain,        2b      65
+            saleInit.tokenAmount,       32b     67
+            saleInit.minRaise,          32b     99
+            saleInit.maxRaise,          32b     131
+            saleInit.saleStart,         32b     163
+            saleInit.saleEnd,           32b     195
+            encodeTokens(saleInit.acceptedTokens),  227 + 50*tCnt
+            saleInit.recipient,         32b     228 + 50*tCnt
+            saleInit.refundRecipient    32b     260 + 50*tCnt
+        );
+    }
+    function encodeTokens(Token[] memory tokens) public pure returns (bytes memory encoded) {
+        encoded = abi.encodePacked(uint8(tokens.length));
+        for (uint i = 0; i < tokens.length; i++) {
+            encoded = abi.encodePacked(
+                encoded,
+                tokens[i].tokenAddress,     32b
+                tokens[i].tokenChain,       2b
+                tokens[i].conversionRate    16b
+            );
+        }
+    }
+*/
 
 // Accessor methods to no-copy-read from slice directly.
 impl SaleInit {
@@ -75,49 +105,49 @@ impl SaleInit {
     }
 
     pub fn get_token_amount(&self, bf: &[u8]) -> (u128, u128) {
-        read_u256(&bf[97..])
+        read_u256(&bf[67..])
     }
 
     pub fn get_min_raise(&self, bf: &[u8]) -> (u128, u128) {
-        read_u256(&bf[129..])
+        read_u256(&bf[99..])
     }
 
     pub fn get_max_raise(&self, bf: &[u8]) -> (u128, u128) {
-        read_u256(&bf[161..])
+        read_u256(&bf[131..])
     }
 
     pub fn get_sale_start(&self, bf: &[u8]) -> (u128, u128) {
-        read_u256(&bf[193..])
+        read_u256(&bf[163..])
     }
 
     pub fn get_sale_end(&self, bf: &[u8]) -> (u128, u128) {
-        read_u256(&bf[225..])
+        read_u256(&bf[195..])
     }
 
     pub fn get_sale_recepient(&self, bf: &[u8]) -> Pubkey {
-        let recipient_offset: usize = 279 + usize::from(self.token_cnt) * 50;
+        let recipient_offset: usize = 228 + usize::from(self.token_cnt) * 50;
         Pubkey::new(&bf[recipient_offset..recipient_offset + 32])
     }
 
     pub fn get_refund_recepient(&self, bf: &[u8]) -> Pubkey {
-        let recipient_offset: usize = 279 + usize::from(self.token_cnt) * 50;
+        let recipient_offset: usize = 260 + usize::from(self.token_cnt) * 50;
         Pubkey::new(&bf[recipient_offset + 32..recipient_offset + 64])
     }
 
     // Accepted tokens data getters
     // tokenAddress: Pubkey,
     pub fn get_accepted_token_address(&self, idx: usize, bf: &[u8]) -> Pubkey {
-        let t_offset: usize = 279 + idx * 50;
+        let t_offset: usize = 228 + idx * 50;
         Pubkey::new(&bf[t_offset..t_offset + 32])
     }
 
     pub fn get_accepted_token_chain(&self, idx: usize, bf: &[u8]) -> u16 {
-        let t_offset: usize = 279 + idx * 50 + 32;
+        let t_offset: usize = 228 + idx * 50 + 32;
         read_u16(&bf[t_offset..])
     }
 
-    pub fn get_accepted_token_conversion_rate(&self, idx: usize, bf: &[u8]) -> (u128, u128) {
-        let t_offset: usize = 279 + idx * 50 + 34;
-        read_u256(&bf[t_offset..])
+    pub fn get_accepted_token_conversion_rate(&self, idx: usize, bf: &[u8]) -> u128 {
+        let t_offset: usize = 228 + idx * 50 + 34;
+        read_u128(&bf[t_offset..])
     }
 }

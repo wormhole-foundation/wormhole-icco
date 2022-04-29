@@ -145,7 +145,7 @@ export async function instantiateContract(
   admin_address: string,
   codeId: number,
   msg: object
-) {
+): Promise<string> {
   const instantiateMsg = new MsgInstantiateContract(
     wallet.key.accAddress,
     admin_address,
@@ -155,8 +155,8 @@ export async function instantiateContract(
   );
   let result = await performTransaction(terra, wallet, instantiateMsg);
   return result.logs[0].events[0].attributes
-    .filter((element) => element.key == "contract_address")
-    .map((x) => x.value)[0];
+    .filter((element: any) => element.key == "contract_address")
+    .map((x: any) => x.value)[0];
 }
 
 export async function executeContract(

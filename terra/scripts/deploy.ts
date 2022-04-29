@@ -1,4 +1,3 @@
-import "dotenv/config";
 import yargs from "yargs";
 import {
   newClient,
@@ -94,7 +93,7 @@ async function uploadAndInitIccoContributor(
   wallet: any,
   wormhole: string,
   tokenBridge: string
-) {
+): Promise<string> {
   // TODO: handle existing codeId and contract addresses
   let codeId: number | undefined = undefined;
   let addr: string | undefined = undefined;

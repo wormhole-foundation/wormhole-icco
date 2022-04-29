@@ -242,6 +242,10 @@ pub fn init_icco_sale(
     }
 }
 
+pub fn get_icco_state_address (program_id: Pubkey, sale_id: u128) -> Pubkey {
+    SaleStateAccount::<'_, { AccountState::Initialized }>::key(&SaleStateDerivationData{sale_id: sale_id}, &program_id)
+}
+
 pub fn abort_icco_sale(
     program_id: Pubkey,
     sale_id: u128,

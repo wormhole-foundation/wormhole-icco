@@ -17,7 +17,7 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
         Ok(cfg) => Ok(ConfigResponse {
             conductor_chain: cfg.conductor_chain,
             conductor_address: cfg.conductor_address,
-            owner: cfg.owner,
+            owner: cfg.owner.to_string(),
         }),
         Err(_) => ContributorError::NotInitialized.std_err(),
     }

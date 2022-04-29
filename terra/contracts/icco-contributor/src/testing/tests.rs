@@ -1,6 +1,5 @@
 use cosmwasm_std::testing::{mock_env, mock_info};
 use cosmwasm_std::{from_binary, Binary, StdResult, Uint128, Uint256};
-use std::string::String;
 
 use icco::common::{SaleAborted, SaleSealed};
 
@@ -141,6 +140,10 @@ use crate::{
     saleAborted vaa 0x010000000001003f2c65c95e0309fec40c863e6f9d318141c7febc648f87f9f65ba43e64c33840574e461593dffc11a8d577bd0c8e9fe9368b5789fd2cc30e6fe0faf1699af53400000004900000000000020000000000000000000000005f8e26facc23fa4cbd87b8d9dbbd33d5047abde100000000000000030f040000000000000000000000000000000000000000000000000000000000000001
 */
 
+// fake addresses for initialize
+const WORMHOLE_ADDRESS: &str = "terra1dcegyrekltswvyy0xy69ydgxn9x8x32zdtapd8";
+const TOKEN_BRIDGE_ADDRESS: &str = "terra1dcegyrekltswvyy0xy69ydgxn9x8x32zdtapd8";
+
 #[test]
 fn proper_initialization() -> StdResult<()> {
     let mut deps = mock_dependencies(&[]);
@@ -150,14 +153,13 @@ fn proper_initialization() -> StdResult<()> {
     let conductor_address = "0000000000000000000000005f8e26facc23fa4cbd87b8d9dbbd33d5047abde1";
     let conductor_address = hex::decode(conductor_address).unwrap();
     let conductor_address = conductor_address.as_slice();
-
     let owner = info.sender.to_string();
+
     let msg = InstantiateMsg {
-        wormhole_contract: String::new(),
-        token_bridge_contract: String::new(),
+        wormhole: WORMHOLE_ADDRESS.into(),
+        token_bridge: TOKEN_BRIDGE_ADDRESS.into(),
         conductor_chain: conductor_chain,
         conductor_address: Binary::from(conductor_address),
-        owner: owner.clone(),
     };
 
     let response = instantiate(deps.as_mut(), mock_env(), info, msg.clone())?;
@@ -176,7 +178,7 @@ fn proper_initialization() -> StdResult<()> {
         ConfigResponse {
             conductor_chain,
             conductor_address: conductor_address.to_vec(),
-            owner: owner.clone(),
+            owner,
         },
         "config != ConfigResponse"
     );
@@ -195,11 +197,10 @@ fn init_sale() -> StdResult<()> {
     let conductor_address = conductor_address.as_slice();
 
     let msg = InstantiateMsg {
-        wormhole_contract: String::new(),
-        token_bridge_contract: String::new(),
+        wormhole: WORMHOLE_ADDRESS.into(),
+        token_bridge: TOKEN_BRIDGE_ADDRESS.into(),
         conductor_chain: conductor_chain,
         conductor_address: Binary::from(conductor_address),
-        owner: info.sender.to_string(),
     };
 
     let response = instantiate(deps.as_mut(), mock_env(), info, msg)?;

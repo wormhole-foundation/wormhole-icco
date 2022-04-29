@@ -1,4 +1,4 @@
-use cosmwasm_std::{StdResult, Storage, Uint128};
+use cosmwasm_std::{Addr, StdResult, Storage, Uint128};
 use cw_storage_plus::{Item, Map, U8Key};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -18,11 +18,11 @@ pub struct BuyerStatus {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Config {
-    pub wormhole_contract: HumanAddr,
-    pub token_bridge_contract: HumanAddr,
+    pub wormhole: Addr,
+    pub token_bridge: Addr,
     pub conductor_chain: u16,
     pub conductor_address: Vec<u8>,
-    pub owner: HumanAddr,
+    pub owner: Addr,
 }
 
 pub struct SaleMessage<'a> {
@@ -35,16 +35,10 @@ pub struct UpgradeContract {
     pub new_contract: u64,
 }
 */
-pub struct UserAction;
-
-impl UserAction {
-    pub const CONTRIBUTE: u8 = 1;
-}
-
-pub type HumanAddr = String;
+//pub type HumanAddr = String;
 pub type SaleId<'a> = &'a [u8];
 pub type TokenIndexKey<'a> = (SaleId<'a>, U8Key);
-pub type BuyerTokenIndexKey<'a> = (SaleId<'a>, U8Key, &'a HumanAddr);
+pub type BuyerTokenIndexKey<'a> = (SaleId<'a>, U8Key, Addr);
 
 pub const CONFIG: Item<Config> = Item::new("config");
 pub const SALES: Map<SaleId, SaleCore> = Map::new("sales");
@@ -57,6 +51,18 @@ pub const TOTAL_ALLOCATIONS: Map<TokenIndexKey, Uint128> = Map::new("total_alloc
 pub const BUYER_STATUSES: Map<BuyerTokenIndexKey, BuyerStatus> = Map::new("buyer_statuses");
 //pub const USER_ACTIONS: Map<SaleId, u8> = Map::new("user_actions");
 //pub const TOKEN_CONTRIBUTE_TMP = Item<> = Item::new("token_contribute_tmp");
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct PendingContributeToken {
+    pub sale_id: Vec<u8>,
+    pub token_index: u8,
+    pub contract_addr: Addr,
+    pub sender: Addr,
+    pub balance_before: Uint128,
+}
+
+pub const PENDING_CONTRIBUTE_TOKEN: Item<PendingContributeToken> =
+    Item::new("pending_contribute_token");
 
 pub const ZERO_AMOUNT: Uint128 = Uint128::zero();
 

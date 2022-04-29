@@ -56,6 +56,9 @@ pub enum ContributorError {
 
     #[error("InsufficientFunds")]
     InsufficientFunds,
+
+    #[error("PendingContribute")]
+    PendingContribute,
 }
 
 impl ContributorError {

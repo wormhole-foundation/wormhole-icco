@@ -6,13 +6,11 @@ use std::string::String;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
-    pub wormhole_contract: String,
-    pub token_bridge_contract: String,
+    pub wormhole: String,
+    pub token_bridge: String,
 
     pub conductor_chain: u16,
     pub conductor_address: Binary,
-
-    pub owner: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -21,24 +19,32 @@ pub enum ExecuteMsg {
     InitSale {
         data: Binary,
     },
+
     Contribute {
         sale_id: Binary,
         token_index: u8,
         amount: Uint128,
     },
+
+    EscrowUserContributionHook,
+
     AttestContributions {
         sale_id: Binary,
     },
+
     SaleSealed {
         data: Binary,
     },
+
     ClaimAllocation {
         sale_id: Binary,
         token_index: u8,
     },
+
     SaleAborted {
         data: Binary,
     },
+
     ClaimRefund {
         sale_id: Binary,
         token_index: u8,

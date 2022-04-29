@@ -36,6 +36,26 @@ fn read_u256(buf: &[u8]) -> (u128, u128) {
 
 /// -------------------------------------------------------------------
 /// Zero-copy from VAA payload for Init Sale.
+#[derive(PartialEq, Debug)]
+#[allow(non_snake_case)]
+pub struct SaleAbort {
+    pub payload_id: u8,     // 4
+    pub sale_id: u128,
+}
+
+impl DeserializePayload for SaleAbort {
+    // Only fixed portion can be deserialized.
+    fn deserialize(buf: &mut &[u8]) -> Result<Self> {
+        let r = SaleAbort {
+            payload_id: buf[0],
+            sale_id: read_u256(&buf[1..]).1,
+        };
+        Ok(r)
+    }
+}
+
+/// -------------------------------------------------------------------
+/// Zero-copy from VAA payload for Init Sale.
 
 // This portion is what we always want. deserialized by Solitaire
 #[derive(PartialEq, Debug)]
@@ -46,7 +66,7 @@ pub struct SaleInit {
     pub sale_id: u128,
 }
 
-// Deserialize repeatedly need data.
+// Deserialize repeatedly needed data.
 impl DeserializePayload for SaleInit {
     // Only fixed portion can be deserialized.
     fn deserialize(buf: &mut &[u8]) -> Result<Self> {

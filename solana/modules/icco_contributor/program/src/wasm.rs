@@ -11,7 +11,10 @@ use crate::{
         CustodySigner,
         EmitterAccount
     },
-    instructions::init_icco_sale,
+    instructions::{
+        init_icco_sale,
+        abort_icco_sale,
+    },
     types::{
         EndpointRegistration,
 //        WrappedMeta
@@ -145,13 +148,10 @@ pub fn vaa_address(bridge_id: String, vaa: Vec<u8>) -> Vec<u8> {
 }
 
 #[wasm_bindgen]
-// payload does not contain vaa. Empty array expected.
 pub fn init_icco_sale_ix(
     program_id: String,
     bridge_id: String,
     payer: String,
-    //TBD need to pass container of collector token accounts [to be created?] PDA using [saleId,token].
-    //..
     vaa: Vec<u8>,
 ) -> JsValue {
     let vaa = VAA::deserialize(vaa.as_slice()).unwrap();
@@ -164,6 +164,34 @@ pub fn init_icco_sale_ix(
         &bridge_id,
     );
     let ix = init_icco_sale(
+        program_id,
+        SaleInit::get_init_sale_sale_id(&vaa.payload),
+        Pubkey::from_str(payer.as_str()).unwrap(),
+        message_key,
+        Pubkey::new(&vaa.emitter_address),
+        vaa.emitter_chain,
+        vaa.sequence,
+    );
+    JsValue::from_serde(&ix).unwrap()
+}
+
+#[wasm_bindgen]
+pub fn abort_icco_sale_ix(
+    program_id: String,
+    bridge_id: String,
+    payer: String,
+    vaa: Vec<u8>,
+) -> JsValue {
+    let vaa = VAA::deserialize(vaa.as_slice()).unwrap();
+    let bridge_id = Pubkey::from_str(bridge_id.as_str()).unwrap();
+    let program_id = Pubkey::from_str(program_id.as_str()).unwrap();
+    let message_key = bridge::accounts::PostedVAA::<'_, { AccountState::Uninitialized }>::key(
+        &PostedVAADerivationData {
+            payload_hash: hash_vaa(&vaa.clone().into()).to_vec(),
+        },
+        &bridge_id,
+    );
+    let ix = abort_icco_sale(
         program_id,
         SaleInit::get_init_sale_sale_id(&vaa.payload),
         Pubkey::from_str(payer.as_str()).unwrap(),

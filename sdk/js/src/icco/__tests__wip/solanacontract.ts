@@ -17,11 +17,12 @@ import {
   postVaaSolanaWithRetry,
 } from "@certusone/wormhole-sdk";
 
-import { sleepFor } from "../misc";
+import { sleepFor, parseSaleInit } from "../";
 
 import {
   vaa_address,
   init_icco_sale_ix,
+  abort_icco_sale_ix,
 } from "../../solana/icco_contributor-node";
 
 // Solana
@@ -78,9 +79,11 @@ import {
   // getWrappedCollateral,
   // getRefundRecipientBalanceOnEth,
   // abortSaleEarlyAtContributors,
-  // abortSaleEarlyAtConductor,
+  abortSaleEarlyAtConductor,
   deployTokenOnEth,
+  getSignedVaaFromReceiptOnEth,
 } from "../__tests__/helpers";
+
 import { MsgInstantiateContract } from "@terra-money/terra.js";
 
 setDefaultWasm("node");
@@ -148,10 +151,10 @@ describe("Solana dev Tests", () => {
     })();
   });
 
-  test("call into init_icco_sale", (done) => {
+  test("call into init_icco_sale abort_icco_sale", (done) => {
     (async () => {
       try {
-        console.log("bbrp -->> init_icco_sale");
+        console.log("-->> init_icco_sale");
 
         // create initSale using conductor on ETH.
         const ethProvider = new ethers.providers.WebSocketProvider(
@@ -198,7 +201,8 @@ describe("Solana dev Tests", () => {
         const maxRaise = "14";
         const saleDuration = 60; // seconds
         // get the time
-        const saleStart = await makeSaleStartFromLastBlock(contributorConfigs);
+        const saleStart =
+          (await makeSaleStartFromLastBlock(contributorConfigs)) + 20; // So it can be aborted "early".
 
         const decimals = 9;
         const saleEnd = saleStart + saleDuration;
@@ -214,6 +218,7 @@ describe("Solana dev Tests", () => {
           saleEnd,
           acceptedTokens
         );
+        const saleInit = await parseSaleInit(saleInitVaa);
         console.info(
           "Sale Init VAA:",
           Buffer.from(saleInitVaa).toString("hex")
@@ -223,54 +228,108 @@ describe("Solana dev Tests", () => {
         const privateKeyDecoded = Uint8Array.from(
           SOLANA_WALLET_PK.split(",").map((s) => parseInt(s))
         );
-        // console.log(privateKeyDecoded);
         const walletAccount = Keypair.fromSecretKey(privateKeyDecoded);
         //  console.log(walletAccount.publicKey.toString()); // check "6sbzC1eH4FTujJXWj51eQe25cYvr4xfXbJ1vAj7j2k5J"
 
         // Log Solana VAA PDA address.
-        const vaa_pda = vaa_address(SOLANA_BRIDGE_ADDR, saleInitVaa);
-        const vaa_pda_pk = new PublicKey(vaa_pda);
-        console.log("bbrp vaa PDA: ", vaa_pda_pk.toString());
-
-        // post VAA on solana.
-        await postVaaSolanaWithRetry(
-          solanaConnection,
-          async (transaction) => {
-            transaction.partialSign(walletAccount);
-            return transaction;
-          },
-          SOLANA_BRIDGE_ADDR,
-          walletAccount.publicKey.toString(),
-          Buffer.from(saleInitVaa),
-          0
+        const init_vaa_pda_pk = new PublicKey(
+          vaa_address(SOLANA_BRIDGE_ADDR, saleInitVaa)
         );
+        console.log("bbrp init_sale vaa PDA: ", init_vaa_pda_pk.toString());
 
-        //        const saleInitVaa = Uint8Array.from(Buffer.from(initSaleVaa, "hex"));
-        // console.log("bbrp vaa len: ", saleInitVaa.length);
-
-        // Make init_icco_sale_ix.
-        const ix = ixFromRust(
-          init_icco_sale_ix(
-            SOLANA_CONTRIBUTOR_ADDR,
+        // Make init_icco_sale_ix and call it
+        {
+          // post VAA on solana.
+          await postVaaSolanaWithRetry(
+            solanaConnection,
+            async (transaction) => {
+              transaction.partialSign(walletAccount);
+              return transaction;
+            },
             SOLANA_BRIDGE_ADDR,
             walletAccount.publicKey.toString(),
-            saleInitVaa
-          )
+            Buffer.from(saleInitVaa),
+            0
+          );
+          const ix = ixFromRust(
+            init_icco_sale_ix(
+              SOLANA_CONTRIBUTOR_ADDR,
+              SOLANA_BRIDGE_ADDR,
+              walletAccount.publicKey.toString(),
+              saleInitVaa
+            )
+          );
+          // call contributor contract
+          const tx = new Transaction().add(ix);
+          await solanaConnection.sendTransaction(tx, [walletAccount], {
+            skipPreflight: false,
+            preflightCommitment: "singleGossip",
+          });
+        }
+
+        // -----------------------
+        // Now abort this sale.
+        console.log("-->> abort_icco_sale");
+        // abort the sale early in the conductor
+        const abortEarlyReceipt = await abortSaleEarlyAtConductor(
+          saleInit,
+          conductorConfig
         );
-        // call contributor contract
-        const tx = new Transaction().add(ix);
-        await solanaConnection.sendTransaction(tx, [walletAccount], {
-          skipPreflight: false,
-          preflightCommitment: "singleGossip",
-        });
+        const saleAbortVaa = await getSignedVaaFromReceiptOnEth(
+          conductorConfig.chainId,
+          ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
+          abortEarlyReceipt
+        );
+
+        // Log Solana VAA PDA address.
+        const abort_vaa_pda_pk = new PublicKey(
+          vaa_address(SOLANA_BRIDGE_ADDR, saleAbortVaa)
+        );
+        console.log("abort_sale vaa PDA: ", abort_vaa_pda_pk.toString());
+        console.info(
+          "AbortSale VAA:",
+          Buffer.from(saleAbortVaa).toString("hex")
+        );
+
+        {
+          // post VAA on solana.
+          await postVaaSolanaWithRetry(
+            solanaConnection,
+            async (transaction) => {
+              transaction.partialSign(walletAccount);
+              return transaction;
+            },
+            SOLANA_BRIDGE_ADDR,
+            walletAccount.publicKey.toString(),
+            Buffer.from(saleAbortVaa),
+            0
+          );
+          // Make abort_icco_sale_ix.
+          const ix = ixFromRust(
+            abort_icco_sale_ix(
+              SOLANA_CONTRIBUTOR_ADDR,
+              SOLANA_BRIDGE_ADDR,
+              walletAccount.publicKey.toString(),
+              saleAbortVaa
+            )
+          );
+          // call contributor contract
+          const tx = new Transaction().add(ix);
+          await solanaConnection.sendTransaction(tx, [walletAccount], {
+            skipPreflight: false,
+            preflightCommitment: "singleGossip",
+          });
+        }
 
         // Done here.
         ethProvider.destroy();
-        console.log("bbrp <<--- init_icco_sale");
+        console.log("init_icco_sale abort_icco_sale done");
         done();
       } catch (e) {
         console.error(e);
-        done("An error occurred in init_icco_sale contributor test");
+        done(
+          "An error occurred in init_icco_sale abort_icco_sale contributor test"
+        );
       }
     })();
   });

@@ -1,26 +1,20 @@
 #![allow(dead_code)]
-#![allow(unused_must_use)]
-#![allow(unused_imports)]
+//#![allow(unused_must_use)]
+//#![allow(unused_imports)]
 
-use core::convert::TryInto;
+//use core::convert::TryInto;
 //use std::mem::size_of_val;
 
-use std::{
-    error::Error,
-    io::{
-        Cursor,
-        Read,
-        Write,
-    },
-    // str::Utf8Error,
-    // string::FromUtf8Error,
-};
-
-use byteorder::{
-    BigEndian,
-    ReadBytesExt,
-    WriteBytesExt,
-};
+// use std::{
+//     error::Error,
+//     io::{
+//         Cursor,
+//         Read,
+//         Write,
+//     },
+//     // str::Utf8Error,
+//     // string::FromUtf8Error,
+// };
 
 use crate::{
     messages::SaleInit,
@@ -37,31 +31,30 @@ use solana_program::msg;
 use solana_program::{
     account_info::AccountInfo,
     // program_error::ProgramError,
-    pubkey::Pubkey,
+    // pubkey::Pubkey,
     sysvar::clock::Clock,
     sysvar::rent::Rent,
 };
 
 use solitaire::{
-    SolitaireError,
     CreationLamports::Exempt,
     *,
 };
 
-use wormhole_sdk::{VAA};
+// use wormhole_sdk::{VAA};
 
 use bridge::{
     vaa::{
         ClaimableVAA,
-        DeserializePayload,
-        PayloadMessage,
+//        DeserializePayload,
+//        PayloadMessage,
     },
-    error::Error::{
+//    error::Error::{
 //        VAAAlreadyExecuted,
 //        VAAInvalid,
-    },
+//    },
 
-    CHAIN_ID_SOLANA,
+//    CHAIN_ID_SOLANA,
 };
 
 
@@ -70,7 +63,7 @@ use bridge::{
 pub struct InitIccoSale<'b> {
     pub payer: Mut<Signer<AccountInfo<'b>>>,
     pub config: ConfigAccount<'b, { AccountState::Initialized }>,       // Must be created before Init
-    pub sale_state: Mut<SaleStateAccount<'b, { AccountState::MaybeInitialized }>>,   // Must not be created yet
+    pub sale_state: Mut<SaleStateAccount<'b, { AccountState::Uninitialized }>>,   // Must not be created yet
     // TBD
     pub init_sale_vaa: ClaimableVAA<'b, SaleInit>,
     pub rent: Sysvar<'b, Rent>,
@@ -126,9 +119,9 @@ pub fn init_icco_sale(
     // msg!("state_key: {:?}", accs.sale_state.info().key);
 
     // Create sale_state account. (it was Uninitialized coming in)
-    if !accs.sale_state.is_initialized() {
-        accs.sale_state.create(&(&*accs).into(), ctx, accs.payer.key, Exempt)?;
-    }
+    // if !accs.sale_state.is_initialized() {
+    accs.sale_state.create(&(&*accs).into(), ctx, accs.payer.key, Exempt)?;
+    //}
 
     // [Ckeck if all Solana tokens exist.] Custodian accounts are created on first contribution to each token. As well as contribution info PDA Account.
 

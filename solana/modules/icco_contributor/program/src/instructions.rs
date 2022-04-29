@@ -20,6 +20,7 @@ use crate::{
     },
     api::{
         InitIccoSaleData,
+        AbortIccoSaleData,
     },
 };
 use borsh::BorshSerialize;
@@ -207,8 +208,7 @@ pub fn init_icco_sale(
     sequence: u64,
 ) -> Instruction {
     let config_key = ConfigAccount::<'_, { AccountState::Initialized }>::key(None, &program_id);
-    let state_key = SaleStateAccount::<'_, { AccountState::MaybeInitialized }>::key(&SaleStateDerivationData{sale_id: sale_id}, &program_id);
-    msg!("state_key: {:?}", state_key);
+    let state_key = SaleStateAccount::<'_, { AccountState::Uninitialized }>::key(&SaleStateDerivationData{sale_id: sale_id}, &program_id);
     
     let claim = Claim::<'_, { AccountState::Uninitialized }>::key(
         &ClaimDerivationData {
@@ -242,3 +242,46 @@ pub fn init_icco_sale(
     }
 }
 
+pub fn abort_icco_sale(
+    program_id: Pubkey,
+    sale_id: u128,
+    payer: Pubkey,
+    payload_message: Pubkey,    // Abort VAA
+    emitter: Pubkey,
+    emitter_chain: u16,
+    sequence: u64,
+) -> Instruction {
+    let config_key = ConfigAccount::<'_, { AccountState::Initialized }>::key(None, &program_id);
+    let state_key = SaleStateAccount::<'_, { AccountState::Initialized }>::key(&SaleStateDerivationData{sale_id: sale_id}, &program_id);
+    
+    let claim = Claim::<'_, { AccountState::Uninitialized }>::key(
+        &ClaimDerivationData {
+            emitter_address: emitter.to_bytes(),
+            emitter_chain: emitter_chain,
+            sequence,
+        },
+        &program_id,
+    );
+
+    Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new(payer, true),
+            AccountMeta::new_readonly(config_key, false),
+            AccountMeta::new(state_key, false),
+            AccountMeta::new_readonly(payload_message, false),
+            AccountMeta::new(claim, false),
+//            AccountMeta::new(program_id, false),
+            AccountMeta::new_readonly(solana_program::sysvar::rent::id(), false),
+            AccountMeta::new_readonly(solana_program::sysvar::clock::id(), false),
+            AccountMeta::new_readonly(solana_program::system_program::id(), false),
+        ],
+
+        data: (
+            crate::instruction::Instruction::AbortIccoSale,
+            AbortIccoSaleData {},
+        )
+            .try_to_vec()
+            .unwrap(),
+    }
+}

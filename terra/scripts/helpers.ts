@@ -45,6 +45,10 @@ export function writeContractAddress(fp: string, name: string, addr: string) {
   return;
 }
 
+export function newLocalClient(): Client {
+  return newClient("localterra", undefined);
+}
+
 export function newClient(
   network: string,
   mnemonic: string | undefined

@@ -7,48 +7,45 @@ WASMS=$(patsubst %, artifacts/%.wasm, $(PACKAGES))
 
 -include ../Makefile.help
 
-.PHONY: build
-## Build contracts.
-build: artifacts/checksums.txt
+.PHONY: clean build tools unit-test integration-test
+## Remove All Builds
+clean:
+	rm -rf artifacts localterra.json testnet.json mainnet.json
+	cd scripts && npm run clean
 
-VALID_mainnet=1
-VALID_testnet=1
-VALID_devnet=1
-.PHONY: check-network
-check-network:
-ifndef VALID_$(NETWORK)
-	$(error Invalid or missing NETWORK. Please call with `$(MAKE) $(MAKECMDGOALS) NETWORK=[mainnet | testnet | devnet]`)
-endif
+.PHONY: build scripts unit-test integration-test
+## Build Contracts
+build: artifacts/checksums.txt
 
 $(WASMS) artifacts/checksums.txt: $(SOURCE_FILES)
 	DOCKER_BUILDKIT=1 docker build --target artifacts -o artifacts .
 
-payer-$(NETWORK).json:
-	$(error Missing private key in payer-$(NETWORK).json)
+.PHONY: scripts
+### Build Scripts
+scripts: scripts/lib
 
-.PHONY: deploy/icco_contributor
-## Deploy ICCO contributor
-deploy/icco_contributor: icco_contributor-code-id-$(NETWORK).txt
+scripts/lib: scripts/node_modules
+	cd scripts && npm run build
 
-%-code-id-$(NETWORK).txt: check-network tools/node_modules payer-$(NETWORK).json
-	@echo "Deploying artifacts/$($*_SOURCE).wasm on $(NETWORK)"
-	@node tools/deploy_single.js \
-		--network $(NETWORK) \
-		--artifact artifacts/$($*_SOURCE).wasm \
-		--mnemonic "$$(cat payer-$(NETWORK).json)" \
-		| grep -i "code id" | sed s/[^0-9]//g \
-		> $@
-	@echo "Deployed at code id $$(cat $@) (stored in $@)"
+scripts/node_modules:
+	cd scripts && npm ci
 
-tools/node_modules: tools/package-lock.json
-	cd tools && npm ci
-
-.PHONY: test
-## Run linter and unit tests
-test:
+.PHONY: unit-test
+## Run Linter and Unit Tests
+unit-test:
 #	cargo clippy
 	cargo test -- --nocapture
 
-.PHONY: clean
-clean:
-	rm -f $(WASMS) artifacts/checksums.txt tools/node_modules
+.PHONY: integration-test
+## Run Integration Tests
+integration-test: build tools
+	rm -f localterra.json
+	@if pgrep terrad; then echo "Error: terrad already running. Stop it before running tests"; exit 1; fi
+	cd LocalTerra && docker compose up --detach
+	sleep 5
+	cd scripts && node lib/deploy.js --network localterra || (cd ../LocalTerra && docker compose down && exit 1)
+	cd LocalTerra && docker compose down
+
+LocalTerra:
+	git clone --depth 1 https://www.github.com/terra-money/LocalTerra
+

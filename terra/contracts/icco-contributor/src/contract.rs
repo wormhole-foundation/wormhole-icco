@@ -7,6 +7,7 @@ use crate::{
         attest_contributions, claim_allocation, claim_refund, contribute, init_sale, sale_aborted,
         sale_sealed,
     },
+    hooks::escrow_user_contribution_hook,
     msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg},
     query::{
         query_accepted_token, query_config, query_sale_registry, query_sale_status,
@@ -27,12 +28,14 @@ pub fn instantiate(
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> StdResult<Response> {
+    let wormhole = deps.api.addr_validate(msg.wormhole.as_str())?;
+    let token_bridge = deps.api.addr_validate(msg.token_bridge.as_str())?;
     let cfg = Config {
-        wormhole_contract: msg.wormhole_contract,
-        token_bridge_contract: msg.token_bridge_contract,
+        wormhole,
+        token_bridge,
         conductor_chain: msg.conductor_chain,
         conductor_address: msg.conductor_address.into(),
-        owner: info.sender.to_string(),
+        owner: info.sender,
     };
     CONFIG.save(deps.storage, &cfg)?;
 
@@ -56,6 +59,7 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
             token_index,
             amount,
         } => contribute(deps, env, info, sale_id.as_slice(), token_index, amount),
+        ExecuteMsg::EscrowUserContributionHook {} => escrow_user_contribution_hook(deps, env, info),
         ExecuteMsg::AttestContributions { sale_id } => {
             attest_contributions(deps, env, info, &sale_id)
         }

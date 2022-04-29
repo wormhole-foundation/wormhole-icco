@@ -2,12 +2,12 @@ use cosmwasm_std::{
     to_binary, Binary, CosmosMsg, Deps, DepsMut, Env, MessageInfo, Order, QueryRequest, Response,
     StdError, StdResult, Storage, Uint128, WasmMsg, WasmQuery,
 };
+use cw20::Cw20ExecuteMsg;
 use terraswap::{
     asset::AssetInfo,
     querier::{query_balance, query_token_balance},
 };
 
-use token_bridge_terra::contract::coins_after_tax;
 use wormhole::{
     msg::{ExecuteMsg as WormholeExecuteMsg, QueryMsg as WormholeQueryMsg},
     state::ParsedVAA,
@@ -19,25 +19,16 @@ use icco::common::{
 
 use crate::{
     error::ContributorError,
+    msg::ExecuteMsg,
     state::{
-        SaleMessage,
-        TokenIndexKey,
-        UserAction,
-        ACCEPTED_ASSETS,
-        ACCEPTED_TOKENS,
-        CONFIG,
-        SALES,
-        SALE_STATUSES,
-        SALE_TIMES,
-        TOTAL_ALLOCATIONS,
-        TOTAL_CONTRIBUTIONS, //USER_ACTIONS,
-        ZERO_AMOUNT,
+        BuyerStatus, BuyerTokenIndexKey, PendingContributeToken, SaleMessage, TokenIndexKey,
+        ACCEPTED_ASSETS, ACCEPTED_TOKENS, BUYER_STATUSES, CONFIG, PENDING_CONTRIBUTE_TOKEN, SALES,
+        SALE_STATUSES, SALE_TIMES, TOTAL_ALLOCATIONS, TOTAL_CONTRIBUTIONS, ZERO_AMOUNT,
     },
 };
 
 // nonce means nothing?
 const WORMHOLE_NONCE: u32 = 0;
-const NATIVE_DENOM_START_INDEX: usize = 28;
 
 pub fn init_sale(deps: DepsMut, env: Env, _info: MessageInfo, vaa: &Binary) -> StdResult<Response> {
     let parsed = parse_vaa(deps.as_ref(), env.block.time.seconds(), vaa)?;
@@ -184,17 +175,33 @@ pub fn contribute_native(
         .map(|c| Uint128::from(c.amount));
 
     match result {
-        Some(funded) => {
-            // something
+        Some(funds) => {
+            let key: BuyerTokenIndexKey = (sale_id, token_index.into(), info.sender);
+            BUYER_STATUSES.update(
+                deps.storage,
+                key,
+                |status: Option<BuyerStatus>| -> StdResult<BuyerStatus> {
+                    match status {
+                        Some(one) => Ok(BuyerStatus {
+                            contribution: one.contribution + funds,
+                            allocation_is_claimed: false,
+                            refund_is_claimed: false,
+                        }),
+                        None => Ok(BuyerStatus {
+                            contribution: funds,
+                            allocation_is_claimed: false,
+                            refund_is_claimed: false,
+                        }),
+                    }
+                },
+            )?;
             Ok(Response::new()
                 .add_attribute("action", "contribute_native")
                 .add_attribute("sale_id", Binary::from(sale_id).to_base64())
                 .add_attribute("denom", denom)
-                .add_attribute("amount", funded.to_string()))
+                .add_attribute("contribution", funds.to_string()))
         }
-        None => {
-            return ContributorError::InsufficientFunds.std_err();
-        }
+        None => ContributorError::InsufficientFunds.std_err(),
     }
 }
 
@@ -207,25 +214,47 @@ pub fn contribute_token(
     contract_addr: &String,
     amount: Uint128,
 ) -> StdResult<Response> {
-    // check balance
-    /*
-    let balance: BalanceResponse = deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
-        contract_addr: contract_addr.clone(),
-        msg: to_binary(&TokenQuery::Balance {
-            address: env.contract.address.to_string(),
-        })?,
-    }))?;
-    */
+    // if this method is called again, we need to check whether
+    // we are already processing the balance before the transfer
+    if PENDING_CONTRIBUTE_TOKEN.load(deps.storage).is_ok() {
+        return ContributorError::PendingContribute.std_err();
+    }
 
-    let querier = &deps.querier;
-    let validated = deps.api.addr_validate(contract_addr.as_str())?;
-    let balance = query_token_balance(querier, validated, env.contract.address.clone())?;
+    let contract_addr = deps.api.addr_validate(contract_addr.as_str())?;
+
+    let balance_before = query_token_balance(
+        &deps.querier,
+        contract_addr.clone(),
+        env.contract.address.clone(),
+    )?;
+
+    PENDING_CONTRIBUTE_TOKEN.save(
+        deps.storage,
+        &PendingContributeToken {
+            sale_id: sale_id.to_vec(),
+            token_index,
+            contract_addr: contract_addr.clone(),
+            sender: info.sender.clone(),
+            balance_before,
+        },
+    )?;
 
     Ok(Response::new()
-        .add_attribute("action", "contribute_token")
-        .add_attribute("sale_id", Binary::from(sale_id).to_base64())
-        .add_attribute("contract_addr", contract_addr.clone())
-        .add_attribute("amount", amount.to_string()))
+        .add_messages(vec![CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: contract_addr.to_string(),
+            msg: to_binary(&Cw20ExecuteMsg::TransferFrom {
+                owner: info.sender.to_string(),
+                recipient: env.contract.address.to_string(),
+                amount,
+            })?,
+            funds: vec![],
+        })])
+        .add_messages(vec![CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: env.contract.address.to_string(),
+            msg: to_binary(&ExecuteMsg::EscrowUserContributionHook {})?,
+            funds: vec![],
+        })])
+        .add_attribute("action", "contribute_token"))
 }
 
 pub fn attest_contributions(
@@ -265,8 +294,9 @@ pub fn attest_contributions(
 
     let cfg = CONFIG.load(storage)?;
 
+    // TODO: make generic method to send wormhole messages
     let wormhole_message = CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: cfg.wormhole_contract,
+        contract_addr: cfg.wormhole.to_string(),
         funds: vec![],
         msg: to_binary(&WormholeExecuteMsg::PostMessage {
             message: Binary::from(contribution_sealed.serialize()),
@@ -461,7 +491,7 @@ fn verify_conductor(
 fn parse_vaa(deps: Deps, block_time: u64, data: &Binary) -> StdResult<ParsedVAA> {
     let cfg = CONFIG.load(deps.storage)?;
     let vaa: ParsedVAA = deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
-        contract_addr: cfg.wormhole_contract.clone(),
+        contract_addr: cfg.wormhole.to_string(),
         msg: to_binary(&WormholeQueryMsg::VerifyVAA {
             vaa: data.clone(),
             block_time,

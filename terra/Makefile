@@ -21,7 +21,7 @@ $(WASMS) artifacts/checksums.txt: $(SOURCE_FILES)
 	DOCKER_BUILDKIT=1 docker build --target artifacts -o artifacts .
 
 .PHONY: scripts
-### Build Scripts
+## Build Scripts
 scripts: scripts/lib
 
 scripts/lib: scripts/node_modules

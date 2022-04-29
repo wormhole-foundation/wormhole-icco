@@ -1,45 +1,29 @@
-# Deploy
+# ICCO On Terra
 
-First build the contracts
+Currently there is only a Contributor that will exist on the Terra blockchain.
 
+## Building WASMs
 
-``` sh
-docker build -f Dockerfile.build -o artifacts .
+```sh
+make build
 ```
 
-Then, for example, to deploy `token_bridge.wasm`, run in the `tools` directory
+## Running Unit Tests
 
-``` sh
-npm ci
-node deploy_single.js --network mainnet --artifact ../artifacts/token_bridge.wasm --mnemonic "..."
+```sh
+make unit-test
 ```
 
-which will print something along the lines of
+This will run `cargo clippy` and `cargo test`.
 
-``` sh
-Storing WASM: ../artifacts/token_bridge.wasm (367689 bytes)
-Deploy fee:  88446uluna
-Code ID:  2435
+## Running Integration Tests in LocalTerra
+
+```sh
+make integration-test
 ```
 
-# Migrate
+This will automatically build [scripts](scripts) if these were not built already and run tests outlined [here](scripts/tests).
 
-## Mainnet
+## Deploy
 
-Migrations on mainnet have to go through governance. Once the guardians sign the
-upgrade VAA, the contract can be upgraded by submitting the signed VAA to the
-appropriate contract. For example, to upgrade the token bridge on mainnet,
-in `wormhole/clients/token_bridge/`:
-
-``` sh
-node main.js terra execute_governance_vaa <signed VAA (hex)> --rpc "https://lcd.terra.dev" --chain_id "columbus-5" --mnemonic "..." --token_bridge "terra10nmmwe8r3g99a9newtqa7a75xfgs2e8z87r2sf"
-```
-
-## Testnet
-
-
-For example, to migrate the token bridge to 37262, run in `tools/`:
-
-``` sh
-node migrate_testnet.js --code_id 37262 --contract terra1pseddrv0yfsn76u4zxrjmtf45kdlmalswdv39a --mnemonic "..."
-```
+TODO

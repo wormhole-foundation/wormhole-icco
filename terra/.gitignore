@@ -1,2 +1,5 @@
 artifacts
-!artifacts/cw20_base.wasm
+LocalTerra
+localterra.json
+testnet.json
+mainnet.json

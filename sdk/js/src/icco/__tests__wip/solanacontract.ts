@@ -21,6 +21,7 @@ import { sleepFor, parseSaleInit } from "../";
 
 import {
   vaa_address,
+  icco_state_address,
   init_icco_sale_ix,
   abort_icco_sale_ix,
 } from "../../solana/icco_contributor-node";
@@ -261,10 +262,15 @@ describe("Solana dev Tests", () => {
           );
           // call contributor contract
           const tx = new Transaction().add(ix);
-          await solanaConnection.sendTransaction(tx, [walletAccount], {
-            skipPreflight: false,
-            preflightCommitment: "singleGossip",
-          });
+          const tx_id = await solanaConnection.sendTransaction(
+            tx,
+            [walletAccount],
+            {
+              skipPreflight: false,
+              preflightCommitment: "singleGossip",
+            }
+          );
+          await solanaConnection.confirmTransaction(tx_id);
         }
 
         // -----------------------
@@ -315,11 +321,38 @@ describe("Solana dev Tests", () => {
           );
           // call contributor contract
           const tx = new Transaction().add(ix);
-          await solanaConnection.sendTransaction(tx, [walletAccount], {
-            skipPreflight: false,
-            preflightCommitment: "singleGossip",
-          });
+          const tx_id = await solanaConnection.sendTransaction(
+            tx,
+            [walletAccount],
+            {
+              skipPreflight: false,
+              preflightCommitment: "singleGossip",
+            }
+          );
+          await solanaConnection.confirmTransaction(tx_id);
         }
+
+        const icco_state_pda_address = icco_state_address(
+          SOLANA_CONTRIBUTOR_ADDR,
+          BigInt(saleInit.saleId.toString())
+        );
+        console.log(
+          "icco_state_pda_address: ",
+          icco_state_pda_address.toString()
+        );
+        const icco_state_pda_address_pk = new PublicKey(
+          icco_state_pda_address.toString()
+        );
+
+        // const slot = await solanaConnection.getSlot();
+        // console.log("slot: ", slot);
+
+        const icco_state_pda_info = await solanaConnection.getParsedAccountInfo(
+          // getAccountInfoAndContext(
+          icco_state_pda_address_pk,
+          "confirmed"
+        );
+        console.log(icco_state_pda_info);
 
         // Done here.
         ethProvider.destroy();

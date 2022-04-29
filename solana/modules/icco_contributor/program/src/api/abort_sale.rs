@@ -88,6 +88,8 @@ pub fn abort_icco_sale(
     let derivation_data: SaleStateDerivationData = (&*accs).into();
     accs.sale_state.verify_derivation(ctx.program_id, &derivation_data)?;
 
+    msg!("state_key: {:?}", accs.sale_state.info().key);
+
     // sale_state account set 
     if accs.sale_state.is_sealed {
         return Err(SaleHasBeenSealed.into());

@@ -9,7 +9,7 @@
       "outDir": "lib",
       "forceConsistentCasingInFileNames": true
     },
-    "include": ["deploy.ts", "tests/tests.ts"],
+    "include": ["deploy.ts", "tests/contributor.ts"],
     "exclude": [
         "node_modules"
       ]

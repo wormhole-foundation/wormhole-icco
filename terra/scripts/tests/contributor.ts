@@ -81,6 +81,9 @@ async function conductSuccessfulSale(
 
   {
     logTestName("1. Orchestrator Initializes Sale... ");
+    // Conductor will have produced a VAA. Here we fabricate the VAA and
+    // forge a signature with devnet guardian
+
     untested();
   }
 

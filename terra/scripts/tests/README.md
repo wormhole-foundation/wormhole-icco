@@ -4,11 +4,12 @@ This is a work-in-progress.
 
 ## Contributor
 
-Tests will cover the following scenarios (see [whitepaper](../../../WHITEPAPER.md) for details on how the Contributor works).
+Tests will cover the following scenarios in `contributor.ts` (see [whitepaper](../../../WHITEPAPER.md) for details on how the Contributor works).
 
 ### Deployment
 
-- [ ] Deploy Contract
+- [x] Deploy Contract
+- [ ] Expect Error when Non-Owner Attempts to Upgrade Contract
 - [ ] Upgrade Contract
 
 ### Conduct Successful Sale

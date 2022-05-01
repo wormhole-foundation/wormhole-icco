@@ -1,5 +1,6 @@
 artifacts
 LocalTerra
+wormhole
 localterra.json
 testnet.json
 mainnet.json

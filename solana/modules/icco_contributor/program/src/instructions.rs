@@ -19,6 +19,7 @@ use crate::{
         SplTokenMetaDerivationData,
     },
     api::{
+        CreateIccoSaleCustodyAccountData,
         InitIccoSaleData,
         AbortIccoSaleData,
     },
@@ -62,7 +63,14 @@ use solitaire::{
     processors::seeded::Seeded,
     AccountState,
 };
-use spl_token::state::Mint;
+use spl_token::{
+//    error::TokenError::OwnerMismatch,
+    state::{
+        Account,
+        Mint,
+    },
+};
+
 use std::str::FromStr;
 
 pub fn initialize(
@@ -85,44 +93,6 @@ pub fn initialize(
     })
 }
 
-/*
-pub fn register_chain(
-    program_id: Pubkey,
-    bridge_id: Pubkey,
-    payer: Pubkey,
-    message_key: Pubkey,
-    vaa: PostVAAData,
-    payload: PayloadGovernanceRegisterChain,
-    data: RegisterChainData,
-) -> solitaire::Result<Instruction> {
-    let config_key = ConfigAccount::<'_, { AccountState::Uninitialized }>::key(None, &program_id);
-    let (message_acc, claim_acc) = claimable_vaa(program_id, message_key, vaa);
-    let endpoint = Endpoint::<'_, { AccountState::Initialized }>::key(
-        &EndpointDerivationData {
-            emitter_chain: payload.chain,
-            emitter_address: payload.endpoint_address,
-        },
-        &program_id,
-    );
-
-    Ok(Instruction {
-        program_id,
-        accounts: vec![
-            AccountMeta::new(payer, true),
-            AccountMeta::new_readonly(config_key, false),
-            AccountMeta::new(endpoint, false),
-            message_acc,
-            claim_acc,
-            // Dependencies
-            AccountMeta::new(solana_program::sysvar::rent::id(), false),
-            AccountMeta::new(solana_program::system_program::id(), false),
-            // Program
-            AccountMeta::new_readonly(bridge_id, false),
-        ],
-        data: (crate::instruction::Instruction::RegisterChain, data).try_to_vec()?,
-    })
-}
-*/ 
 
 fn claimable_vaa(
     bridge_id: Pubkey,
@@ -144,59 +114,54 @@ fn claimable_vaa(
     )
 }
 
-/*
-pub fn upgrade_contract(
+
+pub fn create_icco_sale_custody_account(
     program_id: Pubkey,
+    sale_id: u128,
     payer: Pubkey,
     payload_message: Pubkey,
     emitter: Pubkey,
-    new_contract: Pubkey,
-    spill: Pubkey,
+    emitter_chain: u16,
     sequence: u64,
+    token_mint: Pubkey,
+    _token_index: u8,  // TBD For validation against VAA. 
 ) -> Instruction {
+    let config_key = ConfigAccount::<'_, { AccountState::Initialized }>::key(None, &program_id);
+    let custody_key = CustodyAccount::<'_, { AccountState::MaybeInitialized }>::key(&CustodyAccountDerivationData{sale_id: sale_id, mint: token_mint}, &program_id);
     let claim = Claim::<'_, { AccountState::Uninitialized }>::key(
         &ClaimDerivationData {
             emitter_address: emitter.to_bytes(),
-            emitter_chain: CHAIN_ID_SOLANA,
+            emitter_chain: emitter_chain,
             sequence,
         },
         &program_id,
     );
 
-    let (upgrade_authority, _) = Pubkey::find_program_address(&["upgrade".as_bytes()], &program_id);
-
-    let (program_data, _) = Pubkey::find_program_address(
-        &[program_id.as_ref()],
-        &solana_program::bpf_loader_upgradeable::id(),
-    );
-
     Instruction {
         program_id,
-
         accounts: vec![
             AccountMeta::new(payer, true),
+            AccountMeta::new_readonly(config_key, false),
             AccountMeta::new_readonly(payload_message, false),
             AccountMeta::new(claim, false),
-            AccountMeta::new_readonly(upgrade_authority, false),
-            AccountMeta::new(spill, false),
-            AccountMeta::new(new_contract, false),
-            AccountMeta::new(program_data, false),
-            AccountMeta::new(program_id, false),
+            AccountMeta::new_readonly(token_mint, false),       // Mint.
+//            AccountMeta::new(payer, true),                      // Use payer as custody_signer 
+            AccountMeta::new(custody_key, false),
             AccountMeta::new_readonly(solana_program::sysvar::rent::id(), false),
             AccountMeta::new_readonly(solana_program::sysvar::clock::id(), false),
-            AccountMeta::new_readonly(solana_program::bpf_loader_upgradeable::id(), false),
             AccountMeta::new_readonly(solana_program::system_program::id(), false),
+            AccountMeta::new_readonly(spl_token::id(), false),
         ],
-
         data: (
-            crate::instruction::Instruction::UpgradeContract,
-            UpgradeContractData {},
+            crate::instruction::Instruction::CreateIccoSaleCustodyAccount,
+            CreateIccoSaleCustodyAccountData {},
         )
             .try_to_vec()
             .unwrap(),
     }
 }
-*/
+
+
 
 pub fn init_icco_sale(
     program_id: Pubkey,
@@ -244,6 +209,10 @@ pub fn init_icco_sale(
 
 pub fn get_icco_state_address (program_id: Pubkey, sale_id: u128) -> Pubkey {
     SaleStateAccount::<'_, { AccountState::Initialized }>::key(&SaleStateDerivationData{sale_id: sale_id}, &program_id)
+}
+
+pub fn get_icco_sale_custody_account_address(program_id: Pubkey, sale_id: u128, token_mint: Pubkey) -> Pubkey {
+    CustodyAccount::<'_, { AccountState::MaybeInitialized }>::key(&CustodyAccountDerivationData{sale_id: sale_id, mint: token_mint}, &program_id)
 }
 
 pub fn abort_icco_sale(

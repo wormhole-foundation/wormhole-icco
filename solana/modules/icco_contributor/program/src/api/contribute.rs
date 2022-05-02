@@ -67,7 +67,7 @@ pub struct ContributeIccoSale<'b> {
     pub authority_signer: AuthoritySigner<'b>,
 
     pub custody_signer: CustodySigner<'b>,
-    pub custody: Mut<CustodyAccount<'b, { AccountState::MaybeInitialized }>>,   // TBD Move custody Account init to separate call. By Sale creator before init sale. In case sale creator needs to pay for it.
+    pub custody: Mut<CustodyAccount<'b, { AccountState::Initialized }>>, 
 
     pub clock: Sysvar<'b, Clock>,
 }
@@ -146,17 +146,17 @@ pub fn contribute_icco_sale(
 
     // Create and init custody account as needed.
     // https://github.com/certusone/wormhole/blob/1792141307c3979b1f267af3e20cfc2f011d7051/solana/modules/token_bridge/program/src/api/transfer.rs#L159
-    if !accs.custody.is_initialized() {
-        accs.custody.create(&(&*accs).into(), ctx, accs.payer.key, Exempt)?;       // Cuurent vallet is payer
+    // if !accs.custody.is_initialized() {
+    //     accs.custody.create(&(&*accs).into(), ctx, accs.payer.key, Exempt)?;       // Cuurent vallet is payer
 
-        let init_ix = spl_token::instruction::initialize_account(
-            &spl_token::id(),
-            accs.custody.info().key,
-            accs.mint.info().key,
-            accs.custody_signer.key,
-        )?;
-        invoke_signed(&init_ix, ctx.accounts, &[])?;
-    }
+    //     let init_ix = spl_token::instruction::initialize_account(
+    //         &spl_token::id(),
+    //         accs.custody.info().key,
+    //         accs.mint.info().key,
+    //         accs.custody_signer.key,
+    //     )?;
+    //     invoke_signed(&init_ix, ctx.accounts, &[])?;
+    // }
 
     // Create/Load contribution PDA account. 
     if !accs.contribution_state.is_initialized() {

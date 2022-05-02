@@ -22,6 +22,8 @@ import { sleepFor, parseSaleInit } from "../";
 import {
   vaa_address,
   icco_state_address,
+  create_icco_sale_custody_account_ix,
+  icco_sale_custody_account_address,
   init_icco_sale_ix,
   abort_icco_sale_ix,
 } from "../../solana/icco_contributor-node";
@@ -90,6 +92,7 @@ import { MsgInstantiateContract } from "@terra-money/terra.js";
 setDefaultWasm("node");
 //import { init_icco_sale_ix } from "icco_contributor";
 
+// 6sbzC1eH4FTujJXWj51eQe25cYvr4xfXbJ1vAj7j2k5J
 const SOLANA_WALLET_PK =
   "14,173,153,4,176,224,201,111,32,237,183,185,159,247,22,161,89,84,215,209,212,137,10,92,157,49,29,192,101,164,152,70,87,65,8,174,214,157,175,126,98,90,54,24,100,177,247,77,19,112,47,44,165,109,233,102,14,86,109,29,134,145,132,141";
 const SOLANA_CONTRIBUTOR_ADDR = "5yrpFgtmiBkRmDgveVErMWuxC25eK5QE5ouZgfi46aqM";
@@ -252,7 +255,40 @@ describe("Solana dev Tests", () => {
             Buffer.from(saleInitVaa),
             0
           );
-          const ix = ixFromRust(
+          // Create custody account(s) to hold contributet tokens.
+          const custody_addr = icco_sale_custody_account_address(
+            SOLANA_CONTRIBUTOR_ADDR,
+            BigInt(saleInit.saleId.toString()),
+            "2WDq7wSs9zYrpx2kbHDA4RUTRch2CCTP6ZWaH4GNfnQQ" // see wormhole/docs/devnet.md
+          );
+          console.log("custody_addr: ", custody_addr.toString());
+
+          const ix_create_custudy_acct = ixFromRust(
+            create_icco_sale_custody_account_ix(
+              SOLANA_CONTRIBUTOR_ADDR,
+              SOLANA_BRIDGE_ADDR,
+              walletAccount.publicKey.toString(),
+              saleInitVaa,
+              "2WDq7wSs9zYrpx2kbHDA4RUTRch2CCTP6ZWaH4GNfnQQ", // see wormhole/docs/devnet.md
+              0
+            )
+          );
+          const tx_create_custudy_acct = new Transaction().add(
+            ix_create_custudy_acct
+          );
+          const tx_id_create_custudy_acct =
+            await solanaConnection.sendTransaction(
+              tx_create_custudy_acct,
+              [walletAccount],
+              {
+                skipPreflight: false,
+                preflightCommitment: "singleGossip",
+              }
+            );
+          await solanaConnection.confirmTransaction(tx_id_create_custudy_acct);
+
+          // Init sale.
+          const ix_init = ixFromRust(
             init_icco_sale_ix(
               SOLANA_CONTRIBUTOR_ADDR,
               SOLANA_BRIDGE_ADDR,
@@ -261,9 +297,9 @@ describe("Solana dev Tests", () => {
             )
           );
           // call contributor contract
-          const tx = new Transaction().add(ix);
+          const tx_init = new Transaction().add(ix_init);
           const tx_id = await solanaConnection.sendTransaction(
-            tx,
+            tx_init,
             [walletAccount],
             {
               skipPreflight: false,
@@ -291,11 +327,11 @@ describe("Solana dev Tests", () => {
         const abort_vaa_pda_pk = new PublicKey(
           vaa_address(SOLANA_BRIDGE_ADDR, saleAbortVaa)
         );
-        console.log("abort_sale vaa PDA: ", abort_vaa_pda_pk.toString());
-        console.info(
-          "AbortSale VAA:",
-          Buffer.from(saleAbortVaa).toString("hex")
-        );
+        // console.log("abort_sale vaa PDA: ", abort_vaa_pda_pk.toString());
+        // console.info(
+        //   "AbortSale VAA:",
+        //   Buffer.from(saleAbortVaa).toString("hex")
+        // );
 
         {
           // post VAA on solana.
@@ -344,19 +380,25 @@ describe("Solana dev Tests", () => {
           icco_state_pda_address.toString()
         );
 
-        // const slot = await solanaConnection.getSlot();
-        // console.log("slot: ", slot);
+        // const slot = await solanaConnection.getSlot(); console.log("slot: ", slot);
 
-        const icco_state_pda_info = await solanaConnection.getParsedAccountInfo(
-          // getAccountInfoAndContext(
+        // Use getAccountInfoAndContext to get slot.
+        const icco_state_pda_info = await solanaConnection.getAccountInfo(
           icco_state_pda_address_pk,
           "confirmed"
         );
         console.log(icco_state_pda_info);
 
+        const sale_state = icco_state_pda_info!.data;
+        console.log("ICCO sale state bytes: " + sale_state[1]);
+        console.log(
+          "ICCO sale state bytes str: " + sale_state.toString("utf8")
+        );
+        expect(sale_state[0] === 0 && sale_state[1] === 1).toBeTruthy();
+
         // Done here.
         ethProvider.destroy();
-        console.log("init_icco_sale abort_icco_sale done");
+        console.log("----- init_icco_sale + abort_icco_sale done -----");
         done();
       } catch (e) {
         console.error(e);

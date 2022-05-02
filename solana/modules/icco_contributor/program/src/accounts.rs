@@ -81,8 +81,11 @@ pub struct CustodyAccountDerivationData {
 impl<'b, const STATE: AccountState> Seeded<&CustodyAccountDerivationData>
     for CustodyAccount<'b, { STATE }>
 {
-    fn seeds(accs: &CustodyAccountDerivationData) -> Vec<Vec<u8>> {
-        vec![accs.mint.to_bytes().to_vec()]
+    fn seeds(accs: &CustodyAccountDerivationData) -> Vec<Vec<u8>> { 
+        vec![
+            accs.sale_id.to_be_bytes().to_vec(),
+            accs.mint.to_bytes().to_vec(),
+        ]
     }
 }
 

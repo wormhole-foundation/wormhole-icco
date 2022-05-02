@@ -22,13 +22,15 @@ pub mod messages;
 pub mod types;
 
 pub use api::{
-    contribute_icco_sale, init_icco_sale, initialize, abort_icco_sale, ContributeIccoSale, InitIccoSale, Initialize, AbortIccoSale,
+    contribute_icco_sale, init_icco_sale, initialize, create_icco_sale_custody_account, abort_icco_sale,
+    ContributeIccoSale, InitIccoSale, Initialize, CreateIccoSaleCustodyAccount, AbortIccoSale,
 };
 
 use solitaire::*;
 
 solitaire! {
     Initialize => initialize,
+    CreateIccoSaleCustodyAccount => create_icco_sale_custody_account,
     InitIccoSale  => init_icco_sale,
     AbortIccoSale  => abort_icco_sale,
     ContributeIccoSale => contribute_icco_sale,

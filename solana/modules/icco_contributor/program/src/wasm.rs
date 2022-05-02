@@ -12,6 +12,8 @@ use crate::{
         EmitterAccount
     },
     instructions::{
+        create_icco_sale_custody_account,
+        get_icco_sale_custody_account_address,
         get_icco_state_address,
         init_icco_sale,
         abort_icco_sale,
@@ -152,6 +154,45 @@ pub fn vaa_address(bridge_id: String, vaa: Vec<u8>) -> Vec<u8> {
 pub fn icco_state_address(program_id: String, sale_id: u64) -> Pubkey {
     get_icco_state_address (Pubkey::from_str(program_id.as_str()).unwrap(), sale_id as u128)
 }
+
+#[wasm_bindgen]
+pub fn icco_sale_custody_account_address(program_id: String, sale_id: u64, mint: String) -> Pubkey {
+    get_icco_sale_custody_account_address (Pubkey::from_str(program_id.as_str()).unwrap(), sale_id as u128, Pubkey::from_str(mint.as_str()).unwrap())
+}
+
+#[wasm_bindgen]
+pub fn create_icco_sale_custody_account_ix(
+    program_id: String,
+    bridge_id: String,
+    payer: String,
+    vaa: Vec<u8>,
+    token_mint: String,
+    token_index: u8,
+) -> JsValue {
+    let vaa = VAA::deserialize(vaa.as_slice()).unwrap();
+    let bridge_id = Pubkey::from_str(bridge_id.as_str()).unwrap();
+    let program_id = Pubkey::from_str(program_id.as_str()).unwrap();
+    let token_mint = Pubkey::from_str(token_mint.as_str()).unwrap();
+    let message_key = bridge::accounts::PostedVAA::<'_, { AccountState::Uninitialized }>::key(
+        &PostedVAADerivationData {
+            payload_hash: hash_vaa(&vaa.clone().into()).to_vec(),
+        },
+        &bridge_id,
+    );
+    let ix = create_icco_sale_custody_account(
+        program_id,
+        SaleInit::get_init_sale_sale_id(&vaa.payload),
+        Pubkey::from_str(payer.as_str()).unwrap(),
+        message_key,
+        Pubkey::new(&vaa.emitter_address),
+        vaa.emitter_chain,
+        vaa.sequence,
+        token_mint,
+        token_index,
+        );
+    JsValue::from_serde(&ix).unwrap()
+}
+
 
 #[wasm_bindgen]
 pub fn init_icco_sale_ix(

@@ -63,10 +63,9 @@ pub struct ContributeIccoSale<'b> {
     pub contribution_state: ContributionStateAccount<'b, { AccountState::MaybeInitialized }>, 
 
     pub from: Mut<Data<'b, SplAccount, { AccountState::Initialized }>>,     // From account
-    pub mint: Mut<Data<'b, SplMint, { AccountState::Initialized }>>,        // From token
+    pub mint: Mut<Data<'b, SplMint, { AccountState::Initialized }>>,        // From token Why Mut??
     pub authority_signer: AuthoritySigner<'b>,
 
-    pub custody_signer: CustodySigner<'b>,
     pub custody: Mut<CustodyAccount<'b, { AccountState::Initialized }>>, 
 
     pub clock: Sysvar<'b, Clock>,
@@ -121,9 +120,9 @@ pub fn contribute_icco_sale(
         return Err(SaleSealedOrAborted.into());
     }
 
+    // TBD This does not work yet. EVM Time is not Linux.
     // Check if sale started.
-    // require(block.timestamp >= start, "sale not yet started");
-    // require(block.timestamp <= end, "sale has ended");
+/*
     let now_time = accs.clock.unix_timestamp as u128;       // i64 ->u128
     if now_time < accs.init_sale_vaa.get_sale_start(&accs.init_sale_vaa.meta().payload[..]).0 {
         return Err(SaleHasNotStarted.into());
@@ -131,8 +130,9 @@ pub fn contribute_icco_sale(
     if now_time > accs.init_sale_vaa.get_sale_end(&accs.init_sale_vaa.meta().payload[..]).0 {
         return Err(SaleHasEnded.into());
     }
-
+*/
     // Make sure token Idx matches passed in token mint addr.
+/*
     let token_idx = data.token_idx;
     if token_idx >= accs.init_sale_vaa.token_cnt {
         return Err(InvalidTokenIndex.into());
@@ -143,21 +143,7 @@ pub fn contribute_icco_sale(
     if &token_addr != accs.mint.info().key || token_chain != CHAIN_ID_SOLANA {
         return Err(InvalidTokenAddress.into());
     }
-
-    // Create and init custody account as needed.
-    // https://github.com/certusone/wormhole/blob/1792141307c3979b1f267af3e20cfc2f011d7051/solana/modules/token_bridge/program/src/api/transfer.rs#L159
-    // if !accs.custody.is_initialized() {
-    //     accs.custody.create(&(&*accs).into(), ctx, accs.payer.key, Exempt)?;       // Cuurent vallet is payer
-
-    //     let init_ix = spl_token::instruction::initialize_account(
-    //         &spl_token::id(),
-    //         accs.custody.info().key,
-    //         accs.mint.info().key,
-    //         accs.custody_signer.key,
-    //     )?;
-    //     invoke_signed(&init_ix, ctx.accounts, &[])?;
-    // }
-
+*/
     // Create/Load contribution PDA account. 
     if !accs.contribution_state.is_initialized() {
         accs.contribution_state.create(&(&*accs).into(), ctx, accs.payer.key, Exempt)?;
@@ -168,11 +154,14 @@ pub fn contribute_icco_sale(
         &spl_token::id(),
         accs.from.info().key,
         accs.custody.info().key,
-        accs.authority_signer.key,
+        accs.payer.key,   // accs.authority_signer.key,      // Payer?
         &[],
         data.amount,
     )?;
-    invoke_seeded(&transfer_ix, ctx, &accs.authority_signer, None)?;
+    invoke_signed(&transfer_ix, ctx.accounts, &[])?;
+
+//    invoke_seeded(&transfer_ix, ctx, &accs.payer, None)?;
+//    invoke_seeded(&transfer_ix, ctx, &accs.authority_signer, None)?;
 
     // store new amount.
     accs.contribution_state.amount = accs.contribution_state.amount + data.amount;

@@ -60,7 +60,7 @@ impl<'b, const STATE: AccountState> Seeded<&ContributionStateAccountDerivationDa
 {
     fn seeds(accs: &ContributionStateAccountDerivationData) -> Vec<Vec<u8>> {
         vec![
-            String::from("state").as_bytes().to_vec(),
+            String::from("contribution").as_bytes().to_vec(),
             accs.sale_id.to_be_bytes().to_vec(),
             accs.contributor.to_bytes().to_vec(),
             accs.token.to_bytes().to_vec(),
@@ -70,7 +70,7 @@ impl<'b, const STATE: AccountState> Seeded<&ContributionStateAccountDerivationDa
 
 
 ///-------------------------------------------------------------------
-/// Custody Account.
+/// Custody Account. PDA <= "custody", SaleId, mint
 pub type CustodyAccount<'b, const STATE: AccountState> = Data<'b, SplAccount, { STATE }>;
 
 pub struct CustodyAccountDerivationData {
@@ -83,6 +83,7 @@ impl<'b, const STATE: AccountState> Seeded<&CustodyAccountDerivationData>
 {
     fn seeds(accs: &CustodyAccountDerivationData) -> Vec<Vec<u8>> { 
         vec![
+            String::from("custody").as_bytes().to_vec(),
             accs.sale_id.to_be_bytes().to_vec(),
             accs.mint.to_bytes().to_vec(),
         ]

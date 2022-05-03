@@ -147,6 +147,7 @@ pub fn create_icco_sale_custody_account(
             AccountMeta::new_readonly(token_mint, false),       // Mint.
 //            AccountMeta::new(payer, true),                      // Use payer as custody_signer 
             AccountMeta::new(custody_key, false),
+            AccountMeta::new_readonly(program_id, false),       // <--- As custody owner?
             AccountMeta::new_readonly(solana_program::sysvar::rent::id(), false),
             AccountMeta::new_readonly(solana_program::sysvar::clock::id(), false),
             AccountMeta::new_readonly(solana_program::system_program::id(), false),

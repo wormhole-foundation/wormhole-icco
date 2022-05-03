@@ -77,6 +77,8 @@ pub struct CreateIccoSaleCustodyAccount<'b> {
 //    pub custody_signer: CustodySigner<'b>,
     pub custody: Mut<CustodyAccount<'b, { AccountState::MaybeInitialized }>>,
 
+    pub prog_id: AccountInfo<'b>,
+
     pub rent: Sysvar<'b, Rent>,
     pub clock: Sysvar<'b, Clock>,
 }
@@ -125,7 +127,8 @@ pub fn create_icco_sale_custody_account(
             &spl_token::id(),
             accs.custody.info().key,
             accs.mint.info().key,
-            accs.payer.info().key,
+//            accs.payer.info().key,
+            ctx.program_id,
         )?;
         invoke_signed(&init_ix, ctx.accounts, &[])?;
     }

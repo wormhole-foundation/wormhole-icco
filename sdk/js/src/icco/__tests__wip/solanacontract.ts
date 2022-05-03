@@ -98,6 +98,8 @@ const SOLANA_WALLET_PK =
 const SOLANA_CONTRIBUTOR_ADDR = "5yrpFgtmiBkRmDgveVErMWuxC25eK5QE5ouZgfi46aqM";
 const SOLANA_BRIDGE_ADDR = "Bridge1p5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o";
 
+const SOLANA_TEST_TOKEN_MINT = "2WDq7wSs9zYrpx2kbHDA4RUTRch2CCTP6ZWaH4GNfnQQ"; // see wormhole/docs/devnet.md payer owns 10 Bn of these.
+
 // ten minutes? nobody got time for that
 jest.setTimeout(60000);
 
@@ -259,7 +261,7 @@ describe("Solana dev Tests", () => {
           const custody_addr = icco_sale_custody_account_address(
             SOLANA_CONTRIBUTOR_ADDR,
             BigInt(saleInit.saleId.toString()),
-            "2WDq7wSs9zYrpx2kbHDA4RUTRch2CCTP6ZWaH4GNfnQQ" // see wormhole/docs/devnet.md
+            SOLANA_TEST_TOKEN_MINT
           );
           console.log("custody_addr: ", custody_addr.toString());
 
@@ -269,7 +271,7 @@ describe("Solana dev Tests", () => {
               SOLANA_BRIDGE_ADDR,
               walletAccount.publicKey.toString(),
               saleInitVaa,
-              "2WDq7wSs9zYrpx2kbHDA4RUTRch2CCTP6ZWaH4GNfnQQ", // see wormhole/docs/devnet.md
+              SOLANA_TEST_TOKEN_MINT, // see wormhole/docs/devnet.md
               0
             )
           );

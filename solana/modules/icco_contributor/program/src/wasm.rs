@@ -17,6 +17,7 @@ use crate::{
         get_icco_state_address,
         init_icco_sale,
         abort_icco_sale,
+        contribute_icco_sale,
     },
     types::{
         EndpointRegistration,
@@ -222,6 +223,7 @@ pub fn init_icco_sale_ix(
     JsValue::from_serde(&ix).unwrap()
 }
 
+
 #[wasm_bindgen]
 pub fn abort_icco_sale_ix(
     program_id: String,
@@ -246,6 +248,42 @@ pub fn abort_icco_sale_ix(
         Pubkey::new(&vaa.emitter_address),
         vaa.emitter_chain,
         vaa.sequence,
+    );
+    JsValue::from_serde(&ix).unwrap()
+}
+
+
+#[wasm_bindgen]
+pub fn contribute_icco_sale_ix(
+    program_id: String,
+    bridge_id: String,
+    payer: String,
+    from_account: String,
+    init_sale_vaa: Vec<u8>,
+    token_mint: String,
+    token_index: u8,
+    amount: u64,
+) -> JsValue {
+    let vaa = VAA::deserialize(init_sale_vaa.as_slice()).unwrap();
+    let bridge_id = Pubkey::from_str(bridge_id.as_str()).unwrap();
+    let program_id = Pubkey::from_str(program_id.as_str()).unwrap();
+    let from_account = Pubkey::from_str(from_account.as_str()).unwrap();
+    let token_mint = Pubkey::from_str(token_mint.as_str()).unwrap();
+    let message_key = bridge::accounts::PostedVAA::<'_, { AccountState::Uninitialized }>::key(
+        &PostedVAADerivationData {
+            payload_hash: hash_vaa(&vaa.clone().into()).to_vec(),
+        },
+        &bridge_id,
+    );
+    let ix = contribute_icco_sale(
+        program_id,
+        SaleInit::get_init_sale_sale_id(&vaa.payload),
+        Pubkey::from_str(payer.as_str()).unwrap(),
+        from_account,
+        message_key,
+        token_mint,
+        token_index,
+        amount,
     );
     JsValue::from_serde(&ix).unwrap()
 }

@@ -22,7 +22,7 @@ use crate::{
         ConfigAccount,
         SaleStateAccount,
         SaleStateDerivationData,
-        CustodySigner,
+//        CustodySigner,
         CustodyAccount,
         CustodyAccountDerivationData,
     },
@@ -51,8 +51,6 @@ use solitaire::{
 use bridge::{
     vaa::{
         ClaimableVAA,
-//        DeserializePayload,
-//        PayloadMessage,
     },
 //    error::Error::{
 //        VAAAlreadyExecuted,
@@ -72,9 +70,7 @@ pub struct CreateIccoSaleCustodyAccount<'b> {
 
 //    pub mint: Mut<Data<'b, SplMint, { AccountState::Initialized }>>,        // From token
     pub mint: Data<'b, SplMint, { AccountState::MaybeInitialized }>,        // From token
-    //// pub authority_signer: AuthoritySigner<'b>,
 
-//    pub custody_signer: CustodySigner<'b>,
     pub custody: Mut<CustodyAccount<'b, { AccountState::MaybeInitialized }>>,
 
     pub prog_id: AccountInfo<'b>,

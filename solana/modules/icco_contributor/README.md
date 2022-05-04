@@ -1,3 +1,9 @@
+```
+Notion designlink:
+https://www.notion.so/677ea05b110347279846b709e7d000c1?v=0361b046678e42dfb1bfe2887c13750d&p=8b34da4ecc4249239216d8e2bf9c720e
+https://www.notion.so/ICCO-On-Solana-8b34da4ecc4249239216d8e2bf9c720e
+```
+
 local check For tilt devnet:
 
 build using:

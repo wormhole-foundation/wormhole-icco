@@ -26,6 +26,8 @@ import {
   icco_sale_custody_account_address,
   init_icco_sale_ix,
   abort_icco_sale_ix,
+  contribute_icco_sale_ix,
+  Pubkey,
 } from "../../solana/icco_contributor-node";
 
 // Solana
@@ -99,7 +101,8 @@ const SOLANA_CONTRIBUTOR_ADDR = "5yrpFgtmiBkRmDgveVErMWuxC25eK5QE5ouZgfi46aqM";
 const SOLANA_BRIDGE_ADDR = "Bridge1p5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o";
 
 const SOLANA_TEST_TOKEN_MINT = "2WDq7wSs9zYrpx2kbHDA4RUTRch2CCTP6ZWaH4GNfnQQ"; // see wormhole/docs/devnet.md payer owns 10 Bn of these.
-
+const SOLANA_TEST_TOKEN_ACCOUNT =
+  "BhxSeLbNAKoToEyEf8rPHEv4vSgFTPpXdEJdZT6BBZn1"; // Contribution source.
 // ten minutes? nobody got time for that
 jest.setTimeout(60000);
 
@@ -241,7 +244,7 @@ describe("Solana dev Tests", () => {
         const init_vaa_pda_pk = new PublicKey(
           vaa_address(SOLANA_BRIDGE_ADDR, saleInitVaa)
         );
-        console.log("bbrp init_sale vaa PDA: ", init_vaa_pda_pk.toString());
+        // console.log("bbrp init_sale vaa PDA: ", init_vaa_pda_pk.toString());
 
         // Make init_icco_sale_ix and call it
         {
@@ -312,6 +315,37 @@ describe("Solana dev Tests", () => {
         }
 
         // -----------------------
+        // Contribute to the contributor custody account.
+        {
+          console.log("---- Contributing ------");
+          // Make contribute instruction.
+          const ixw = contribute_icco_sale_ix(
+            SOLANA_CONTRIBUTOR_ADDR,
+            SOLANA_BRIDGE_ADDR,
+            walletAccount.publicKey.toString(),
+            SOLANA_TEST_TOKEN_ACCOUNT,
+            saleInitVaa, // init_sale_vaa: Vec<u8>,
+            SOLANA_TEST_TOKEN_MINT,
+            0, // Token idx
+            BigInt(1000000000) // Amount (raw)
+          );
+          dumpInstructionAccounts(ixw);
+          const ix = ixFromRust(ixw);
+
+          // call contributor contract
+          const tx = new Transaction().add(ix);
+          const tx_id = await solanaConnection.sendTransaction(
+            tx,
+            [walletAccount],
+            {
+              skipPreflight: false,
+              preflightCommitment: "singleGossip",
+            }
+          );
+          await solanaConnection.confirmTransaction(tx_id);
+        }
+
+        // -----------------------
         // Now abort this sale.
         console.log("-->> abort_icco_sale");
         // abort the sale early in the conductor
@@ -325,7 +359,7 @@ describe("Solana dev Tests", () => {
           abortEarlyReceipt
         );
 
-        // Log Solana VAA PDA address.
+        // Log Solana Abort sale VAA PDA address.
         const abort_vaa_pda_pk = new PublicKey(
           vaa_address(SOLANA_BRIDGE_ADDR, saleAbortVaa)
         );
@@ -411,3 +445,11 @@ describe("Solana dev Tests", () => {
     })();
   });
 });
+
+function dumpInstructionAccounts(ixw: any) {
+  ixw.accounts.map((a: any, i: number) => {
+    // console.log(i + ": " + a.pubkey);
+    const pk = new Pubkey(a.pubkey);
+    console.log(i + ": " + pk.toString());
+  });
+}

@@ -18,6 +18,7 @@ use crate::{
     },
     errors::Error::*,
     types::*,
+    claimed_vaa::ClaimedVAA,
 };
 
 use solana_program::msg;
@@ -56,15 +57,15 @@ use bridge::{
 #[derive(FromAccounts)]
 pub struct ContributeIccoSale<'b> {
     pub payer: Mut<Signer<AccountInfo<'b>>>,
-    pub config: ConfigAccount<'b, { AccountState::Initialized }>,      // Must be created by now
-    pub sale_state: SaleStateAccount<'b, { AccountState::Initialized }>,   // Must not be created yet
-    pub init_sale_vaa: ClaimableVAA<'b, SaleInit>,           // Was claimed.
+    pub config: ConfigAccount<'b, { AccountState::Initialized }>,
+    pub sale_state: SaleStateAccount<'b, { AccountState::Initialized }>,    // R/O here
+    pub init_sale_vaa: ClaimedVAA<'b, SaleInit>,           // Was claimed.
 
-    pub contribution_state: ContributionStateAccount<'b, { AccountState::MaybeInitialized }>, 
+    pub contribution_state: Mut<ContributionStateAccount<'b, { AccountState::MaybeInitialized }>>, 
 
     pub from: Mut<Data<'b, SplAccount, { AccountState::Initialized }>>,     // From account
-    pub mint: Mut<Data<'b, SplMint, { AccountState::Initialized }>>,        // From token Why Mut??
-    pub authority_signer: AuthoritySigner<'b>,
+//    pub mint: Mut<Data<'b, SplMint, { AccountState::Initialized }>>,        // From token Why Mut??
+    pub mint: Data<'b, SplMint, { AccountState::Initialized }>,        // From token Why Mut??
 
     pub custody: Mut<CustodyAccount<'b, { AccountState::Initialized }>>, 
 
@@ -92,7 +93,7 @@ impl<'a> From<&ContributeIccoSale<'a>> for ContributionStateAccountDerivationDat
     fn from(accs: &ContributeIccoSale<'a>) -> Self {
         ContributionStateAccountDerivationData {
             sale_id: accs.init_sale_vaa.sale_id,
-            contributor: *accs.from.info().key,
+            contributor: *accs.payer.info().key,    // Needs to be wallet to be able to potentially use multiple contrib subaccounts?
             token: *accs.mint.info().key,
         }
     }
@@ -101,8 +102,8 @@ impl<'a> From<&ContributeIccoSale<'a>> for ContributionStateAccountDerivationDat
 
 #[derive(BorshDeserialize, BorshSerialize, Default)]
 pub struct ContributeIccoSaleData {
-    amount: u64,
-    token_idx: u8,
+    pub amount: u64,
+    pub token_idx: u8,
 }
 
 impl<'b> InstructionContext<'b> for ContributeIccoSale<'b> {
@@ -113,7 +114,7 @@ pub fn contribute_icco_sale(
     accs: &mut ContributeIccoSale,
     data: ContributeIccoSaleData,
 ) -> Result<()> {
-    msg!("bbrp in contribute_icco_sale!");
+    msg!("In contribute_icco_sale!");
 
     // Check sale status.
     if accs.sale_state.is_sealed || accs.sale_state.is_aborted {
@@ -144,7 +145,8 @@ pub fn contribute_icco_sale(
         return Err(InvalidTokenAddress.into());
     }
 */
-    // Create/Load contribution PDA account. 
+
+// Create/Load contribution PDA account. 
     if !accs.contribution_state.is_initialized() {
         accs.contribution_state.create(&(&*accs).into(), ctx, accs.payer.key, Exempt)?;
     }

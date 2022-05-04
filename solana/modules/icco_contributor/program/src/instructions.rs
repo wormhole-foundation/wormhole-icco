@@ -17,11 +17,14 @@ use crate::{
 //        MintSigner,
         SplTokenMeta,
         SplTokenMetaDerivationData,
+        ContributionStateAccount,
+        ContributionStateAccountDerivationData,
     },
     api::{
         CreateIccoSaleCustodyAccountData,
         InitIccoSaleData,
         AbortIccoSaleData,
+        ContributeIccoSaleData,
     },
 };
 use borsh::BorshSerialize;
@@ -145,7 +148,6 @@ pub fn create_icco_sale_custody_account(
             AccountMeta::new_readonly(payload_message, false),
             AccountMeta::new(claim, false),
             AccountMeta::new_readonly(token_mint, false),       // Mint.
-//            AccountMeta::new(payer, true),                      // Use payer as custody_signer 
             AccountMeta::new(custody_key, false),
             AccountMeta::new_readonly(program_id, false),       // <--- As custody owner?
             AccountMeta::new_readonly(solana_program::sysvar::rent::id(), false),
@@ -254,6 +256,56 @@ pub fn abort_icco_sale(
         data: (
             crate::instruction::Instruction::AbortIccoSale,
             AbortIccoSaleData {},
+        )
+            .try_to_vec()
+            .unwrap(),
+    }
+}
+
+
+pub fn contribute_icco_sale(
+    program_id: Pubkey,
+    sale_id: u128,
+    payer: Pubkey,
+    from_account: Pubkey,
+    payload_message: Pubkey,
+    // emitter: Pubkey,
+    // emitter_chain: u16,
+    // sequence: u64,
+    token_mint: Pubkey,
+    token_index: u8,  // TBD For validation against VAA. 
+    amount: u64,
+) -> Instruction {
+    let config_key = ConfigAccount::<'_, { AccountState::Initialized }>::key(None, &program_id);
+    let state_key = SaleStateAccount::<'_, { AccountState::Initialized }>::key(&SaleStateDerivationData{sale_id: sale_id}, &program_id);
+    let contribution_state_key =
+        ContributionStateAccount::<'_, { AccountState::MaybeInitialized }>::key(&ContributionStateAccountDerivationData{
+            sale_id: sale_id,
+            contributor: payer,
+            token: token_mint,
+        }, &program_id);
+    let custody_key = CustodyAccount::<'_, { AccountState::MaybeInitialized }>::key(&CustodyAccountDerivationData{sale_id: sale_id, mint: token_mint}, &program_id);
+
+    Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new(payer, true),
+            AccountMeta::new_readonly(config_key, false),
+            AccountMeta::new_readonly(state_key, false),
+            AccountMeta::new_readonly(payload_message, false),
+            AccountMeta::new(contribution_state_key, false),
+            AccountMeta::new(from_account, false),
+            AccountMeta::new_readonly(token_mint, false),       // Mint.
+            AccountMeta::new(custody_key, false),
+//Not needed            AccountMeta::new_readonly(program_id, false),       // <--- As custody owner?
+            AccountMeta::new_readonly(solana_program::sysvar::clock::id(), false),
+            AccountMeta::new_readonly(solana_program::sysvar::rent::id(), false),
+            AccountMeta::new_readonly(solana_program::system_program::id(), false),
+            AccountMeta::new_readonly(spl_token::id(), false),
+        ],
+        data: (
+            crate::instruction::Instruction::ContributeIccoSale,
+            ContributeIccoSaleData {amount: amount, token_idx: token_index},
         )
             .try_to_vec()
             .unwrap(),

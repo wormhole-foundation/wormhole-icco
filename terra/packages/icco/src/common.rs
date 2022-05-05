@@ -108,7 +108,6 @@ impl AcceptedToken {
         if self.chain != CHAIN_ID {
             return Err(StdError::generic_err("chain != terra"));
         }
-
         let addr = self.address.as_slice();
         match addr[0] {
             1u8 => {
@@ -132,13 +131,6 @@ impl AcceptedToken {
                 })
             }
         }
-    }
-
-    pub fn make_asset(&self, api: &dyn Api, amount: Uint128) -> StdResult<Asset> {
-        Ok(Asset {
-            info: self.make_asset_info(api)?,
-            amount: amount,
-        })
     }
 }
 

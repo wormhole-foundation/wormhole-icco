@@ -37,21 +37,28 @@ pub struct AcceptedToken {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct SaleStatus {
-    pub is_sealed: bool,
-    pub is_aborted: bool,
+pub enum SaleStatus {
+    Active,
+    Sealed,
+    Aborted,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Contribution {
     pub token_index: u8,
-    pub contributed: Uint256, // actually Uint128, but will be serialized as Uint256
+    pub amount: Uint256, // actually Uint128, but will be serialized as Uint256
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Allocation {
-    pub token_index: u8,
-    pub allocated: Uint256,
+    pub allocated: Uint256, // actually Uint128, but will be serialized as Uint256
+    pub excess_contributed: Uint256,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct AssetAllocation {
+    pub allocated: Uint128,
+    pub excess_contributed: Uint128,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -98,44 +105,6 @@ impl AcceptedToken {
             conversion_rate: Uint128::zero(),
         })
     }
-
-    pub fn serialize(&self) -> Vec<u8> {
-        [
-            self.chain.to_be_bytes().to_vec(),
-            self.address.to_vec(),
-            self.conversion_rate.u128().to_be_bytes().to_vec(),
-        ]
-        .concat()
-    }
-
-    pub fn make_asset_info(&self, api: &dyn Api) -> StdResult<AssetInfo> {
-        if self.chain != CHAIN_ID {
-            return Err(StdError::generic_err("chain != terra"));
-        }
-        let addr = self.address.as_slice();
-        match addr[0] {
-            1u8 => {
-                // match first "u" (e.g. uusd)
-                match addr.iter().position(|&x| x == 117u8) {
-                    Some(idx) => {
-                        let denom = &addr[idx..32];
-                        match String::from_utf8(denom.into()) {
-                            Ok(denom) => Ok(AssetInfo::NativeToken { denom }),
-                            _ => Err(StdError::generic_err("not valid denom")),
-                        }
-                    }
-                    None => Err(StdError::generic_err("not valid denom")),
-                }
-            }
-            _ => {
-                let token_address = CanonicalAddr::from(&addr[12..32]);
-                let humanized = api.addr_humanize(&token_address)?;
-                Ok(AssetInfo::Token {
-                    contract_addr: humanized.to_string(),
-                })
-            }
-        }
-    }
 }
 
 pub fn to_const_bytes32(data: &[u8], index: usize) -> [u8; 32] {
@@ -144,6 +113,14 @@ pub fn to_const_bytes32(data: &[u8], index: usize) -> [u8; 32] {
 
 pub fn to_u256(data: &[u8], index: usize) -> Uint256 {
     Uint256::new(to_const_bytes32(data, index))
+}
+
+impl Contribution {
+    pub const NUM_BYTES: usize = 33; // 1 + 32
+}
+
+impl Allocation {
+    pub const NUM_BYTES: usize = 65; // 1 + 32 + 32
 }
 
 impl SaleInit {
@@ -206,89 +183,124 @@ impl SaleInit {
 
 impl ContributionsSealed {
     pub const PAYLOAD_ID: u8 = 2;
+    pub const HEADER_LEN: usize = 34; // excluding payload
 
-    pub fn new(sale_id: &[u8], chain_id: u16) -> Self {
+    pub fn new(sale_id: &[u8], chain_id: u16, capacity: usize) -> Self {
         ContributionsSealed {
             sale_id: sale_id.to_vec(),
             chain_id,
-            contributions: Vec::new(),
+            contributions: Vec::with_capacity(capacity),
         }
     }
 
-    pub fn add_contribution(&mut self, token_index: u8, contributed: Uint128) -> StdResult<usize> {
-        // limit to len 255
-        if self.contributions.len() >= 256 {
+    pub fn add_contribution(&mut self, token_index: u8, amount: Uint128) -> StdResult<()> {
+        let contributions = &mut self.contributions;
+
+        // limit to len 256
+        if contributions.len() >= 256 {
             return Err(StdError::generic_err("cannot exceed length 256"));
         }
 
-        let contributed = Uint256::from(contributed.u128());
-        self.contributions.push(Contribution {
-            token_index,
-            contributed,
-        });
-        Ok(self.contributions.len())
-    }
-    /*
-    pub fn deserialize(data: &Vec<u8>) -> StdResult<Self> {
-        let data = data.as_slice();
-        let payload_id = data.get_u8(0);
-
-        if payload_id != ContributionsSealed::PAYLOAD_ID {
+        let result = contributions.iter().find(|c| c.token_index == token_index);
+        if result != None {
             return Err(StdError::generic_err(
-                "payload_id != ContributionsSealed::PAYLOAD_ID"
+                "token_index already in contributions",
             ));
         }
-        let sale_id = data.get_bytes32(1).to_vec();
-        let chain_id = data.get_u16(33);
 
-        // TODO: deserialize
-        let contributions: Vec<Contribution> = Vec::new();
-        Ok(ContributionsSealed {
-            sale_id,
-            chain_id,
-            contributions,
-        })
+        contributions.push(Contribution {
+            token_index,
+            amount: amount.into(),
+        });
+        Ok(())
     }
-    */
+
     pub fn serialize(&self) -> Vec<u8> {
-        [
-            ContributionsSealed::PAYLOAD_ID.to_be_bytes().to_vec(),
-            self.sale_id.to_vec(),
-            self.chain_id.to_be_bytes().to_vec(),
-            self.serialize_contributions(),
-        ]
-        .concat()
-    }
-
-    fn serialize_contributions(&self) -> Vec<u8> {
-        // TODO
-        Vec::new()
+        let contributions = &self.contributions;
+        let mut serialized = Vec::with_capacity(
+            1 + ContributionsSealed::HEADER_LEN + Contribution::NUM_BYTES * contributions.len(),
+        );
+        serialized.push(ContributionsSealed::PAYLOAD_ID);
+        serialized.extend(self.sale_id.iter());
+        serialized.extend(self.chain_id.to_be_bytes().iter());
+        for contribution in contributions {
+            serialized.push(contribution.token_index);
+            serialized.extend(contribution.amount.to_be_bytes().iter());
+        }
+        serialized
     }
 }
 
 impl SaleSealed {
     pub const PAYLOAD_ID: u8 = 3;
+    pub const HEADER_LEN: usize = 33; // excluding payload
 
-    pub fn add_allocation(&mut self, token_index: u8, allocated: Uint256) -> StdResult<u8> {
-        self.allocations.push(Allocation {
-            token_index,
-            allocated,
-        });
-        Ok(token_index)
-    }
-    pub fn deserialize(data: &[u8]) -> StdResult<Self> {
-        let sale_id = data.get_bytes32(0).to_vec();
+    pub fn new(sale_id: &[u8], num_allocations: usize) -> Self {
+        let mut allocations: Vec<Allocation> = Vec::with_capacity(num_allocations);
+        for _ in 0..num_allocations {
+            allocations.push(Allocation {
+                allocated: Uint256::zero(),
+                excess_contributed: Uint256::zero(),
+            });
+        }
 
-        let allocations = SaleSealed::deserialize_allocations(&data[32..]);
-        Ok(SaleSealed {
-            sale_id,
+        SaleSealed {
+            sale_id: sale_id.to_vec(),
             allocations,
-        })
+        }
     }
 
-    pub fn deserialize_allocations(data: &[u8]) -> Vec<Allocation> {
-        // TODO
-        Vec::new()
+    pub fn add_allocation(
+        &mut self,
+        token_index: u8,
+        allocated: Uint128,
+        excess_contributed: Uint128,
+    ) -> StdResult<()> {
+        let allocation = &mut self.allocations[token_index as usize];
+
+        allocation.allocated = allocated.into();
+        allocation.excess_contributed = excess_contributed.into();
+        Ok(())
+    }
+
+    pub fn read_sale_id(data: &[u8]) -> Vec<u8> {
+        return data.get_bytes32(0).to_vec();
+    }
+
+    pub fn deserialize_allocations_safely(
+        data: &[u8],
+        expected_num_allocations: u8,
+        indices: &Vec<u8>,
+    ) -> StdResult<Vec<(u8, AssetAllocation)>> {
+        if data.get_u8(32) != expected_num_allocations {
+            return Err(StdError::generic_err("encoded num_allocations != expected"));
+        }
+
+        let mut parsed: Vec<(u8, AssetAllocation)> = Vec::with_capacity(indices.len());
+        for &token_index in indices {
+            let i = SaleSealed::HEADER_LEN + (token_index as usize) * Allocation::NUM_BYTES;
+
+            // allocated
+            let (invalid, allocated) = data.get_u256(i);
+            if invalid > 0 {
+                return Err(StdError::generic_err("allocated too large"));
+            }
+
+            // excess_contribution
+            let (invalid, excess_contributed) = data.get_u256(i + 32);
+            if invalid > 0 {
+                return Err(StdError::generic_err("excess_contributed too large"));
+            }
+            parsed.push((
+                token_index,
+                AssetAllocation {
+                    allocated: allocated.into(),
+                    excess_contributed: excess_contributed.into(),
+                },
+            ));
+        }
+
+        Ok(parsed)
     }
     /*
     pub fn serialize(&self) -> Vec<u8> {
@@ -315,4 +327,29 @@ impl SaleAborted {
         [self.payload_id.to_be_bytes().to_vec(), self.sale_id.clone()].concat()
     }
     */
+}
+
+pub fn make_asset_info(api: &dyn Api, addr: &[u8]) -> StdResult<AssetInfo> {
+    match addr[0] {
+        1u8 => {
+            // match first "u" (e.g. uusd)
+            match addr.iter().position(|&x| x == 117u8) {
+                Some(idx) => {
+                    let denom = &addr[idx..32];
+                    match String::from_utf8(denom.into()) {
+                        Ok(denom) => Ok(AssetInfo::NativeToken { denom }),
+                        _ => Err(StdError::generic_err("not valid denom")),
+                    }
+                }
+                None => Err(StdError::generic_err("not valid denom")),
+            }
+        }
+        _ => {
+            let token_address = CanonicalAddr::from(&addr[12..32]);
+            let humanized = api.addr_humanize(&token_address)?;
+            Ok(AssetInfo::Token {
+                contract_addr: humanized.to_string(),
+            })
+        }
+    }
 }

@@ -12,6 +12,9 @@ pub enum ContributorError {
     #[error("AssetNotFound")]
     AssetNotFound,
 
+    #[error("BuyerNotActive")]
+    BuyerNotActive,
+
     #[error("ContributionNotFound")]
     ContributionNotFound,
 
@@ -20,6 +23,12 @@ pub enum ContributorError {
 
     #[error("InsufficientFunds")]
     InsufficientFunds,
+
+    #[error("InsufficientSaleTokens")]
+    InsufficientSaleTokens,
+
+    #[error("NonexistentBuyer")]
+    NonexistentBuyer,
 
     #[error("NonexistentDenom")]
     NonexistentDenom,
@@ -38,9 +47,6 @@ pub enum ContributorError {
 
     #[error("SaleAlreadyExists")]
     SaleAlreadyExists,
-
-    #[error("SaleAlreadySealedOrAborted")]
-    SaleAlreadySealedOrAborted,
 
     #[error("SaleEnded")]
     SaleEnded,
@@ -62,6 +68,9 @@ pub enum ContributorError {
 
     #[error("TooManyAcceptedTokens")]
     TooManyAcceptedTokens,
+
+    #[error("WrongBuyerStatus")]
+    WrongBuyerStatus,
 
     #[error("ZeroAmount")]
     ZeroAmount,

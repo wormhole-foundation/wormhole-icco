@@ -8,21 +8,25 @@ use terraswap::{
     querier::{query_balance, query_token_balance},
 };
 
+use token_bridge_terra::msg::{
+    ExecuteMsg as TokenBridgeExecuteMsg, QueryMsg as TokenBridgeQueryMsg, WrappedRegistryResponse,
+};
 use wormhole::{
     msg::{ExecuteMsg as WormholeExecuteMsg, QueryMsg as WormholeQueryMsg},
     state::ParsedVAA,
 };
 
-use icco::common::{ContributionsSealed, SaleAborted, SaleInit, SaleSealed, SaleStatus, CHAIN_ID};
+use icco::common::{
+    make_asset_info, ContributionsSealed, SaleAborted, SaleInit, SaleSealed, SaleStatus, CHAIN_ID,
+};
 
 use crate::{
     error::ContributorError,
     msg::ExecuteMsg,
     state::{
-        AssetKey, BuyerStatus, BuyerTokenIndexKey, PendingContributeToken, SaleMessage,
-        TokenIndexKey, ACCEPTED_ASSETS, ASSET_INDICES, BUYER_STATUSES, CONFIG,
-        PENDING_CONTRIBUTE_TOKEN, SALES, SALE_STATUSES, SALE_TIMES, TOTAL_ALLOCATIONS,
-        TOTAL_CONTRIBUTIONS,
+        update_buyer_contribution, AssetKey, BuyerStatus, PendingContributeToken, SaleMessage,
+        TokenIndexKey, ACCEPTED_ASSETS, ASSET_INDICES, CONFIG, PENDING_CONTRIBUTE_TOKEN, SALES,
+        SALE_STATUSES, SALE_TIMES, TOTAL_ALLOCATIONS, TOTAL_CONTRIBUTIONS,
     },
 };
 
@@ -45,21 +49,14 @@ pub fn init_sale(deps: DepsMut, env: Env, _info: MessageInfo, vaa: &Binary) -> S
     let sale_init = SaleInit::deserialize(message.payload)?;
     let sale_id = sale_init.core.id.as_slice();
 
-    if SALES.may_load(deps.storage, sale_id)? != None {
+    if SALES.load(deps.storage, sale_id).is_ok() {
         return ContributorError::SaleAlreadyExists.std_err();
     }
 
     SALES.save(deps.storage, sale_id, &sale_init.core)?;
 
     // fresh status
-    SALE_STATUSES.save(
-        deps.storage,
-        sale_id,
-        &SaleStatus {
-            is_sealed: false,
-            is_aborted: false,
-        },
-    )?;
+    SALE_STATUSES.save(deps.storage, sale_id, &SaleStatus::Active)?;
 
     // and times
     SALE_TIMES.save(deps.storage, sale_id, &sale_init.core.times)?;
@@ -79,7 +76,7 @@ pub fn init_sale(deps: DepsMut, env: Env, _info: MessageInfo, vaa: &Binary) -> S
         let token_key: TokenIndexKey = (sale_id, token_index.into());
 
         let this = env.contract.address.clone();
-        let asset_info = token.make_asset_info(deps.api)?;
+        let asset_info = make_asset_info(deps.api, token.address.as_slice())?;
         let asset_key: AssetKey;
         match asset_info.clone() {
             AssetInfo::NativeToken { denom } => {
@@ -122,7 +119,7 @@ pub fn init_sale(deps: DepsMut, env: Env, _info: MessageInfo, vaa: &Binary) -> S
 
 // TODO : add signature argument
 pub fn contribute(
-    mut deps: DepsMut,
+    deps: DepsMut,
     env: Env,
     info: MessageInfo,
     sale_id: &[u8],
@@ -130,8 +127,8 @@ pub fn contribute(
     amount: Uint128,
 ) -> StdResult<Response> {
     let status = SALE_STATUSES.load(deps.storage, sale_id)?;
-    if status.is_aborted {
-        return ContributorError::SaleAborted.std_err();
+    if status != SaleStatus::Active {
+        return ContributorError::SaleAlreadySealedOrAborted.std_err();
     }
 
     let times = SALE_TIMES.load(deps.storage, sale_id)?;
@@ -160,8 +157,8 @@ pub fn contribute(
 }
 
 pub fn contribute_native(
-    mut deps: DepsMut,
-    env: Env,
+    deps: DepsMut,
+    _env: Env,
     info: MessageInfo,
     sale_id: &[u8],
     token_index: u8,
@@ -177,39 +174,28 @@ pub fn contribute_native(
 
     match result {
         Some(funds) => {
-            let key: BuyerTokenIndexKey = (sale_id, token_index.into(), info.sender);
-            let status = BUYER_STATUSES.update(
+            let status = update_buyer_contribution(
                 deps.storage,
-                key,
-                |status: Option<BuyerStatus>| -> StdResult<BuyerStatus> {
-                    match status {
-                        Some(one) => Ok(BuyerStatus {
-                            contribution: one.contribution + funds,
-                            allocation_is_claimed: false,
-                            refund_is_claimed: false,
-                        }),
-                        None => Ok(BuyerStatus {
-                            contribution: funds,
-                            allocation_is_claimed: false,
-                            refund_is_claimed: false,
-                        }),
-                    }
-                },
+                (sale_id, token_index.into(), info.sender),
+                funds,
             )?;
 
-            Ok(Response::new()
-                .add_attribute("action", "contribute_native")
-                .add_attribute("sale_id", Binary::from(sale_id).to_base64())
-                .add_attribute("denom", denom)
-                .add_attribute("funds", funds.to_string())
-                .add_attribute("contribution", status.contribution.to_string()))
+            match status {
+                BuyerStatus::Active { contribution } => Ok(Response::new()
+                    .add_attribute("action", "contribute_native")
+                    .add_attribute("sale_id", Binary::from(sale_id).to_base64())
+                    .add_attribute("denom", denom)
+                    .add_attribute("funds", funds.to_string())
+                    .add_attribute("contribution", contribution.to_string())),
+                _ => ContributorError::WrongBuyerStatus.std_err(),
+            }
         }
         None => ContributorError::InsufficientFunds.std_err(),
     }
 }
 
 pub fn contribute_token(
-    mut deps: DepsMut,
+    deps: DepsMut,
     env: Env,
     info: MessageInfo,
     sale_id: &[u8],
@@ -268,13 +254,13 @@ pub fn contribute_token(
 }
 
 pub fn attest_contributions(
-    mut deps: DepsMut,
+    deps: DepsMut,
     env: Env,
-    info: MessageInfo,
+    _info: MessageInfo,
     sale_id: &[u8],
 ) -> StdResult<Response> {
     let status = SALE_STATUSES.load(deps.storage, sale_id)?;
-    if status.is_sealed || status.is_aborted {
+    if status != SaleStatus::Active {
         return ContributorError::SaleAlreadySealedOrAborted.std_err();
     }
 
@@ -301,7 +287,6 @@ pub fn attest_contributions(
 
     let serialized = contribution_sealed.serialize();
     let num_bytes = serialized.len();
-
     Ok(Response::new()
         .add_message(wormhole_post_message_hook(deps.as_ref(), serialized)?)
         .add_attribute("action", "attest_contributions")
@@ -326,39 +311,43 @@ pub fn sale_sealed(
         return ContributorError::InvalidVaaAction.std_err();
     }
 
-    let sale_sealed = SaleSealed::deserialize(message.payload)?;
-    let sale_id = sale_sealed.sale_id.as_slice();
+    let sale_id = SaleSealed::read_sale_id(message.payload).as_slice();
 
     let status = SALE_STATUSES.load(deps.storage, sale_id)?;
-    if status.is_sealed || status.is_aborted {
-        return ContributorError::SaleAlreadySealedOrAborted.std_err();
+    if status != SaleStatus::Active {
+        return ContributorError::SaleEnded.std_err();
     }
 
     let sale = SALES.load(deps.storage, sale_id)?;
 
     // sale token handling
-    if sale.token_chain == CHAIN_ID {
-        // lol
-    } else {
-        // get the wrapped address
-        // verify balance is > 0
-        // sum total allocations
-        // verify the balance is >= total allocations
-    }
+    let asset_info = match sale.token_chain {
+        CHAIN_ID => make_asset_info(deps.api, sale.token_address.as_slice())?,
+        _ => {
+            // get the wrapped address
+            query_token_bridge_wrapped(
+                deps.as_ref(),
+                sale.token_chain,
+                sale.token_address.as_slice(),
+            )?
+        }
+    };
 
-    SALE_STATUSES.update(
-        deps.storage,
-        sale_id,
-        |status: Option<SaleStatus>| -> StdResult<SaleStatus> {
-            match status {
-                Some(_) => Ok(SaleStatus {
-                    is_sealed: true,
-                    is_aborted: false,
-                }),
-                None => ContributorError::SaleNotFound.std_err(),
-            }
-        },
-    )?;
+    let balance = match asset_info {
+        AssetInfo::NativeToken { denom } => {
+            // this should never happen, but...
+            query_balance(&deps.querier, env.contract.address, denom)?
+        }
+        AssetInfo::Token { contract_addr } => query_token_balance(
+            &deps.querier,
+            Addr::unchecked(contract_addr),
+            env.contract.address,
+        )?,
+    };
+    // save some work if we don't have any of the sale tokens
+    if balance == Uint128::zero() {
+        return ContributorError::InsufficientSaleTokens.std_err();
+    }
 
     let asset_indices: Vec<u8> = ASSET_INDICES
         .prefix(sale_id)
@@ -368,6 +357,22 @@ pub fn sale_sealed(
             index
         })
         .collect();
+
+    // grab the allocations we care about (for Terra contributions)
+    let parsed_allocations =
+        SaleSealed::deserialize_allocations_safely(sale_id, sale.num_accepted, &asset_indices)?;
+
+    // sum total allocations and check against balance in the contract
+    let total_allocations = parsed_allocations
+        .iter()
+        .fold(Uint128::zero(), |total, (_, next)| total + next.allocated);
+
+    if balance < total_allocations {
+        return ContributorError::InsufficientSaleTokens.std_err();
+    }
+
+    // now that everything checks out, set the status to Sealed
+    SALE_STATUSES.save(deps.storage, sale_id, &SaleStatus::Sealed)?;
 
     // transfer contributions to conductor
     let cfg = CONFIG.load(deps.storage)?;
@@ -381,11 +386,12 @@ pub fn sale_sealed(
 
     Ok(Response::new()
         .add_attribute("action", "sale_sealed")
-        .add_attribute("sale_id", Binary::from(sale_id).to_base64()))
+        .add_attribute("sale_id", Binary::from(sale_id).to_base64())
+        .add_attribute("total_allocations", total_allocations.to_string()))
 }
 
 pub fn claim_allocation(
-    mut deps: DepsMut,
+    deps: DepsMut,
     env: Env,
     info: MessageInfo,
     sale_id: &Binary,
@@ -418,19 +424,7 @@ pub fn sale_aborted(
     let sale_id = sale_aborted.sale_id.as_slice();
     let sale = SALES.load(deps.storage, sale_id)?;
 
-    SALE_STATUSES.update(
-        deps.storage,
-        sale_id,
-        |status: Option<SaleStatus>| -> StdResult<SaleStatus> {
-            match status {
-                Some(_) => Ok(SaleStatus {
-                    is_sealed: false,
-                    is_aborted: true,
-                }),
-                None => ContributorError::SaleNotFound.std_err(),
-            }
-        },
-    )?;
+    SALE_STATUSES.save(deps.storage, sale_id, &SaleStatus::Aborted)?;
 
     Ok(Response::new()
         .add_attribute("action", "sale_aborted")
@@ -438,7 +432,7 @@ pub fn sale_aborted(
 }
 
 pub fn claim_refund(
-    mut deps: DepsMut,
+    deps: DepsMut,
     env: Env,
     info: MessageInfo,
     sale_id: &Binary,
@@ -492,6 +486,21 @@ fn query_wormhole_verify_vaa(deps: Deps, block_time: u64, data: &Binary) -> StdR
         })?,
     }))?;
     Ok(vaa)
+}
+
+fn query_token_bridge_wrapped(deps: Deps, chain: u16, address: &[u8]) -> StdResult<AssetInfo> {
+    let cfg = CONFIG.load(deps.storage)?;
+    let response: WrappedRegistryResponse =
+        deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
+            contract_addr: cfg.token_bridge.to_string(),
+            msg: to_binary(&TokenBridgeQueryMsg::WrappedRegistry {
+                chain,
+                address: Binary::from(address),
+            })?,
+        }))?;
+    Ok(AssetInfo::Token {
+        contract_addr: response.address,
+    })
 }
 
 fn wormhole_post_message_hook(deps: Deps, bytes: Vec<u8>) -> StdResult<CosmosMsg> {

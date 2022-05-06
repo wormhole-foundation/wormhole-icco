@@ -1,7 +1,11 @@
-use cosmwasm_std::{Binary, Uint128, Uint256};
+use cosmwasm_std::{Binary, Uint128};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use terraswap::asset::AssetInfo;
+
+use icco::common::{SaleStatus, SaleTimes};
+
+use crate::state::BuyerStatus;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
@@ -59,7 +63,7 @@ pub struct MigrateMsg {}
 pub enum QueryMsg {
     Config {},
 
-    SaleRegistry {
+    Sale {
         sale_id: Binary,
     },
 
@@ -90,45 +94,26 @@ pub enum QueryMsg {
         sale_id: Binary,
         asset_info: AssetInfo,
     },
-}
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub struct ConfigResponse {
-    pub conductor_chain: u16,
-    pub conductor_address: Vec<u8>,
-    pub owner: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub struct SaleRegistryResponse {
-    pub id: Vec<u8>,
-    pub token_address: Vec<u8>,
-    pub token_chain: u16,
-    pub token_amount: Uint256,
-    pub min_raise: Uint256,
-    pub max_raise: Uint256,
-    pub sale_start: u64,
-    pub sale_end: u64,
-    pub recipient: Vec<u8>,
-    pub refund_recipient: Vec<u8>,
+    BuyerStatus {
+        sale_id: Binary,
+        token_index: u8,
+        buyer: String,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct SaleStatusResponse {
     pub id: Vec<u8>,
-    pub is_sealed: bool,
-    pub is_aborted: bool,
+    pub status: SaleStatus,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct SaleTimesResponse {
     pub id: Vec<u8>,
-    pub start: u64,
-    pub end: u64,
+    pub times: SaleTimes,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -153,4 +138,14 @@ pub struct AcceptedAssetResponse {
     pub id: Vec<u8>,
     pub token_index: u8,
     pub asset_info: AssetInfo,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct BuyerStatusResponse {
+    pub id: Vec<u8>,
+    pub token_index: u8,
+    pub buyer: String,
+    pub asset_info: AssetInfo,
+    pub status: BuyerStatus,
 }

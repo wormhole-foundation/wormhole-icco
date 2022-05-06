@@ -1,17 +1,16 @@
 use cosmwasm_std::testing::{mock_env, mock_info};
-use cosmwasm_std::{from_binary, Binary, StdResult, Uint128, Uint256};
+use cosmwasm_std::{from_binary, Addr, Binary, StdResult, Uint128, Uint256};
 use terraswap::asset::AssetInfo;
 
-use icco::common::{SaleAborted, SaleSealed};
+use icco::common::{SaleAborted, SaleCore, SaleSealed, SaleStatus};
 
 use crate::{
     contract::{execute, instantiate, query},
     msg::{
-        AcceptedAssetResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, QueryMsg,
-        SaleRegistryResponse, SaleStatusResponse, SaleTimesResponse, TotalAllocationResponse,
-        TotalContributionResponse,
+        AcceptedAssetResponse, ExecuteMsg, InstantiateMsg, QueryMsg, SaleStatusResponse,
+        SaleTimesResponse, TotalAllocationResponse, TotalContributionResponse,
     },
-    state::SaleMessage,
+    state::{Config, SaleMessage},
     testing::mock_querier::mock_dependencies,
 };
 
@@ -162,16 +161,18 @@ fn proper_initialization() -> StdResult<()> {
 
     // it worked, let's query the state
     let response = query(deps.as_ref(), mock_env(), QueryMsg::Config {})?;
-    let config: ConfigResponse = from_binary(&response)?;
+    let config: Config = from_binary(&response)?;
 
     assert_eq!(
         config,
-        ConfigResponse {
-            conductor_chain,
+        Config {
+            wormhole: Addr::unchecked(WORMHOLE_ADDRESS),
+            token_bridge: Addr::unchecked(TOKEN_BRIDGE_ADDRESS),
+            conductor_chain: conductor_chain,
             conductor_address: conductor_address.to_vec(),
-            owner,
+            owner: Addr::unchecked(owner),
         },
-        "config != ConfigResponse"
+        "config != expected"
     );
 
     Ok(())
@@ -236,25 +237,22 @@ fn init_sale() -> StdResult<()> {
             sale_id: Binary::from(sale_id),
         },
     )?;
-    let sale_status: SaleStatusResponse = from_binary(&response)?;
-
+    let response: SaleStatusResponse = from_binary(&response)?;
+    let sale_status = response.status;
     assert_eq!(
-        sale_status.is_sealed, false,
-        "sale_status.is_sealed is true"
-    );
-    assert_eq!(
-        sale_status.is_aborted, false,
-        "sale_status.is_aborted is true"
+        sale_status,
+        SaleStatus::Active,
+        "sale_status != SaleStatus::Active"
     );
 
     let response = query(
         deps.as_ref(),
         mock_env(),
-        QueryMsg::SaleRegistry {
+        QueryMsg::Sale {
             sale_id: Binary::from(sale_id),
         },
     )?;
-    let sale: SaleRegistryResponse = from_binary(&response)?;
+    let sale: SaleCore = from_binary(&response)?;
     assert_eq!(sale.id.as_slice(), sale_id);
 
     /* expected output
@@ -328,10 +326,10 @@ fn init_sale() -> StdResult<()> {
     assert_eq!(sale.max_raise, max_raise, "sale.max_raise != expected");
 
     let sale_start = 1651524845u64;
-    assert_eq!(sale.sale_start, sale_start, "sale.sale_start != expected");
+    assert_eq!(sale.times.start, sale_start, "sale.sale_start != expected");
 
     let sale_end = 16515248410u64;
-    assert_eq!(sale.sale_end, sale_end, "sale.sale_end != expected");
+    assert_eq!(sale.times.end, sale_end, "sale.sale_end != expected");
 
     let recipient = "00000000000000000000000022d491bde2303f2f43325b2108d26f1eaba1e32b";
     let recipient = hex::decode(recipient).unwrap();
@@ -352,10 +350,11 @@ fn init_sale() -> StdResult<()> {
             sale_id: Binary::from(sale_id),
         },
     )?;
-    let sale_times: SaleTimesResponse = from_binary(&response)?;
+    let response: SaleTimesResponse = from_binary(&response)?;
+    let sale_times = response.times;
     assert_eq!(sale.id.as_slice(), sale_id);
-    assert_eq!(sale.sale_start, sale_times.start);
-    assert_eq!(sale.sale_end, sale_times.end);
+    assert_eq!(sale.times.start, sale_times.start);
+    assert_eq!(sale.times.end, sale_times.end);
 
     // check accepted tokens
     let accepted_assets = Vec::from([AssetInfo::NativeToken {

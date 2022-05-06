@@ -1,4 +1,4 @@
-use cosmwasm_std::{Addr, StdResult, Uint128};
+use cosmwasm_std::{Addr, StdResult, Storage, Uint128};
 use cw_storage_plus::{Item, Map, U8Key};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -7,14 +7,34 @@ use wormhole::byte_utils::ByteUtils;
 
 use icco::common::{SaleCore, SaleStatus, SaleTimes};
 
+use crate::error::ContributorError;
+
 // per sale_id and token_index, we need to track a buyer's contribution, as well as whether
 // he has been refunded or his allocations have been claimed
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub enum BuyerStatus {
+    Active {
+        contribution: Uint128,
+    },
+    AllocationIsClaimed {
+        allocation: Uint128,
+        excess: Uint128,
+    },
+    RefundIsClaimed {
+        amount: Uint128,
+    },
+}
+
+/*
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct BuyerStatus {
     pub contribution: Uint128,
-    pub allocation_is_claimed: bool,
-    pub refund_is_claimed: bool,
+    pub state: BuyerState,
+    //pub allocation_is_claimed: bool,
+    //pub refund_is_claimed: bool,
 }
+*/
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Config {
@@ -85,3 +105,71 @@ impl UpgradeContract {
     }
 }
 */
+
+pub fn update_buyer_contribution(
+    storage: &mut dyn Storage,
+    key: BuyerTokenIndexKey,
+    amount: Uint128,
+) -> StdResult<BuyerStatus> {
+    BUYER_STATUSES.update(
+        storage,
+        key,
+        |result: Option<BuyerStatus>| -> StdResult<BuyerStatus> {
+            match result {
+                Some(one) => match one {
+                    BuyerStatus::Active { contribution } => Ok(BuyerStatus::Active {
+                        contribution: contribution + amount,
+                    }),
+                    _ => ContributorError::BuyerNotActive.std_err(),
+                },
+                None => Ok(BuyerStatus::Active {
+                    contribution: amount,
+                }),
+            }
+        },
+    )
+}
+
+pub fn allocation_is_claimed(
+    storage: &mut dyn Storage,
+    key: BuyerTokenIndexKey,
+    allocation: Uint128,
+    excess: Uint128,
+) -> StdResult<BuyerStatus> {
+    BUYER_STATUSES.update(
+        storage,
+        key,
+        |result: Option<BuyerStatus>| -> StdResult<BuyerStatus> {
+            match result {
+                Some(one) => match one {
+                    BuyerStatus::Active { contribution: _ } => {
+                        Ok(BuyerStatus::AllocationIsClaimed { allocation, excess })
+                    }
+                    _ => ContributorError::BuyerNotActive.std_err(),
+                },
+                None => ContributorError::NonexistentBuyer.std_err(),
+            }
+        },
+    )
+}
+
+pub fn refund_is_claimed(
+    storage: &mut dyn Storage,
+    key: BuyerTokenIndexKey,
+) -> StdResult<BuyerStatus> {
+    BUYER_STATUSES.update(
+        storage,
+        key,
+        |result: Option<BuyerStatus>| -> StdResult<BuyerStatus> {
+            match result {
+                Some(one) => match one {
+                    BuyerStatus::Active { contribution } => Ok(BuyerStatus::RefundIsClaimed {
+                        amount: contribution,
+                    }),
+                    _ => ContributorError::BuyerNotActive.std_err(),
+                },
+                None => ContributorError::NonexistentBuyer.std_err(),
+            }
+        },
+    )
+}

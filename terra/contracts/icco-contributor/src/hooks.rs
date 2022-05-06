@@ -1,12 +1,15 @@
 use cosmwasm_std::{Binary, DepsMut, Env, MessageInfo, Response, StdResult};
 use terraswap::querier::query_token_balance;
 
-use crate::state::{BuyerStatus, BuyerTokenIndexKey, BUYER_STATUSES, PENDING_CONTRIBUTE_TOKEN};
+use crate::{
+    error::ContributorError,
+    state::{update_buyer_contribution, BuyerStatus, PENDING_CONTRIBUTE_TOKEN},
+};
 
 pub fn escrow_user_contribution_hook(
-    mut deps: DepsMut,
+    deps: DepsMut,
     env: Env,
-    info: MessageInfo,
+    _info: MessageInfo,
 ) -> StdResult<Response> {
     let pending = PENDING_CONTRIBUTE_TOKEN.load(deps.storage)?;
     PENDING_CONTRIBUTE_TOKEN.remove(deps.storage);
@@ -23,36 +26,24 @@ pub fn escrow_user_contribution_hook(
     let token_index = pending.token_index;
     let sender = pending.sender;
 
-    let key: BuyerTokenIndexKey = (sale_id, token_index.into(), sender.clone());
-
     // add to user
-    let status = BUYER_STATUSES.update(
+    let status = update_buyer_contribution(
         deps.storage,
-        key,
-        |status: Option<BuyerStatus>| -> StdResult<BuyerStatus> {
-            match status {
-                Some(one) => Ok(BuyerStatus {
-                    contribution: one.contribution + amount,
-                    allocation_is_claimed: false,
-                    refund_is_claimed: false,
-                }),
-                None => Ok(BuyerStatus {
-                    contribution: amount,
-                    allocation_is_claimed: false,
-                    refund_is_claimed: false,
-                }),
-            }
-        },
+        (sale_id, token_index.into(), sender.clone()),
+        amount,
     )?;
 
-    Ok(Response::new()
-        .add_attribute("action", "escrow_user_contribution_hook")
-        .add_attribute("pending.sale_id", Binary::from(pending.sale_id).to_base64())
-        .add_attribute("pending.token_index", pending.token_index.to_string())
-        .add_attribute("pending.contract_addr", pending.contract_addr)
-        .add_attribute("pending.sender", sender)
-        .add_attribute("pending.balance_before", pending.balance_before.to_string())
-        .add_attribute("balance_after", balance_after.to_string())
-        .add_attribute("amount", amount.to_string())
-        .add_attribute("contribution", status.contribution.to_string()))
+    match status {
+        BuyerStatus::Active { contribution } => Ok(Response::new()
+            .add_attribute("action", "escrow_user_contribution_hook")
+            .add_attribute("pending.sale_id", Binary::from(pending.sale_id).to_base64())
+            .add_attribute("pending.token_index", pending.token_index.to_string())
+            .add_attribute("pending.contract_addr", pending.contract_addr)
+            .add_attribute("pending.sender", sender)
+            .add_attribute("pending.balance_before", pending.balance_before.to_string())
+            .add_attribute("balance_after", balance_after.to_string())
+            .add_attribute("amount", amount.to_string())
+            .add_attribute("contribution", contribution.to_string())),
+        _ => ContributorError::WrongBuyerStatus.std_err(),
+    }
 }

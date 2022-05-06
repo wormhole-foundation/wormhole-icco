@@ -10,7 +10,7 @@ use crate::{
     hooks::escrow_user_contribution_hook,
     msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg},
     query::{
-        query_accepted_asset, query_asset_index, query_config, query_sale_registry,
+        query_accepted_asset, query_asset_index, query_buyer_status, query_config, query_sale,
         query_sale_status, query_sale_times, query_total_allocation, query_total_contribution,
     },
     state::{Config, CONFIG},
@@ -80,7 +80,7 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::Config {} => to_binary(&query_config(deps)?),
-        QueryMsg::SaleRegistry { sale_id } => to_binary(&query_sale_registry(deps, &sale_id)?),
+        QueryMsg::Sale { sale_id } => to_binary(&query_sale(deps, &sale_id)?),
         QueryMsg::SaleStatus { sale_id } => to_binary(&query_sale_status(deps, &sale_id)?),
         QueryMsg::SaleTimes { sale_id } => to_binary(&query_sale_times(deps, &sale_id)?),
         QueryMsg::TotalContribution {
@@ -111,5 +111,15 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
             sale_id,
             asset_info,
         } => to_binary(&query_asset_index(deps, sale_id.as_slice(), asset_info)?),
+        QueryMsg::BuyerStatus {
+            sale_id,
+            token_index,
+            buyer,
+        } => to_binary(&query_buyer_status(
+            deps,
+            sale_id.as_slice(),
+            token_index,
+            buyer,
+        )?),
     }
 }

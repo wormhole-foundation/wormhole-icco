@@ -11,6 +11,7 @@ cd -
 
 cd modules/icco_contributor/program
 EMITTER_ADDRESS="11111111111111111111111111111115" BRIDGE_ADDRESS="Bridge1p5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o" wasm-pack build --target nodejs -d node -- --features wasm
+mkdir -p ../../../../sdk/js/src/solana/icco_contributor-node
 cp node/* ../../../../sdk/js/src/solana/icco_contributor-node/
 cd -
 

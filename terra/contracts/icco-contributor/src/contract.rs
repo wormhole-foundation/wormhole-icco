@@ -10,8 +10,8 @@ use crate::{
     hooks::escrow_user_contribution_hook,
     msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg},
     query::{
-        query_accepted_token, query_config, query_sale_registry, query_sale_status,
-        query_sale_times, query_total_allocation, query_total_contribution,
+        query_accepted_asset, query_asset_index, query_config, query_sale_registry,
+        query_sale_status, query_sale_times, query_total_allocation, query_total_contribution,
     },
     state::{Config, CONFIG},
 };
@@ -83,17 +83,33 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::SaleRegistry { sale_id } => to_binary(&query_sale_registry(deps, &sale_id)?),
         QueryMsg::SaleStatus { sale_id } => to_binary(&query_sale_status(deps, &sale_id)?),
         QueryMsg::SaleTimes { sale_id } => to_binary(&query_sale_times(deps, &sale_id)?),
-        QueryMsg::AcceptedToken {
-            sale_id,
-            token_index,
-        } => to_binary(&query_accepted_token(deps, &sale_id, token_index)?),
         QueryMsg::TotalContribution {
             sale_id,
             token_index,
-        } => to_binary(&query_total_contribution(deps, &sale_id, token_index)?),
+        } => to_binary(&query_total_contribution(
+            deps,
+            sale_id.as_slice(),
+            token_index,
+        )?),
         QueryMsg::TotalAllocation {
             sale_id,
             token_index,
-        } => to_binary(&query_total_allocation(deps, &sale_id, token_index)?),
+        } => to_binary(&query_total_allocation(
+            deps,
+            sale_id.as_slice(),
+            token_index,
+        )?),
+        QueryMsg::AcceptedAsset {
+            sale_id,
+            token_index,
+        } => to_binary(&query_accepted_asset(
+            deps,
+            sale_id.as_slice(),
+            token_index,
+        )?),
+        QueryMsg::AssetIndex {
+            sale_id,
+            asset_info,
+        } => to_binary(&query_asset_index(deps, sale_id.as_slice(), asset_info)?),
     }
 }

@@ -3,17 +3,56 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ContributorError {
-    #[error("InvalidVAAAction")]
-    InvalidVAAAction,
+    #[error("InvalidVaaAction")]
+    InvalidVaaAction,
+
+    #[error("AllocationNotFound")]
+    AllocationNotFound,
+
+    #[error("AssetNotFound")]
+    AssetNotFound,
+
+    #[error("ContributionNotFound")]
+    ContributionNotFound,
+
+    #[error("DuplicateAcceptedToken")]
+    DuplicateAcceptedToken,
+
+    #[error("InsufficientFunds")]
+    InsufficientFunds,
+
+    #[error("NonexistentDenom")]
+    NonexistentDenom,
+
+    #[error("NonexistentToken")]
+    NonexistentToken,
 
     #[error("NotInitialized")]
     NotInitialized,
 
-    #[error("SaleNotFound")]
-    SaleNotFound,
+    #[error("PendingContribute")]
+    PendingContribute,
+
+    #[error("SaleAborted")]
+    SaleAborted,
 
     #[error("SaleAlreadyExists")]
     SaleAlreadyExists,
+
+    #[error("SaleAlreadySealedOrAborted")]
+    SaleAlreadySealedOrAborted,
+
+    #[error("SaleEnded")]
+    SaleEnded,
+
+    #[error("SaleNotFinished")]
+    SaleNotFinished,
+
+    #[error("SaleNotFound")]
+    SaleNotFound,
+
+    #[error("SaleNotStarted")]
+    SaleNotStarted,
 
     #[error("SaleStatusNotFound")]
     SaleStatusNotFound,
@@ -21,44 +60,11 @@ pub enum ContributorError {
     #[error("SaleTimesNotFound")]
     SaleTimesNotFound,
 
-    #[error("AcceptedTokenNotFound")]
-    AcceptedTokenNotFound,
+    #[error("TooManyAcceptedTokens")]
+    TooManyAcceptedTokens,
 
-    #[error("ContributionNotFound")]
-    ContributionNotFound,
-
-    #[error("AllocationNotFound")]
-    AllocationNotFound,
-
-    #[error("SaleNotFinished")]
-    SaleNotFinished,
-
-    #[error("SaleAlreadySealedOrAborted")]
-    SaleAlreadySealedOrAborted,
-
-    #[error("SaleAborted")]
-    SaleAborted,
-
-    #[error("SaleNotStarted")]
-    SaleNotStarted,
-
-    #[error("SaleEnded")]
-    SaleEnded,
-
-    #[error("WrongChain")]
-    WrongChain,
-
-    #[error("NonexistentToken")]
-    NonexistentToken,
-
-    #[error("NonexistentDenom")]
-    NonexistentDenom,
-
-    #[error("InsufficientFunds")]
-    InsufficientFunds,
-
-    #[error("PendingContribute")]
-    PendingContribute,
+    #[error("ZeroAmount")]
+    ZeroAmount,
 }
 
 impl ContributorError {

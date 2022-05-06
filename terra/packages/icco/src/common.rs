@@ -2,7 +2,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use cosmwasm_std::{Api, CanonicalAddr, StdError, StdResult, Uint128, Uint256};
-use terraswap::asset::{Asset, AssetInfo};
+use terraswap::asset::AssetInfo;
 
 use crate::byte_utils::ByteUtils;
 
@@ -26,6 +26,7 @@ pub struct SaleCore {
     pub times: SaleTimes,
     pub recipient: Vec<u8>,
     pub refund_recipient: Vec<u8>,
+    pub num_accepted: u8,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -80,6 +81,8 @@ pub struct SaleAborted {
 impl AcceptedToken {
     pub const N_BYTES: usize = 50;
 
+    // conversion rate isn't used by the contributor for anything, so will
+    // avoid deserializing
     pub fn deserialize(data: &[u8]) -> StdResult<Self> {
         let address = data.get_bytes32(0).to_vec();
         if address.len() != 32 {
@@ -87,11 +90,12 @@ impl AcceptedToken {
         }
 
         let chain = data.get_u16(32);
-        let conversion_rate = data.get_u128_be(34);
+        // let conversion_rate = data.get_u128_be(34);
         Ok(AcceptedToken {
             chain,
             address,
-            conversion_rate: conversion_rate.into(),
+            // conversion_rate: conversion_rate.into(),
+            conversion_rate: Uint128::zero(),
         })
     }
 
@@ -158,10 +162,10 @@ impl SaleInit {
 
         let accepted_tokens =
             SaleInit::deserialize_tokens(&data[SaleInit::INDEX_ACCEPTED_TOKENS_START..])?;
+        let num_accepted = accepted_tokens.len();
 
-        let index = SaleInit::INDEX_ACCEPTED_TOKENS_START
-            + 1
-            + AcceptedToken::N_BYTES * accepted_tokens.len();
+        let index =
+            SaleInit::INDEX_ACCEPTED_TOKENS_START + 1 + AcceptedToken::N_BYTES * num_accepted;
 
         let recipient = data.get_bytes32(index).to_vec();
         let refund_recipient = data.get_bytes32(index + 32).to_vec();
@@ -177,6 +181,7 @@ impl SaleInit {
                 times: SaleTimes { start, end },
                 recipient,
                 refund_recipient,
+                num_accepted: num_accepted as u8,
             },
             accepted_tokens,
         })

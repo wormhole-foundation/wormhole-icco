@@ -1,12 +1,13 @@
 use cosmwasm_std::testing::{mock_env, mock_info};
 use cosmwasm_std::{from_binary, Binary, StdResult, Uint128, Uint256};
+use terraswap::asset::AssetInfo;
 
 use icco::common::{SaleAborted, SaleSealed};
 
 use crate::{
     contract::{execute, instantiate, query},
     msg::{
-        AcceptedTokenResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, QueryMsg,
+        AcceptedAssetResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, QueryMsg,
         SaleRegistryResponse, SaleStatusResponse, SaleTimesResponse, TotalAllocationResponse,
         TotalContributionResponse,
     },
@@ -48,16 +49,6 @@ use crate::{
           tokenAddress: '0000000000000000000000003d9e7a12daa29a8b2b1bfaa9dc97ce018853ab31',
           tokenChain: 4,
           conversionRate: '1000000000000000000'
-        },
-        {
-          tokenAddress: '000000000000000000000000ddb64fe46a91d46ee29420539fc25fd07c5fea3e',
-          tokenChain: 4,
-          conversionRate: '200000000000000000'
-        },
-        {
-          tokenAddress: '000000000000000000000000ddb64fe46a91d46ee29420539fc25fd07c5fea3e',
-          tokenChain: 4,
-          conversionRate: '200000000000000000'
         }
       ],
       recipient: '00000000000000000000000022d491bde2303f2f43325b2108d26f1eaba1e32b',
@@ -211,26 +202,21 @@ fn init_sale() -> StdResult<()> {
     );
 
     let signed_vaa = "\
-        01000000000100ae0eda623b8aae9bde03c68922ac218bb0c3aa9c5ea0a70a7a\
-        caea0a46d0915a7b3a06758250e44e6c543a37ea1097b85be6f75bd07127b802\
-        38ed6e6b73cbc00000000563000000000002000000000000000000000000f19a\
-        2a01b70519f67adb309a994ec8c69a967e8b00000000000000000f0100000000\
-        0000000000000000000000000000000000000000000000000000000000000000\
+        01000000000100d771f358d25ef9d138cd6243fb29fb998cd7968e70ab530d94\
+        3fe4974536f51b58a3d6a9558b93724c6dd166da3bacf33ce72ef2dfd35591a3\
+        3057543273fcb20100000001000000020002000000000000000000000000f19a\
+        2a01b70519f67adb309a994ec8c69a967e8b0000000000000003010100000000\
+        0000000000000000000000000000000000000000000000000000000200000000\
         000000000000000083752ecafebf4707258dedffbd9c7443148169db00020000\
         000000000000000000000000000000000000000000000de0b6b3a76400000000\
         000000000000000000000000000000000000000000008ac7230489e800000000\
         00000000000000000000000000000000000000000000c249fdd3277800000000\
-        0000000000000000000000000000000000000000000000000000000005670000\
-        0000000000000000000000000000000000000000000000000000000005a30400\
-        0000000000000000000000ddb64fe46a91d46ee29420539fc25fd07c5fea3e00\
-        0200000000000000000de0b6b3a7640000000000000000000000000000ddb64f\
-        e46a91d46ee29420539fc25fd07c5fea3e0004000000000000000002c68af0bb\
-        1400000000000000000000000000008a5bbc20ad253e296f61601e868a3206b2\
-        d4774c0002000000000000000002c68af0bb1400000000000000000000000000\
-        003d9e7a12daa29a8b2b1bfaa9dc97ce018853ab31000400000000000000000d\
-        e0b6b3a764000000000000000000000000000022d491bde2303f2f43325b2108\
-        d26f1eaba1e32b00000000000000000000000022d491bde2303f2f43325b2108\
-        d26f1eaba1e32b";
+        0000000000000000000000000000000000000000000000000000627044ed0000\
+        0000000000000000000000000000000000000000000000000003d862b11a0101\
+        0000000000000000000000000000000000000000000000000000007575736400\
+        0300000000000000000de0b6b3a764000000000000000000000000000022d491\
+        bde2303f2f43325b2108d26f1eaba1e32b00000000000000000000000022d491\
+        bde2303f2f43325b2108d26f1eaba1e32b";
     let signed_vaa = hex::decode(signed_vaa).unwrap();
 
     let info = mock_info("addr0001", &[]);
@@ -239,7 +225,7 @@ fn init_sale() -> StdResult<()> {
     };
     let _response = execute(deps.as_mut(), mock_env(), info, msg)?;
 
-    let sale_id = "0000000000000000000000000000000000000000000000000000000000000000";
+    let sale_id = "0000000000000000000000000000000000000000000000000000000000000002";
     let sale_id = hex::decode(sale_id).unwrap();
     let sale_id = sale_id.as_slice();
 
@@ -338,13 +324,13 @@ fn init_sale() -> StdResult<()> {
     let min_raise = Uint256::from(10_000_000_000_000_000_000u128);
     assert_eq!(sale.min_raise, min_raise, "sale.min_raise != expected");
 
-    let max_raise = Uint256::from(10_000_000_000_000_000_000u128);
-    assert_eq!(sale.min_raise, max_raise, "sale.max_raise != expected");
+    let max_raise = Uint256::from(14_000_000_000_000_000_000u128);
+    assert_eq!(sale.max_raise, max_raise, "sale.max_raise != expected");
 
-    let sale_start = 1383u64;
+    let sale_start = 1651524845u64;
     assert_eq!(sale.sale_start, sale_start, "sale.sale_start != expected");
 
-    let sale_end = 1443u64;
+    let sale_end = 16515248410u64;
     assert_eq!(sale.sale_end, sale_end, "sale.sale_end != expected");
 
     let recipient = "00000000000000000000000022d491bde2303f2f43325b2108d26f1eaba1e32b";
@@ -372,46 +358,41 @@ fn init_sale() -> StdResult<()> {
     assert_eq!(sale.sale_end, sale_times.end);
 
     // check accepted tokens
-    let accepted_token_addresses = Vec::from([
-        "000000000000000000000000ddb64fe46a91d46ee29420539fc25fd07c5fea3e",
-        "000000000000000000000000ddb64fe46a91d46ee29420539fc25fd07c5fea3e",
-        "0000000000000000000000008a5bbc20ad253e296f61601e868a3206b2d4774c",
-        "0000000000000000000000003d9e7a12daa29a8b2b1bfaa9dc97ce018853ab31",
-    ]);
-    let accepted_token_chains = Vec::from([2u16, 4u16, 2u16, 4u16, 4u16, 4u16]);
-    let accepted_token_conversion_rates = Vec::from([
-        1_000_000_000_000_000_000u128,
-        200_000_000_000_000_000u128,
-        200_000_000_000_000_000u128,
-        1_000_000_000_000_000_000u128,
-    ]);
+    let accepted_assets = Vec::from([AssetInfo::NativeToken {
+        denom: "uusd".to_string(),
+    }]);
 
-    let n_accepted_tokens = accepted_token_addresses.len();
-
-    for i in 0..n_accepted_tokens {
+    for i in 0..accepted_assets.len() {
         let token_index = i as u8;
+        let expected_asset = accepted_assets[i].clone();
 
+        // first query by index
         let response = query(
             deps.as_ref(),
             mock_env(),
-            QueryMsg::AcceptedToken {
+            QueryMsg::AcceptedAsset {
                 sale_id: Binary::from(sale_id),
                 token_index,
             },
         )?;
-        let token: AcceptedTokenResponse = from_binary(&response)?;
+        let asset: AcceptedAssetResponse = from_binary(&response)?;
         assert_eq!(
-            token.chain, accepted_token_chains[i],
-            "token.chain != expected"
+            asset.asset_info,
+            expected_asset.clone(),
+            "asset_info != expected"
         );
 
-        let token_address = hex::decode(accepted_token_addresses[i]).unwrap();
-        assert_eq!(&token.address, &token_address, "token.address != expected");
-        assert_eq!(
-            token.conversion_rate.u128(),
-            accepted_token_conversion_rates[i],
-            "token.conversion_rate != expected"
-        );
+        // next query by asset
+        let response = query(
+            deps.as_ref(),
+            mock_env(),
+            QueryMsg::AssetIndex {
+                sale_id: Binary::from(sale_id),
+                asset_info: expected_asset.clone(),
+            },
+        )?;
+        let asset: AcceptedAssetResponse = from_binary(&response)?;
+        assert_eq!(asset.asset_info, expected_asset, "asset_info != expected");
 
         // now verify contributions and allocations are zeroed out
         let response = query(

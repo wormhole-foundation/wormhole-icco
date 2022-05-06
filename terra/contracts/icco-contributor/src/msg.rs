@@ -1,8 +1,7 @@
 use cosmwasm_std::{Binary, Uint128, Uint256};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-
-use std::string::String;
+use terraswap::asset::AssetInfo;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
@@ -59,12 +58,38 @@ pub struct MigrateMsg {}
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     Config {},
-    SaleRegistry { sale_id: Binary },
-    SaleStatus { sale_id: Binary },
-    SaleTimes { sale_id: Binary },
-    AcceptedToken { sale_id: Binary, token_index: u8 },
-    TotalContribution { sale_id: Binary, token_index: u8 },
-    TotalAllocation { sale_id: Binary, token_index: u8 },
+
+    SaleRegistry {
+        sale_id: Binary,
+    },
+
+    SaleStatus {
+        sale_id: Binary,
+    },
+
+    SaleTimes {
+        sale_id: Binary,
+    },
+
+    TotalContribution {
+        sale_id: Binary,
+        token_index: u8,
+    },
+
+    TotalAllocation {
+        sale_id: Binary,
+        token_index: u8,
+    },
+
+    AcceptedAsset {
+        sale_id: Binary,
+        token_index: u8,
+    },
+
+    AssetIndex {
+        sale_id: Binary,
+        asset_info: AssetInfo,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -108,16 +133,6 @@ pub struct SaleTimesResponse {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub struct AcceptedTokenResponse {
-    pub id: Vec<u8>,
-    pub token_index: u8,
-    pub chain: u16,
-    pub address: Vec<u8>,
-    pub conversion_rate: Uint128,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
 pub struct TotalContributionResponse {
     pub id: Vec<u8>,
     pub token_index: u8,
@@ -130,4 +145,12 @@ pub struct TotalAllocationResponse {
     pub id: Vec<u8>,
     pub token_index: u8,
     pub amount: Uint128,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct AcceptedAssetResponse {
+    pub id: Vec<u8>,
+    pub token_index: u8,
+    pub asset_info: AssetInfo,
 }

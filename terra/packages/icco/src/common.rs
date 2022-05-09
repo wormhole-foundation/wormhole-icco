@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use cosmwasm_std::{Api, CanonicalAddr, StdError, StdResult, Uint128, Uint256};
 use terraswap::asset::AssetInfo;
 
-use crate::byte_utils::ByteUtils;
+use crate::{byte_utils::ByteUtils, error::CommonError};
 
 // Chain ID of Terra
 pub const CHAIN_ID: u16 = 3;
@@ -17,7 +17,6 @@ pub struct SaleTimes {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct SaleCore {
-    pub id: Vec<u8>,
     pub token_address: Vec<u8>,
     pub token_chain: u16,
     pub token_amount: Uint256,
@@ -62,27 +61,28 @@ pub struct AssetAllocation {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct SaleInit {
+pub struct SaleInit<'a> {
+    pub id: &'a [u8],
     pub core: SaleCore,
     pub accepted_tokens: Vec<AcceptedToken>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct ContributionsSealed {
-    pub sale_id: Vec<u8>,
+pub struct ContributionsSealed<'a> {
+    pub id: &'a [u8],
     pub chain_id: u16,
     pub contributions: Vec<Contribution>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct SaleSealed {
-    pub sale_id: Vec<u8>,
+pub struct SaleSealed<'a> {
+    pub id: &'a [u8],
     pub allocations: Vec<Allocation>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct SaleAborted {
-    pub sale_id: Vec<u8>,
+pub struct SaleAborted<'a> {
+    pub id: &'a [u8],
 }
 
 impl AcceptedToken {
@@ -123,19 +123,26 @@ impl Allocation {
     pub const NUM_BYTES: usize = 65; // 1 + 32 + 32
 }
 
-impl SaleInit {
+impl<'a> SaleInit<'a> {
     pub const PAYLOAD_ID: u8 = 1;
-    const INDEX_ACCEPTED_TOKENS_START: usize = 226;
+    const INDEX_ACCEPTED_TOKENS_START: usize = 227;
 
-    pub fn deserialize(data: &[u8]) -> StdResult<Self> {
-        let sale_id = data.get_bytes32(0).to_vec();
-        let token_address = data.get_bytes32(32).to_vec();
-        let token_chain = data.get_u16(64);
-        let token_amount = to_u256(data, 66);
-        let min_raise = to_u256(data, 98);
-        let max_raise = to_u256(data, 130);
-        let start = data.get_u64(162 + 24); // encoded as u256, but we only care about u64 time
-        let end = data.get_u64(194 + 24); // encoded as u256, but we only care about u64 for time
+    pub fn get_sale_id(data: &'a [u8]) -> StdResult<&[u8]> {
+        match data[0] {
+            SaleInit::PAYLOAD_ID => Ok(&data[1..33]),
+            _ => CommonError::InvalidVaaAction.std_err(),
+        }
+    }
+
+    // TODO: replicate deserialize_safely like in SaleSealed
+    pub fn deserialize(id: &'a [u8], data: &'a [u8]) -> StdResult<Self> {
+        let token_address = data.get_bytes32(33).to_vec();
+        let token_chain = data.get_u16(65);
+        let token_amount = to_u256(data, 67);
+        let min_raise = to_u256(data, 99);
+        let max_raise = to_u256(data, 131);
+        let start = data.get_u64(163 + 24); // encoded as u256, but we only care about u64 time
+        let end = data.get_u64(195 + 24); // encoded as u256, but we only care about u64 for time
 
         let accepted_tokens =
             SaleInit::deserialize_tokens(&data[SaleInit::INDEX_ACCEPTED_TOKENS_START..])?;
@@ -148,8 +155,8 @@ impl SaleInit {
         let refund_recipient = data.get_bytes32(index + 32).to_vec();
 
         Ok(SaleInit {
+            id,
             core: SaleCore {
-                id: sale_id,
                 token_address,
                 token_chain,
                 token_amount,
@@ -165,7 +172,7 @@ impl SaleInit {
     }
 
     fn deserialize_tokens(data: &[u8]) -> StdResult<Vec<AcceptedToken>> {
-        let n_tokens = data.get_u8(0) as usize;
+        let n_tokens = data[0] as usize;
         let expected_length = 1 + AcceptedToken::N_BYTES * n_tokens;
         if data.len() <= expected_length {
             return Err(StdError::generic_err("data.len() < expected_length"));
@@ -181,13 +188,13 @@ impl SaleInit {
     }
 }
 
-impl ContributionsSealed {
+impl<'a> ContributionsSealed<'a> {
     pub const PAYLOAD_ID: u8 = 2;
-    pub const HEADER_LEN: usize = 34; // excluding payload
+    pub const HEADER_LEN: usize = 34;
 
-    pub fn new(sale_id: &[u8], chain_id: u16, capacity: usize) -> Self {
+    pub fn new(sale_id: &'a [u8], chain_id: u16, capacity: usize) -> Self {
         ContributionsSealed {
-            sale_id: sale_id.to_vec(),
+            id: sale_id,
             chain_id,
             contributions: Vec::with_capacity(capacity),
         }
@@ -221,7 +228,7 @@ impl ContributionsSealed {
             1 + ContributionsSealed::HEADER_LEN + Contribution::NUM_BYTES * contributions.len(),
         );
         serialized.push(ContributionsSealed::PAYLOAD_ID);
-        serialized.extend(self.sale_id.iter());
+        serialized.extend_from_slice(self.id);
         serialized.extend(self.chain_id.to_be_bytes().iter());
         for contribution in contributions {
             serialized.push(contribution.token_index);
@@ -231,11 +238,11 @@ impl ContributionsSealed {
     }
 }
 
-impl SaleSealed {
+impl<'a> SaleSealed<'a> {
     pub const PAYLOAD_ID: u8 = 3;
-    pub const HEADER_LEN: usize = 33; // excluding payload
+    pub const HEADER_LEN: usize = 34;
 
-    pub fn new(sale_id: &[u8], num_allocations: usize) -> Self {
+    pub fn new(id: &'a [u8], num_allocations: usize) -> Self {
         let mut allocations: Vec<Allocation> = Vec::with_capacity(num_allocations);
         for _ in 0..num_allocations {
             allocations.push(Allocation {
@@ -244,10 +251,7 @@ impl SaleSealed {
             });
         }
 
-        SaleSealed {
-            sale_id: sale_id.to_vec(),
-            allocations,
-        }
+        SaleSealed { id, allocations }
     }
 
     pub fn add_allocation(
@@ -263,8 +267,11 @@ impl SaleSealed {
         Ok(())
     }
 
-    pub fn read_sale_id(data: &[u8]) -> Vec<u8> {
-        return data.get_bytes32(0).to_vec();
+    pub fn get_sale_id(data: &'a [u8]) -> StdResult<&[u8]> {
+        match data[0] {
+            SaleSealed::PAYLOAD_ID => Ok(&data[1..33]),
+            _ => CommonError::InvalidVaaAction.std_err(),
+        }
     }
 
     pub fn deserialize_allocations_safely(
@@ -272,7 +279,7 @@ impl SaleSealed {
         expected_num_allocations: u8,
         indices: &Vec<u8>,
     ) -> StdResult<Vec<(u8, AssetAllocation)>> {
-        if data.get_u8(32) != expected_num_allocations {
+        if data[33] != expected_num_allocations {
             return Err(StdError::generic_err("encoded num_allocations != expected"));
         }
 
@@ -314,13 +321,14 @@ impl SaleSealed {
     */
 }
 
-impl SaleAborted {
+impl<'a> SaleAborted<'a> {
     pub const PAYLOAD_ID: u8 = 4;
 
-    pub fn deserialize(data: &[u8]) -> StdResult<Self> {
-        Ok(SaleAborted {
-            sale_id: data.get_bytes32(0).to_vec(),
-        })
+    pub fn get_sale_id(data: &'a [u8]) -> StdResult<&[u8]> {
+        match data[0] {
+            SaleAborted::PAYLOAD_ID => Ok(&data[1..33]),
+            _ => CommonError::InvalidVaaAction.std_err(),
+        }
     }
     /*
     pub fn serialize(&self) -> Vec<u8> {

@@ -21,8 +21,8 @@ pub enum ContributorError {
     #[error("DuplicateAcceptedToken")]
     DuplicateAcceptedToken,
 
-    #[error("InsufficientFunds")]
-    InsufficientFunds,
+    #[error("IncorrectFunds")]
+    IncorrectFunds,
 
     #[error("InsufficientSaleTokens")]
     InsufficientSaleTokens,

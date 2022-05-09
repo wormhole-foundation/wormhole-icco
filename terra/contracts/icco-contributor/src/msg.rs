@@ -3,7 +3,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use terraswap::asset::AssetInfo;
 
-use icco::common::{SaleStatus, SaleTimes};
+use icco::common::{SaleCore, SaleStatus, SaleTimes};
 
 use crate::state::BuyerStatus;
 
@@ -100,6 +100,13 @@ pub enum QueryMsg {
         token_index: u8,
         buyer: String,
     },
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct SaleResponse {
+    pub id: Vec<u8>,
+    pub sale: SaleCore,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

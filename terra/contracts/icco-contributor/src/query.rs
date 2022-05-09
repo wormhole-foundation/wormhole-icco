@@ -6,8 +6,8 @@ use icco::common::SaleCore;
 use crate::{
     error::ContributorError,
     msg::{
-        AcceptedAssetResponse, BuyerStatusResponse, SaleStatusResponse, SaleTimesResponse,
-        TotalAllocationResponse, TotalContributionResponse,
+        AcceptedAssetResponse, BuyerStatusResponse, SaleResponse, SaleStatusResponse,
+        SaleTimesResponse, TotalAllocationResponse, TotalContributionResponse,
     },
     state::{
         Config, ACCEPTED_ASSETS, ASSET_INDICES, BUYER_STATUSES, CONFIG, SALES, SALE_STATUSES,
@@ -19,23 +19,24 @@ pub fn query_config(deps: Deps) -> StdResult<Config> {
     CONFIG.load(deps.storage)
 }
 
-pub fn query_sale(deps: Deps, sale_id: &[u8]) -> StdResult<SaleCore> {
-    SALES.load(deps.storage, sale_id)
+pub fn query_sale(deps: Deps, sale_id: &[u8]) -> StdResult<SaleResponse> {
+    Ok(SaleResponse {
+        id: sale_id.to_vec(),
+        sale: SALES.load(deps.storage, sale_id)?,
+    })
 }
 
 pub fn query_sale_status(deps: Deps, sale_id: &[u8]) -> StdResult<SaleStatusResponse> {
-    let status = SALE_STATUSES.load(deps.storage, sale_id)?;
     Ok(SaleStatusResponse {
         id: sale_id.to_vec(),
-        status,
+        status: SALE_STATUSES.load(deps.storage, sale_id)?,
     })
 }
 
 pub fn query_sale_times(deps: Deps, sale_id: &[u8]) -> StdResult<SaleTimesResponse> {
-    let times = SALE_TIMES.load(deps.storage, sale_id)?;
     Ok(SaleTimesResponse {
         id: sale_id.to_vec(),
-        times,
+        times: SALE_TIMES.load(deps.storage, sale_id)?,
     })
 }
 
@@ -44,15 +45,11 @@ pub fn query_total_contribution(
     sale_id: &[u8],
     token_index: u8,
 ) -> StdResult<TotalContributionResponse> {
-    let result = TOTAL_CONTRIBUTIONS.load(deps.storage, (sale_id, token_index.into()));
-    match result {
-        Ok(amount) => Ok(TotalContributionResponse {
-            id: sale_id.to_vec(),
-            token_index,
-            amount,
-        }),
-        Err(_) => ContributorError::ContributionNotFound.std_err(),
-    }
+    Ok(TotalContributionResponse {
+        id: sale_id.to_vec(),
+        token_index,
+        amount: TOTAL_CONTRIBUTIONS.load(deps.storage, (sale_id, token_index.into()))?,
+    })
 }
 
 pub fn query_total_allocation(
@@ -60,15 +57,11 @@ pub fn query_total_allocation(
     sale_id: &[u8],
     token_index: u8,
 ) -> StdResult<TotalAllocationResponse> {
-    let result = TOTAL_ALLOCATIONS.load(deps.storage, (sale_id, token_index.into()));
-    match result {
-        Ok(amount) => Ok(TotalAllocationResponse {
-            id: sale_id.to_vec(),
-            token_index,
-            amount,
-        }),
-        Err(_) => ContributorError::AllocationNotFound.std_err(),
-    }
+    Ok(TotalAllocationResponse {
+        id: sale_id.to_vec(),
+        token_index,
+        amount: TOTAL_ALLOCATIONS.load(deps.storage, (sale_id, token_index.into()))?,
+    })
 }
 
 pub fn query_accepted_asset(
@@ -76,15 +69,11 @@ pub fn query_accepted_asset(
     sale_id: &[u8],
     token_index: u8,
 ) -> StdResult<AcceptedAssetResponse> {
-    let result = ACCEPTED_ASSETS.load(deps.storage, (sale_id, token_index.into()));
-    match result {
-        Ok(asset_info) => Ok(AcceptedAssetResponse {
-            id: sale_id.to_vec(),
-            token_index,
-            asset_info,
-        }),
-        Err(_) => ContributorError::AssetNotFound.std_err(),
-    }
+    Ok(AcceptedAssetResponse {
+        id: sale_id.to_vec(),
+        token_index,
+        asset_info: ACCEPTED_ASSETS.load(deps.storage, (sale_id, token_index.into()))?,
+    })
 }
 
 pub fn query_asset_index(
@@ -96,11 +85,11 @@ pub fn query_asset_index(
         AssetInfo::NativeToken { denom } => denom,
         AssetInfo::Token { contract_addr } => contract_addr,
     };
-    let token_index = ASSET_INDICES.load(deps.storage, (sale_id, asset))?;
+
     Ok(AcceptedAssetResponse {
         id: sale_id.to_vec(),
         asset_info,
-        token_index,
+        token_index: ASSET_INDICES.load(deps.storage, (sale_id, asset))?,
     })
 }
 

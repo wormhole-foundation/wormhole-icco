@@ -21,6 +21,9 @@ pub enum ContributorError {
     #[error("DuplicateAcceptedToken")]
     DuplicateAcceptedToken,
 
+    #[error("FeeTokensForbidden")]
+    FeeTokensForbidden,
+
     #[error("IncorrectFunds")]
     IncorrectFunds,
 

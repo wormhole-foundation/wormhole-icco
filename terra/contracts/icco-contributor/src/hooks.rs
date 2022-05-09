@@ -21,6 +21,9 @@ pub fn escrow_user_contribution_hook(
     )?;
 
     let amount = balance_after - pending.balance_before;
+    if amount != pending.check_amount {
+        return ContributorError::FeeTokensForbidden.std_err();
+    }
 
     let sale_id = pending.sale_id.as_slice();
     let token_index = pending.token_index;

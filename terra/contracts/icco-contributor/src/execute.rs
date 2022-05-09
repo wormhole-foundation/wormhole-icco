@@ -215,6 +215,7 @@ pub fn contribute_token(
         env.contract.address.clone(),
     )?;
 
+    // TODO: add targeted amount and check in hook
     PENDING_CONTRIBUTE_TOKEN.save(
         deps.storage,
         &PendingContributeToken {
@@ -223,9 +224,11 @@ pub fn contribute_token(
             contract_addr: contract_addr.clone(),
             sender: info.sender.clone(),
             balance_before,
+            check_amount: amount,
         },
     )?;
 
+    // TODO: use execute_contract
     Ok(Response::new()
         .add_message(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: contract_addr.to_string(),

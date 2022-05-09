@@ -51,6 +51,7 @@ pub struct PendingContributeToken {
     pub contract_addr: Addr,
     pub sender: Addr,
     pub balance_before: Uint128,
+    pub check_amount: Uint128,
 }
 
 /*

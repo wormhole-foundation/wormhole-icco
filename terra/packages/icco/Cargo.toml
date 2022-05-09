@@ -17,6 +17,7 @@ schemars = "0.8.1"
 serde = { version = "1.0.103", default-features = false, features = ["derive"] }
 terraswap = "2.4.0"
 lazy_static = "1.4.0"
+thiserror = { version = "1.0.20" }
 
 [dev-dependencies]
 cosmwasm-vm = { version = "0.16.0", default-features = false }

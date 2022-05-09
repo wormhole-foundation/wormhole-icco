@@ -719,19 +719,17 @@ dependencies = [
  "serde",
  "serde_json",
  "terraswap",
+ "thiserror",
 ]
 
 [[package]]
 name = "icco-contributor"
 version = "0.1.0"
 dependencies = [
- "bigint",
  "cosmwasm-std",
  "cosmwasm-vm",
  "cw-storage-plus",
  "cw20",
- "cw20-base",
- "generic-array",
  "hex",
  "icco",
  "k256",

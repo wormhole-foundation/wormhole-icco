@@ -1,6 +1,6 @@
 use cosmwasm_std::{
-    to_binary, Addr, Binary, CosmosMsg, Deps, DepsMut, Env, MessageInfo, Order, QueryRequest,
-    Response, StdError, StdResult, Storage, Uint128, WasmMsg, WasmQuery,
+    to_binary, Addr, Binary, CosmosMsg, Deps, DepsMut, Env, MessageInfo, QueryRequest, Response,
+    StdError, StdResult, Storage, Uint128, WasmMsg, WasmQuery,
 };
 use cw20::Cw20ExecuteMsg;
 use terraswap::{
@@ -24,9 +24,10 @@ use crate::{
     error::ContributorError,
     msg::ExecuteMsg,
     state::{
-        update_buyer_contribution, AssetKey, BuyerStatus, PendingContributeToken, SaleMessage,
-        TokenIndexKey, ACCEPTED_ASSETS, ASSET_INDICES, CONFIG, PENDING_CONTRIBUTE_TOKEN, SALES,
-        SALE_STATUSES, SALE_TIMES, TOTAL_ALLOCATIONS, TOTAL_CONTRIBUTIONS,
+        is_sale_active, sale_asset_indices, update_buyer_contribution, AssetKey, BuyerStatus,
+        PendingContributeToken, TokenIndexKey, ACCEPTED_ASSETS, ASSET_INDICES, CONFIG,
+        PENDING_CONTRIBUTE_TOKEN, SALES, SALE_STATUSES, SALE_TIMES, TOTAL_ALLOCATIONS,
+        TOTAL_CONTRIBUTIONS,
     },
 };
 
@@ -35,24 +36,16 @@ const WORMHOLE_NONCE: u32 = 0;
 
 pub fn init_sale(deps: DepsMut, env: Env, _info: MessageInfo, vaa: &Binary) -> StdResult<Response> {
     let parsed_vaa = query_wormhole_verify_vaa(deps.as_ref(), env.block.time.seconds(), vaa)?;
-    verify_conductor(
-        deps.storage,
-        parsed_vaa.emitter_chain,
-        parsed_vaa.emitter_address.as_slice(),
-    )?;
+    verify_conductor(deps.storage, &parsed_vaa)?;
 
-    let message = SaleMessage::deserialize(parsed_vaa.payload.as_slice())?;
-    if message.id != SaleInit::PAYLOAD_ID {
-        return ContributorError::InvalidVaaAction.std_err();
-    }
+    let vaa_payload = &parsed_vaa.payload;
+    let sale_id = SaleInit::get_sale_id(vaa_payload)?;
 
-    let sale_init = SaleInit::deserialize(message.payload)?;
-    let sale_id = sale_init.core.id.as_slice();
-
-    if SALES.load(deps.storage, sale_id).is_ok() {
+    if is_sale_active(deps.storage, sale_id) {
         return ContributorError::SaleAlreadyExists.std_err();
     }
 
+    let sale_init = SaleInit::deserialize(sale_id, vaa_payload)?;
     SALES.save(deps.storage, sale_id, &sale_init.core)?;
 
     // fresh status
@@ -108,7 +101,7 @@ pub fn init_sale(deps: DepsMut, env: Env, _info: MessageInfo, vaa: &Binary) -> S
     let sale = &sale_init.core;
     Ok(Response::new()
         .add_attribute("action", "init_sale")
-        .add_attribute("sale_id", Binary::from(sale.id.as_slice()).to_base64())
+        .add_attribute("sale_id", Binary::from(sale_id).to_base64())
         .add_attribute("token_chain", sale.token_chain.to_string())
         .add_attribute(
             "token_address",
@@ -126,9 +119,8 @@ pub fn contribute(
     token_index: u8,
     amount: Uint128,
 ) -> StdResult<Response> {
-    let status = SALE_STATUSES.load(deps.storage, sale_id)?;
-    if status != SaleStatus::Active {
-        return ContributorError::SaleAlreadySealedOrAborted.std_err();
+    if !is_sale_active(deps.storage, sale_id) {
+        return ContributorError::SaleEnded.std_err();
     }
 
     let times = SALE_TIMES.load(deps.storage, sale_id)?;
@@ -142,7 +134,7 @@ pub fn contribute(
     let asset_info = ACCEPTED_ASSETS.load(deps.storage, (sale_id, token_index.into()))?;
     match asset_info {
         AssetInfo::NativeToken { denom } => {
-            contribute_native(deps, env, info, sale_id, token_index, &denom)
+            contribute_native(deps, env, info, sale_id, token_index, &denom, amount)
         }
         AssetInfo::Token { contract_addr } => contribute_token(
             deps,
@@ -163,6 +155,7 @@ pub fn contribute_native(
     sale_id: &[u8],
     token_index: u8,
     denom: &String,
+    amount: Uint128,
 ) -> StdResult<Response> {
     // we don't care about the amount in contribute (can be zero)
     // as long as we have some amount in the transaction
@@ -174,11 +167,12 @@ pub fn contribute_native(
 
     match result {
         Some(funds) => {
-            let status = update_buyer_contribution(
-                deps.storage,
-                (sale_id, token_index.into(), info.sender),
-                funds,
-            )?;
+            if funds != amount {
+                return ContributorError::IncorrectFunds.std_err();
+            }
+
+            let status =
+                update_buyer_contribution(deps.storage, sale_id, token_index, &info.sender, funds)?;
 
             match status {
                 BuyerStatus::Active { contribution } => Ok(Response::new()
@@ -190,7 +184,7 @@ pub fn contribute_native(
                 _ => ContributorError::WrongBuyerStatus.std_err(),
             }
         }
-        None => ContributorError::InsufficientFunds.std_err(),
+        None => ContributorError::IncorrectFunds.std_err(),
     }
 }
 
@@ -259,9 +253,8 @@ pub fn attest_contributions(
     _info: MessageInfo,
     sale_id: &[u8],
 ) -> StdResult<Response> {
-    let status = SALE_STATUSES.load(deps.storage, sale_id)?;
-    if status != SaleStatus::Active {
-        return ContributorError::SaleAlreadySealedOrAborted.std_err();
+    if !is_sale_active(deps.storage, sale_id) {
+        return ContributorError::SaleEnded.std_err();
     }
 
     let times = SALE_TIMES.load(deps.storage, sale_id)?;
@@ -269,16 +262,9 @@ pub fn attest_contributions(
         return ContributorError::SaleNotFinished.std_err();
     }
 
-    let asset_indices: Vec<u8> = ASSET_INDICES
-        .prefix(sale_id)
-        .range(deps.storage, None, None, Order::Ascending)
-        .map(|item| -> u8 {
-            let (_, index) = item.unwrap();
-            index
-        })
-        .collect();
+    let asset_indices = sale_asset_indices(deps.storage, sale_id);
 
-    let mut contribution_sealed = ContributionsSealed::new(sale_id, CHAIN_ID);
+    let mut contribution_sealed = ContributionsSealed::new(sale_id, CHAIN_ID, asset_indices.len());
     for &token_index in asset_indices.iter() {
         let contributions =
             TOTAL_CONTRIBUTIONS.load(deps.storage, (sale_id, token_index.into()))?;
@@ -287,8 +273,16 @@ pub fn attest_contributions(
 
     let serialized = contribution_sealed.serialize();
     let num_bytes = serialized.len();
+
+    let cfg = CONFIG.load(deps.storage)?;
     Ok(Response::new()
-        .add_message(wormhole_post_message_hook(deps.as_ref(), serialized)?)
+        .add_message(execute_contract(
+            &cfg.wormhole,
+            to_binary(&WormholeExecuteMsg::PostMessage {
+                message: Binary::from(serialized),
+                nonce: WORMHOLE_NONCE,
+            })?,
+        ))
         .add_attribute("action", "attest_contributions")
         .add_attribute("num_bytes", num_bytes.to_string()))
 }
@@ -300,25 +294,17 @@ pub fn sale_sealed(
     vaa: &Binary,
 ) -> StdResult<Response> {
     let parsed_vaa = query_wormhole_verify_vaa(deps.as_ref(), env.block.time.seconds(), vaa)?;
-    verify_conductor(
-        deps.storage,
-        parsed_vaa.emitter_chain,
-        parsed_vaa.emitter_address.as_slice(),
-    )?;
+    verify_conductor(deps.storage, &parsed_vaa)?;
 
-    let message = SaleMessage::deserialize(parsed_vaa.payload.as_slice())?;
-    if message.id != SaleSealed::PAYLOAD_ID {
-        return ContributorError::InvalidVaaAction.std_err();
-    }
+    let payload = &parsed_vaa.payload;
+    let sale_id = SaleSealed::get_sale_id(payload)?;
 
-    let sale_id = SaleSealed::read_sale_id(message.payload).as_slice();
-
-    let status = SALE_STATUSES.load(deps.storage, sale_id)?;
-    if status != SaleStatus::Active {
-        return ContributorError::SaleEnded.std_err();
-    }
-
-    let sale = SALES.load(deps.storage, sale_id)?;
+    let sale = match is_sale_active(deps.storage, sale_id) {
+        true => SALES.load(deps.storage, sale_id)?,
+        _ => {
+            return ContributorError::SaleEnded.std_err();
+        }
+    };
 
     // sale token handling
     let asset_info = match sale.token_chain {
@@ -349,18 +335,11 @@ pub fn sale_sealed(
         return ContributorError::InsufficientSaleTokens.std_err();
     }
 
-    let asset_indices: Vec<u8> = ASSET_INDICES
-        .prefix(sale_id)
-        .range(deps.storage, None, None, Order::Ascending)
-        .map(|result| -> u8 {
-            let (_, index) = result.unwrap();
-            index
-        })
-        .collect();
+    let asset_indices = sale_asset_indices(deps.storage, sale_id);
 
     // grab the allocations we care about (for Terra contributions)
     let parsed_allocations =
-        SaleSealed::deserialize_allocations_safely(sale_id, sale.num_accepted, &asset_indices)?;
+        SaleSealed::deserialize_allocations_safely(payload, sale.num_accepted, &asset_indices)?;
 
     // sum total allocations and check against balance in the contract
     let total_allocations = parsed_allocations
@@ -382,6 +361,11 @@ pub fn sale_sealed(
         for &token_index in asset_indices.iter() {
             // do token bridge transfers here
         }
+    }
+
+    // now update TOTAL_ALLOCATIONS (fix to use AssetAllocation)
+    for (token_index, allocation) in parsed_allocations.iter() {
+        //TOTAL_ALLOCATIONS.save(deps.storage, (sale_id, token_index.into()), )
     }
 
     Ok(Response::new()
@@ -408,27 +392,20 @@ pub fn sale_aborted(
     _info: MessageInfo,
     vaa: &Binary,
 ) -> StdResult<Response> {
-    let parsed = query_wormhole_verify_vaa(deps.as_ref(), env.block.time.seconds(), vaa)?;
-    verify_conductor(
-        deps.storage,
-        parsed.emitter_chain,
-        parsed.emitter_address.as_slice(),
-    )?;
+    let parsed_vaa = query_wormhole_verify_vaa(deps.as_ref(), env.block.time.seconds(), vaa)?;
+    verify_conductor(deps.storage, &parsed_vaa)?;
 
-    let message = SaleMessage::deserialize(parsed.payload.as_slice())?;
-    if message.id != SaleAborted::PAYLOAD_ID {
-        return ContributorError::InvalidVaaAction.std_err();
-    }
+    let sale_id = SaleAborted::get_sale_id(&parsed_vaa.payload)?;
 
-    let sale_aborted = SaleAborted::deserialize(message.payload)?;
-    let sale_id = sale_aborted.sale_id.as_slice();
-    let sale = SALES.load(deps.storage, sale_id)?;
+    if !is_sale_active(deps.storage, sale_id) {
+        return ContributorError::SaleEnded.std_err();
+    };
 
     SALE_STATUSES.save(deps.storage, sale_id, &SaleStatus::Aborted)?;
 
     Ok(Response::new()
         .add_attribute("action", "sale_aborted")
-        .add_attribute("sale_id", Binary::from(sale.id).to_base64()))
+        .add_attribute("sale_id", Binary::from(sale_id).to_base64()))
 }
 
 pub fn claim_refund(
@@ -457,18 +434,16 @@ pub fn handle_upgrade_contract(_deps: DepsMut, env: Env, data: &Vec<u8>) -> StdR
 }
 */
 
-fn verify_conductor(
-    storage: &mut dyn Storage,
-    emitter_chain: u16,
-    emitter_address: &[u8],
-) -> StdResult<()> {
+fn verify_conductor(storage: &mut dyn Storage, parsed: &ParsedVAA) -> StdResult<()> {
     let cfg = CONFIG.load(storage)?;
 
-    if cfg.conductor_chain != emitter_chain || !cfg.conductor_address.eq(emitter_address) {
+    if cfg.conductor_chain != parsed.emitter_chain
+        || !cfg.conductor_address.eq(&parsed.emitter_address)
+    {
         return Err(StdError::generic_err(format!(
             "invalid emitter: {}:{}",
-            emitter_chain,
-            hex::encode(emitter_address),
+            parsed.emitter_chain,
+            hex::encode(&parsed.emitter_address),
         )));
     }
 
@@ -506,12 +481,20 @@ fn query_token_bridge_wrapped(deps: Deps, chain: u16, address: &[u8]) -> StdResu
 fn wormhole_post_message_hook(deps: Deps, bytes: Vec<u8>) -> StdResult<CosmosMsg> {
     let cfg = CONFIG.load(deps.storage)?;
 
-    Ok(CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: cfg.wormhole.to_string(),
-        funds: vec![],
-        msg: to_binary(&WormholeExecuteMsg::PostMessage {
+    Ok(execute_contract(
+        &cfg.wormhole,
+        to_binary(&WormholeExecuteMsg::PostMessage {
             message: Binary::from(bytes),
             nonce: WORMHOLE_NONCE,
         })?,
-    }))
+    ))
+}
+
+// no need for funds
+fn execute_contract(contract: &Addr, msg: Binary) -> CosmosMsg {
+    CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: contract.to_string(),
+        funds: vec![],
+        msg,
+    })
 }

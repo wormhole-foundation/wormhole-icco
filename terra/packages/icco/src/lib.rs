@@ -1,5 +1,6 @@
 #[cfg(test)]
 extern crate lazy_static;
 
-pub mod byte_utils;
+mod byte_utils;
 pub mod common;
+pub mod error;

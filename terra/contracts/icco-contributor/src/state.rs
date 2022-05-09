@@ -1,9 +1,8 @@
-use cosmwasm_std::{Addr, StdResult, Storage, Uint128};
+use cosmwasm_std::{Addr, Order, StdResult, Storage, Uint128};
 use cw_storage_plus::{Item, Map, U8Key};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use terraswap::asset::AssetInfo;
-use wormhole::byte_utils::ByteUtils;
 
 use icco::common::{SaleCore, SaleStatus, SaleTimes};
 
@@ -45,11 +44,6 @@ pub struct Config {
     pub owner: Addr,
 }
 
-pub struct SaleMessage<'a> {
-    pub id: u8,
-    pub payload: &'a [u8],
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct PendingContributeToken {
     pub sale_id: Vec<u8>,
@@ -64,7 +58,7 @@ pub struct UpgradeContract {
     pub new_contract: u64,
 }
 */
-//pub type HumanAddr = String;
+
 pub type SaleId<'a> = &'a [u8];
 pub type TokenIndexKey<'a> = (SaleId<'a>, U8Key);
 pub type AssetKey<'a> = (SaleId<'a>, String);
@@ -87,15 +81,6 @@ pub const ASSET_INDICES: Map<AssetKey, u8> = Map::new("asset_indices");
 pub const PENDING_CONTRIBUTE_TOKEN: Item<PendingContributeToken> =
     Item::new("pending_contribute_token");
 
-impl<'a> SaleMessage<'a> {
-    pub fn deserialize(data: &'a [u8]) -> StdResult<Self> {
-        Ok(SaleMessage {
-            id: data.get_u8(0),
-            payload: &data[1..],
-        })
-    }
-}
-
 /*
 impl UpgradeContract {
     pub fn deserialize(data: &Vec<u8>) -> StdResult<Self> {
@@ -108,12 +93,25 @@ impl UpgradeContract {
 
 pub fn update_buyer_contribution(
     storage: &mut dyn Storage,
-    key: BuyerTokenIndexKey,
+    sale_id: &[u8],
+    token_index: u8,
+    buyer: &Addr,
     amount: Uint128,
 ) -> StdResult<BuyerStatus> {
+    TOTAL_CONTRIBUTIONS.update(
+        storage,
+        (sale_id, token_index.into()),
+        |result: Option<Uint128>| -> StdResult<Uint128> {
+            match result {
+                Some(contribution) => Ok(contribution + amount),
+                None => Ok(amount), // should already be zeroed out from init_sale
+            }
+        },
+    )?;
+
     BUYER_STATUSES.update(
         storage,
-        key,
+        (sale_id, token_index.into(), buyer.clone()),
         |result: Option<BuyerStatus>| -> StdResult<BuyerStatus> {
             match result {
                 Some(one) => match one {
@@ -172,4 +170,22 @@ pub fn refund_is_claimed(
             }
         },
     )
+}
+
+pub fn is_sale_active(storage: &dyn Storage, sale_id: &[u8]) -> bool {
+    match SALE_STATUSES.load(storage, sale_id) {
+        Ok(status) => status == SaleStatus::Active,
+        Err(_) => false,
+    }
+}
+
+pub fn sale_asset_indices(storage: &dyn Storage, sale_id: &[u8]) -> Vec<u8> {
+    ASSET_INDICES
+        .prefix(sale_id)
+        .range(storage, None, None, Order::Ascending)
+        .map(|item| -> u8 {
+            let (_, index) = item.unwrap();
+            index
+        })
+        .collect()
 }

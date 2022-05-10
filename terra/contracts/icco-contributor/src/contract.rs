@@ -53,7 +53,7 @@ pub fn reply(_deps: DepsMut, _env: Env, _msg: Reply) -> StdResult<Response> {
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> StdResult<Response> {
     match msg {
-        ExecuteMsg::InitSale { data } => init_sale(deps, env, info, &data),
+        ExecuteMsg::InitSale { signed_vaa } => init_sale(deps, env, info, signed_vaa),
         ExecuteMsg::Contribute {
             sale_id,
             token_index,
@@ -63,12 +63,12 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
         ExecuteMsg::AttestContributions { sale_id } => {
             attest_contributions(deps, env, info, &sale_id)
         }
-        ExecuteMsg::SaleSealed { data } => sale_sealed(deps, env, info, &data),
+        ExecuteMsg::SaleSealed { signed_vaa } => sale_sealed(deps, env, info, signed_vaa),
         ExecuteMsg::ClaimAllocation {
             sale_id,
             token_index,
         } => claim_allocation(deps, env, info, &sale_id, token_index),
-        ExecuteMsg::SaleAborted { data } => sale_aborted(deps, env, info, &data),
+        ExecuteMsg::SaleAborted { signed_vaa } => sale_aborted(deps, env, info, signed_vaa),
         ExecuteMsg::ClaimRefund {
             sale_id,
             token_index,

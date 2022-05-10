@@ -12,6 +12,7 @@ use crate::error::ContributorError;
 // he has been refunded or his allocations have been claimed
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum BuyerStatus {
     Active {
         contribution: Uint128,
@@ -36,6 +37,7 @@ pub struct BuyerStatus {
 */
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
 pub struct Config {
     pub wormhole: Addr,
     pub token_bridge: Addr,

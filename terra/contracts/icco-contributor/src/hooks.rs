@@ -35,13 +35,8 @@ pub fn escrow_user_contribution_hook(
     match status {
         BuyerStatus::Active { contribution } => Ok(Response::new()
             .add_attribute("action", "escrow_user_contribution_hook")
-            .add_attribute("pending.sale_id", Binary::from(pending.sale_id).to_base64())
-            .add_attribute("pending.token_index", pending.token_index.to_string())
-            .add_attribute("pending.contract_addr", pending.contract_addr)
-            .add_attribute("pending.sender", pending.sender)
-            .add_attribute("pending.balance_before", pending.balance_before.to_string())
             .add_attribute("balance_after", balance_after.to_string())
-            .add_attribute("amount", amount.to_string())
+            .add_attribute("change", amount.to_string())
             .add_attribute("contribution", contribution.to_string())),
         _ => ContributorError::WrongBuyerStatus.std_err(),
     }

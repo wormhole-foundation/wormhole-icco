@@ -3,9 +3,6 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ContributorError {
-    #[error("InvalidVaaAction")]
-    InvalidVaaAction,
-
     #[error("AllocationNotFound")]
     AllocationNotFound,
 
@@ -39,9 +36,6 @@ pub enum ContributorError {
     #[error("NonexistentToken")]
     NonexistentToken,
 
-    #[error("NotInitialized")]
-    NotInitialized,
-
     #[error("PendingContribute")]
     PendingContribute,
 
@@ -57,17 +51,8 @@ pub enum ContributorError {
     #[error("SaleNotFinished")]
     SaleNotFinished,
 
-    #[error("SaleNotFound")]
-    SaleNotFound,
-
     #[error("SaleNotStarted")]
     SaleNotStarted,
-
-    #[error("SaleStatusNotFound")]
-    SaleStatusNotFound,
-
-    #[error("SaleTimesNotFound")]
-    SaleTimesNotFound,
 
     #[error("TooManyAcceptedTokens")]
     TooManyAcceptedTokens,

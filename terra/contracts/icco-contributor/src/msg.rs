@@ -20,7 +20,7 @@ pub struct InstantiateMsg {
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
     InitSale {
-        data: Binary,
+        signed_vaa: Binary,
     },
 
     Contribute {
@@ -36,7 +36,7 @@ pub enum ExecuteMsg {
     },
 
     SaleSealed {
-        data: Binary,
+        signed_vaa: Binary,
     },
 
     ClaimAllocation {
@@ -45,7 +45,7 @@ pub enum ExecuteMsg {
     },
 
     SaleAborted {
-        data: Binary,
+        signed_vaa: Binary,
     },
 
     ClaimRefund {

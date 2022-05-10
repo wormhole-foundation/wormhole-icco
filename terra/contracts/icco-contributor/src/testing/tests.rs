@@ -219,11 +219,10 @@ fn init_sale() -> StdResult<()> {
         bde2303f2f43325b2108d26f1eaba1e32b00000000000000000000000022d491\
         bde2303f2f43325b2108d26f1eaba1e32b";
     let signed_vaa = hex::decode(signed_vaa).unwrap();
+    let signed_vaa = Binary::from(signed_vaa.as_slice());
 
     let info = mock_info("addr0001", &[]);
-    let msg = ExecuteMsg::InitSale {
-        data: Binary::from(signed_vaa.as_slice()),
-    };
+    let msg = ExecuteMsg::InitSale { signed_vaa };
     let _response = execute(deps.as_mut(), mock_env(), info, msg)?;
 
     let sale_id = "0000000000000000000000000000000000000000000000000000000000000002";

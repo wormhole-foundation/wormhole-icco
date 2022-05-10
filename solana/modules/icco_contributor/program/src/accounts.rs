@@ -17,8 +17,9 @@ pub type CoreBridge<'a, const STATE: AccountState> = Data<'a, BridgeData, { STAT
 
 pub type EmitterAccount<'b> = Derive<Info<'b>, "emitter">;
 
+
 ///-------------------------------------------------------------------
-/// Cntributor Config.
+/// Contributor Config.
 pub type ConfigAccount<'b, const STATE: AccountState> =
     Derive<Data<'b, Config, { STATE }>, "config">;
 
@@ -28,14 +29,14 @@ pub type ConfigAccount<'b, const STATE: AccountState> =
 pub type SaleStateAccount<'b, const STATE: AccountState> =
     Data<'b, SaleState, { STATE }>;
 
-pub struct SaleStateDerivationData {
+pub struct SaleStateAccountDerivationData {
     pub sale_id: u128,
 }
 
-impl<'b, const STATE: AccountState> Seeded<&SaleStateDerivationData>
+impl<'b, const STATE: AccountState> Seeded<&SaleStateAccountDerivationData>
     for SaleStateAccount<'b, { STATE }>
 {
-    fn seeds(accs: &SaleStateDerivationData) -> Vec<Vec<u8>> {
+    fn seeds(accs: &SaleStateAccountDerivationData) -> Vec<Vec<u8>> {
         vec![
             String::from("state").as_bytes().to_vec(),
             accs.sale_id.to_be_bytes().to_vec(),

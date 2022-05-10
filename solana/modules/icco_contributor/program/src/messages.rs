@@ -26,6 +26,10 @@ fn read_u16(buf: &[u8]) -> u16 {
     u16::from_be_bytes(buf[0..2].try_into().unwrap())
 }
 
+fn read_u64(buf: &[u8]) -> u64 {
+    u64::from_be_bytes(buf[0..8].try_into().unwrap())
+}
+
 fn read_u128(buf: &[u8]) -> u128 {
     u128::from_be_bytes(buf[0..16].try_into().unwrap())
 }
@@ -35,7 +39,31 @@ fn read_u256(buf: &[u8]) -> (u128, u128) {
 }
 
 /// -------------------------------------------------------------------
-/// Zero-copy from VAA payload for Init Sale.
+/// sale_state getters/setters
+pub fn get_sale_state_sealed(bf: &[u8]) -> bool {
+    bf[0] != 0
+}
+pub fn set_sale_state_sealed(bf: & mut [u8], v: bool) {
+    bf[0] = if v {1} else {0};
+}
+
+pub fn get_sale_state_aborted(bf: &[u8]) -> bool {
+    bf[1] != 0
+}
+pub fn set_sale_state_aborted(bf: & mut [u8], v: bool) {
+    bf[1] = if v {1} else {0};
+}
+
+pub fn get_sale_state_contribution(bf: &[u8], token_idx: u8) -> u64 {
+    read_u64(&bf[(2 + 8 * token_idx) as usize..])
+}
+pub fn set_sale_state_contribution(bf: & mut [u8], token_idx: u8, v: u64) {
+    let n = (2 + 8 * token_idx) as usize;
+    bf[n..n+8].clone_from_slice(&v.to_be_bytes()[..]);
+}
+
+/// -------------------------------------------------------------------
+/// From VAA payload for SaleAbort.
 #[derive(PartialEq, Debug)]
 #[allow(non_snake_case)]
 pub struct SaleAbort {

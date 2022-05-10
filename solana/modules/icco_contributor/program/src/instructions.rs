@@ -7,18 +7,17 @@ use crate::{
         AuthoritySigner,
         ConfigAccount,
         SaleStateAccount,
-        SaleStateDerivationData,
+        SaleStateAccountDerivationData,
         CustodyAccount,
         CustodyAccountDerivationData,
         CustodySigner,
         EmitterAccount,
-//        Endpoint,
-//        EndpointDerivationData,
-//        MintSigner,
         SplTokenMeta,
         SplTokenMetaDerivationData,
         ContributionStateAccount,
         ContributionStateAccountDerivationData,
+//        TestAccount,
+//        TestAccountDerivationData,
     },
     api::{
         CreateIccoSaleCustodyAccountData,
@@ -130,6 +129,7 @@ pub fn create_icco_sale_custody_account(
     _token_index: u8,  // TBD For validation against VAA. 
 ) -> Instruction {
     let config_key = ConfigAccount::<'_, { AccountState::Initialized }>::key(None, &program_id);
+//    let test_key = TestAccount::<'_, { AccountState::Uninitialized }>::key(&TestAccountDerivationData{sale_id: sale_id}, &program_id);
     let custody_key = CustodyAccount::<'_, { AccountState::MaybeInitialized }>::key(&CustodyAccountDerivationData{sale_id: sale_id, mint: token_mint}, &program_id);
     let claim = Claim::<'_, { AccountState::Uninitialized }>::key(
         &ClaimDerivationData {
@@ -154,6 +154,7 @@ pub fn create_icco_sale_custody_account(
             AccountMeta::new_readonly(solana_program::sysvar::clock::id(), false),
             AccountMeta::new_readonly(solana_program::system_program::id(), false),
             AccountMeta::new_readonly(spl_token::id(), false),
+//            AccountMeta::new(test_key, false),
         ],
         data: (
             crate::instruction::Instruction::CreateIccoSaleCustodyAccount,
@@ -176,7 +177,7 @@ pub fn init_icco_sale(
     sequence: u64,
 ) -> Instruction {
     let config_key = ConfigAccount::<'_, { AccountState::Initialized }>::key(None, &program_id);
-    let state_key = SaleStateAccount::<'_, { AccountState::Uninitialized }>::key(&SaleStateDerivationData{sale_id: sale_id}, &program_id);
+    let state_key = SaleStateAccount::<'_, { AccountState::Uninitialized }>::key(&SaleStateAccountDerivationData{sale_id: sale_id}, &program_id);
     
     let claim = Claim::<'_, { AccountState::Uninitialized }>::key(
         &ClaimDerivationData {
@@ -192,13 +193,12 @@ pub fn init_icco_sale(
         accounts: vec![
             AccountMeta::new(payer, true),
             AccountMeta::new_readonly(config_key, false),
-            AccountMeta::new(state_key, false),
             AccountMeta::new_readonly(payload_message, false),
             AccountMeta::new(claim, false),
-//            AccountMeta::new(program_id, false),
             AccountMeta::new_readonly(solana_program::sysvar::rent::id(), false),
             AccountMeta::new_readonly(solana_program::sysvar::clock::id(), false),
             AccountMeta::new_readonly(solana_program::system_program::id(), false),
+            AccountMeta::new(state_key, false),
         ],
 
         data: (
@@ -210,8 +210,14 @@ pub fn init_icco_sale(
     }
 }
 
+/*
+pub fn get_test_account_address (program_id: Pubkey, sale_id: u128) -> Pubkey {
+    TestAccount::<'_, { AccountState::Initialized }>::key(&TestAccountDerivationData{sale_id: sale_id}, &program_id)
+}
+*/
+
 pub fn get_icco_state_address (program_id: Pubkey, sale_id: u128) -> Pubkey {
-    SaleStateAccount::<'_, { AccountState::Initialized }>::key(&SaleStateDerivationData{sale_id: sale_id}, &program_id)
+    SaleStateAccount::<'_, { AccountState::Initialized }>::key(&SaleStateAccountDerivationData{sale_id: sale_id}, &program_id)
 }
 
 pub fn get_icco_sale_custody_account_address(program_id: Pubkey, sale_id: u128, token_mint: Pubkey) -> Pubkey {
@@ -228,7 +234,7 @@ pub fn abort_icco_sale(
     sequence: u64,
 ) -> Instruction {
     let config_key = ConfigAccount::<'_, { AccountState::Initialized }>::key(None, &program_id);
-    let state_key = SaleStateAccount::<'_, { AccountState::Initialized }>::key(&SaleStateDerivationData{sale_id: sale_id}, &program_id);
+    let state_key = SaleStateAccount::<'_, { AccountState::Initialized }>::key(&SaleStateAccountDerivationData{sale_id: sale_id}, &program_id);
     
     let claim = Claim::<'_, { AccountState::Uninitialized }>::key(
         &ClaimDerivationData {
@@ -244,13 +250,13 @@ pub fn abort_icco_sale(
         accounts: vec![
             AccountMeta::new(payer, true),
             AccountMeta::new_readonly(config_key, false),
-            AccountMeta::new(state_key, false),
             AccountMeta::new_readonly(payload_message, false),
             AccountMeta::new(claim, false),
 //            AccountMeta::new(program_id, false),
             AccountMeta::new_readonly(solana_program::sysvar::rent::id(), false),
             AccountMeta::new_readonly(solana_program::sysvar::clock::id(), false),
             AccountMeta::new_readonly(solana_program::system_program::id(), false),
+            AccountMeta::new(state_key, false),
         ],
 
         data: (
@@ -277,7 +283,7 @@ pub fn contribute_icco_sale(
     amount: u64,
 ) -> Instruction {
     let config_key = ConfigAccount::<'_, { AccountState::Initialized }>::key(None, &program_id);
-    let state_key = SaleStateAccount::<'_, { AccountState::Initialized }>::key(&SaleStateDerivationData{sale_id: sale_id}, &program_id);
+    let state_key = SaleStateAccount::<'_, { AccountState::Initialized }>::key(&SaleStateAccountDerivationData{sale_id: sale_id}, &program_id);
     let contribution_state_key =
         ContributionStateAccount::<'_, { AccountState::MaybeInitialized }>::key(&ContributionStateAccountDerivationData{
             sale_id: sale_id,
@@ -291,7 +297,6 @@ pub fn contribute_icco_sale(
         accounts: vec![
             AccountMeta::new(payer, true),
             AccountMeta::new_readonly(config_key, false),
-            AccountMeta::new_readonly(state_key, false),
             AccountMeta::new_readonly(payload_message, false),
             AccountMeta::new(contribution_state_key, false),
             AccountMeta::new(from_account, false),
@@ -302,6 +307,7 @@ pub fn contribute_icco_sale(
             AccountMeta::new_readonly(solana_program::sysvar::rent::id(), false),
             AccountMeta::new_readonly(solana_program::system_program::id(), false),
             AccountMeta::new_readonly(spl_token::id(), false),
+            AccountMeta::new(state_key, false),
         ],
         data: (
             crate::instruction::Instruction::ContributeIccoSale,

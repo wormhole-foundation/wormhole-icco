@@ -2,27 +2,13 @@
 //#![allow(unused_must_use)]
 //#![allow(unused_imports)]
 
-//use core::convert::TryInto;
-//use std::mem::size_of_val;
-
-// use std::{
-//     error::Error,
-//     io::{
-//         Cursor,
-//         Read,
-//         Write,
-//     },
-//     // str::Utf8Error,
-//     // string::FromUtf8Error,
-// };
-
 use crate::{
     messages::SaleInit,
-    accounts::{
+    simple_account::create_simple_account,
+        accounts::{
         ConfigAccount,
         SaleStateAccount,
-        SaleStateDerivationData,
-//        CustodySigner,
+        SaleStateAccountDerivationData,
         CustodyAccount,
         CustodyAccountDerivationData,
     },
@@ -33,7 +19,10 @@ use crate::{
 use solana_program::msg;
 
 use solana_program::{
+    // pubkey::Pubkey,
+    // system_instruction,
     account_info::AccountInfo,
+    // program::invoke,
     program::invoke_signed,
     // program_error::ProgramError,
     // pubkey::Pubkey,
@@ -46,17 +35,10 @@ use solitaire::{
     *,
 };
 
-// use wormhole_sdk::{VAA};
-
 use bridge::{
     vaa::{
         ClaimableVAA,
     },
-//    error::Error::{
-//        VAAAlreadyExecuted,
-//        VAAInvalid,
-//    },
-
 //    CHAIN_ID_SOLANA,
 };
 
@@ -77,6 +59,7 @@ pub struct CreateIccoSaleCustodyAccount<'b> {
 
     pub rent: Sysvar<'b, Rent>,
     pub clock: Sysvar<'b, Clock>,
+    // Account [11] is the test.
 }
 
 impl<'a> From<&CreateIccoSaleCustodyAccount<'a>> for CustodyAccountDerivationData {
@@ -92,6 +75,7 @@ impl<'a> From<&CreateIccoSaleCustodyAccount<'a>> for CustodyAccountDerivationDat
 #[derive(BorshDeserialize, BorshSerialize, Default)]
 pub struct CreateIccoSaleCustodyAccountData {
 }
+
 
 pub fn create_icco_sale_custody_account(
     ctx: &ExecutionContext,
@@ -115,7 +99,7 @@ pub fn create_icco_sale_custody_account(
     let sale_id = accs.init_sale_vaa.sale_id;
     msg!("sale_id: {:?}", sale_id);
 
-    // Create and init custody account if needed. It may be iunitialized if previous init sale failed after accounts were created.
+    // Create and init custody account as needed. It may be initialized already, if previous init sale failed after accounts were created.
     // https://github.com/certusone/wormhole/blob/1792141307c3979b1f267af3e20cfc2f011d7051/solana/modules/token_bridge/program/src/api/transfer.rs#L159
     if !accs.custody.is_initialized() {
         accs.custody.create(&(&*accs).into(), ctx, accs.payer.key, Exempt)?;
@@ -132,30 +116,28 @@ pub fn create_icco_sale_custody_account(
     Ok(())
 }
 
-// ctx.program_id, // accs.payer.info().key, // accs.custody_signer.key,
-
-
-
 
 #[derive(FromAccounts)]
 pub struct InitIccoSale<'b> {
     pub payer: Mut<Signer<AccountInfo<'b>>>,
     pub config: ConfigAccount<'b, { AccountState::Initialized }>,       // Must be created before Init
-    pub sale_state: Mut<SaleStateAccount<'b, { AccountState::Uninitialized }>>,   // Must not be created yet
-
     pub init_sale_vaa: ClaimableVAA<'b, SaleInit>,  // Claimed here.
 
     pub rent: Sysvar<'b, Rent>,
     pub clock: Sysvar<'b, Clock>,
+    // Sale state is in ctx.accounts[7];
 }
 
-impl<'a> From<&InitIccoSale<'a>> for SaleStateDerivationData {
+/*
+// May need this later Just for PDA verification.
+impl<'a> From<&InitIccoSale<'a>> for SaleStateAccountDerivationData {
     fn from(accs: &InitIccoSale<'a>) -> Self {
-        SaleStateDerivationData {
+        SaleStateAccountDerivationData {
             sale_id: accs.init_sale_vaa.sale_id,
         }
     }
 }
+*/
 
 // No data so far. All is in VAA Account
 #[derive(BorshDeserialize, BorshSerialize, Default)]
@@ -184,30 +166,39 @@ pub fn init_icco_sale(
         return Err(VAAInvalidEmitterChain.into());
     }
 
-
     let now_time = accs.clock.unix_timestamp;
     let start_time = accs.init_sale_vaa.get_sale_start(&accs.init_sale_vaa.meta().payload[..]).1 as i64;
     let end_time = accs.init_sale_vaa.get_sale_end(&accs.init_sale_vaa.meta().payload[..]).1 as i64;
     msg!("time: {:?} start: {:?} end: {:?}", now_time, start_time, end_time);
 
-
     let sale_id = accs.init_sale_vaa.sale_id;
     msg!("sale_id: {:?}", sale_id);
-
+/* BEFORE
     // Verify that the sale_state account PDA was derived correctly
     let derivation_data: SaleStateDerivationData = (&*accs).into();
     accs.sale_state.verify_derivation(ctx.program_id, &derivation_data)?;
     // msg!("state_key: {:?}", accs.sale_state.info().key);
 
-    // Create sale_state account. (it was Uninitialized coming in)
-    // if !accs.sale_state.is_initialized() {
-    accs.sale_state.create(&(&*accs).into(), ctx, accs.payer.key, Exempt)?;
-    //}
-
     // [Check if all Solana tokens exist??] Custodian accounts are created before this call.
-
+*/
+    // Create account using Solana API.
+    msg!("ctx accounts Cnt: {}", ctx.accounts.len());
+    let sale_state_account_info = &ctx.accounts[7];
+    
+    if **sale_state_account_info.lamports.borrow() > 0 {
+        return Err(SaleStateIsAlredyInitialized.into());
+    } else {
+        create_simple_account (ctx,
+            sale_state_account_info.key,
+            accs.payer.key,
+            2 + 8 * accs.init_sale_vaa.token_cnt as usize,
+            &SaleStateAccount::<'_, { AccountState::Uninitialized }>::seeds(&SaleStateAccountDerivationData{sale_id: sale_id}
+        ))?;
+    }
+    
     // If all good - Prevent vaa double processing
     accs.init_sale_vaa.claim(ctx, accs.payer.key)?;
 
     Ok(())
 }
+

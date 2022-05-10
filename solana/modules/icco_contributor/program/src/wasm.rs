@@ -14,6 +14,7 @@ use crate::{
     instructions::{
         create_icco_sale_custody_account,
         get_icco_sale_custody_account_address,
+//        get_test_account_address,
         get_icco_state_address,
         init_icco_sale,
         abort_icco_sale,
@@ -150,6 +151,13 @@ pub fn vaa_address(bridge_id: String, vaa: Vec<u8>) -> Vec<u8> {
     );
     message_key.to_bytes().to_vec()
 }
+
+/*
+#[wasm_bindgen]
+pub fn test_account_address(program_id: String, sale_id: u64) -> Pubkey {
+    get_test_account_address (Pubkey::from_str(program_id.as_str()).unwrap(), sale_id as u128)
+}
+*/
 
 #[wasm_bindgen]
 pub fn icco_state_address(program_id: String, sale_id: u64) -> Pubkey {

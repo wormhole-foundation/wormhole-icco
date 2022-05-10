@@ -3,11 +3,10 @@
 //#![allow(unused_imports)]
 
 use crate::{
-    messages::SaleAbort,
+    messages::*,
     accounts::{
         ConfigAccount,
-        SaleStateAccount,
-        SaleStateDerivationData,
+//        SaleStateAccountDerivationData,
     },
     errors::Error::*,
 };
@@ -32,32 +31,31 @@ use bridge::{
 };
 
 
-
 #[derive(FromAccounts)]
 pub struct AbortIccoSale<'b> {
     pub payer: Mut<Signer<AccountInfo<'b>>>,
     pub config: ConfigAccount<'b, { AccountState::Initialized }>,
-    pub sale_state: Mut<SaleStateAccount<'b, { AccountState::Initialized }>>,
     pub abort_sale_vaa: ClaimableVAA<'b, SaleAbort>,
     pub rent: Sysvar<'b, Rent>,
     pub clock: Sysvar<'b, Clock>,
+    // Sale state is in ctx.accounts[7];
 }
 
-impl<'a> From<&AbortIccoSale<'a>> for SaleStateDerivationData {
+/*
+// May need this later Just for PDA verification.
+impl<'a> From<&AbortIccoSale<'a>> for SaleStateAccountDerivationData {
     fn from(accs: &AbortIccoSale<'a>) -> Self {
-        SaleStateDerivationData {
+        SaleStateAccountDerivationData {
             sale_id: accs.abort_sale_vaa.sale_id,
         }
     }
 }
+*/
 
 // No data so far.
 #[derive(BorshDeserialize, BorshSerialize, Default)]
 pub struct AbortIccoSaleData {
 }
-
-// impl<'b> InstructionContext<'b> for AbortIccoSale<'b> {
-// }
 
 pub fn abort_icco_sale(
     ctx: &ExecutionContext,
@@ -81,25 +79,22 @@ pub fn abort_icco_sale(
     // let end_time = accs.init_sale_vaa.get_sale_end(&accs.init_sale_vaa.meta().payload[..]).1 as i64;
     // msg!("time: {:?} start: {:?} end: {:?}", now_time, start_time, end_time);
 
-
-    // let sale_id = accs.init_sale_vaa.sale_id;
-
     // Verify that the sale_state account PDA was derived correctly
-    let derivation_data: SaleStateDerivationData = (&*accs).into();
-    accs.sale_state.verify_derivation(ctx.program_id, &derivation_data)?;
+//    let sale_id = accs.init_sale_vaa.sale_id;
+//    let derivation_data: SaleStateAccountDerivationData = (&*accs).into();
+//    accs.sale_state.verify_derivation(ctx.program_id, &derivation_data)?;
+    let sale_state_account_info = &ctx.accounts[7];
+    //msg!("state_key: {:?}", sale_state_account_info.key);
 
-    msg!("state_key: {:?}", accs.sale_state.info().key);
-
-    // sale_state account set 
-    if accs.sale_state.is_sealed {
+    let mut state_data = sale_state_account_info.data.borrow_mut();
+    if get_sale_state_sealed(&state_data) {
         return Err(SaleHasBeenSealed.into());
     }
-    if accs.sale_state.is_aborted {
+    if get_sale_state_aborted(&state_data) {
         return Err(SaleHasBeenAborted.into());
     }
 
-    // Set sale as aborted and claim VAA on this chain
-    accs.sale_state.is_aborted = true;
+    set_sale_state_aborted(& mut state_data, true);
     accs.abort_sale_vaa.claim(ctx, accs.payer.key)?;
 
     Ok(())

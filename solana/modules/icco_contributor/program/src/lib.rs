@@ -21,6 +21,7 @@ pub mod errors;
 pub mod messages;
 pub mod types;
 pub mod claimed_vaa;
+pub mod simple_account;
 
 pub use api::{
     contribute_icco_sale, init_icco_sale, initialize, create_icco_sale_custody_account, abort_icco_sale,

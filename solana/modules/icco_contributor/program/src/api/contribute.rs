@@ -4,11 +4,11 @@
 
 use std::mem::size_of_val;
 use crate::{
-    messages::SaleInit,
+    messages::*,
     accounts::{
         ConfigAccount,
         SaleStateAccount,
-        SaleStateDerivationData,
+//        SaleStateAccountDerivationData,
         CustodySigner,
         CustodyAccount,
         CustodyAccountDerivationData,
@@ -58,7 +58,6 @@ use bridge::{
 pub struct ContributeIccoSale<'b> {
     pub payer: Mut<Signer<AccountInfo<'b>>>,
     pub config: ConfigAccount<'b, { AccountState::Initialized }>,
-    pub sale_state: SaleStateAccount<'b, { AccountState::Initialized }>,    // R/O here
     pub init_sale_vaa: ClaimedVAA<'b, SaleInit>,           // Was claimed.
 
     pub contribution_state: Mut<ContributionStateAccount<'b, { AccountState::MaybeInitialized }>>, 
@@ -70,15 +69,18 @@ pub struct ContributeIccoSale<'b> {
     pub custody: Mut<CustodyAccount<'b, { AccountState::Initialized }>>, 
 
     pub clock: Sysvar<'b, Clock>,
+    // Sale state is in ctx.accounts[11];
 }
 
-impl<'a> From<&ContributeIccoSale<'a>> for SaleStateDerivationData {
+/*
+impl<'a> From<&ContributeIccoSale<'a>> for SaleStateAccountDerivationData {
     fn from(accs: &ContributeIccoSale<'a>) -> Self {
-        SaleStateDerivationData {
+        SaleStateAccountDerivationData {
             sale_id: accs.init_sale_vaa.sale_id,
         }
     }
 }
+*/
 
 impl<'a> From<&ContributeIccoSale<'a>> for CustodyAccountDerivationData {
     fn from(accs: &ContributeIccoSale<'a>) -> Self {
@@ -116,14 +118,18 @@ pub fn contribute_icco_sale(
 ) -> Result<()> {
     msg!("In contribute_icco_sale!");
 
+    let sale_state_account_info = &ctx.accounts[11];
+    //msg!("state_key: {:?}", sale_state_account_info.key);
+    let mut state_data = sale_state_account_info.data.borrow_mut();
+
     // Check sale status.
-    if accs.sale_state.is_sealed || accs.sale_state.is_aborted {
+    if get_sale_state_sealed(&state_data) || get_sale_state_aborted(&state_data) {
         return Err(SaleSealedOrAborted.into());
     }
-
+/*
     // TBD This does not work yet. EVM Time is not Linux.
     // Check if sale started.
-/*
+
     let now_time = accs.clock.unix_timestamp as u128;       // i64 ->u128
     if now_time < accs.init_sale_vaa.get_sale_start(&accs.init_sale_vaa.meta().payload[..]).0 {
         return Err(SaleHasNotStarted.into());
@@ -132,6 +138,7 @@ pub fn contribute_icco_sale(
         return Err(SaleHasEnded.into());
     }
 */
+
     // Make sure token Idx matches passed in token mint addr.
 /*
     let token_idx = data.token_idx;
@@ -165,7 +172,11 @@ pub fn contribute_icco_sale(
 //    invoke_seeded(&transfer_ix, ctx, &accs.payer, None)?;
 //    invoke_seeded(&transfer_ix, ctx, &accs.authority_signer, None)?;
 
-    // store new amount.
+    // store new amount in Custody and State accounts.
+    let token_idx = data.token_idx;
+    let tmp_v = get_sale_state_contribution(&state_data, token_idx) + data.amount;
+    set_sale_state_contribution(& mut state_data, token_idx, tmp_v);
+//    accs.sale_state.contributions[token_idx] = accs.sale_state.contributions[token_idx] + data.amount;
     accs.contribution_state.amount = accs.contribution_state.amount + data.amount;
     Ok(())
 }

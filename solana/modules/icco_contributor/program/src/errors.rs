@@ -17,6 +17,9 @@ pub enum Error {
     SaleHasEnded,
     SaleHasBeenSealed,
     SaleHasBeenAborted,
+    VAATokenCountExceeded,
+    SaleStateIsAlredyInitialized,
+    TestAccountError,
 }
 
 /// Errors thrown by the program will bubble up to the solitaire wrapper, which needs a way to

@@ -24,11 +24,25 @@ impl Owned for Config {
     }
 }
 
+
+/// Temp test account data. If needed.
+#[derive(Default, Clone, Copy, BorshDeserialize, BorshSerialize)]
+pub struct TestStruct {
+}
+
+impl Owned for TestStruct {
+    fn owner(&self) -> AccountOwner {
+        AccountOwner::This
+    }
+}
+
+
+
 /// icco sale state. Writeable in init, seal, abort.
-#[derive(Default, Clone, Copy, BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+/// Only static sizing is working well in here, so 256 is preallocated.
+//#[derive(Clone, Copy, BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[derive(Default, Clone, Copy, BorshDeserialize, BorshSerialize)]
 pub struct SaleState {
-    pub is_sealed: bool,
-    pub is_aborted: bool,
 }
 
 impl Owned for SaleState {
@@ -36,7 +50,6 @@ impl Owned for SaleState {
         AccountOwner::This
     }
 }
-
 
 /// icco contribution state. Writeable in contribute, redeem, refund.
 #[derive(Default, Clone, Copy, BorshDeserialize, BorshSerialize, Serialize, Deserialize)]

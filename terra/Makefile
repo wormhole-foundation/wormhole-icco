@@ -43,7 +43,7 @@ scripts/node_modules:
 ## Run Linter and Unit Tests
 unit-test:
 #	cargo clippy
-	cargo test -- --nocapture
+	RUST_BACKTRACE=1 cargo test -- --nocapture
 
 .PHONY: integration-test
 ## Run Integration Tests

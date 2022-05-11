@@ -24,8 +24,8 @@ pub mod claimed_vaa;
 pub mod simple_account;
 
 pub use api::{
-    contribute_icco_sale, init_icco_sale, initialize, create_icco_sale_custody_account, abort_icco_sale,
-    ContributeIccoSale, InitIccoSale, Initialize, CreateIccoSaleCustodyAccount, AbortIccoSale,
+    contribute_icco_sale, init_icco_sale, initialize, create_icco_sale_custody_account, abort_icco_sale, attest_icco_sale,
+    ContributeIccoSale, InitIccoSale, Initialize, CreateIccoSaleCustodyAccount, AbortIccoSale, AttestIccoSale,
 };
 
 use solitaire::*;
@@ -35,5 +35,6 @@ solitaire! {
     CreateIccoSaleCustodyAccount => create_icco_sale_custody_account,
     InitIccoSale  => init_icco_sale,
     AbortIccoSale  => abort_icco_sale,
+    AttestIccoSale  => attest_icco_sale,
     ContributeIccoSale => contribute_icco_sale,
 }

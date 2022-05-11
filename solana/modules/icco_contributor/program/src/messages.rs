@@ -82,6 +82,7 @@ impl DeserializePayload for SaleAbort {
     }
 }
 
+
 /// -------------------------------------------------------------------
 /// Zero-copy from VAA payload for Init Sale.
 
@@ -184,18 +185,47 @@ impl SaleInit {
 
     // Accepted tokens data getters
     // tokenAddress: Pubkey,
-    pub fn get_accepted_token_address(&self, idx: usize, bf: &[u8]) -> Pubkey {
-        let t_offset: usize = 228 + idx * 50;
+    pub fn get_accepted_token_address(&self, idx: u8, bf: &[u8]) -> Pubkey {
+        let t_offset: usize = 228 + (idx as usize) * 50;
         Pubkey::new(&bf[t_offset..t_offset + 32])
     }
 
-    pub fn get_accepted_token_chain(&self, idx: usize, bf: &[u8]) -> u16 {
-        let t_offset: usize = 228 + idx * 50 + 32;
+    pub fn get_accepted_token_chain(&self, idx: u8, bf: &[u8]) -> u16 {
+        let t_offset: usize = 228 + (idx as usize) * 50 + 32;
         read_u16(&bf[t_offset..])
     }
 
-    pub fn get_accepted_token_conversion_rate(&self, idx: usize, bf: &[u8]) -> u128 {
-        let t_offset: usize = 228 + idx * 50 + 34;
+    pub fn get_accepted_token_conversion_rate(&self, idx: u8, bf: &[u8]) -> u128 {
+        let t_offset: usize = 228 + (idx as usize) * 50 + 34;
         read_u128(&bf[t_offset..])
     }
+}
+
+/// -------------------------------------------------------------------
+/// VAA saleAttested reply payload [2]
+
+// Layout
+// uint8 payloadID;    // PayloadID uint8 = 2
+// uint256 saleID;     // Sale ID
+// uint16 chainID;     // Chain ID
+// uint8 tokens_cnt     // Contribution[] contributions; // sealed contributions for this sale
+//      uint8 contributions[i].tokenIndex,
+//      uint256 contributions[i].contributed
+
+pub fn get_sale_attested_size(solana_tokens_cnt: u8) -> usize {
+    ((1+32+2+1) + solana_tokens_cnt*(1+32)) as usize
+}
+
+pub fn pack_sale_attested_vaa_header(bf: & mut [u8], sale_id: u128, solana_tokens_cnt: u8) {
+    bf[0] = 2;
+    bf[33..65].clone_from_slice(&sale_id.to_be_bytes()[..]);        // first 16 bytes s/b 0.
+    bf[65..67].clone_from_slice(&(1 as u16).to_be_bytes()[..]);     // ChainId
+    bf[67] = solana_tokens_cnt;
+}
+
+pub fn pack_sale_attested_vaa_token(bf: & mut [u8], token_idx: u8, slot_idx: u8, amount: u64) {
+    let step = (1+32) as usize;
+    let base = (8+32+2+1) as usize + step * (slot_idx as usize);
+    bf[base] = token_idx;
+    bf[base+33..base+65].clone_from_slice(&amount.to_be_bytes()[..]);
 }

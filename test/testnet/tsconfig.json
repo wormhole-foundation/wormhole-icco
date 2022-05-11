@@ -10,9 +10,6 @@
     "allowJs": true,
     "resolveJsonModule": true
   },
-  "include": [
-    "register_tilt_contributors.ts",
-    "register_testnet_contributors.ts"
-  ],
+  "include": ["src"],
   "exclude": ["node_modules"]
 }

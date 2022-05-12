@@ -9,6 +9,7 @@ export async function signContribution(
   tokenIndex: number,
   amount: ethers.BigNumberish,
   buyerAddress: string,
+  totalContribution: ethers.BigNumberish,
   signer: string
 ): Promise<ethers.BytesLike> {
   const web3 = new Web3(rpc);
@@ -23,6 +24,7 @@ export async function signContribution(
     web3.eth.abi
       .encodeParameter("address", buyerAddress)
       .substring(2 + (64 - 40)),
+    web3.eth.abi.encodeParameter("uint256", totalContribution).substring(2),
   ];
 
   // compute the hash

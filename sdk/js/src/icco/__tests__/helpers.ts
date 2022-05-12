@@ -509,6 +509,14 @@ export async function contributeAllTokensOnEth(
   {
     const receipts = await Promise.all(
       buyers.map(async (config, i): Promise<ethers.ContractReceipt> => {
+        const totalContribution = await getSaleContributionOnEth(
+          TOKEN_SALE_CONTRIBUTOR_ADDRESSES.get(config.chainId)!,
+          config.wallet.provider,
+          saleId,
+          config.tokenIndex,
+          config.wallet.address
+        );
+
         // perform KYC
         const signature = await signContribution(
           rpc,
@@ -519,7 +527,8 @@ export async function contributeAllTokensOnEth(
           saleId,
           config.tokenIndex,
           contributions[i],
-          buyers[i].wallet.address,
+          config.wallet.address,
+          totalContribution,
           KYC_PRIVATE_KEYS
         );
 
@@ -570,6 +579,13 @@ export async function secureContributeAllTokensOnEth(
   {
     const receipts = await Promise.all(
       buyers.map(async (config, i): Promise<ethers.ContractReceipt> => {
+        const totalContribution = await getSaleContributionOnEth(
+          TOKEN_SALE_CONTRIBUTOR_ADDRESSES.get(config.chainId)!,
+          config.wallet.provider,
+          saleId,
+          config.tokenIndex,
+          config.wallet.address
+        );
         const signature = await signContribution(
           rpc,
           nativeToHexString(
@@ -579,7 +595,8 @@ export async function secureContributeAllTokensOnEth(
           saleId,
           config.tokenIndex,
           contributions[i],
-          buyers[i].wallet.address,
+          config.wallet.address,
+          totalContribution,
           KYC_PRIVATE_KEYS
         );
 
@@ -1380,6 +1397,7 @@ export async function signContribution(
   tokenIndex: number,
   amount: ethers.BigNumberish,
   buyerAddress: string,
+  totalContribution: ethers.BigNumberish,
   signer: string
 ): Promise<ethers.BytesLike> {
   const web3 = new Web3(rpc);
@@ -1394,6 +1412,7 @@ export async function signContribution(
     web3.eth.abi
       .encodeParameter("address", buyerAddress)
       .substring(2 + (64 - 40)),
+    web3.eth.abi.encodeParameter("uint256", totalContribution).substring(2),
   ];
 
   // compute the hash

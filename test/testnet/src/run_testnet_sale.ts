@@ -12,21 +12,18 @@ import {
   redeemCrossChainAllocations,
   claimContributorAllocationOnEth,
   redeemCrossChainContributions,
+  testProvider,
 } from "./utils";
 import {
   SALE_CONFIG,
   TESTNET_ADDRESSES,
   CONDUCTOR_NETWORK,
   CONTRIBUTOR_INFO,
-  CHAIN_ID_TO_NETWORK,
-  WORMHOLE_ADDRESSES,
+  CONDUCTOR_ADDRESS,
 } from "./consts";
 import { Contribution, saleParams, SealSaleResult } from "./structs";
-import {
-  setDefaultWasm,
-  getEmitterAddressEth,
-  getSignedVAAWithRetry,
-} from "@certusone/wormhole-sdk";
+import { setDefaultWasm } from "@certusone/wormhole-sdk";
+import { getSaleFromConductorOnEth } from "wormhole-icco-sdk";
 
 setDefaultWasm("node");
 

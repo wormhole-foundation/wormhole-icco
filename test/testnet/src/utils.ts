@@ -8,9 +8,6 @@ import {
   getEmitterAddressEth,
   nativeToHexString,
   importCoreWasm,
-  hexToUint8Array,
-  uint8ArrayToNative,
-  getForeignAssetEth,
   redeemOnEth,
 } from "@certusone/wormhole-sdk";
 import {
@@ -35,6 +32,7 @@ import {
   getErc20Decimals,
   claimAllocationOnEth,
   getAllocationIsClaimedOnEth,
+  getSaleContributionOnEth,
 } from "wormhole-icco-sdk";
 import {
   WORMHOLE_ADDRESSES,
@@ -378,12 +376,24 @@ export async function prepareAndExecuteContribution(
     return false;
   }
 
+  // network for the contribution
+  const network = CHAIN_ID_TO_NETWORK.get(contribution.chainId);
+
   // create wallet for the contributor
   const wallet: ethers.Wallet = contributorWallet(contribution);
 
   // format amount
   const amount: ethers.BigNumberish = await parseUnits(contribution, wallet);
   console.log("Contributing this amount:", amount.toString());
+
+  // get total contributed amount for kyc authority
+  const totalContribution = await getSaleContributionOnEth(
+    TESTNET_ADDRESSES[network],
+    wallet.provider,
+    saleId,
+    tokenIndex,
+    wallet.address
+  );
 
   // get KYC signature
   const signature = await signContribution(
@@ -393,13 +403,14 @@ export async function prepareAndExecuteContribution(
     tokenIndex,
     amount,
     wallet.address,
+    totalContribution,
     KYC_AUTHORITY_KEY
   );
 
   // make the contribution
   try {
     const receipt = await secureContributeOnEth(
-      TESTNET_ADDRESSES[CHAIN_ID_TO_NETWORK.get(contribution.chainId)],
+      TESTNET_ADDRESSES[network],
       saleId,
       tokenIndex,
       amount,

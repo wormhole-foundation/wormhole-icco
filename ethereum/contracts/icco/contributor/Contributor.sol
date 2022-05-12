@@ -88,14 +88,17 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
     function contribute(uint saleId, uint tokenIndex, uint amount, bytes memory sig) public nonReentrant { 
         require(saleExists(saleId), "sale not initiated");
 
-        (, bool isAborted) = getSaleStatus(saleId);
+        // bypass stack too deep
+        {
+            (, bool isAborted) = getSaleStatus(saleId);
 
-        require(!isAborted, "sale was aborted");
+            require(!isAborted, "sale was aborted");
 
-        (uint start, uint end) = getSaleTimeframe(saleId);
+            (uint start, uint end) = getSaleTimeframe(saleId);
 
-        require(block.timestamp >= start, "sale not yet started");
-        require(block.timestamp <= end, "sale has ended");
+            require(block.timestamp >= start, "sale not yet started");
+            require(block.timestamp <= end, "sale has ended");
+        }
 
         (uint16 tokenChain, bytes32 tokenAddressBytes,) = getSaleAcceptedTokenInfo(saleId, tokenIndex);
 
@@ -104,7 +107,14 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
         // bypass stack too deep  
         {
             // verify authority has signed contribution 
-            bytes memory encodedHashData = abi.encodePacked(conductorContract(), saleId, tokenIndex, amount, msg.sender); 
+            bytes memory encodedHashData = abi.encodePacked(
+                conductorContract(), 
+                saleId, 
+                tokenIndex, 
+                amount, 
+                msg.sender, 
+                getSaleContribution(saleId, tokenIndex, msg.sender)
+            ); 
             require(verifySignature(encodedHashData, sig) == authority(), "unauthorized contributor");
         }
 

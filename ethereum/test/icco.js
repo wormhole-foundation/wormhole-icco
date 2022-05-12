@@ -5040,6 +5040,15 @@ const signContribution = async function(
   buyerAddress,
   signer
 ) {
+  // query for total contributed amount by this contributor
+  const initialized = new web3.eth.Contract(
+    ContributorImplementationFullABI,
+    TokenSaleContributor.address
+  );
+  const totalContribution = await initialized.methods
+    .getSaleContribution(saleId, tokenIndex, buyerAddress)
+    .call();
+
   const body = [
     web3.eth.abi.encodeParameter("bytes32", conductorAddress).substring(2),
     web3.eth.abi.encodeParameter("uint256", saleId).substring(2),
@@ -5048,6 +5057,7 @@ const signContribution = async function(
     web3.eth.abi
       .encodeParameter("address", buyerAddress)
       .substring(2 + (64 - 40)),
+    web3.eth.abi.encodeParameter("uint256", totalContribution).substring(2),
   ];
 
   // compute the hash

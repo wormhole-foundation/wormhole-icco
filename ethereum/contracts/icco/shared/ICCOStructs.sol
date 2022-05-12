@@ -31,7 +31,9 @@ library ICCOStructs {
 
     struct Raise {
         // sale token address
-        address token;
+        bytes32 token;
+        // sale token chainId
+        uint16 tokenChain;
         // token amount being sold
         uint256 tokenAmount;
         // min raise amount
@@ -100,6 +102,20 @@ library ICCOStructs {
         uint8 payloadID;
         // Sale ID
         uint256 saleID;
+    }
+
+    function normalizeAmount(uint256 amount, uint8 decimals) public pure returns(uint256){
+        if (decimals > 8) {
+            amount /= 10 ** (decimals - 8);
+        }
+        return amount;
+    }
+
+    function deNormalizeAmount(uint256 amount, uint8 decimals) public pure returns(uint256){
+        if (decimals > 8) {
+            amount *= 10 ** (decimals - 8);
+        }
+        return amount;
     }
 
     function encodeSaleInit(SaleInit memory saleInit) public pure returns (bytes memory encoded) {

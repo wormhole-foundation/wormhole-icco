@@ -4,9 +4,8 @@ import {
   ERC20__factory,
   getForeignAssetEth,
 } from "@certusone/wormhole-sdk";
-
-import { Conductor__factory } from "../ethers-contracts";
 import { nativeToUint8Array } from "./misc";
+import { Conductor__factory } from "../ethers-contracts";
 import { AcceptedToken, SaleInit, makeAcceptedToken, Raise } from "./structs";
 
 export { AcceptedToken, SaleInit };
@@ -39,7 +38,9 @@ export async function makeAcceptedWrappedTokenEth(
 
 export async function createSaleOnEth(
   conductorAddress: string,
+  localTokenAddress: string,
   tokenAddress: string,
+  tokenChain: ChainId,
   amount: ethers.BigNumberish,
   minRaise: ethers.BigNumberish,
   maxRaise: ethers.BigNumberish,
@@ -52,14 +53,18 @@ export async function createSaleOnEth(
 ): Promise<ethers.ContractReceipt> {
   // approve first
   {
-    const token = ERC20__factory.connect(tokenAddress, wallet);
+    const token = ERC20__factory.connect(localTokenAddress, wallet);
     const tx = await token.approve(conductorAddress, amount);
     const receipt = await tx.wait();
   }
 
+  // convert address string to bytes32
+  const tokenAddressBytes32 = nativeToUint8Array(tokenAddress, tokenChain);
+
   // create a struct to pass to createSale
   const raise: Raise = {
-    token: tokenAddress,
+    token: tokenAddressBytes32,
+    tokenChain: tokenChain,
     tokenAmount: amount,
     minRaise: minRaise,
     maxRaise: maxRaise,

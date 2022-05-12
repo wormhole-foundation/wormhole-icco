@@ -11,8 +11,9 @@ contract ConductorSetters is ConductorState, Context {
         _state.owner = owner_;
     }
 
-    function setContributor(uint16 chainId, bytes32 emitter) internal {
+    function setContributor(uint16 chainId, bytes32 emitter, bytes32 custody) internal {
         _state.contributorImplementations[chainId] = emitter;
+        _state.contributorCustody[chainId] = custody; 
     }
 
     function setInitialized(address implementatiom) internal {

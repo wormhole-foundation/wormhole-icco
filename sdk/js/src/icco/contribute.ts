@@ -47,7 +47,12 @@ export async function contributeOnEth(
     const receipt = await tx.wait();
   }
 
-  const tx = await contributor.contribute(saleId, tokenIndex, amount, signature);
+  const tx = await contributor.contribute(
+    saleId,
+    tokenIndex,
+    amount,
+    signature
+  );
   return tx.wait();
 }
 

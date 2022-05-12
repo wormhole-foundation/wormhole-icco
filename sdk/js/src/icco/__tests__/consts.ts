@@ -27,8 +27,12 @@ export const ETH_CORE_BRIDGE_ADDRESS =
 export const ETH_TOKEN_BRIDGE_ADDRESS =
   "0x0290FB167208Af455bB137780163b7B7a9a10C16";
 
+// decimals for min/max raise denomination
+export const DENOMINATION_DECIMALS = 18;
+
 // contributors only registered with conductor on CHAIN_ID_ETH
 export const ETH_TOKEN_SALE_CONDUCTOR_ADDRESS = Tilt.conductorAddress;
+export const ETH_TOKEN_SALE_CONDUCTOR_CHAIN_ID = Tilt.conductorChain;
 export const TOKEN_SALE_CONTRIBUTOR_ADDRESSES = new Map<ChainId, string>();
 TOKEN_SALE_CONTRIBUTOR_ADDRESSES.set(CHAIN_ID_ETH, Tilt.ethContributorAddress);
 TOKEN_SALE_CONTRIBUTOR_ADDRESSES.set(CHAIN_ID_BSC, Tilt.bscContributorAddress);

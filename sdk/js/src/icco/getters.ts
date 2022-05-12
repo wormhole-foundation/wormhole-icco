@@ -18,6 +18,7 @@ export async function getSaleFromConductorOnEth(
     saleId: sale.saleID,
     tokenAddress: sale.tokenAddress,
     tokenChain: sale.tokenChain,
+    localTokenAddress: sale.localTokenAddress,
     tokenAmount: sale.tokenAmount,
     minRaise: sale.minRaise,
     maxRaise: sale.maxRaise,

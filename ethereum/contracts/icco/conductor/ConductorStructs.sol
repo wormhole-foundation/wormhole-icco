@@ -7,10 +7,12 @@ contract ConductorStructs {
     struct Sale {
         // Sale ID
         uint256 saleID;
-        // Address of the token. Left-zero-padded if shorter than 32 bytes
+        // Native address of the token. Left-zero-padded if shorter than 32 bytes
         bytes32 tokenAddress;
-        // Chain ID of the token
+        // Native chain ID of the token
         uint16 tokenChain;
+        // address of token on conductor chain, will be different if selling a wrapped token
+        address localTokenAddress;
         // token amount being sold
         uint256 tokenAmount;
         // min raise amount

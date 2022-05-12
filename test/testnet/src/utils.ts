@@ -563,7 +563,7 @@ export async function redeemCrossChainAllocations(
 export async function sealSaleAtContributors(
   saleInit: SaleInit,
   saleResult: SealSaleResult
-) {
+): Promise<[SaleSealed, Map<ChainId, ethers.ContractReceipt>]> {
   if (!saleResult.sale.isSealed) {
     throw Error("sale was not sealed");
   }
@@ -575,20 +575,18 @@ export async function sealSaleAtContributors(
   console.log("Sealing sale at the contributors.");
   console.log(saleSealed);
 
-  // set sale sealed for each contributor
-  const receipts = await Promise.all(
-    CONTRIBUTOR_NETWORKS.map(
-      async (network): Promise<ethers.ContractReceipt> => {
-        return saleSealedOnEth(
-          TESTNET_ADDRESSES[network],
-          signedVaa,
-          initiatorWallet(network),
-          saleInit.saleId
-        );
-      }
-    )
-  );
-  return saleSealed;
+  const receipts = new Map<ChainId, ethers.ContractReceipt>();
+  for (let [chainId, network] of CHAIN_ID_TO_NETWORK) {
+    const receipt = await saleSealedOnEth(
+      TESTNET_ADDRESSES[network],
+      signedVaa,
+      initiatorWallet(network),
+      saleInit.saleId
+    );
+    receipts.set(chainId, receipt);
+  }
+
+  return [saleSealed, receipts];
 }
 
 export async function claimContributorAllocationOnEth(
@@ -621,4 +619,53 @@ export async function claimContributorAllocationOnEth(
     tokenIndex[1],
     wallet.address
   );
+}
+
+export async function redeemCrossChainContributions(
+  receipt: ethers.ContractReceipt,
+  emitterChain: ChainId
+): Promise<boolean> {
+  const sequences = parseSequencesFromLogEth(
+    receipt,
+    WORMHOLE_ADDRESSES[CHAIN_ID_TO_NETWORK.get(emitterChain)].wormhole
+  );
+
+  const bridgeTransferSequence = sequences[sequences.length - 1];
+  if (bridgeTransferSequence === undefined) {
+    console.log("no vaa sequences found");
+    return false;
+  }
+
+  for (const sequence of sequences) {
+    const result = await getSignedVAAWithRetry(
+      WORMHOLE_ADDRESSES.guardianRpc,
+      emitterChain,
+      getEmitterAddressEth(
+        WORMHOLE_ADDRESSES[CHAIN_ID_TO_NETWORK.get(emitterChain)].tokenBridge
+      ),
+      sequence,
+      {
+        transport: NodeHttpTransport(),
+      }
+    );
+    const signedVaa = result.vaaBytes;
+    const vaaPayload = await extractVaaPayload(signedVaa);
+    const chainId = await getTargetChainIdFromTransferVaa(vaaPayload);
+    const targetNetwork = CHAIN_ID_TO_NETWORK.get(chainId);
+
+    console.log(
+      "Redeeming cross-chain transfer",
+      sequence,
+      "to recipient on chainId:",
+      chainId
+    );
+
+    // redeem it on conductor chain
+    const receipt = await redeemOnEth(
+      WORMHOLE_ADDRESSES[targetNetwork].tokenBridge,
+      initiatorWallet(targetNetwork),
+      signedVaa
+    );
+  }
+  return true;
 }

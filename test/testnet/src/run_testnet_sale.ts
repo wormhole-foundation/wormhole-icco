@@ -11,15 +11,22 @@ import {
   sealSaleAtContributors,
   redeemCrossChainAllocations,
   claimContributorAllocationOnEth,
+  redeemCrossChainContributions,
 } from "./utils";
 import {
   SALE_CONFIG,
   TESTNET_ADDRESSES,
   CONDUCTOR_NETWORK,
   CONTRIBUTOR_INFO,
+  CHAIN_ID_TO_NETWORK,
+  WORMHOLE_ADDRESSES,
 } from "./consts";
 import { Contribution, saleParams, SealSaleResult } from "./structs";
-import { setDefaultWasm } from "@certusone/wormhole-sdk";
+import {
+  setDefaultWasm,
+  getEmitterAddressEth,
+  getSignedVAAWithRetry,
+} from "@certusone/wormhole-sdk";
 
 setDefaultWasm("node");
 
@@ -81,15 +88,20 @@ async function main() {
   await redeemCrossChainAllocations(saleResult);
 
   // seal the sale on the Contributor contracts
-  const saleSealed = await sealSaleAtContributors(saleInit, saleResult);
+  const saleSealedResults = await sealSaleAtContributors(saleInit, saleResult);
 
   // claim allocations on contributors
   for (let i = 0; i < successfulContributions.length; i++) {
     const successful = await claimContributorAllocationOnEth(
-      saleSealed,
+      saleSealedResults[0],
       successfulContributions[i]
     );
     console.log("Allocation", i, "was claimed successfully:", successful);
+  }
+
+  // redeem VAAs for conductor
+  for (let [chainId, receipt] of saleSealedResults[1]) {
+    await redeemCrossChainContributions(receipt, chainId);
   }
 }
 

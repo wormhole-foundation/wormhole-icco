@@ -26,6 +26,7 @@ wormhole/ethereum/build:
 ## Run Unit/Integration Test With Ganache CLI
 test: .env build wormhole/ethereum/build
 	@if pgrep npm; then echo "Error: npm exec ganache-cli already running. Stop it before running tests"; exit 1; fi
+	cp -u icco_deployment_config.js.sample icco_deployment_config.js
 	npx ganache-cli -e 10000 --deterministic --time="1970-01-01T00:00:00+00:00" > ganache.log &
 	sleep 5
 	cd wormhole/ethereum && npm run migrate

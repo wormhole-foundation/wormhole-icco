@@ -39,9 +39,17 @@ pub struct AttestIccoSale<'b> {
     pub payer: Mut<Signer<AccountInfo<'b>>>,
     pub config: ConfigAccount<'b, { AccountState::Initialized }>,
     pub init_sale_vaa: ClaimedVAA<'b, SaleInit>,           // Was claimed.
+    pub message: Mut<Signer<AccountInfo<'b>>>,
     pub rent: Sysvar<'b, Rent>,
     pub clock: Sysvar<'b, Clock>,
-    // Sale state is in ctx.accounts[5];
+    // Sale state is in ctx.accounts[6];
+    // --- starting at [6]: Needed for post_message call.
+    // AccountMeta::new(wormhole_config, false),
+    // AccountMeta::new(fee_collector, false),
+    // AccountMeta::new_readonly(emitter, false),
+    // AccountMeta::new(sequence, false),
+    // AccountMeta::new_readonly(wormhole, false),
+    // AccountMeta::new_readonly(solana_program::system_program::id(), false),
 }
 
 /*
@@ -77,15 +85,19 @@ pub fn attest_icco_sale(
 //    let derivation_data: SaleStateAccountDerivationData = (&*accs).into();
 //    accs.sale_state.verify_derivation(ctx.program_id, &derivation_data)?;
 
-    let sale_state_account_info = &ctx.accounts[5];
+    // msg!("state: {:?}", ctx.accounts[6].key);
+    let sale_state_account_info = &ctx.accounts[6];
     let state_data = sale_state_account_info.data.borrow();
     if get_sale_state_sealed(&state_data) {
+        // msg!("sealed!");
         return Err(SaleHasBeenSealed.into());
     }
     if get_sale_state_aborted(&state_data) {
+        // msg!("aborted!");
         return Err(SaleHasBeenAborted.into());
     }
 
+    // msg!("counting tokens");
     // Let's count solana tokens.
     let mut sol_cnt: u8 = 0;
     let mut token_idx: u8 = 0;
@@ -96,14 +108,16 @@ pub fn attest_icco_sale(
         token_idx = token_idx + 1;
     }
     // Allocate and fill the VAA payload.
-    let mut vaa_bf = Vec::with_capacity(sol_cnt as usize);   // even 0 should be ok
+    msg!("alloc: {} / {}", sol_cnt, token_idx);
+
+    let mut vaa_bf = std::iter::repeat(0 as u8).take(get_sale_attested_size(sol_cnt) as usize).collect::<Vec<_>>();
     let mut bf = & mut vaa_bf;
     pack_sale_attested_vaa_header(& mut bf, accs.init_sale_vaa.sale_id, sol_cnt);
 
     // Store solana amounts.
+    // msg!("making VAA");
     sol_cnt = 0;
     token_idx = 0;
-//    let amount: u64 = 0;
     while token_idx < accs.init_sale_vaa.token_cnt {
         if accs.init_sale_vaa.get_accepted_token_chain(token_idx, &accs.init_sale_vaa.meta().payload) == 1 {
             let amount = get_sale_state_contribution(&state_data, token_idx);
@@ -114,13 +128,14 @@ pub fn attest_icco_sale(
     }
 
     // post sale_attested_vaa.
+    msg!("posting VAA");
     post_message(
         *ctx.program_id,
         *accs.payer.key,
-        *accs.payer.key,
+        *accs.message.key,
         &bf,
         ConsistencyLevel::Confirmed,
-        None,       //Some(&seeds),  // If needed.
+        None,
         ctx.accounts,
         0
     )?;

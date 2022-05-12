@@ -27,6 +27,7 @@ import {
   init_icco_sale_ix,
   abort_icco_sale_ix,
   contribute_icco_sale_ix,
+  attest_icco_sale_ix,
   Pubkey,
   //  test_account_address,
 } from "../../solana/icco_contributor-node";
@@ -347,6 +348,39 @@ describe("Solana dev Tests", () => {
         }
 
         // -----------------------
+        // Call attest.
+        {
+          console.log("---- Attesting ------");
+          // Make new VAA keypair.
+          const messageKey = Keypair.generate();
+          console.log("attest message key: ", messageKey.publicKey.toString());
+
+          // Make attest instruction.
+          const ixa = attest_icco_sale_ix(
+            SOLANA_CONTRIBUTOR_ADDR,
+            SOLANA_BRIDGE_ADDR,
+            walletAccount.publicKey.toString(),
+            saleInitVaa, // initSale
+            messageKey.publicKey.toString()
+          );
+          dumpInstructionAccounts(ixa);
+          const ix = ixFromRust(ixa);
+
+          // call contributor contract
+          const tx = new Transaction().add(ix);
+          //     tx.partialSign(messageKey);
+          const tx_id = await solanaConnection.sendTransaction(
+            tx,
+            [walletAccount, messageKey],
+            {
+              skipPreflight: false,
+              preflightCommitment: "singleGossip",
+            }
+          );
+          await solanaConnection.confirmTransaction(tx_id);
+        }
+
+        // -----------------------
         // Now abort this sale.
         console.log("-->> abort_icco_sale");
         // abort the sale early in the conductor
@@ -433,158 +467,6 @@ describe("Solana dev Tests", () => {
         );
         expect(sale_state[0] === 0 && sale_state[1] === 1).toBeTruthy();
 
-        // Done here.
-        ethProvider.destroy();
-        console.log("----- init_icco_sale + abort_icco_sale done -----");
-        done();
-      } catch (e) {
-        console.error(e);
-        done(
-          "An error occurred in init_icco_sale abort_icco_sale contributor test"
-        );
-      }
-    })();
-  });
-
-  xtest("call into init_icco_sale minitest", (done) => {
-    (async () => {
-      try {
-        console.log("-->> minitest");
-
-        // create initSale using conductor on ETH.
-        const ethProvider = new ethers.providers.WebSocketProvider(
-          ETH_NODE_URL
-        );
-        const contributorConfigs: EthContributorConfig[] = [
-          {
-            chainId: CHAIN_ID_ETH,
-            wallet: new ethers.Wallet(ETH_PRIVATE_KEY1, ethProvider),
-            collateralAddress: WETH_ADDRESS,
-            conversionRate: "1",
-          },
-          // TBD Need to add solana?
-        ];
-        const conductorConfig = contributorConfigs[0];
-        // make sale token. mint 10 and sell 10%
-        const tokenAddress = await deployTokenOnEth(
-          ETH_NODE_URL,
-          "Icco-Test",
-          "ICCO",
-          ethers.utils.parseUnits("10").toString(),
-          conductorConfig.wallet
-        );
-        console.log("Token Address: ", tokenAddress);
-        const buyers: EthBuyerConfig[] = [
-          // native weth
-          {
-            chainId: CHAIN_ID_ETH,
-            wallet: new ethers.Wallet(ETH_PRIVATE_KEY2, ethProvider),
-            collateralAddress: WETH_ADDRESS,
-            contribution: "6",
-            tokenIndex: 0,
-          },
-        ];
-
-        // we need to set up all of the accepted tokens (natives plus their wrapped versions)
-        const acceptedTokens = await makeAcceptedTokensFromConfigs(
-          contributorConfigs,
-          buyers
-        );
-
-        const tokenAmount = "1";
-        const minRaise = "10"; // eth units
-        const maxRaise = "14";
-        const saleDuration = 60; // seconds
-        // get the time
-        const saleStart =
-          (await makeSaleStartFromLastBlock(contributorConfigs)) + 20; // So it can be aborted "early".
-
-        const decimals = 9;
-        const saleEnd = saleStart + saleDuration;
-        console.info("--> Sale Start: ", saleStart);
-        const saleInitVaa = await createSaleOnEthAndGetVaa(
-          conductorConfig.wallet,
-          conductorConfig.chainId,
-          tokenAddress,
-          ethers.utils.parseUnits(tokenAmount, decimals),
-          ethers.utils.parseUnits(minRaise),
-          ethers.utils.parseUnits(maxRaise),
-          saleStart,
-          saleEnd,
-          acceptedTokens
-        );
-        const saleInit = await parseSaleInit(saleInitVaa);
-        console.info(
-          "Sale Init VAA:",
-          Buffer.from(saleInitVaa).toString("hex")
-        );
-
-        // Wallet (payer) account decode
-        const privateKeyDecoded = Uint8Array.from(
-          SOLANA_WALLET_PK.split(",").map((s) => parseInt(s))
-        );
-        const walletAccount = Keypair.fromSecretKey(privateKeyDecoded);
-        //  console.log(walletAccount.publicKey.toString()); // check "6sbzC1eH4FTujJXWj51eQe25cYvr4xfXbJ1vAj7j2k5J"
-
-        // Log Solana VAA PDA address.
-        const init_vaa_pda_pk = new PublicKey(
-          vaa_address(SOLANA_BRIDGE_ADDR, saleInitVaa)
-        );
-        // console.log("bbrp init_sale vaa PDA: ", init_vaa_pda_pk.toString());
-
-        // Make init_icco_sale_ix and call it
-        {
-          // post VAA on solana.
-          await postVaaSolanaWithRetry(
-            solanaConnection,
-            async (transaction) => {
-              transaction.partialSign(walletAccount);
-              return transaction;
-            },
-            SOLANA_BRIDGE_ADDR,
-            walletAccount.publicKey.toString(),
-            Buffer.from(saleInitVaa),
-            0
-          );
-          /*
-          const ta_key = test_account_address(
-            SOLANA_CONTRIBUTOR_ADDR,
-            BigInt(saleInit.saleId.toString())
-          );
-          console.log("test_account_address: ", ta_key.toString());
-*/
-          // Create custody account(s) to hold contributet tokens.
-          const custody_addr = icco_sale_custody_account_address(
-            SOLANA_CONTRIBUTOR_ADDR,
-            BigInt(saleInit.saleId.toString()),
-            SOLANA_TEST_TOKEN_MINT
-          );
-          console.log("custody_addr: ", custody_addr.toString());
-
-          const ix_create_custudy_acct = ixFromRust(
-            create_icco_sale_custody_account_ix(
-              SOLANA_CONTRIBUTOR_ADDR,
-              SOLANA_BRIDGE_ADDR,
-              walletAccount.publicKey.toString(),
-              saleInitVaa,
-              SOLANA_TEST_TOKEN_MINT, // see wormhole/docs/devnet.md
-              0
-            )
-          );
-          const tx_create_custudy_acct = new Transaction().add(
-            ix_create_custudy_acct
-          );
-          const tx_id_create_custudy_acct =
-            await solanaConnection.sendTransaction(
-              tx_create_custudy_acct,
-              [walletAccount],
-              {
-                skipPreflight: false,
-                preflightCommitment: "singleGossip",
-              }
-            );
-          await solanaConnection.confirmTransaction(tx_id_create_custudy_acct);
-        }
         // Done here.
         ethProvider.destroy();
         console.log("----- init_icco_sale + abort_icco_sale done -----");

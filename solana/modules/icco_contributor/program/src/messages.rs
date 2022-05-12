@@ -218,14 +218,14 @@ pub fn get_sale_attested_size(solana_tokens_cnt: u8) -> usize {
 
 pub fn pack_sale_attested_vaa_header(bf: & mut [u8], sale_id: u128, solana_tokens_cnt: u8) {
     bf[0] = 2;
-    bf[33..65].clone_from_slice(&sale_id.to_be_bytes()[..]);        // first 16 bytes s/b 0.
-    bf[65..67].clone_from_slice(&(1 as u16).to_be_bytes()[..]);     // ChainId
-    bf[67] = solana_tokens_cnt;
+    bf[17..33].clone_from_slice(&sale_id.to_be_bytes()[..]);        // first 16 bytes s/b 0.
+    bf[33..35].clone_from_slice(&(1 as u16).to_be_bytes()[..]);     // ChainId
+    bf[35] = solana_tokens_cnt;
 }
 
 pub fn pack_sale_attested_vaa_token(bf: & mut [u8], token_idx: u8, slot_idx: u8, amount: u64) {
     let step = (1+32) as usize;
-    let base = (8+32+2+1) as usize + step * (slot_idx as usize);
+    let base = (1+32+2+1) as usize + step * (slot_idx as usize);
     bf[base] = token_idx;
-    bf[base+33..base+65].clone_from_slice(&amount.to_be_bytes()[..]);
+    bf[base+1..base+33].clone_from_slice(&amount.to_be_bytes()[..]);
 }

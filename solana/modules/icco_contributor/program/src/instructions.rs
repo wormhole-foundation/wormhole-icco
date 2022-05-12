@@ -16,17 +16,18 @@ use crate::{
         SplTokenMetaDerivationData,
         ContributionStateAccount,
         ContributionStateAccountDerivationData,
-//        TestAccount,
-//        TestAccountDerivationData,
     },
     api::{
         CreateIccoSaleCustodyAccountData,
         InitIccoSaleData,
         AbortIccoSaleData,
         ContributeIccoSaleData,
+        AttestIccoSaleData,
     },
 };
+
 use borsh::BorshSerialize;
+
 use bridge::{
     accounts::{
         Bridge,
@@ -59,6 +60,14 @@ use solana_program::{
     },
     pubkey::Pubkey,
     msg,
+};
+
+use wormhole_sdk::{
+    id,
+    config,
+    fee_collector,
+    sequence,
+    emitter,
 };
 
 use solitaire::{
@@ -121,7 +130,7 @@ pub fn create_icco_sale_custody_account(
     program_id: Pubkey,
     sale_id: u128,
     payer: Pubkey,
-    payload_message: Pubkey,
+    vaa_message: Pubkey,
     emitter: Pubkey,
     emitter_chain: u16,
     sequence: u64,
@@ -131,7 +140,7 @@ pub fn create_icco_sale_custody_account(
     let config_key = ConfigAccount::<'_, { AccountState::Initialized }>::key(None, &program_id);
 //    let test_key = TestAccount::<'_, { AccountState::Uninitialized }>::key(&TestAccountDerivationData{sale_id: sale_id}, &program_id);
     let custody_key = CustodyAccount::<'_, { AccountState::MaybeInitialized }>::key(&CustodyAccountDerivationData{sale_id: sale_id, mint: token_mint}, &program_id);
-    let claim = Claim::<'_, { AccountState::Uninitialized }>::key(
+    let vaa_claim = Claim::<'_, { AccountState::Uninitialized }>::key(
         &ClaimDerivationData {
             emitter_address: emitter.to_bytes(),
             emitter_chain: emitter_chain,
@@ -145,8 +154,8 @@ pub fn create_icco_sale_custody_account(
         accounts: vec![
             AccountMeta::new(payer, true),
             AccountMeta::new_readonly(config_key, false),
-            AccountMeta::new_readonly(payload_message, false),
-            AccountMeta::new(claim, false),
+            AccountMeta::new_readonly(vaa_message, false),
+            AccountMeta::new(vaa_claim, false),
             AccountMeta::new_readonly(token_mint, false),       // Mint.
             AccountMeta::new(custody_key, false),
             AccountMeta::new_readonly(program_id, false),       // <--- As custody owner?
@@ -171,7 +180,7 @@ pub fn init_icco_sale(
     program_id: Pubkey,
     sale_id: u128,
     payer: Pubkey,
-    payload_message: Pubkey,
+    vaa_message: Pubkey,
     emitter: Pubkey,
     emitter_chain: u16,
     sequence: u64,
@@ -179,7 +188,7 @@ pub fn init_icco_sale(
     let config_key = ConfigAccount::<'_, { AccountState::Initialized }>::key(None, &program_id);
     let state_key = SaleStateAccount::<'_, { AccountState::Uninitialized }>::key(&SaleStateAccountDerivationData{sale_id: sale_id}, &program_id);
     
-    let claim = Claim::<'_, { AccountState::Uninitialized }>::key(
+    let vaa_claim = Claim::<'_, { AccountState::Uninitialized }>::key(
         &ClaimDerivationData {
             emitter_address: emitter.to_bytes(),
             emitter_chain: emitter_chain,
@@ -193,8 +202,8 @@ pub fn init_icco_sale(
         accounts: vec![
             AccountMeta::new(payer, true),
             AccountMeta::new_readonly(config_key, false),
-            AccountMeta::new_readonly(payload_message, false),
-            AccountMeta::new(claim, false),
+            AccountMeta::new_readonly(vaa_message, false),
+            AccountMeta::new(vaa_claim, false),
             AccountMeta::new_readonly(solana_program::sysvar::rent::id(), false),
             AccountMeta::new_readonly(solana_program::sysvar::clock::id(), false),
             AccountMeta::new_readonly(solana_program::system_program::id(), false),
@@ -228,7 +237,7 @@ pub fn abort_icco_sale(
     program_id: Pubkey,
     sale_id: u128,
     payer: Pubkey,
-    payload_message: Pubkey,    // Abort VAA
+    vaa_message: Pubkey,    // Abort VAA
     emitter: Pubkey,
     emitter_chain: u16,
     sequence: u64,
@@ -236,7 +245,7 @@ pub fn abort_icco_sale(
     let config_key = ConfigAccount::<'_, { AccountState::Initialized }>::key(None, &program_id);
     let state_key = SaleStateAccount::<'_, { AccountState::Initialized }>::key(&SaleStateAccountDerivationData{sale_id: sale_id}, &program_id);
     
-    let claim = Claim::<'_, { AccountState::Uninitialized }>::key(
+    let vaa_claim = Claim::<'_, { AccountState::Uninitialized }>::key(
         &ClaimDerivationData {
             emitter_address: emitter.to_bytes(),
             emitter_chain: emitter_chain,
@@ -250,8 +259,8 @@ pub fn abort_icco_sale(
         accounts: vec![
             AccountMeta::new(payer, true),
             AccountMeta::new_readonly(config_key, false),
-            AccountMeta::new_readonly(payload_message, false),
-            AccountMeta::new(claim, false),
+            AccountMeta::new_readonly(vaa_message, false),
+            AccountMeta::new(vaa_claim, false),
 //            AccountMeta::new(program_id, false),
             AccountMeta::new_readonly(solana_program::sysvar::rent::id(), false),
             AccountMeta::new_readonly(solana_program::sysvar::clock::id(), false),
@@ -274,7 +283,7 @@ pub fn contribute_icco_sale(
     sale_id: u128,
     payer: Pubkey,
     from_account: Pubkey,
-    payload_message: Pubkey,
+    vaa_message: Pubkey,    // initSale, claimed
     // emitter: Pubkey,
     // emitter_chain: u16,
     // sequence: u64,
@@ -297,7 +306,7 @@ pub fn contribute_icco_sale(
         accounts: vec![
             AccountMeta::new(payer, true),
             AccountMeta::new_readonly(config_key, false),
-            AccountMeta::new_readonly(payload_message, false),
+            AccountMeta::new_readonly(vaa_message, false),
             AccountMeta::new(contribution_state_key, false),
             AccountMeta::new(from_account, false),
             AccountMeta::new_readonly(token_mint, false),       // Mint.
@@ -312,6 +321,52 @@ pub fn contribute_icco_sale(
         data: (
             crate::instruction::Instruction::ContributeIccoSale,
             ContributeIccoSaleData {amount: amount, token_idx: token_index},
+        )
+            .try_to_vec()
+            .unwrap(),
+    }
+}
+
+pub fn attest_icco_sale(
+    program_id: Pubkey,
+    sale_id: u128,
+    payer: Pubkey,
+    vaa_message: Pubkey,    // initSale, claimed
+    attest_message: Pubkey,    // vaa to be created for conductor (signer keypair)
+//    emitter: Pubkey,
+) -> Instruction {
+    // icco
+    let config_key = ConfigAccount::<'_, { AccountState::Initialized }>::key(None, &program_id);
+    let state_key = SaleStateAccount::<'_, { AccountState::Initialized }>::key(&SaleStateAccountDerivationData{sale_id: sale_id}, &program_id);
+    // bridge
+    let wormhole = wormhole_sdk::id();
+    let wormhole_config = config(&wormhole);
+    let fee_collector = fee_collector(&wormhole);
+    let (emitter, _, _) = emitter(&program_id);
+    let sequence = sequence(&wormhole, &emitter);
+
+    Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new(payer, true),
+            AccountMeta::new_readonly(config_key, false),
+            AccountMeta::new_readonly(vaa_message, false),
+            AccountMeta::new(attest_message, true),    // new vaa, signer
+            AccountMeta::new_readonly(solana_program::sysvar::rent::id(), false),
+            AccountMeta::new_readonly(solana_program::sysvar::clock::id(), false),
+            // Non-struct icco accounts:
+            AccountMeta::new(state_key, false),
+            // needed to post_vaa:
+            AccountMeta::new(wormhole_config, false),
+            AccountMeta::new(fee_collector, false),
+            AccountMeta::new_readonly(emitter, false),
+            AccountMeta::new(sequence, false),
+            AccountMeta::new_readonly(wormhole, false),
+            AccountMeta::new_readonly(solana_program::system_program::id(), false),
+        ],
+        data: (
+            crate::instruction::Instruction::AttestIccoSale,
+            AttestIccoSaleData {},
         )
             .try_to_vec()
             .unwrap(),

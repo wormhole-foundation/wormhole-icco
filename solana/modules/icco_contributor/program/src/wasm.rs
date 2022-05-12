@@ -19,7 +19,8 @@ use crate::{
         init_icco_sale,
         abort_icco_sale,
         contribute_icco_sale,
-    },
+        attest_icco_sale,
+        },
     types::{
         EndpointRegistration,
 //        WrappedMeta
@@ -292,6 +293,35 @@ pub fn contribute_icco_sale_ix(
         token_mint,
         token_index,
         amount,
+    );
+    JsValue::from_serde(&ix).unwrap()
+}
+
+
+#[wasm_bindgen]
+pub fn attest_icco_sale_ix(
+    program_id: String,
+    bridge_id: String,
+    payer: String,
+    init_sale_vaa: Vec<u8>,         // initSale
+    attest_vaa: String,
+) -> JsValue {
+    let i_s_vaa = VAA::deserialize(init_sale_vaa.as_slice()).unwrap();
+    let bridge_id = Pubkey::from_str(bridge_id.as_str()).unwrap();
+    let program_id = Pubkey::from_str(program_id.as_str()).unwrap();
+    let init_sale_message_key = bridge::accounts::PostedVAA::<'_, { AccountState::Uninitialized }>::key(
+        &PostedVAADerivationData {
+            payload_hash: hash_vaa(&i_s_vaa.clone().into()).to_vec(),
+        },
+        &bridge_id,
+    );
+    let ix = attest_icco_sale(
+        program_id,
+        SaleInit::get_init_sale_sale_id(&i_s_vaa.payload),
+        Pubkey::from_str(payer.as_str()).unwrap(),
+        init_sale_message_key,
+        Pubkey::from_str(attest_vaa.as_str()).unwrap(),
+//        program_id,
     );
     JsValue::from_serde(&ix).unwrap()
 }

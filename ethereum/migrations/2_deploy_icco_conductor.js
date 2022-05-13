@@ -1,22 +1,18 @@
-require("dotenv").config({ path: "../.env" });
-
 const TokenSaleConductor = artifacts.require("TokenSaleConductor");
 const ConductorImplementation = artifacts.require("ConductorImplementation");
 const ConductorSetup = artifacts.require("ConductorSetup");
 const ICCOStructs = artifacts.require("ICCOStructs");
 
 const ethereumRootPath = `${__dirname}/..`;
-const WormholeAddresses = require(`${ethereumRootPath}/wormhole-addresses.js`);
-const consistencyLevel = process.env.CONSISTENCY_LEVEL;
-
-const chainId = process.env.CONDUCTOR_CHAIN_ID;
+const DeploymentConfig = require(`${ethereumRootPath}/icco_deployment_config.js`);
 
 const fs = require("fs");
 
-module.exports = async function (deployer, network) {
-  const addresses = WormholeAddresses[network];
-  if (!addresses) {
-    throw Error("wormhole and token bridge addresses undefined");
+module.exports = async function(deployer, network) {
+  console.log(network);
+  const config = DeploymentConfig[network];
+  if (!config) {
+    throw Error("deployment config undefined");
   }
 
   // deploy ICCOStructs library
@@ -37,10 +33,10 @@ module.exports = async function (deployer, network) {
   const conductorInitData = conductorSetup.methods
     .setup(
       ConductorImplementation.address,
-      chainId,
-      addresses.wormhole,
-      addresses.tokenBridge,
-      consistencyLevel,
+      config.conductorChainId,
+      config.wormhole,
+      config.tokenBridge,
+      config.consistencyLevel
     )
     .encodeABI();
 
@@ -66,12 +62,20 @@ module.exports = async function (deployer, network) {
       ? JSON.parse(fs.readFileSync(fp, "utf8"))
       : {};
     contents.conductorAddress = TokenSaleConductor.address;
-    contents.conductorChain = parseInt(chainId);
+    contents.conductorChain = parseInt(config.conductorChainId);
     fs.writeFileSync(fp, JSON.stringify(contents, null, 2), "utf8");
   }
 
-  // TODO: testnet
+  // testnet deployments
   if (network == "goerli") {
+    const fp = `${ethereumRootPath}/../testnet.json`;
+
+    const contents = fs.existsSync(fp)
+      ? JSON.parse(fs.readFileSync(fp, "utf8"))
+      : {};
+    contents.conductorAddress = TokenSaleConductor.address;
+    contents.conductorChain = parseInt(config.conductorChainId);
+    fs.writeFileSync(fp, JSON.stringify(contents, null, 2), "utf8");
   }
 
   // TODO: mainnet

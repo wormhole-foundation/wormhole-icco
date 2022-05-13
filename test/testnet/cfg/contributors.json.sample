@@ -1,0 +1,22 @@
+{
+  "contributions": [
+    {
+      "chainId": 2,
+      "address": "0x71d553Edd3261Ad94765Ad42EB0be8934896f501",
+      "amount": ".01",
+      "key": "ADD WALLET PRIVATE KEY"
+    },
+    {
+      "chainId": 6,
+      "address": "0xe09Ed38E5Cd1014444846f62376ac88C5232cDe9",
+      "amount": "1",
+      "key": "ADD WALLET PRIVATE KEY"
+    },
+    {
+      "chainId": 6,
+      "address": "0x1D308089a2D1Ced3f1Ce36B1FcaF815b07217be3",
+      "amount": ".01",
+      "key": "ADD WALLET PRIVATE KEY"
+    }
+  ]
+}

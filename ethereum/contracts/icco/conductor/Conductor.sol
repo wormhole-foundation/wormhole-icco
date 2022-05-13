@@ -5,6 +5,7 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 import "../../libraries/external/BytesLib.sol";
 
@@ -15,11 +16,11 @@ import "./ConductorGovernance.sol";
 
 import "../shared/ICCOStructs.sol";
 
-contract Conductor is ConductorGovernance {
+contract Conductor is ConductorGovernance, ReentrancyGuard {
     function createSale(
         ICCOStructs.Raise memory raise,
         ICCOStructs.Token[] memory acceptedTokens   
-    ) public payable returns (
+    ) public payable nonReentrant returns (
         uint saleId,
         uint wormholeSequence
     ) {
@@ -31,18 +32,33 @@ contract Conductor is ConductorGovernance {
         require(acceptedTokens.length > 0, "must accept at least one token");
         require(acceptedTokens.length < 255, "too many tokens");
         require(raise.maxRaise > raise.minRaise, "maxRaise must be > minRaise");
-         
+
+        // grab the local token address (address for the conductor chain)
+        address localTokenAddress;
+        if (raise.tokenChain == chainId()) {
+            localTokenAddress = address(uint160(uint256(raise.token)));
+        } else {
+            // identify wormhole token bridge wrapper
+            localTokenAddress = tokenBridge().wrappedAsset(raise.tokenChain, raise.token);  
+            require(localTokenAddress != address(0), "wrapped address not found on this chain"); 
+        }
+
+        uint8 localTokenDecimals;  
         { // token deposit context to avoid stack too deep errors
+            // fetch the sale token decimals and place in the saleInit struct.
+            // the contributors need to know this to scale allocations on non-evm chains            
+            (,bytes memory queriedDecimals) = localTokenAddress.staticcall(abi.encodeWithSignature("decimals()"));
+            localTokenDecimals = abi.decode(queriedDecimals, (uint8));
 
             // query own token balance before transfer
-            (,bytes memory queriedBalanceBefore) = raise.token.staticcall(abi.encodeWithSelector(IERC20.balanceOf.selector, address(this)));
+            (,bytes memory queriedBalanceBefore) = localTokenAddress.staticcall(abi.encodeWithSelector(IERC20.balanceOf.selector, address(this)));
             uint256 balanceBefore = abi.decode(queriedBalanceBefore, (uint256));
 
             // deposit tokens
-            SafeERC20.safeTransferFrom(IERC20(raise.token), msg.sender, address(this), raise.tokenAmount);
+            SafeERC20.safeTransferFrom(IERC20(localTokenAddress), msg.sender, address(this), raise.tokenAmount);
 
             // query own token balance after transfer
-            (,bytes memory queriedBalanceAfter) = raise.token.staticcall(abi.encodeWithSelector(IERC20.balanceOf.selector, address(this)));
+            (,bytes memory queriedBalanceAfter) = localTokenAddress.staticcall(abi.encodeWithSelector(IERC20.balanceOf.selector, address(this)));
             uint256 balanceAfter = abi.decode(queriedBalanceAfter, (uint256));
 
             // revert if token has fee
@@ -54,8 +70,10 @@ contract Conductor is ConductorGovernance {
         saleId = useSaleId();
         ConductorStructs.Sale memory sale = ConductorStructs.Sale({
             saleID : saleId,
-            tokenAddress : bytes32(uint256(uint160(raise.token))),
-            tokenChain : chainId(),
+            tokenAddress : raise.token,
+            tokenChain : raise.tokenChain,
+            localTokenDecimals: localTokenDecimals,
+            localTokenAddress: localTokenAddress,     
             tokenAmount : raise.tokenAmount,
             minRaise: raise.minRaise,
             maxRaise: raise.maxRaise,
@@ -96,9 +114,11 @@ contract Conductor is ConductorGovernance {
             // Sale ID
             saleID : saleId,
             // Address of the token. Left-zero-padded if shorter than 32 bytes
-            tokenAddress : bytes32(uint256(uint160(raise.token))),
+            tokenAddress : raise.token,
             // Chain ID of the token
-            tokenChain : chainId(),
+            tokenChain : raise.tokenChain,
+            // token decimals
+            tokenDecimals: localTokenDecimals,
             // token amount being sold
             tokenAmount : raise.tokenAmount,
             // min raise amount
@@ -118,7 +138,7 @@ contract Conductor is ConductorGovernance {
         });
         wormholeSequence = wormhole().publishMessage{
             value : msg.value
-        }(0, ICCOStructs.encodeSaleInit(saleInit), consistencyLevel()); 
+        }(0, ICCOStructs.encodeSaleInit(saleInit), consistencyLevel());
     }
 
     function abortSaleBeforeStartTime(uint saleId) public payable returns (uint wormholeSequence) {
@@ -177,7 +197,7 @@ contract Conductor is ConductorGovernance {
         ConductorStructs.Sale memory sale = sales(saleId);
 
         require(!sale.isSealed && !sale.isAborted, "already sealed / aborted");
-        
+
         ConductorStructs.InternalAccounting memory accounting;        
 
         for (uint i = 0; i < sale.contributionsCollected.length; i++) {
@@ -209,18 +229,18 @@ contract Conductor is ConductorGovernance {
                 uint allocation = sale.tokenAmount * (sale.contributions[i] * sale.acceptedTokensConversionRates[i] / 1e18) / accounting.totalContribution;
                 uint excessContribution = accounting.totalExcessContribution * sale.contributions[i] / accounting.totalContribution;
 
-                if(allocation > 0) {
+                if (allocation > 0) {
 
                     // send allocations to contributor contracts
                     if (sale.acceptedTokensChains[i] == chainId()) {
                         // simple transfer on same chain
-                        SafeERC20.safeTransfer(IERC20(address(uint160(uint256(sale.tokenAddress)))), address(uint160(uint256(contributorContracts(sale.acceptedTokensChains[i])))), allocation);
+                        SafeERC20.safeTransfer(IERC20(sale.localTokenAddress), address(uint160(uint256(contributorCustody(sale.acceptedTokensChains[i])))), allocation);
                     } else {
                         // adjust allocation for dust after token bridge transfer
-                        allocation = (allocation / 1e10) * 1e10;
+                        allocation = ICCOStructs.deNormalizeAmount(ICCOStructs.normalizeAmount(allocation, sale.localTokenDecimals), sale.localTokenDecimals);
 
                         // transfer over wormhole token bridge
-                        SafeERC20.safeApprove(IERC20(address(uint160(uint256(sale.tokenAddress)))), address(tknBridge), allocation);
+                        SafeERC20.safeApprove(IERC20(sale.localTokenAddress), address(tknBridge), allocation);
 
                         require(accounting.valueSent >= accounting.messageFee, "insufficient wormhole messaging fees");
                         accounting.valueSent -= accounting.messageFee;
@@ -228,10 +248,10 @@ contract Conductor is ConductorGovernance {
                         tknBridge.transferTokens{
                             value : accounting.messageFee
                         }(
-                            address(uint160(uint256(sale.tokenAddress))),
+                            sale.localTokenAddress,
                             allocation,
                             sale.acceptedTokensChains[i],
-                            contributorContracts(sale.acceptedTokensChains[i]),
+                            contributorCustody(sale.acceptedTokensChains[i]),
                             0,
                             0
                         );
@@ -248,7 +268,7 @@ contract Conductor is ConductorGovernance {
             // transfer dust back to refund recipient
             accounting.dust = sale.tokenAmount - accounting.totalAllocated;
             if (accounting.dust > 0) {
-                SafeERC20.safeTransfer(IERC20(address(uint160(uint256(sale.tokenAddress)))), address(uint160(uint256(sale.refundRecipient))), accounting.dust);
+                SafeERC20.safeTransfer(IERC20(sale.localTokenAddress), address(uint160(uint256(sale.refundRecipient))), accounting.dust);
             }
 
             require(accounting.valueSent >= accounting.messageFee, "insufficient wormhole messaging fees");
@@ -284,7 +304,7 @@ contract Conductor is ConductorGovernance {
 
         setRefundClaimed(saleId);
 
-        SafeERC20.safeTransfer(IERC20(address(uint160(uint256(sale.tokenAddress)))), address(uint160(uint256(sale.refundRecipient))), sale.tokenAmount);
+        SafeERC20.safeTransfer(IERC20(sale.localTokenAddress), address(uint160(uint256(sale.refundRecipient))), sale.tokenAmount);
     }
     
     function useSaleId() internal returns(uint256 saleId) {

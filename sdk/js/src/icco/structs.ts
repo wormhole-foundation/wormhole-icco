@@ -4,7 +4,8 @@ import { ChainId } from "@certusone/wormhole-sdk";
 import { nativeToUint8Array } from "./misc";
 
 export interface Raise {
-  token: string;
+  token: ethers.BytesLike;
+  tokenChain: ChainId;
   tokenAmount: ethers.BigNumberish;
   minRaise: ethers.BigNumberish;
   maxRaise: ethers.BigNumberish;
@@ -37,12 +38,15 @@ export interface Sale {
 
 export interface ConductorSale extends Sale {
   initiator: string;
+  localTokenDecimals: number;
+  localTokenAddress: string;
   contributions: ethers.BigNumberish[];
   contributionsCollected: boolean[];
   refundIsClaimed: boolean;
 }
 
 export interface ContributorSale extends Sale {
+  tokenDecimals: number;
   allocations: ethers.BigNumberish[];
   excessContributions: ethers.BigNumberish[];
 }
@@ -58,6 +62,7 @@ export interface SaleInit {
   saleId: ethers.BigNumberish;
   tokenAddress: string;
   tokenChain: number;
+  tokenDecimals: number;
   tokenAmount: ethers.BigNumberish;
   minRaise: ethers.BigNumberish;
   maxRaise: ethers.BigNumberish;
@@ -83,11 +88,11 @@ export interface SaleSealed {
 export function makeAcceptedToken(
   chainId: ChainId,
   address: string,
-  conversion: string
+  conversion: ethers.BigNumberish
 ): AcceptedToken {
   return {
     tokenChain: chainId,
     tokenAddress: nativeToUint8Array(address, chainId),
-    conversionRate: ethers.utils.parseUnits(conversion), // always 1e18
+    conversionRate: conversion,
   };
 }

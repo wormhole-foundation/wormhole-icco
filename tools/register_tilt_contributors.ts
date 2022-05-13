@@ -1,4 +1,4 @@
-import fs from "fs";
+const fs = require("fs");
 
 import {
   ChainId,
@@ -7,17 +7,8 @@ import {
   CHAIN_ID_BSC,
   hexToUint8Array,
 } from "@certusone/wormhole-sdk";
-import {
-  getContributorContractOnEth,
-  registerChainOnEth,
-} from "wormhole-icco-sdk";
+import { registerChainOnEth } from "wormhole-icco-sdk";
 import { ethers } from "ethers";
-
-import { fileURLToPath } from "url";
-import { dirname } from "path";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 const ETH_DEVNET_PK =
   "0x4f3edf983ac636a65a842ce7c78d9aa706d3b113bce9c46f30d7d21715b23b1d"; // account 2
@@ -38,11 +29,15 @@ async function main() {
   );
 
   const emitters: Emitter[] = [];
+  const custodyAccounts: Emitter[] = [];
   {
     // TODO: grab this from the tilt.json file...
     // const solanaProgAddr = "22mamxmojFWBdbGqaxTH46HBAgAY2bJRiGJJHfNRNQ95";  //TBD Not used, because I could not get WH sdk to be available in tilt.
     const solanaEmitterAddr =
       "aeab35a8d36bbaad38154ca4ca6a0770e7009326316d59ef2c8a2123e90d174c"; // Derived from solanaProgAddr using await sdk.getEmitterAddressSolana(..);
+
+    const solanaCustodyAddr =
+      "aeab35a8d36bbaad38154ca4ca6a0770e7009326316d59ef2c8a2123e90d174c";
 
     // Build chainId -> ContributorAddr map.
     const ethEmitterAddress =
@@ -52,29 +47,37 @@ async function main() {
     emitters.push({ chainId: CHAIN_ID_SOLANA, address: solanaEmitterAddr });
     emitters.push({ chainId: CHAIN_ID_ETH, address: ethEmitterAddress });
     emitters.push({ chainId: CHAIN_ID_BSC, address: bscEmitterAddress });
+
+    // Build chainId -> ContributorCustodyAddr map.
+    custodyAccounts.push({
+      chainId: CHAIN_ID_SOLANA,
+      address: solanaCustodyAddr,
+    });
+    custodyAccounts.push({ chainId: CHAIN_ID_ETH, address: ethEmitterAddress });
+    custodyAccounts.push({ chainId: CHAIN_ID_BSC, address: bscEmitterAddress });
   }
 
   // register all chainId -> ContributorAddr with conductor.
-  for (const emitter of emitters) {
+  for (let i = 0; i < emitters.length; i++) {
     console.log(
       "Registering chainId: ",
-      emitter.chainId,
+      emitters[i].chainId,
       " emitter: ",
-      emitter.address
+      emitters[i].address,
+      " custody: ",
+      custodyAccounts[i].address
     );
 
-    const contributorAddress = hexToUint8Array(emitter.address);
+    const contributorAddress = hexToUint8Array(emitters[i].address);
+    const contributorCustodyAddress = hexToUint8Array(
+      custodyAccounts[i].address
+    );
     const receipt = await registerChainOnEth(
       tilt.conductorAddress,
-      emitter.chainId,
+      emitters[i].chainId,
       contributorAddress,
+      contributorCustodyAddress,
       wallet
-    );
-
-    const check = await getContributorContractOnEth(
-      tilt.conductorAddress,
-      provider,
-      emitter.chainId
     );
   }
 

@@ -1,40 +1,24 @@
 import { ethers } from "ethers";
-import {
-  ChainId,
-  importCoreWasm,
-  uint8ArrayToHex,
-} from "@certusone/wormhole-sdk";
+import { ChainId, uint8ArrayToHex } from "@certusone/wormhole-sdk";
 
 import { AcceptedToken, Allocation, SaleInit, SaleSealed } from "./structs";
 
-const VAA_PAYLOAD_NUM_ACCEPTED_TOKENS = 227;
+const VAA_PAYLOAD_NUM_ACCEPTED_TOKENS = 228;
 const VAA_PAYLOAD_ACCEPTED_TOKEN_BYTES_LENGTH = 50;
 
-export async function extractVaaPayload(
-  signedVaa: Uint8Array
-): Promise<Uint8Array> {
-  const { parse_vaa } = await importCoreWasm();
-  const { payload: payload } = parse_vaa(signedVaa);
-  return payload;
-}
-
 export async function getSaleIdFromIccoVaa(
-  signedVaa: Uint8Array
+  payload: Uint8Array
 ): Promise<ethers.BigNumberish> {
-  const payload = await extractVaaPayload(signedVaa);
   return ethers.BigNumber.from(payload.slice(1, 33)).toString();
 }
 
 export async function getTargetChainIdFromTransferVaa(
-  signedVaa: Uint8Array
+  payload: Uint8Array
 ): Promise<ChainId> {
-  const payload = await extractVaaPayload(signedVaa);
   return Buffer.from(payload).readUInt16BE(99) as ChainId;
 }
 
-export async function parseSaleInit(signedVaa: Uint8Array): Promise<SaleInit> {
-  const payload = await extractVaaPayload(signedVaa);
-
+export async function parseSaleInit(payload: Uint8Array): Promise<SaleInit> {
   const buffer = Buffer.from(payload);
 
   const numAcceptedTokens = buffer.readUInt8(VAA_PAYLOAD_NUM_ACCEPTED_TOKENS);
@@ -47,11 +31,12 @@ export async function parseSaleInit(signedVaa: Uint8Array): Promise<SaleInit> {
     saleId: ethers.BigNumber.from(payload.slice(1, 33)).toString(),
     tokenAddress: uint8ArrayToHex(payload.slice(33, 65)),
     tokenChain: buffer.readUInt16BE(65),
-    tokenAmount: ethers.BigNumber.from(payload.slice(67, 99)).toString(),
-    minRaise: ethers.BigNumber.from(payload.slice(99, 131)).toString(),
-    maxRaise: ethers.BigNumber.from(payload.slice(131, 163)).toString(),
-    saleStart: ethers.BigNumber.from(payload.slice(163, 195)).toString(),
-    saleEnd: ethers.BigNumber.from(payload.slice(195, 227)).toString(),
+    tokenDecimals: buffer.readUInt8(67),
+    tokenAmount: ethers.BigNumber.from(payload.slice(68, 100)).toString(),
+    minRaise: ethers.BigNumber.from(payload.slice(100, 132)).toString(),
+    maxRaise: ethers.BigNumber.from(payload.slice(132, 164)).toString(),
+    saleStart: ethers.BigNumber.from(payload.slice(164, 196)).toString(),
+    saleEnd: ethers.BigNumber.from(payload.slice(196, 228)).toString(),
     acceptedTokens: parseAcceptedTokens(payload, numAcceptedTokens),
     recipient: uint8ArrayToHex(
       payload.slice(recipientIndex, recipientIndex + 32)
@@ -93,10 +78,8 @@ const VAA_PAYLOAD_NUM_ALLOCATIONS = 33;
 const VAA_PAYLOAD_ALLOCATION_BYTES_LENGTH = 65;
 
 export async function parseSaleSealed(
-  signedVaa: Uint8Array
+  payload: Uint8Array
 ): Promise<SaleSealed> {
-  const payload = await extractVaaPayload(signedVaa);
-
   const buffer = Buffer.from(payload);
 
   const numAllocations = buffer.readUInt8(VAA_PAYLOAD_NUM_ALLOCATIONS);

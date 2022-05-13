@@ -13,10 +13,7 @@ import {
   getContributorContractOnEth,
   getSaleFromConductorOnEth,
   getSaleFromContributorOnEth,
-  registerChainOnEth,
   sealSaleOnEth,
-  ConductorSale,
-  makeAcceptedToken,
 } from "../..";
 import {
   BSC_NODE_URL,
@@ -29,9 +26,9 @@ import {
   ETH_TOKEN_BRIDGE_ADDRESS,
   ETH_TOKEN_SALE_CONDUCTOR_ADDRESS,
   TOKEN_SALE_CONTRIBUTOR_ADDRESSES,
-  KYC_PRIVATE_KEYS,
   WBNB_ADDRESS,
   WETH_ADDRESS,
+  DENOMINATION_DECIMALS,
 } from "./consts";
 import {
   EthBuyerConfig,
@@ -41,7 +38,6 @@ import {
   waitForSaleToStart,
   makeAcceptedTokensFromConfigs,
   sealOrAbortSaleOnEth,
-  contributeAllTokensOnEth,
   secureContributeAllTokensOnEth,
   getCollateralBalancesOnEth,
   claimAllAllocationsOnEth,
@@ -63,7 +59,6 @@ import {
   abortSaleEarlyAtContributors,
   abortSaleEarlyAtConductor,
   deployTokenOnEth,
-  signContribution,
 } from "./helpers";
 
 // ten minutes? nobody got time for that
@@ -228,7 +223,8 @@ describe("Integration Tests", () => {
           // we need to set up all of the accepted tokens (natives plus their wrapped versions)
           const acceptedTokens = await makeAcceptedTokensFromConfigs(
             contributorConfigs,
-            buyers
+            buyers,
+            DENOMINATION_DECIMALS
           );
 
           // add fake terra and solana tokens to acceptedTokens
@@ -255,6 +251,7 @@ describe("Integration Tests", () => {
             conductorConfig.wallet
           );
 
+          const tokenChain = CHAIN_ID_ETH; // needed to check if token is native or not
           const tokenAmount = "1";
           const minRaise = "10"; // eth units
           const maxRaise = "14";
@@ -265,10 +262,16 @@ describe("Integration Tests", () => {
             contributorConfigs
           );
 
+          // the token being sold is on eth
+          // which means it has the same local token address
+          const localTokenAddress = tokenAddress;
+
           const saleInit = await createSaleOnEthAndInit(
             conductorConfig,
             contributorConfigs,
+            localTokenAddress,
             tokenAddress,
+            tokenChain,
             tokenAmount,
             minRaise,
             maxRaise,
@@ -276,8 +279,6 @@ describe("Integration Tests", () => {
             saleDuration,
             acceptedTokens
           );
-          console.log("Parsed Sale Init:", saleInit);
-
           console.log("Parsed Sale Init:", saleInit);
 
           // balance check
@@ -687,7 +688,8 @@ describe("Integration Tests", () => {
           // we need to set up all of the accepted tokens (natives plus their wrapped versions)
           const acceptedTokens = await makeAcceptedTokensFromConfigs(
             contributorConfigs,
-            buyers
+            buyers,
+            DENOMINATION_DECIMALS
           );
 
           // conductor lives in CHAIN_ID_ETH
@@ -702,6 +704,7 @@ describe("Integration Tests", () => {
             conductorConfig.wallet
           );
 
+          const tokenChain = CHAIN_ID_ETH; // needed to check if token is native or not
           const tokenAmount = "1";
           const minRaise = "10"; // eth units
           const maxRaise = "100";
@@ -712,10 +715,16 @@ describe("Integration Tests", () => {
             contributorConfigs
           );
 
+          // the token being sold is on eth
+          // which means it has the same local token address
+          const localTokenAddress = tokenAddress;
+
           const saleInit = await createSaleOnEthAndInit(
             conductorConfig,
             contributorConfigs,
+            localTokenAddress,
             tokenAddress,
+            tokenChain,
             tokenAmount,
             minRaise,
             maxRaise,
@@ -924,7 +933,8 @@ describe("Integration Tests", () => {
           // we need to set up all of the accepted tokens
           const acceptedTokens = await makeAcceptedTokensFromConfigs(
             contributorConfigs,
-            buyers
+            buyers,
+            DENOMINATION_DECIMALS
           );
 
           // conductor lives in CHAIN_ID_ETH
@@ -939,6 +949,7 @@ describe("Integration Tests", () => {
             conductorConfig.wallet
           );
 
+          const tokenChain = CHAIN_ID_ETH; // needed to check if token is native or not
           const tokenAmount = "1";
           const minRaise = "10"; // eth units
           const maxRaise = "100";
@@ -956,10 +967,16 @@ describe("Integration Tests", () => {
             contributorConfigs
           );
 
+          // the token being sold is on eth
+          // which means it has the same local token address
+          const localTokenAddress = tokenAddress;
+
           const saleInit = await createSaleOnEthAndInit(
             conductorConfig,
             contributorConfigs,
+            localTokenAddress,
             tokenAddress,
+            tokenChain,
             tokenAmount,
             minRaise,
             maxRaise,

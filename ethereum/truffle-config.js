@@ -1,5 +1,21 @@
-require("dotenv").config({ path: ".env" });
+const fs = require("fs");
 const HDWalletProvider = require("@truffle/hdwallet-provider");
+
+let DeploymentConfig;
+
+function prepareConfig() {
+  // expected config path
+  const configPath = `${__dirname}/icco_deployment_config.js`;
+
+  // create dummy object if deployment config doesn't exist
+  // for compilation purposes
+  if (fs.existsSync(configPath)) {
+    DeploymentConfig = require(configPath);
+  } else {
+    DeploymentConfig = {};
+  }
+}
+prepareConfig();
 
 module.exports = {
   networks: {
@@ -23,8 +39,8 @@ module.exports = {
     mainnet: {
       provider: () =>
         new HDWalletProvider(
-          process.env.MNEMONIC,
-          `https://mainnet.infura.io/v3/` + process.env.INFURA_KEY
+          DeploymentConfig["mainnet"].mnemonic,
+          DeploymentConfig["mainnet"].rpc
         ),
       network_id: 1,
       gas: 10000000,
@@ -33,23 +49,11 @@ module.exports = {
       timeoutBlocks: 200,
       skipDryRun: false,
     },
-    rinkeby: {
-      provider: () =>
-        new HDWalletProvider(
-          process.env.MNEMONIC,
-          `https://rinkeby.infura.io/v3/` + process.env.INFURA_KEY
-        ),
-      network_id: 4,
-      gas: 5500000,
-      confirmations: 2,
-      timeoutBlocks: 200,
-      skipDryRun: true,
-    },
     goerli: {
       provider: () => {
         return new HDWalletProvider(
-          process.env.MNEMONIC,
-          "https://goerli.infura.io/v3/" + process.env.INFURA_KEY
+          DeploymentConfig["goerli"].mnemonic,
+          DeploymentConfig["goerli"].rpc
         );
       },
       network_id: "5",
@@ -59,8 +63,8 @@ module.exports = {
     binance: {
       provider: () => {
         return new HDWalletProvider(
-          process.env.MNEMONIC,
-          "https://bsc-dataseed.binance.org/"
+          DeploymentConfig["binance"].mnemonic,
+          DeploymentConfig["binance"].rpc
         );
       },
       network_id: "56",
@@ -70,18 +74,18 @@ module.exports = {
     binance_testnet: {
       provider: () =>
         new HDWalletProvider(
-          process.env.MNEMONIC,
-          "https://data-seed-prebsc-1-s1.binance.org:8545/"
+          DeploymentConfig["binance_testnet"].mnemonic,
+          DeploymentConfig["binance_testnet"].rpc
         ),
       network_id: "97",
-      gas: 70000000,
-      gasPrice: 8000000000,
+      gas: 29000000,
+      gasPrice: 10000000000,
     },
     polygon: {
       provider: () => {
         return new HDWalletProvider(
-          process.env.MNEMONIC,
-          "https://polygon-rpc.com"
+          DeploymentConfig["polygon"].mnemonic,
+          DeploymentConfig["polygon"].rpc
         );
       },
       network_id: "137",
@@ -91,8 +95,8 @@ module.exports = {
     mumbai: {
       provider: () => {
         return new HDWalletProvider(
-          process.env.MNEMONIC,
-          "https://polygon-mumbai.infura.io/v3/" + process.env.INFURA_KEY
+          DeploymentConfig["mumbai"].mnemonic,
+          DeploymentConfig["mumbai"].rpc
         );
       },
       network_id: "80001",
@@ -100,8 +104,8 @@ module.exports = {
     avalanche: {
       provider: () => {
         return new HDWalletProvider(
-          process.env.MNEMONIC,
-          "https://api.avax.network/ext/bc/C/rpc"
+          DeploymentConfig["avalanche"].mnemonic,
+          DeploymentConfig["avalanche"].rpc
         );
       },
       network_id: "43114",
@@ -111,47 +115,16 @@ module.exports = {
     fuji: {
       provider: () =>
         new HDWalletProvider(
-          process.env.MNEMONIC,
-          "https://api.avax-test.network/ext/bc/C/rpc"
+          DeploymentConfig["fuji"].mnemonic,
+          DeploymentConfig["fuji"].rpc
         ),
       network_id: "43113",
-    },
-    oasis: {
-      provider: () => {
-        return new HDWalletProvider(
-          process.env.MNEMONIC,
-          "https://emerald.oasis.dev/"
-        );
-      },
-      network_id: 42262,
-      gas: 4465030,
-      gasPrice: 30000000000,
-    },
-    aurora: {
-      provider: () => {
-        return new HDWalletProvider(
-          process.env.MNEMONIC,
-          "https://mainnet.aurora.dev"
-        );
-      },
-      network_id: 1313161554,
-    },
-    aurora_testnet: {
-      provider: () => {
-        return new HDWalletProvider(
-          process.env.MNEMONIC,
-          "https://testnet.aurora.dev"
-        );
-      },
-      network_id: 0x4e454153,
-      gas: 70000000,
-      gasPrice: 8000000000,
     },
     fantom_testnet: {
       provider: () => {
         return new HDWalletProvider(
-          process.env.MNEMONIC,
-          "https://rpc.testnet.fantom.network/"
+          DeploymentConfig["fantom_testnet"].mnemonic,
+          DeploymentConfig["fantom_testnet"].rpc
         );
       },
       network_id: 0xfa2,
@@ -173,8 +146,4 @@ module.exports = {
   },
 
   plugins: ["@chainsafe/truffle-plugin-abigen", "truffle-plugin-verify"],
-
-  api_keys: {
-    etherscan: process.env.ETHERSCAN_KEY,
-  },
 };

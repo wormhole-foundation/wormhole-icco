@@ -21,9 +21,9 @@ contract ConductorGovernance is ConductorGetters, ConductorSetters, ERC1967Upgra
     event OwnershipTransfered(address indexed oldOwner, address indexed newOwner);
 
     // register contributor contract
-    function registerChain(uint16 contributorChainId, bytes32 contributorAddress) public onlyOwner {
+    function registerChain(uint16 contributorChainId, bytes32 contributorAddress, bytes32 custodyAddress) public onlyOwner {
         require(contributorContracts(contributorChainId) == bytes32(0), "chain already registered");
-        setContributor(contributorChainId, contributorAddress);
+        setContributor(contributorChainId, contributorAddress, custodyAddress);
     }   
 
     function upgrade(uint16 conductorChainId, address newImplementation) public onlyOwner {

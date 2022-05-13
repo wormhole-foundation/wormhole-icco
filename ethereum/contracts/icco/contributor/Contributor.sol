@@ -32,6 +32,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
             saleID : saleInit.saleID,
             tokenAddress : saleInit.tokenAddress,
             tokenChain : saleInit.tokenChain,
+            tokenDecimals: saleInit.tokenDecimals,
             tokenAmount : saleInit.tokenAmount,
             minRaise : saleInit.minRaise,
             maxRaise : saleInit.maxRaise,
@@ -88,14 +89,17 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
     function contribute(uint saleId, uint tokenIndex, uint amount, bytes memory sig) public nonReentrant { 
         require(saleExists(saleId), "sale not initiated");
 
-        (, bool isAborted) = getSaleStatus(saleId);
+        // bypass stack too deep
+        {
+            (, bool isAborted) = getSaleStatus(saleId);
 
-        require(!isAborted, "sale was aborted");
+            require(!isAborted, "sale was aborted");
 
-        (uint start, uint end) = getSaleTimeframe(saleId);
+            (uint start, uint end) = getSaleTimeframe(saleId);
 
-        require(block.timestamp >= start, "sale not yet started");
-        require(block.timestamp <= end, "sale has ended");
+            require(block.timestamp >= start, "sale not yet started");
+            require(block.timestamp <= end, "sale has ended");
+        }
 
         (uint16 tokenChain, bytes32 tokenAddressBytes,) = getSaleAcceptedTokenInfo(saleId, tokenIndex);
 
@@ -104,7 +108,14 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
         // bypass stack too deep  
         {
             // verify authority has signed contribution 
-            bytes memory encodedHashData = abi.encodePacked(conductorContract(), saleId, tokenIndex, amount, msg.sender); 
+            bytes memory encodedHashData = abi.encodePacked(
+                conductorContract(), 
+                saleId, 
+                tokenIndex, 
+                amount, 
+                msg.sender, 
+                getSaleContribution(saleId, tokenIndex, msg.sender)
+            ); 
             require(verifySignature(encodedHashData, sig) == authority(), "unauthorized contributor");
         }
 
@@ -211,17 +222,19 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
         }
 
         uint16 conductorChainId = conductorChainId();
-        if (conductorChainId == thisChainId) {
+        if (conductorChainId == thisChainId) { 
             // raised funds are payed out on this chain
             for (uint i = 0; i < sale.acceptedTokensAddresses.length; i++) {
                 if (sale.acceptedTokensChains[i] == thisChainId) {
                     // send contributions less excess owed to contributors
                     uint256 totalContributionsLessExcess = getSaleTotalContribution(sale.saleID, i) - getSaleExcessContribution(sale.saleID, i);
-                    SafeERC20.safeTransfer(
-                        IERC20(address(uint160(uint256(sale.acceptedTokensAddresses[i])))),
-                        address(uint160(uint256(sale.recipient))),
-                        totalContributionsLessExcess
-                    );
+                    if (totalContributionsLessExcess > 0) {
+                        SafeERC20.safeTransfer(
+                            IERC20(address(uint160(uint256(sale.acceptedTokensAddresses[i])))),
+                            address(uint160(uint256(sale.recipient))),
+                            totalContributionsLessExcess
+                        );
+                    }
                 }
             }
         } else {
@@ -231,26 +244,43 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
             uint valueSent = msg.value;
 
             for (uint i = 0; i < sale.acceptedTokensAddresses.length; i++) {
-                if (sale.acceptedTokensChains[i] == thisChainId) {
+                if (sale.acceptedTokensChains[i] == thisChainId) {  
+                    address acceptedTokenAddress = address(uint160(uint256(sale.acceptedTokensAddresses[i])));
+                    
+                    // get token decimals for normalization of token amount
+                    uint8 acceptedTokenDecimals;
+                    {// bypass stack too deep
+                        (,bytes memory queriedDecimals) = acceptedTokenAddress.staticcall(abi.encodeWithSignature("decimals()"));
+                        acceptedTokenDecimals = abi.decode(queriedDecimals, (uint8));
+                    }
+
                     // send contributions less excess owed to contributors
-                    uint totalContributionsLessExcess = ((getSaleTotalContribution(sale.saleID, i) - getSaleExcessContribution(sale.saleID, i)) / 1e10) * 1e10;
-
-                    // transfer over wormhole token bridge
-                    SafeERC20.safeApprove(IERC20(address(uint160(uint256(sale.acceptedTokensAddresses[i])))), address(tknBridge), totalContributionsLessExcess);
-
-                    require(valueSent >= messageFee, "insufficient wormhole messaging fees");
-                    valueSent -= messageFee;
-
-                    tknBridge.transferTokens{
-                        value : messageFee
-                    }(
-                        address(uint160(uint256(sale.acceptedTokensAddresses[i]))),
-                        totalContributionsLessExcess,
-                        conductorChainId,
-                        sale.recipient,
-                        0,
-                        0
+                    uint totalContributionsLessExcess = ICCOStructs.deNormalizeAmount(
+                        ICCOStructs.normalizeAmount(
+                            getSaleTotalContribution(sale.saleID, i) - getSaleExcessContribution(sale.saleID, i),
+                            acceptedTokenDecimals
+                        ),
+                        acceptedTokenDecimals
                     );
+
+                    if (totalContributionsLessExcess > 0) {
+                        // transfer over wormhole token bridge
+                        SafeERC20.safeApprove(IERC20(acceptedTokenAddress), address(tknBridge), totalContributionsLessExcess);
+
+                        require(valueSent >= messageFee, "insufficient wormhole messaging fees");
+                        valueSent -= messageFee;
+
+                        tknBridge.transferTokens{
+                            value : messageFee
+                        }(
+                            acceptedTokenAddress,
+                            totalContributionsLessExcess,
+                            conductorChainId,
+                            sale.recipient,
+                            0,
+                            0
+                        );
+                    }
                 }
             }
         }

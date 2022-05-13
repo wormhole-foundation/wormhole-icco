@@ -11,6 +11,8 @@ contract ContributorStructs {
         bytes32 tokenAddress;
         // Chain ID of the token
         uint16 tokenChain;
+        // token decimals
+        uint8 tokenDecimals;
         // token amount being sold
         uint256 tokenAmount;
         // min raise amount

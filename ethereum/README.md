@@ -1,3 +1,7 @@
+### Building
+
+Build the contracts by running `make build`
+
 ### Testing
 
 Run the tests by running `make test`
@@ -32,3 +36,5 @@ To deploy the Conductor and Contributor smart contracts to testnet you will need
 3. Deploy the `Contributor` contract(s) with the following command:
 
    - npx truffle migrate --f 3 --to 3 --network (`network key from icco_deployment_config.js`) --skip-dry-run
+
+4. Follow the instructions in the README.md in `tools/` for `Contributor` contract registration

@@ -1,3 +1,21 @@
+## Prepare Your Environment
+
+Install `solana` cli (version 1.9.4)
+
+```sh
+sh -c "$(curl -sSfL https://release.solana.com/v1.9.4/install)"
+```
+
+Install `wasm-pack`
+
+```sh
+cargo install wasm-pack
+```
+
+Make sure `$HOME/.local/share/solana/install/active_release/bin` and `$HOME/.cargo/bin` are in your `$PATH` environment variable.
+
+## Build
+
 ```
 Notion designlink:
 https://www.notion.so/677ea05b110347279846b709e7d000c1?v=0361b046678e42dfb1bfe2887c13750d&p=8b34da4ecc4249239216d8e2bf9c720e

@@ -1,6 +1,21 @@
+const fs = require("fs");
 const HDWalletProvider = require("@truffle/hdwallet-provider");
 
-const DeploymentConfig = require(`${__dirname}/icco_deployment_config.js`);
+let DeploymentConfig;
+
+function prepareConfig() {
+  // expected config path
+  const configPath = `${__dirname}/icco_deployment_config.js`;
+
+  // create dummy object if deployment config doesn't exist
+  // for compilation purposes
+  if (fs.existsSync(configPath)) {
+    DeploymentConfig = require(configPath);
+  } else {
+    DeploymentConfig = {};
+  }
+}
+prepareConfig();
 
 module.exports = {
   networks: {

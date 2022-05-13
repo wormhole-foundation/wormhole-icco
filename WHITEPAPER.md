@@ -36,7 +36,8 @@ There are two programs needed to model this.
 To create a sale, a user invokes the `createSale()` method on the sale conductor. It takes the following set or arguments:
 
 - A `Raise` struct with the following arguments:
-  - Offered token address
+  - Offered token native address
+  - Offered token native chain
   - Offered token amount
   - A start time for when contributions can be accepted
   - An end time for when contributions will no loner be accepted
@@ -95,7 +96,7 @@ The Contributor contracts has two functions to consume the relevant attestations
 
 Owner Only:
 
-- `registerChain(uint16 contributorChainId, bytes32 contributorAddress)`
+- `registerChain(uint16 contributorChainId, bytes32 contributorAddress, bytes32 custodyAddress)`
 - `upgrade(uint16 conductorChainId, address newImplementation)`
 - `updateConsistencyLevel(uint16 conductorChainId, uint8 newConsistencyLevel)`
 - `transferOwnership(uint16 conductorChainId, address newOwner)`
@@ -139,7 +140,8 @@ Owner Only:
   - uint256 excessContribution (excess contributions refunded to contributors on this chain)
 
 - Raise
-  - address token (sale token address)
+  - address token (sale token native address)
+  - uint16 tokenChain (sale token native chainId)
   - uint256 tokenAmount (token amount being sold)
   - uint256 minRaise (min raise amount)
   - uint256 maxRaise (max raise amount)
@@ -163,6 +165,8 @@ uint256 saleID;
 bytes32 tokenAddress;
 // Chain ID of the token being sold
 uint16 tokenChain;
+// sale token decimals
+uint8 tokenDecimals
 // token amount being sold
 uint256 tokenAmount;
 // min raise amount

@@ -7,11 +7,11 @@ all: ethereum terra sdk
 .PHONY: clean
 ## Remove All Builds
 clean:
+	rm -rf wormhole tilt.json
 	cd ethereum && make clean
 	cd terra && make clean
 	cd sdk/js && rm -rf node_modules contracts lib src/icco/__tests__/tilt.json
 	cd tools && rm -rf node_modules lib
-	rm -f tilt.json
 
 .PHONY: ethereum
 ## Build Ethereum contracts
@@ -59,5 +59,11 @@ tilt-test: sdk sdk/js/src/icco/__tests__/tilt.json
 	@if ! pgrep tilt; then echo "Error: tilt not running. Start it before running tests"; exit 1; fi
 	cd sdk/js && npm run build && npm run test
 
-sdk/js/src/icco/__tests__/tilt.json:
-	cp tilt.json sdk/js/src/icco/__tests__/tilt.json
+wormhole:
+	git clone --depth 1 --branch dev.v2 --single-branch https://github.com/certusone/wormhole.git
+
+wormhole/solana/artifacts-devnet: wormhole
+	cd wormhole/solana && NETWORK=devnet make artifacts
+
+wormhole/ethereum/build: wormhole
+	cd wormhole/ethereum && make build

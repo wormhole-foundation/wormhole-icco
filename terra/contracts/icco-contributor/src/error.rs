@@ -48,14 +48,23 @@ pub enum ContributorError {
     #[error("SaleEnded")]
     SaleEnded,
 
+    #[error("SaleNonexistent")]
+    SaleNonexistent,
+
     #[error("SaleNotFinished")]
     SaleNotFinished,
 
     #[error("SaleNotStarted")]
     SaleNotStarted,
 
+    #[error("SaleStillActive")]
+    SaleStillActive,
+
     #[error("TooManyAcceptedTokens")]
     TooManyAcceptedTokens,
+
+    #[error("UnsupportedConductor")]
+    UnsupportedConductor,
 
     #[error("WrongBuyerStatus")]
     WrongBuyerStatus,

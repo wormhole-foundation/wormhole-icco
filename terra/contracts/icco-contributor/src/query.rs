@@ -60,7 +60,7 @@ pub fn query_total_allocation(
     Ok(TotalAllocationResponse {
         id: sale_id.to_vec(),
         token_index,
-        amount: TOTAL_ALLOCATIONS.load(deps.storage, (sale_id, token_index.into()))?,
+        allocation: TOTAL_ALLOCATIONS.load(deps.storage, (sale_id, token_index.into()))?,
     })
 }
 

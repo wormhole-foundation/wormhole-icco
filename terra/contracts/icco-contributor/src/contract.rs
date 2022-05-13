@@ -1,8 +1,10 @@
 use cosmwasm_std::{
     entry_point, to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Reply, Response, StdResult,
 };
+use icco::common::CHAIN_ID;
 
 use crate::{
+    error::ContributorError,
     execute::{
         attest_contributions, claim_allocation, claim_refund, contribute, init_sale, sale_aborted,
         sale_sealed,
@@ -30,16 +32,23 @@ pub fn instantiate(
 ) -> StdResult<Response> {
     let wormhole = deps.api.addr_validate(msg.wormhole.as_str())?;
     let token_bridge = deps.api.addr_validate(msg.token_bridge.as_str())?;
-    let cfg = Config {
-        wormhole,
-        token_bridge,
-        conductor_chain: msg.conductor_chain,
-        conductor_address: msg.conductor_address.into(),
-        owner: info.sender,
-    };
-    CONFIG.save(deps.storage, &cfg)?;
 
-    Ok(Response::default())
+    // we know there is no terra conductor existing. So prevent user
+    // from instantiating with one defined
+    match msg.conductor_chain {
+        CHAIN_ID => return ContributorError::UnsupportedConductor.std_err(),
+        _ => {
+            let cfg = Config {
+                wormhole,
+                token_bridge,
+                conductor_chain: msg.conductor_chain,
+                conductor_address: msg.conductor_address.into(),
+                owner: info.sender,
+            };
+            CONFIG.save(deps.storage, &cfg)?;
+            Ok(Response::default())
+        }
+    }
 }
 
 // When CW20 transfers complete, we need to verify the actual amount that is being transferred out

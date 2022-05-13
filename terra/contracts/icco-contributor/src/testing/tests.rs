@@ -208,7 +208,7 @@ fn init_sale() -> StdResult<()> {
         3057543273fcb20100000001000000020002000000000000000000000000f19a\
         2a01b70519f67adb309a994ec8c69a967e8b0000000000000003010100000000\
         0000000000000000000000000000000000000000000000000000000200000000\
-        000000000000000083752ecafebf4707258dedffbd9c7443148169db00020000\
+        000000000000000083752ecafebf4707258dedffbd9c7443148169db0002120000\
         000000000000000000000000000000000000000000000de0b6b3a76400000000\
         000000000000000000000000000000000000000000008ac7230489e800000000\
         00000000000000000000000000000000000000000000c249fdd3277800000000\
@@ -406,21 +406,6 @@ fn init_sale() -> StdResult<()> {
             total_contribution.amount,
             Uint128::zero(),
             "total_contribution.amount != 0"
-        );
-
-        let response = query(
-            deps.as_ref(),
-            mock_env(),
-            QueryMsg::TotalAllocation {
-                sale_id: Binary::from(sale_id),
-                token_index,
-            },
-        )?;
-        let total_allocation: TotalAllocationResponse = from_binary(&response)?;
-        assert_eq!(
-            total_allocation.amount,
-            Uint128::zero(),
-            "total_allocation.amount != 0"
         );
     }
 

@@ -19,6 +19,7 @@ pub struct SaleTimes {
 pub struct SaleCore {
     pub token_address: Vec<u8>,
     pub token_chain: u16,
+    pub token_decimals: u8,
     pub token_amount: Uint256,
     pub min_raise: Uint256,
     pub max_raise: Uint256,
@@ -50,7 +51,7 @@ pub struct Contribution {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Allocation {
-    pub allocated: Uint256, // actually Uint128, but will be serialized as Uint256
+    pub allocated: Uint256,
     pub excess_contributed: Uint256,
 }
 
@@ -85,6 +86,24 @@ pub struct SaleAborted<'a> {
     pub id: &'a [u8],
 }
 
+impl SaleCore {
+    pub fn adjust_token_amount(&self, amount: Uint256, decimals: u8) -> StdResult<Uint128> {
+        let adjusted: Uint256;
+        if self.token_decimals > decimals {
+            let x = self.token_decimals - decimals;
+            adjusted = amount / Uint256::from(10u128).pow(x as u32);
+        } else {
+            let x = decimals - self.token_decimals;
+            adjusted = amount * Uint256::from(10u128).pow(x as u32);
+        }
+
+        match to_uint128(adjusted) {
+            Some(value) => return Ok(value),
+            None => return CommonError::AmountExceedsUint128Max.std_err(),
+        }
+    }
+}
+
 impl AcceptedToken {
     pub const N_BYTES: usize = 50;
 
@@ -107,14 +126,6 @@ impl AcceptedToken {
     }
 }
 
-pub fn to_const_bytes32(data: &[u8], index: usize) -> [u8; 32] {
-    data.get_bytes32(index).get_const_bytes(0)
-}
-
-pub fn to_u256(data: &[u8], index: usize) -> Uint256 {
-    Uint256::new(to_const_bytes32(data, index))
-}
-
 impl Contribution {
     pub const NUM_BYTES: usize = 33; // 1 + 32
 }
@@ -125,7 +136,7 @@ impl Allocation {
 
 impl<'a> SaleInit<'a> {
     pub const PAYLOAD_ID: u8 = 1;
-    const INDEX_ACCEPTED_TOKENS_START: usize = 227;
+    const INDEX_ACCEPTED_TOKENS_START: usize = 228;
 
     pub fn get_sale_id(data: &'a [u8]) -> StdResult<&[u8]> {
         match data[0] {
@@ -138,11 +149,12 @@ impl<'a> SaleInit<'a> {
     pub fn deserialize(id: &'a [u8], data: &'a [u8]) -> StdResult<Self> {
         let token_address = data.get_bytes32(33).to_vec();
         let token_chain = data.get_u16(65);
-        let token_amount = to_u256(data, 67);
-        let min_raise = to_u256(data, 99);
-        let max_raise = to_u256(data, 131);
-        let start = data.get_u64(163 + 24); // encoded as u256, but we only care about u64 time
-        let end = data.get_u64(195 + 24); // encoded as u256, but we only care about u64 for time
+        let token_decimals = data[67]; // TODO: double-check this is correct
+        let token_amount = to_u256(data, 68);
+        let min_raise = to_u256(data, 100);
+        let max_raise = to_u256(data, 132);
+        let start = data.get_u64(164 + 24); // encoded as u256, but we only care about u64 time
+        let end = data.get_u64(196 + 24); // encoded as u256, but we only care about u64 for time
 
         let accepted_tokens =
             SaleInit::deserialize_tokens(&data[SaleInit::INDEX_ACCEPTED_TOKENS_START..])?;
@@ -159,6 +171,7 @@ impl<'a> SaleInit<'a> {
             core: SaleCore {
                 token_address,
                 token_chain,
+                token_decimals,
                 token_amount,
                 min_raise,
                 max_raise,
@@ -208,8 +221,7 @@ impl<'a> ContributionsSealed<'a> {
             return Err(StdError::generic_err("cannot exceed length 256"));
         }
 
-        let result = contributions.iter().find(|c| c.token_index == token_index);
-        if result != None {
+        if let Some(_) = contributions.iter().find(|c| c.token_index == token_index) {
             return Err(StdError::generic_err(
                 "token_index already in contributions",
             ));
@@ -278,31 +290,19 @@ impl<'a> SaleSealed<'a> {
         data: &[u8],
         expected_num_allocations: u8,
         indices: &Vec<u8>,
-    ) -> StdResult<Vec<(u8, AssetAllocation)>> {
+    ) -> StdResult<Vec<(u8, Allocation)>> {
         if data[33] != expected_num_allocations {
             return Err(StdError::generic_err("encoded num_allocations != expected"));
         }
 
-        let mut parsed: Vec<(u8, AssetAllocation)> = Vec::with_capacity(indices.len());
+        let mut parsed: Vec<(u8, Allocation)> = Vec::with_capacity(indices.len());
         for &token_index in indices {
             let i = SaleSealed::HEADER_LEN + (token_index as usize) * Allocation::NUM_BYTES;
-
-            // allocated
-            let (invalid, allocated) = data.get_u256(i);
-            if invalid > 0 {
-                return Err(StdError::generic_err("allocated too large"));
-            }
-
-            // excess_contribution
-            let (invalid, excess_contributed) = data.get_u256(i + 32);
-            if invalid > 0 {
-                return Err(StdError::generic_err("excess_contributed too large"));
-            }
             parsed.push((
                 token_index,
-                AssetAllocation {
-                    allocated: allocated.into(),
-                    excess_contributed: excess_contributed.into(),
+                Allocation {
+                    allocated: to_u256(data, i + 1),
+                    excess_contributed: to_u256(data, i + 33),
                 },
             ));
         }
@@ -337,6 +337,14 @@ impl<'a> SaleAborted<'a> {
     */
 }
 
+fn to_const_bytes32(data: &[u8], index: usize) -> [u8; 32] {
+    data.get_bytes32(index).get_const_bytes(0)
+}
+
+fn to_u256(data: &[u8], index: usize) -> Uint256 {
+    Uint256::new(to_const_bytes32(data, index))
+}
+
 pub fn make_asset_info(api: &dyn Api, addr: &[u8]) -> StdResult<AssetInfo> {
     match addr[0] {
         1u8 => {
@@ -360,4 +368,14 @@ pub fn make_asset_info(api: &dyn Api, addr: &[u8]) -> StdResult<AssetInfo> {
             })
         }
     }
+}
+
+pub fn to_uint128(value: Uint256) -> Option<Uint128> {
+    if value > Uint256::from(u128::MAX) {
+        return None;
+    }
+
+    let bytes = value.to_be_bytes();
+    let (_, value) = bytes.as_slice().get_u256(0);
+    Some(value.into())
 }

@@ -3,6 +3,9 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum CommonError {
+    #[error("AmountExceedsUint128Max")]
+    AmountExceedsUint128Max,
+
     #[error("InvalidVaaAction")]
     InvalidVaaAction,
 }

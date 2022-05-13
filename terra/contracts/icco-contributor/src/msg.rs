@@ -3,7 +3,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use terraswap::asset::AssetInfo;
 
-use icco::common::{SaleCore, SaleStatus, SaleTimes};
+use icco::common::{AssetAllocation, SaleCore, SaleStatus, SaleTimes};
 
 use crate::state::BuyerStatus;
 
@@ -136,7 +136,7 @@ pub struct TotalContributionResponse {
 pub struct TotalAllocationResponse {
     pub id: Vec<u8>,
     pub token_index: u8,
-    pub amount: Uint128,
+    pub allocation: AssetAllocation,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

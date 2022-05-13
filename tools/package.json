@@ -19,6 +19,7 @@
   "license": "ISC",
   "dependencies": {
     "@certusone/wormhole-sdk": "^0.2.5",
-    "@solana/web3.js": "^1.24.0"
+    "@solana/web3.js": "^1.24.0",
+    "yargs": "^17.5.0"
   }
 }

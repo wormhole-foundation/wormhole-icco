@@ -1,3 +1,4 @@
+import yargs from "yargs";
 import { registerChainOnEth, nativeToUint8Array } from "wormhole-icco-sdk";
 import { ethers } from "ethers";
 
@@ -5,9 +6,23 @@ const fs = require("fs");
 const DeploymentConfig = require("../../ethereum/icco_deployment_config.js");
 const ConductorRpc = DeploymentConfig["conductor"].rpc;
 
-const networks: string[] = ["goerli", "fuji"];
+function parseArgs(): string[] {
+  const parsed = yargs(process.argv.slice(2))
+    .option("network", {
+      type: "array",
+      description: "Name of network to register (e.g. goerli)",
+      required: true,
+    })
+    .help("h")
+    .alias("h", "help").argv;
+
+  const args: string[] = parsed.network;
+  return args;
+}
 
 async function main() {
+  const networks = parseArgs();
+
   for (let i = 0; i < networks.length; i++) {
     const config = DeploymentConfig[networks[i]];
     if (!config) {

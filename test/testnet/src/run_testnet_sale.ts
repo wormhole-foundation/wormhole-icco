@@ -1,4 +1,3 @@
-const fs = require("fs");
 import {
   buildAcceptedTokens,
   createSaleOnEthAndInit,
@@ -12,18 +11,15 @@ import {
   redeemCrossChainAllocations,
   claimContributorAllocationOnEth,
   redeemCrossChainContributions,
-  testProvider,
 } from "./utils";
 import {
   SALE_CONFIG,
   TESTNET_ADDRESSES,
   CONDUCTOR_NETWORK,
   CONTRIBUTOR_INFO,
-  CONDUCTOR_ADDRESS,
 } from "./consts";
 import { Contribution, saleParams, SealSaleResult } from "./structs";
 import { setDefaultWasm } from "@certusone/wormhole-sdk";
-import { getSaleFromConductorOnEth } from "wormhole-icco-sdk";
 
 setDefaultWasm("node");
 

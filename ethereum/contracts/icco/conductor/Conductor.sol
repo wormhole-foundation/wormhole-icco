@@ -42,8 +42,13 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
             localTokenAddress = tokenBridge().wrappedAsset(raise.tokenChain, raise.token);  
             require(localTokenAddress != address(0), "wrapped address not found on this chain"); 
         }
-         
+
+        uint8 localTokenDecimals;  
         { // token deposit context to avoid stack too deep errors
+            // fetch the sale token decimals and place in the saleInit struct.
+            // the contributors need to know this to scale allocations on non-evm chains            
+            (,bytes memory queriedDecimals) = localTokenAddress.staticcall(abi.encodeWithSignature("decimals()"));
+            localTokenDecimals = abi.decode(queriedDecimals, (uint8));
 
             // query own token balance before transfer
             (,bytes memory queriedBalanceBefore) = localTokenAddress.staticcall(abi.encodeWithSelector(IERC20.balanceOf.selector, address(this)));
@@ -67,7 +72,8 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
             saleID : saleId,
             tokenAddress : raise.token,
             tokenChain : raise.tokenChain,
-            localTokenAddress: localTokenAddress,
+            localTokenDecimals: localTokenDecimals,
+            localTokenAddress: localTokenAddress,     
             tokenAmount : raise.tokenAmount,
             minRaise: raise.minRaise,
             maxRaise: raise.maxRaise,
@@ -111,6 +117,8 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
             tokenAddress : raise.token,
             // Chain ID of the token
             tokenChain : raise.tokenChain,
+            // token decimals
+            tokenDecimals: localTokenDecimals,
             // token amount being sold
             tokenAmount : raise.tokenAmount,
             // min raise amount
@@ -189,14 +197,6 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
         ConductorStructs.Sale memory sale = sales(saleId);
 
         require(!sale.isSealed && !sale.isAborted, "already sealed / aborted");
-        
-        // query sale tokens decimals
-        // bypass stack too deep
-        uint8 saleTokenDecimals;
-        {
-            (,bytes memory queriedDecimals) = sale.localTokenAddress.staticcall(abi.encodeWithSignature("decimals()"));
-            saleTokenDecimals = abi.decode(queriedDecimals, (uint8));
-        }
 
         ConductorStructs.InternalAccounting memory accounting;        
 
@@ -237,7 +237,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
                         SafeERC20.safeTransfer(IERC20(sale.localTokenAddress), address(uint160(uint256(contributorCustody(sale.acceptedTokensChains[i])))), allocation);
                     } else {
                         // adjust allocation for dust after token bridge transfer
-                        allocation = ICCOStructs.deNormalizeAmount(ICCOStructs.normalizeAmount(allocation, saleTokenDecimals), saleTokenDecimals);
+                        allocation = ICCOStructs.deNormalizeAmount(ICCOStructs.normalizeAmount(allocation, sale.localTokenDecimals), sale.localTokenDecimals);
 
                         // transfer over wormhole token bridge
                         SafeERC20.safeApprove(IERC20(sale.localTokenAddress), address(tknBridge), allocation);

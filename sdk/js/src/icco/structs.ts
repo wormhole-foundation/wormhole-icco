@@ -38,6 +38,7 @@ export interface Sale {
 
 export interface ConductorSale extends Sale {
   initiator: string;
+  localTokenDecimals: number;
   localTokenAddress: string;
   contributions: ethers.BigNumberish[];
   contributionsCollected: boolean[];
@@ -45,6 +46,7 @@ export interface ConductorSale extends Sale {
 }
 
 export interface ContributorSale extends Sale {
+  tokenDecimals: number;
   allocations: ethers.BigNumberish[];
   excessContributions: ethers.BigNumberish[];
 }
@@ -60,6 +62,7 @@ export interface SaleInit {
   saleId: ethers.BigNumberish;
   tokenAddress: string;
   tokenChain: number;
+  tokenDecimals: number;
   tokenAmount: ethers.BigNumberish;
   minRaise: ethers.BigNumberish;
   maxRaise: ethers.BigNumberish;

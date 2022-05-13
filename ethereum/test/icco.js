@@ -581,6 +581,7 @@ contract("ICCO", function(accounts) {
   let SOLD_TOKEN_BYTES32_ADDRESS;
   let CONTRIBUTED_TOKEN_ONE;
   let CONTRIBUTED_TOKEN_TWO;
+  let SOLD_TOKEN_DECIMALS;
   const SELLER = accounts[0];
   const BUYER_ONE = accounts[1];
   const BUYER_TWO = accounts[2];
@@ -600,6 +601,7 @@ contract("ICCO", function(accounts) {
 
     // token to sell in ICCO
     SOLD_TOKEN = await TokenImplementation.new();
+    SOLD_TOKEN_DECIMALS = tokenDecimals;
     SOLD_TOKEN_BYTES32_ADDRESS =
       "0x000000000000000000000000" + SOLD_TOKEN.address.substr(2);
     const soldTokenName = "Sold Token";
@@ -608,7 +610,7 @@ contract("ICCO", function(accounts) {
     await SOLD_TOKEN.initialize(
       soldTokenName,
       soldTokenSymbol,
-      tokenDecimals,
+      SOLD_TOKEN_DECIMALS,
       tokenSequence,
       mintAccount,
       tokenChainId,
@@ -624,7 +626,7 @@ contract("ICCO", function(accounts) {
     await CONTRIBUTED_TOKEN_ONE.initialize(
       tokenOneName,
       tokenOneSymbol,
-      tokenDecimals,
+      SOLD_TOKEN_DECIMALS,
       tokenSequence,
       mintAccount,
       tokenChainId,
@@ -640,7 +642,7 @@ contract("ICCO", function(accounts) {
     await CONTRIBUTED_TOKEN_TWO.initialize(
       tokenTwoName,
       tokenTwoSymbol,
-      tokenDecimals,
+      SOLD_TOKEN_DECIMALS,
       tokenSequence,
       mintAccount,
       tokenChainId,
@@ -756,6 +758,13 @@ contract("ICCO", function(accounts) {
     );
     index += 4;
 
+    // token decimals
+    assert.equal(
+      parseInt(log.payload.substr(index, 2), 16),
+      SOLD_TOKEN_DECIMALS
+    );
+    index += 2;
+
     // token amount
     assert.equal(
       parseInt(log.payload.substr(index, 64), 16),
@@ -864,7 +873,7 @@ contract("ICCO", function(accounts) {
 
     assert.equal(nextSaleId, SALE_ID + 1);
 
-    // confirm that the localTokenAddress was saved correctl
+    // confirm that the localTokenAddress was saved correctly
     const sale = await initialized.methods.sales(SALE_ID).call();
 
     assert.equal(SOLD_TOKEN.address, sale.localTokenAddress);
@@ -1908,6 +1917,13 @@ contract("ICCO", function(accounts) {
     );
     index += 4;
 
+    // token decimals
+    assert.equal(
+      parseInt(log.payload.substr(index, 2), 16),
+      SOLD_TOKEN_DECIMALS
+    );
+    index += 2;
+
     // token amount
     assert.equal(
       parseInt(log.payload.substr(index, 64), 16),
@@ -2913,6 +2929,13 @@ contract("ICCO", function(accounts) {
     );
     index += 4;
 
+    // token decimals
+    assert.equal(
+      parseInt(log.payload.substr(index, 2), 16),
+      SOLD_TOKEN_DECIMALS
+    );
+    index += 2;
+
     // token amount
     assert.equal(
       parseInt(log.payload.substr(index, 64), 16),
@@ -3689,6 +3712,13 @@ contract("ICCO", function(accounts) {
         .substring(2 + 64 - 4)
     );
     index += 4;
+
+    // token decimals
+    assert.equal(
+      parseInt(log.payload.substr(index, 2), 16),
+      SOLD_TOKEN_DECIMALS
+    );
+    index += 2;
 
     // token amount
     assert.equal(
@@ -4623,7 +4653,7 @@ contract("ICCO", function(accounts) {
     const tokenTwoConversionRate = "2000000000000000000";
     const saleRecipient = accounts[0];
     const refundRecipient = accounts[0];
-    const tokenDecimals = 18;
+    const SOLD_TOKEN_DECIMALS = 18;
     const mintAccount = SELLER;
     const tokenSequence = 0; // set to 0 for the test
     const tokenChainId = 0; // set to 0 for the test
@@ -4647,7 +4677,7 @@ contract("ICCO", function(accounts) {
     await soldToken.initialize(
       soldTokenName,
       soldTokenSymbol,
-      tokenDecimals,
+      SOLD_TOKEN_DECIMALS,
       tokenSequence,
       mintAccount,
       tokenChainId,
@@ -4744,7 +4774,7 @@ contract("ICCO", function(accounts) {
     const tokenTwoConversionRate = "2000000000000000000";
     const saleRecipient = accounts[0];
     const refundRecipient = accounts[0];
-    const tokenDecimals = 18;
+    const SOLD_TOKEN_DECIMALS = 18;
     const mintAccount = SELLER;
     const tokenSequence = 0; // set to 0 for the test
     const tokenChainId = 0; // set to 0 for the test
@@ -4766,7 +4796,7 @@ contract("ICCO", function(accounts) {
     await soldToken.initialize(
       soldTokenName,
       soldTokenSymbol,
-      tokenDecimals,
+      SOLD_TOKEN_DECIMALS,
       tokenSequence,
       mintAccount,
       tokenChainId,
@@ -4831,7 +4861,7 @@ contract("ICCO", function(accounts) {
     const tokenOneConversionRate = "1000000000000000000";
     const saleRecipient = accounts[0];
     const refundRecipient = accounts[0];
-    const tokenDecimals = 18;
+    const SOLD_TOKEN_DECIMALS = 18;
     const mintAccount = SELLER;
     const tokenSequence = 0; // set to 0 for the test
     const tokenChainId = 0; // set to 0 for the test
@@ -4853,7 +4883,7 @@ contract("ICCO", function(accounts) {
     await soldToken.initialize(
       soldTokenName,
       soldTokenSymbol,
-      tokenDecimals,
+      SOLD_TOKEN_DECIMALS,
       tokenSequence,
       mintAccount,
       tokenChainId,

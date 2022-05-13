@@ -110,7 +110,7 @@ module.exports = {
   fantom_testnet: {
     conductorChainId: 2,
     contributorChainId: 10,
-    authority: "0x1dF62f291b2E969fB0849d99D9Ce41e2F137006e",
+    authority: "",
     consistencyLevel: 2,
     wormhole: "0x1BB3B4119b7BA9dfad76B0545fb3F531383c3bB7",
     tokenBridge: "0x599CEa2204B4FaECd584Ab1F2b6aCA137a0afbE8",

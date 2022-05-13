@@ -1,4 +1,3 @@
-require("dotenv").config({ path: ".env" });
 const HDWalletProvider = require("@truffle/hdwallet-provider");
 
 const DeploymentConfig = require(`${__dirname}/icco_deployment_config.js`);
@@ -132,8 +131,4 @@ module.exports = {
   },
 
   plugins: ["@chainsafe/truffle-plugin-abigen", "truffle-plugin-verify"],
-
-  api_keys: {
-    etherscan: process.env.ETHERSCAN_KEY,
-  },
 };

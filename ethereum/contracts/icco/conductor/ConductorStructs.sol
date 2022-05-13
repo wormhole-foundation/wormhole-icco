@@ -11,6 +11,8 @@ contract ConductorStructs {
         bytes32 tokenAddress;
         // Native chain ID of the token
         uint16 tokenChain;
+        // decimals of token on conductor chain, could be different for this token on its native chain
+        uint8 localTokenDecimals;
         // address of token on conductor chain, will be different if selling a wrapped token
         address localTokenAddress;
         // token amount being sold

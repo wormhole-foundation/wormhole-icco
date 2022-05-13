@@ -32,6 +32,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
             saleID : saleInit.saleID,
             tokenAddress : saleInit.tokenAddress,
             tokenChain : saleInit.tokenChain,
+            tokenDecimals: saleInit.tokenDecimals,
             tokenAmount : saleInit.tokenAmount,
             minRaise : saleInit.minRaise,
             maxRaise : saleInit.maxRaise,
@@ -219,9 +220,9 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
             require(tokenBalance >= tokenAllocation, "insufficient sale token balance");
             setSaleSealed(sealedSale.saleID);
         }
-        // REVIEW: need to refactor this code
-        uint16 conductorChainId = conductorChainId(); // REVIEW: can the recipient be a cross-chain wallet?
-        if (conductorChainId == thisChainId) { // REVIEW: change the logic to make it more readible 
+
+        uint16 conductorChainId = conductorChainId();
+        if (conductorChainId == thisChainId) { 
             // raised funds are payed out on this chain
             for (uint i = 0; i < sale.acceptedTokensAddresses.length; i++) {
                 if (sale.acceptedTokensChains[i] == thisChainId) {

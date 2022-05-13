@@ -59,6 +59,8 @@ library ICCOStructs {
         bytes32 tokenAddress;
         // Chain ID of the token
         uint16 tokenChain;
+        // token decimals 
+        uint8 tokenDecimals;
         // token amount being sold
         uint256 tokenAmount;
         // min raise amount
@@ -124,6 +126,7 @@ library ICCOStructs {
             saleInit.saleID,
             saleInit.tokenAddress,
             saleInit.tokenChain,
+            saleInit.tokenDecimals,
             saleInit.tokenAmount,
             saleInit.minRaise,
             saleInit.maxRaise,
@@ -151,6 +154,9 @@ library ICCOStructs {
 
         saleInit.tokenChain = encoded.toUint16(index);
         index += 2;
+
+        saleInit.tokenDecimals = encoded.toUint8(index);
+        index += 1;
 
         saleInit.tokenAmount = encoded.toUint256(index);
         index += 32;

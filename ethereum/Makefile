@@ -14,7 +14,6 @@ dependencies: node_modules
 build: node_modules ${SOURCE_FILES} icco_deployment_config.js
 	mkdir -p build
 	touch -m build
-	cp -u icco_deployment_config.js.sample icco_deployment_config.js
 	npm run build
 
 .env: .env.test

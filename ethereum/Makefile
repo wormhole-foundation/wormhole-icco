@@ -1,6 +1,8 @@
 SOURCE_FILES:=$(shell find contracts -name "*.sol")
 
-.PHONY: dependencies test clean all
+-include ../Makefile.help
+
+.PHONY: dependencies test clean all tilt-deploy
 
 all: build
 
@@ -10,14 +12,22 @@ node_modules: package-lock.json
 
 dependencies: node_modules
 
-build: node_modules ${SOURCE_FILES}
+.PHONY: clean
+## Remove All Builds
+clean:
+	rm -rf ganache.log node_modules build wormhole .env
+
+## Compile Solidity Contracts
+build: node_modules ${SOURCE_FILES} icco_deployment_config.js
 	mkdir -p build
 	touch -m build
-	cp -u icco_deployment_config.js.sample icco_deployment_config.js
 	npm run build
 
 .env: .env.test
 	cp $< $@
+
+icco_deployment_config.js:
+	cp icco_deployment_config.js.sample icco_deployment_config.js
 
 wormhole/ethereum/build:
 	git clone --depth 1 --branch dev.v2 --single-branch https://github.com/certusone/wormhole.git
@@ -27,7 +37,6 @@ wormhole/ethereum/build:
 ## Run Unit/Integration Test With Ganache CLI
 test: .env build wormhole/ethereum/build
 	@if pgrep npm; then echo "Error: npm exec ganache-cli already running. Stop it before running tests"; exit 1; fi
-	cp -u icco_deployment_config.js.sample icco_deployment_config.js
 	npx ganache-cli -e 10000 --deterministic --time="1970-01-01T00:00:00+00:00" > ganache.log &
 	sleep 5
 	cd wormhole/ethereum && npm run migrate
@@ -42,5 +51,3 @@ tilt-deploy: .env build
 	sed -i 's/CONTRIBUTOR_CHAIN_ID=0x2/CONTRIBUTOR_CHAIN_ID=0x4/g' .env && npx truffle migrate --f 3 --to 3 --network eth_devnet2
 	rm -f .env
 
-clean:
-	rm -rf ganache.log node_modules build wormhole .env

@@ -14,8 +14,11 @@
         "bignumber.js": "^9.0.1",
         "dotenv": "^8.2.0",
         "elliptic": "^6.5.4",
+        "ethers": "^5.6.4",
         "prettier": "^2.6.1",
         "ts-custom-error": "^3.2.0",
+        "web3-eth-abi": "^1.7.3",
+        "web3-utils": "^1.7.3",
         "yargs": "^17.4.1"
     },
     "devDependencies": {

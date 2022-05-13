@@ -1,11 +1,11 @@
 use cosmwasm_std::{
-    to_binary, Addr, Binary, CosmosMsg, Deps, DepsMut, Env, MessageInfo, QuerierWrapper,
-    QueryRequest, Response, StdError, StdResult, Storage, Uint128, WasmMsg, WasmQuery,
+    to_binary, Addr, Binary, Coin, CosmosMsg, Deps, DepsMut, Env, MessageInfo, QuerierWrapper,
+    QueryRequest, Response, StdError, StdResult, Uint128, Uint256, WasmMsg, WasmQuery,
 };
-use cw20::Cw20ExecuteMsg;
+use cw20::{Cw20ExecuteMsg, Cw20QueryMsg, TokenInfoResponse};
 use serde::de::DeserializeOwned;
 use terraswap::{
-    asset::AssetInfo,
+    asset::{Asset, AssetInfo},
     querier::{query_balance, query_token_balance},
 };
 
@@ -17,16 +17,20 @@ use wormhole::{
     state::ParsedVAA,
 };
 
-use icco::common::{
-    make_asset_info, ContributionsSealed, SaleAborted, SaleInit, SaleSealed, SaleStatus, CHAIN_ID,
+use icco::{
+    common::{
+        make_asset_info, to_uint128, AssetAllocation, ContributionsSealed, SaleAborted, SaleInit,
+        SaleSealed, SaleStatus, CHAIN_ID,
+    },
+    error::CommonError,
 };
 
 use crate::{
     error::ContributorError,
     msg::ExecuteMsg,
     state::{
-        is_sale_active, sale_asset_indices, update_buyer_contribution, AssetKey, BuyerStatus,
-        PendingContributeToken, TokenIndexKey, ACCEPTED_ASSETS, ASSET_INDICES, CONFIG,
+        sale_asset_indices, throw_if_active, throw_if_inactive, update_buyer_contribution,
+        BuyerStatus, PendingContributeToken, TokenIndexKey, ACCEPTED_ASSETS, ASSET_INDICES, CONFIG,
         PENDING_CONTRIBUTE_TOKEN, SALES, SALE_STATUSES, SALE_TIMES, TOTAL_ALLOCATIONS,
         TOTAL_CONTRIBUTIONS,
     },
@@ -44,7 +48,7 @@ pub fn init_sale(
     let payload = parse_and_verify_vaa(deps.as_ref(), &env, signed_vaa)?;
     let sale_id = SaleInit::get_sale_id(&payload)?;
 
-    if is_sale_active(deps.storage, sale_id) {
+    if let Ok(_) = SALE_STATUSES.load(deps.storage, sale_id) {
         return ContributorError::SaleAlreadyExists.std_err();
     }
 
@@ -99,7 +103,6 @@ pub fn init_sale(
 
         // store other things associated with accepted tokens
         TOTAL_CONTRIBUTIONS.save(deps.storage, token_key.clone(), &Uint128::zero())?;
-        TOTAL_ALLOCATIONS.save(deps.storage, token_key, &Uint128::zero())?;
     }
 
     let sale = &sale_init.core;
@@ -123,9 +126,7 @@ pub fn contribute(
     token_index: u8,
     amount: Uint128,
 ) -> StdResult<Response> {
-    if !is_sale_active(deps.storage, sale_id) {
-        return ContributorError::SaleEnded.std_err();
-    }
+    throw_if_inactive(deps.storage, sale_id)?;
 
     let times = SALE_TIMES.load(deps.storage, sale_id)?;
     let now = env.block.time.seconds();
@@ -158,14 +159,18 @@ pub fn attest_contributions(
     _info: MessageInfo,
     sale_id: &[u8],
 ) -> StdResult<Response> {
-    if !is_sale_active(deps.storage, sale_id) {
-        return ContributorError::SaleEnded.std_err();
-    }
+    throw_if_inactive(deps.storage, sale_id)?;
 
     let times = SALE_TIMES.load(deps.storage, sale_id)?;
     if env.block.time.seconds() <= times.end {
         return ContributorError::SaleNotFinished.std_err();
     }
+
+    // Do we care if the orchestrator can attest contributions multiple times?
+    // The conductor can only collect contributions once per chain, so there
+    // is no need to add a protection against attesting more than once.
+    // If we want to add a protection, we can cache the serialized payload
+    // and check if this is already in storage per sale_id.
 
     let asset_indices = sale_asset_indices(deps.storage, sale_id);
 
@@ -181,7 +186,7 @@ pub fn attest_contributions(
 
     let cfg = CONFIG.load(deps.storage)?;
     Ok(Response::new()
-        .add_message(execute_contract(
+        .add_message(execute_contract_without_funds(
             &cfg.wormhole,
             to_binary(&WormholeExecuteMsg::PostMessage {
                 message: Binary::from(serialized),
@@ -201,12 +206,9 @@ pub fn sale_sealed(
     let payload = parse_and_verify_vaa(deps.as_ref(), &env, signed_vaa)?;
     let sale_id = SaleSealed::get_sale_id(&payload)?;
 
-    let sale = match is_sale_active(deps.storage, sale_id) {
-        true => SALES.load(deps.storage, sale_id)?,
-        _ => {
-            return ContributorError::SaleEnded.std_err();
-        }
-    };
+    throw_if_inactive(deps.storage, sale_id)?;
+
+    let sale = SALES.load(deps.storage, sale_id)?;
 
     // sale token handling
     let asset_info = match sale.token_chain {
@@ -221,17 +223,27 @@ pub fn sale_sealed(
         }
     };
 
-    let balance = match asset_info {
+    let (balance, token_decimals) = match asset_info {
         AssetInfo::NativeToken { denom } => {
             // this should never happen, but...
-            query_balance(&deps.querier, env.contract.address, denom)?
+            (
+                query_balance(&deps.querier, env.contract.address, denom)?,
+                6u8,
+            )
         }
-        AssetInfo::Token { contract_addr } => query_token_balance(
-            &deps.querier,
-            Addr::unchecked(contract_addr),
-            env.contract.address,
-        )?,
+        AssetInfo::Token { contract_addr } => {
+            let contract_addr = Addr::unchecked(contract_addr);
+            let token_info: TokenInfoResponse = query_contract(
+                &deps.querier,
+                &contract_addr,
+                to_binary(&Cw20QueryMsg::TokenInfo {})?,
+            )?;
+
+            let balance = query_token_balance(&deps.querier, contract_addr, env.contract.address)?;
+            (balance, token_info.decimals)
+        }
     };
+
     // save some work if we don't have any of the sale tokens
     if balance == Uint128::zero() {
         return ContributorError::InsufficientSaleTokens.std_err();
@@ -243,10 +255,14 @@ pub fn sale_sealed(
     let parsed_allocations =
         SaleSealed::deserialize_allocations_safely(&payload, sale.num_accepted, &asset_indices)?;
 
-    // sum total allocations and check against balance in the contract
+    // Sum total allocations and check against balance in the contract.
+    // Keep in mind, these are Uint256. Need to adjust this down to Uint128
     let total_allocations = parsed_allocations
         .iter()
-        .fold(Uint128::zero(), |total, (_, next)| total + next.allocated);
+        .fold(Uint256::zero(), |total, (_, next)| total + next.allocated);
+
+    // need to adjust total_allocations based on decimal difference
+    let total_allocations = sale.adjust_token_amount(total_allocations, token_decimals)?;
 
     if balance < total_allocations {
         return ContributorError::InsufficientSaleTokens.std_err();
@@ -258,19 +274,51 @@ pub fn sale_sealed(
     // transfer contributions to conductor
     let cfg = CONFIG.load(deps.storage)?;
     if cfg.conductor_chain == CHAIN_ID {
-        // lol
-    } else {
-        for &token_index in asset_indices.iter() {
-            // do token bridge transfers here
-        }
+        return ContributorError::UnsupportedConductor.std_err();
+    }
+
+    let mut token_bridge_msgs: Vec<CosmosMsg> = Vec::with_capacity(sale.num_accepted as usize);
+    for &token_index in asset_indices.iter() {
+        // bridge assets to conductor
+        let amount = TOTAL_CONTRIBUTIONS.load(deps.storage, (sale_id, token_index.into()))?;
+        let asset = Asset {
+            info: ACCEPTED_ASSETS.load(deps.storage, (sale_id, token_index.into()))?,
+            amount,
+        };
+
+        token_bridge_msgs.push(execute_contract_without_funds(
+            &cfg.token_bridge,
+            to_binary(&TokenBridgeExecuteMsg::InitiateTransfer {
+                asset,
+                recipient_chain: cfg.conductor_chain,
+                recipient: Binary::from(cfg.conductor_address.clone()),
+                fee: Uint128::zero(), // does this matter?
+                nonce: WORMHOLE_NONCE,
+            })?,
+        ));
     }
 
     // now update TOTAL_ALLOCATIONS (fix to use AssetAllocation)
     for (token_index, allocation) in parsed_allocations.iter() {
-        //TOTAL_ALLOCATIONS.save(deps.storage, (sale_id, token_index.into()), )
+        // adjust values from uint256 to uint128
+        let allocated = sale.adjust_token_amount(allocation.allocated, token_decimals)?;
+        let excess_contributed = match to_uint128(allocation.excess_contributed) {
+            Some(value) => value,
+            None => return CommonError::AmountExceedsUint128Max.std_err(),
+        };
+
+        TOTAL_ALLOCATIONS.save(
+            deps.storage,
+            (sale_id, (*token_index).into()),
+            &AssetAllocation {
+                allocated,
+                excess_contributed,
+            },
+        )?;
     }
 
     Ok(Response::new()
+        .add_messages(token_bridge_msgs)
         .add_attribute("action", "sale_sealed")
         .add_attribute("sale_id", Binary::from(sale_id).to_base64())
         .add_attribute("total_allocations", total_allocations.to_string()))
@@ -283,7 +331,7 @@ pub fn claim_allocation(
     sale_id: &Binary,
     token_index: u8,
 ) -> StdResult<Response> {
-    // TODO devs do something
+    throw_if_active(deps.storage, sale_id)?;
 
     Ok(Response::new().add_attribute("action", "claim_allocation"))
 }
@@ -297,9 +345,7 @@ pub fn sale_aborted(
     let payload = parse_and_verify_vaa(deps.as_ref(), &env, signed_vaa)?;
     let sale_id = SaleAborted::get_sale_id(&payload)?;
 
-    if !is_sale_active(deps.storage, sale_id) {
-        return ContributorError::SaleEnded.std_err();
-    };
+    throw_if_inactive(deps.storage, sale_id)?;
 
     SALE_STATUSES.save(deps.storage, sale_id, &SaleStatus::Aborted)?;
 
@@ -315,7 +361,7 @@ pub fn claim_refund(
     sale_id: &Binary,
     token_index: u8,
 ) -> StdResult<Response> {
-    // TODO devs do something
+    throw_if_active(deps.storage, sale_id)?;
 
     Ok(Response::new().add_attribute("action", "claim_refund"))
 }
@@ -417,7 +463,7 @@ fn contribute_token(
     )?;
 
     Ok(Response::new()
-        .add_message(execute_contract(
+        .add_message(execute_contract_without_funds(
             &contract_addr,
             to_binary(&Cw20ExecuteMsg::TransferFrom {
                 owner: info.sender.to_string(),
@@ -425,7 +471,7 @@ fn contribute_token(
                 amount,
             })?,
         ))
-        .add_message(execute_contract(
+        .add_message(execute_contract_without_funds(
             &env.contract.address,
             to_binary(&ExecuteMsg::EscrowUserContributionHook)?,
         ))
@@ -490,8 +536,17 @@ fn query_contract<T: DeserializeOwned>(
     }))
 }
 
+// assume only one coin for funds
+fn execute_contract_with_funds(contract: &Addr, msg: Binary, funds: Coin) -> CosmosMsg {
+    CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: contract.to_string(),
+        funds: vec![funds],
+        msg,
+    })
+}
+
 // no need for funds
-fn execute_contract(contract: &Addr, msg: Binary) -> CosmosMsg {
+fn execute_contract_without_funds(contract: &Addr, msg: Binary) -> CosmosMsg {
     CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: contract.to_string(),
         funds: vec![],

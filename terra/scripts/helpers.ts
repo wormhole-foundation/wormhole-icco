@@ -15,8 +15,6 @@ import {
   Wallet,
 } from "@terra-money/terra.js";
 import { readFileSync, writeFileSync, existsSync } from "fs";
-import path from "path";
-import { CustomError } from "ts-custom-error";
 
 const DEFAULT_GAS_CURRENCY = "uusd";
 const DEFAULT_GAS_PRICE = 0.15;
@@ -49,10 +47,7 @@ export function newLocalClient(): Client {
   return newClient("localterra", undefined);
 }
 
-export function newClient(
-  network: string,
-  mnemonic: string | undefined
-): Client {
+export function newClient(network: string, mnemonic: string | undefined): Client {
   if (network == "mainnet" || network == "testnet") {
     if (mnemonic === undefined) {
       throw Error("mnemonic undefined");
@@ -90,16 +85,6 @@ export async function sleep(timeout: number) {
   await new Promise((resolve) => setTimeout(resolve, timeout));
 }
 
-export class TransactionError extends CustomError {
-  public constructor(
-    public code: number,
-    public codespace: string | undefined,
-    public rawLog: string
-  ) {
-    super("transaction failed");
-  }
-}
-
 export async function createTransaction(wallet: Wallet, msg: Msg) {
   let gas_currency = process.env.GAS_CURRENCY! || DEFAULT_GAS_CURRENCY;
   let gas_price = process.env.GAS_PRICE! || DEFAULT_GAS_PRICE;
@@ -115,24 +100,12 @@ export async function broadcastTransaction(terra: LCDClient, signedTx: Tx) {
   return result;
 }
 
-export async function performTransaction(
-  terra: LCDClient,
-  wallet: Wallet,
-  msg: Msg
-) {
+export async function performTransaction(terra: LCDClient, wallet: Wallet, msg: Msg) {
   const signedTx = await createTransaction(wallet, msg);
-  const result = await broadcastTransaction(terra, signedTx);
-  //if (isTxError(result)) {
-  //  throw new TransactionError(parseInt(result.code), result.codespace, result.raw_log);
-  //}
-  return result;
+  return broadcastTransaction(terra, signedTx);
 }
 
-export async function uploadContract(
-  terra: LCDClient,
-  wallet: Wallet,
-  filepath: string
-) {
+export async function uploadContract(terra: LCDClient, wallet: Wallet, filepath: string) {
   const contract = readFileSync(filepath, "base64");
   const uploadMsg = new MsgStoreCode(wallet.key.accAddress, contract);
   const receipt = await performTransaction(terra, wallet, uploadMsg);
@@ -164,19 +137,14 @@ export async function instantiateContract(
 }
 
 export async function executeContract(
-  terra: LCDClient,
+  //terra: LCDClient,
   wallet: Wallet,
   contractAddress: string,
   msg: object,
   coins?: Coins.Input
 ) {
-  const executeMsg = new MsgExecuteContract(
-    wallet.key.accAddress,
-    contractAddress,
-    msg,
-    coins
-  );
-  return await performTransaction(terra, wallet, executeMsg);
+  const executeMsg = new MsgExecuteContract(wallet.key.accAddress, contractAddress, msg, coins);
+  return await performTransaction(wallet.lcd, wallet, executeMsg);
 }
 
 export async function queryContract(
@@ -195,13 +163,7 @@ export async function deployContract(
   initMsg: object
 ) {
   const codeId = await uploadContract(terra, wallet, filepath);
-  return await instantiateContract(
-    terra,
-    wallet,
-    admin_address,
-    codeId,
-    initMsg
-  );
+  return await instantiateContract(terra, wallet, admin_address, codeId, initMsg);
 }
 
 export async function migrate(
@@ -211,12 +173,7 @@ export async function migrate(
   newCodeId: number,
   msg: object
 ) {
-  const migrateMsg = new MsgMigrateContract(
-    wallet.key.accAddress,
-    contractAddress,
-    newCodeId,
-    msg
-  );
+  const migrateMsg = new MsgMigrateContract(wallet.key.accAddress, contractAddress, newCodeId, msg);
   return await performTransaction(terra, wallet, migrateMsg);
 }
 
@@ -231,11 +188,7 @@ export async function update_contract_admin(
   contract_address: string,
   admin_address: string
 ) {
-  let msg = new MsgUpdateContractAdmin(
-    wallet.key.accAddress,
-    admin_address,
-    contract_address
-  );
+  let msg = new MsgUpdateContractAdmin(wallet.key.accAddress, admin_address, contract_address);
 
   return await performTransaction(terra, wallet, msg);
 }

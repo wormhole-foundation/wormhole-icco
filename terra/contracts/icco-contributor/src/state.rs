@@ -4,7 +4,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use terraswap::asset::AssetInfo;
 
-use icco::common::{SaleCore, SaleStatus, SaleTimes};
+use icco::common::{AssetAllocation, SaleCore, SaleStatus, SaleTimes};
 
 use crate::error::ContributorError;
 
@@ -73,7 +73,7 @@ pub const SALE_STATUSES: Map<SaleId, SaleStatus> = Map::new("sale_statuses");
 pub const SALE_TIMES: Map<SaleId, SaleTimes> = Map::new("sale_times");
 pub const ACCEPTED_ASSETS: Map<TokenIndexKey, AssetInfo> = Map::new("accepted_assets");
 pub const TOTAL_CONTRIBUTIONS: Map<TokenIndexKey, Uint128> = Map::new("total_contributions");
-pub const TOTAL_ALLOCATIONS: Map<TokenIndexKey, Uint128> = Map::new("total_allocations");
+pub const TOTAL_ALLOCATIONS: Map<TokenIndexKey, AssetAllocation> = Map::new("total_allocations");
 
 // per buyer
 pub const BUYER_STATUSES: Map<BuyerTokenIndexKey, BuyerStatus> = Map::new("buyer_statuses");
@@ -175,10 +175,27 @@ pub fn refund_is_claimed(
     )
 }
 
-pub fn is_sale_active(storage: &dyn Storage, sale_id: &[u8]) -> bool {
+pub fn throw_if_active(storage: &dyn Storage, sale_id: &[u8]) -> StdResult<()> {
     match SALE_STATUSES.load(storage, sale_id) {
-        Ok(status) => status == SaleStatus::Active,
-        Err(_) => false,
+        Ok(active) => {
+            if active == SaleStatus::Active {
+                return ContributorError::SaleStillActive.std_err();
+            }
+            Ok(())
+        }
+        Err(_) => return ContributorError::SaleNonexistent.std_err(),
+    }
+}
+
+pub fn throw_if_inactive(storage: &dyn Storage, sale_id: &[u8]) -> StdResult<()> {
+    match SALE_STATUSES.load(storage, sale_id) {
+        Ok(active) => {
+            if active != SaleStatus::Active {
+                return ContributorError::SaleEnded.std_err();
+            }
+            Ok(())
+        }
+        Err(_) => return ContributorError::SaleNonexistent.std_err(),
     }
 }
 

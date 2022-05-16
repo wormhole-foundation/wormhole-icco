@@ -89,6 +89,7 @@ import {
   abortSaleEarlyAtConductor,
   deployTokenOnEth,
   getSignedVaaFromReceiptOnEth,
+  extractVaaPayload,
 } from "../__tests__/helpers";
 
 import { MsgInstantiateContract } from "@terra-money/terra.js";
@@ -216,6 +217,7 @@ describe("Solana dev Tests", () => {
         // get the time
         const saleStart =
           (await makeSaleStartFromLastBlock(contributorConfigs)) + 20; // So it can be aborted "early".
+        // TBD: need to use linux time stamp so Soalna can actually use these.
 
         const saleEnd = saleStart + saleDuration;
         console.info("--> Sale Start: ", saleStart);
@@ -235,11 +237,13 @@ describe("Solana dev Tests", () => {
           saleEnd,
           acceptedTokens
         );
-        const saleInit = await parseSaleInit(saleInitVaa);
+        const saleInitPayload = await extractVaaPayload(saleInitVaa);
+        const saleInit = await parseSaleInit(saleInitPayload);
         console.info(
           "Sale Init VAA:",
           Buffer.from(saleInitVaa).toString("hex")
         );
+        //        console.info("Sale :", saleInit);
 
         // Wallet (payer) account decode
         const privateKeyDecoded = Uint8Array.from(

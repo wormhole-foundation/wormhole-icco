@@ -13,7 +13,7 @@ WORMHOLE=../../..
 .PHONY: clean
 ## Remove Builds
 clean:
-	rm -rf validator.log target
+	rm -rf validator.log target program/node
 
 .PHONY: wormhole
 ## Build Wormhole Contracts
@@ -47,3 +47,9 @@ integration-test: build wormhole /tmp/ledger
 ###	BRIDGE_PAYER=/tmp/ledger/faucet-keypair.json cargo test || (pkill solana-test && exit 1)
 	@pkill solana-test
 
+.PHONY: wasm
+## Build WASM
+wasm: program/node
+
+program/node:
+	cd program && wasm-pack build --target nodejs -d node -- --features wasm

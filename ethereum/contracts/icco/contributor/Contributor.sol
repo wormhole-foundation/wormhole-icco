@@ -220,50 +220,52 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
             require(tokenBalance >= tokenAllocation, "insufficient sale token balance");
             setSaleSealed(sealedSale.saleID);
         }
+        
+        // initialize token bridge interface in case the contributions
+        // are being sent to a recipient on a different chain
+        ITokenBridge tknBridge = tokenBridge();
+        uint messageFee = wormhole().messageFee();
+        uint valueSent = msg.value;
 
+        // cache from storage to save on gas
+        // we will check each acceptedTokenChain id
         uint16 conductorChainId = conductorChainId();
-        if (conductorChainId == thisChainId) { 
-            // raised funds are payed out on this chain
-            for (uint i = 0; i < sale.acceptedTokensAddresses.length; i++) {
-                if (sale.acceptedTokensChains[i] == thisChainId) {
-                    // send contributions less excess owed to contributors
-                    uint256 totalContributionsLessExcess = getSaleTotalContribution(sale.saleID, i) - getSaleExcessContribution(sale.saleID, i);
-                    if (totalContributionsLessExcess > 0) {
+        for (uint i = 0; i < sale.acceptedTokensAddresses.length; i++) {
+            if (sale.acceptedTokensChains[i] == thisChainId) {
+                // compute the total contributions to send to the recipient
+                uint256 totalContributionsLessExcess = getSaleTotalContribution(sale.saleID, i) - getSaleExcessContribution(sale.saleID, i); 
+
+                // make sure we have contributions to send to the recipient 
+                // for this accepted token
+                if (totalContributionsLessExcess > 0) {
+                    // convert bytes32 address to evm address
+                    address acceptedTokenAddress = address(uint160(uint256(sale.acceptedTokensAddresses[i]))); 
+
+                    // check to see if this contributor is on the same chain as conductor
+                    if (thisChainId == conductorChainId) {
+                        // send contributions to recipient on this chain
                         SafeERC20.safeTransfer(
-                            IERC20(address(uint160(uint256(sale.acceptedTokensAddresses[i])))),
+                            IERC20(acceptedTokenAddress),
                             address(uint160(uint256(sale.recipient))),
                             totalContributionsLessExcess
                         );
-                    }
-                }
-            }
-        } else {
-            // raised funds are payed out to recipient over wormhole token bridge
-            ITokenBridge tknBridge = tokenBridge();
-            uint messageFee = wormhole().messageFee();
-            uint valueSent = msg.value;
+                    } else { 
+                        // get token decimals for normalization of token amount
+                        uint8 acceptedTokenDecimals;
+                        {// bypass stack too deep
+                            (,bytes memory queriedDecimals) = acceptedTokenAddress.staticcall(abi.encodeWithSignature("decimals()"));
+                            acceptedTokenDecimals = abi.decode(queriedDecimals, (uint8));
+                        }
 
-            for (uint i = 0; i < sale.acceptedTokensAddresses.length; i++) {
-                if (sale.acceptedTokensChains[i] == thisChainId) {  
-                    address acceptedTokenAddress = address(uint160(uint256(sale.acceptedTokensAddresses[i])));
-                    
-                    // get token decimals for normalization of token amount
-                    uint8 acceptedTokenDecimals;
-                    {// bypass stack too deep
-                        (,bytes memory queriedDecimals) = acceptedTokenAddress.staticcall(abi.encodeWithSignature("decimals()"));
-                        acceptedTokenDecimals = abi.decode(queriedDecimals, (uint8));
-                    }
-
-                    // send contributions less excess owed to contributors
-                    uint totalContributionsLessExcess = ICCOStructs.deNormalizeAmount(
-                        ICCOStructs.normalizeAmount(
-                            getSaleTotalContribution(sale.saleID, i) - getSaleExcessContribution(sale.saleID, i),
+                        // perform dust accounting for tokenBridge
+                        totalContributionsLessExcess = ICCOStructs.deNormalizeAmount(
+                            ICCOStructs.normalizeAmount(
+                                totalContributionsLessExcess,
+                                acceptedTokenDecimals
+                            ),
                             acceptedTokenDecimals
-                        ),
-                        acceptedTokenDecimals
-                    );
+                        );
 
-                    if (totalContributionsLessExcess > 0) {
                         // transfer over wormhole token bridge
                         SafeERC20.safeApprove(IERC20(acceptedTokenAddress), address(tknBridge), totalContributionsLessExcess);
 

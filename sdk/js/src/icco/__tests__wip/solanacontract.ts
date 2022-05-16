@@ -202,9 +202,11 @@ describe("Solana dev Tests", () => {
         ];
 
         // we need to set up all of the accepted tokens (natives plus their wrapped versions)
+        const decimals = 9;
         const acceptedTokens = await makeAcceptedTokensFromConfigs(
           contributorConfigs,
-          buyers
+          buyers,
+          decimals // Single for all tokens?
         );
 
         const tokenAmount = "1";
@@ -215,13 +217,17 @@ describe("Solana dev Tests", () => {
         const saleStart =
           (await makeSaleStartFromLastBlock(contributorConfigs)) + 20; // So it can be aborted "early".
 
-        const decimals = 9;
         const saleEnd = saleStart + saleDuration;
         console.info("--> Sale Start: ", saleStart);
+        const localTokenAddress = tokenAddress; // TBD. Local token may not be created yet.
+        const tokenChain = CHAIN_ID_ETH; // needed to check if token is native or not
+
         const saleInitVaa = await createSaleOnEthAndGetVaa(
           conductorConfig.wallet,
           conductorConfig.chainId,
+          localTokenAddress,
           tokenAddress,
+          tokenChain,
           ethers.utils.parseUnits(tokenAmount, decimals),
           ethers.utils.parseUnits(minRaise),
           ethers.utils.parseUnits(maxRaise),

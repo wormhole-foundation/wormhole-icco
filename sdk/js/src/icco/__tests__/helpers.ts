@@ -70,8 +70,8 @@ import {
 } from "./consts";
 import { getSaleIdFromIccoVaa } from "../signedVaa";
 import {
-  getAcceptedTokenDecimalsOnConductor,
   normalizeConversionRate,
+  getAcceptedTokenDecimalsOnConductor,
 } from "../misc";
 
 const ERC20 = require("@openzeppelin/contracts/build/contracts/ERC20PresetMinterPauser.json");

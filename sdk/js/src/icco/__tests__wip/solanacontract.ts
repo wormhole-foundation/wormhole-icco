@@ -243,7 +243,7 @@ describe("Solana dev Tests", () => {
           "Sale Init VAA:",
           Buffer.from(saleInitVaa).toString("hex")
         );
-        //        console.info("Sale :", saleInit);
+        console.info("Sale :", saleInit);
 
         // Wallet (payer) account decode
         const privateKeyDecoded = Uint8Array.from(

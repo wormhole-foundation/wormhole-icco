@@ -15,7 +15,7 @@ mkdir -p ../../../../sdk/js/src/solana/icco_contributor-node
 cp node/* ../../../../sdk/js/src/solana/icco_contributor-node/
 cd -
 
-minikube kubectl -- cp -c devnet keys/solana-devnet.json  solana-devnet-0:/root/.config/solana/id.json
+minikube kubectl -- cp -c devnet devnet.json  solana-devnet-0:/root/.config/solana/id.json
 minikube kubectl -- cp -c devnet modules/icco_contributor/contributor_id.json  solana-devnet-0:/usr/src/
 minikube kubectl -- cp -c devnet modules/icco_contributor/target/deploy/icco_contributor.so solana-devnet-0:/usr/src/
 minikube kubectl -- exec -c devnet solana-devnet-0 -- solana program deploy -u l --program-id=/usr/src/contributor_id.json /usr/src/icco_contributor.so

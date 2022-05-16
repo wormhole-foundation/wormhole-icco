@@ -116,14 +116,14 @@ impl DeserializePayload for SaleInit {
             saleInit.tokenAddress,      32b     33
             saleInit.tokenChain,        2b      65
             saleInit.tokenDecimals      1b      67
-            saleInit.tokenAmount,       32b
-            saleInit.minRaise,          32b
-            saleInit.maxRaise,          32b
-            saleInit.saleStart,         32b
-            saleInit.saleEnd,           32b
-            encodeTokens(saleInit.acceptedTokens),  227 + 50*tCnt
-            saleInit.recipient,         32b     228 + 50*tCnt
-            saleInit.refundRecipient    32b     260 + 50*tCnt
+            saleInit.tokenAmount,       32b     68
+            saleInit.minRaise,          32b     100
+            saleInit.maxRaise,          32b     132
+            saleInit.saleStart,         32b     164
+            saleInit.saleEnd,           32b     196
+            encodeTokens(saleInit.acceptedTokens),  229 + 50*tCnt
+            saleInit.recipient,         32b     229 + 50*tCnt
+            saleInit.refundRecipient    32b     261 + 50*tCnt
         );
     }
     function encodeTokens(Token[] memory tokens) public pure returns (bytes memory encoded) {

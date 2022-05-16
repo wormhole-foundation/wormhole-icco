@@ -69,8 +69,10 @@ import {
   ETH_NODE_URL,
 } from "./consts";
 import { getSaleIdFromIccoVaa } from "../signedVaa";
-import { normalizeConversionRate } from "../..";
-import { getAcceptedTokenDecimalsOnConductor } from "../misc";
+import {
+  getAcceptedTokenDecimalsOnConductor,
+  normalizeConversionRate,
+} from "../misc";
 
 const ERC20 = require("@openzeppelin/contracts/build/contracts/ERC20PresetMinterPauser.json");
 

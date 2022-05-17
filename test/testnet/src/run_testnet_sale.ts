@@ -11,15 +11,20 @@ import {
   redeemCrossChainAllocations,
   claimContributorAllocationOnEth,
   redeemCrossChainContributions,
+  abortSaleEarlyAtConductor,
+  abortSaleEarlyAtContributor,
+  testProvider,
 } from "./utils";
 import {
   SALE_CONFIG,
   TESTNET_ADDRESSES,
   CONDUCTOR_NETWORK,
   CONTRIBUTOR_INFO,
+  CONTRIBUTOR_NETWORKS,
 } from "./consts";
 import { Contribution, saleParams, SealSaleResult } from "./structs";
 import { setDefaultWasm } from "@certusone/wormhole-sdk";
+import { getSaleFromContributorOnEth } from "wormhole-icco-sdk";
 
 setDefaultWasm("node");
 
@@ -42,6 +47,30 @@ async function main() {
   );
   console.log(saleInit);
   console.info("Sale", saleInit.saleId, "has been initialized.");
+
+  // test aborting the sale early
+  if (SALE_CONFIG["testParams"].abortSaleEarly) {
+    console.log("Aborting sale early on the Conductor.");
+    // abort the sale early in the conductor
+    const abortEarlyReceipt = await abortSaleEarlyAtConductor(saleInit);
+
+    console.log("Aborting sale early on the Contributors.");
+    await abortSaleEarlyAtContributor(saleInit, abortEarlyReceipt);
+
+    // confirm that the sale was aborted on each contributor
+    for (let i = 0; i < CONTRIBUTOR_NETWORKS.length; i++) {
+      let network = CONTRIBUTOR_NETWORKS[i];
+      const contributorSale = await getSaleFromContributorOnEth(
+        TESTNET_ADDRESSES[network],
+        testProvider(network),
+        saleInit.saleId
+      );
+      if (contributorSale.isAborted) {
+        console.log("Successfully aborted sale on contributor:", network);
+      }
+    }
+    return;
+  }
 
   // wait for the sale to start before contributing
   console.info("Waiting for the sale to start...");

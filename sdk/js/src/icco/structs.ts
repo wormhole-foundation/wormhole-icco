@@ -13,6 +13,7 @@ export interface Raise {
   saleEnd: ethers.BigNumberish;
   recipient: string;
   refundRecipient: string;
+  solanaTokenAccount: ethers.BytesLike;
 }
 
 export interface Sale {
@@ -40,6 +41,7 @@ export interface ConductorSale extends Sale {
   initiator: string;
   localTokenDecimals: number;
   localTokenAddress: string;
+  solanaTokenAccount: ethers.BytesLike;
   contributions: ethers.BigNumberish[];
   contributionsCollected: boolean[];
   refundIsClaimed: boolean;
@@ -47,6 +49,7 @@ export interface ConductorSale extends Sale {
 
 export interface ContributorSale extends Sale {
   tokenDecimals: number;
+  solanaTokenAccount: ethers.BytesLike;
   allocations: ethers.BigNumberish[];
   excessContributions: ethers.BigNumberish[];
 }
@@ -69,6 +72,7 @@ export interface SaleInit {
   saleStart: ethers.BigNumberish;
   saleEnd: ethers.BigNumberish;
   acceptedTokens: AcceptedToken[];
+  solanaTokenAccount: ethers.BytesLike;
   recipient: string;
   refundRecipient: string;
 }

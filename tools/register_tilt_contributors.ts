@@ -29,7 +29,6 @@ async function main() {
   );
 
   const emitters: Emitter[] = [];
-  const custodyAccounts: Emitter[] = [];
   {
     // TODO: grab this from the tilt.json file...
     // const solanaProgAddr = "22mamxmojFWBdbGqaxTH46HBAgAY2bJRiGJJHfNRNQ95";  //TBD Not used, because I could not get WH sdk to be available in tilt.
@@ -48,37 +47,23 @@ async function main() {
     emitters.push({ chainId: CHAIN_ID_ETH, address: ethEmitterAddress });
     emitters.push({ chainId: CHAIN_ID_BSC, address: bscEmitterAddress });
 
-    // Build chainId -> ContributorCustodyAddr map.
-    custodyAccounts.push({
-      chainId: CHAIN_ID_SOLANA,
-      address: solanaCustodyAddr,
-    });
-    custodyAccounts.push({ chainId: CHAIN_ID_ETH, address: ethEmitterAddress });
-    custodyAccounts.push({ chainId: CHAIN_ID_BSC, address: bscEmitterAddress });
-  }
+    // register all chainId -> ContributorAddr with conductor.
+    for (let i = 0; i < emitters.length; i++) {
+      console.log(
+        "Registering chainId: ",
+        emitters[i].chainId,
+        " emitter: ",
+        emitters[i].address
+      );
 
-  // register all chainId -> ContributorAddr with conductor.
-  for (let i = 0; i < emitters.length; i++) {
-    console.log(
-      "Registering chainId: ",
-      emitters[i].chainId,
-      " emitter: ",
-      emitters[i].address,
-      " custody: ",
-      custodyAccounts[i].address
-    );
-
-    const contributorAddress = hexToUint8Array(emitters[i].address);
-    const contributorCustodyAddress = hexToUint8Array(
-      custodyAccounts[i].address
-    );
-    const receipt = await registerChainOnEth(
-      tilt.conductorAddress,
-      emitters[i].chainId,
-      contributorAddress,
-      contributorCustodyAddress,
-      wallet
-    );
+      const contributorAddress = hexToUint8Array(emitters[i].address);
+      const receipt = await registerChainOnEth(
+        tilt.conductorAddress,
+        emitters[i].chainId,
+        contributorAddress,
+        wallet
+      );
+    }
   }
 
   return;

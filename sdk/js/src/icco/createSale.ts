@@ -47,6 +47,7 @@ export async function createSaleOnEth(
   saleStart: ethers.BigNumberish,
   saleEnd: ethers.BigNumberish,
   acceptedTokens: AcceptedToken[],
+  solanaTokenAccount: ethers.BytesLike,
   recipientAddress: string,
   refundRecipientAddress: string,
   wallet: ethers.Wallet
@@ -72,6 +73,7 @@ export async function createSaleOnEth(
     saleEnd: ethers.BigNumber.from(saleEnd),
     recipient: recipientAddress,
     refundRecipient: refundRecipientAddress,
+    solanaTokenAccount: solanaTokenAccount,
   };
 
   // now create

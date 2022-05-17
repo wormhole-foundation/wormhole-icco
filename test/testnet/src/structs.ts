@@ -13,7 +13,8 @@ export interface saleParams {
   recipient: string;
   refundRecipient: string;
   saleDurationSeconds: number;
-  saleStartTimer: number; // swap out for sale startTime in mainnet
+  saleStartTimer: number;
+  solanaTokenAccount: string;
 }
 
 export interface TokenConfig {

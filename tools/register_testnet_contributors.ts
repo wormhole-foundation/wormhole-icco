@@ -43,10 +43,6 @@ async function main() {
       config.contributorChainId
     );
 
-    // same address for eth/terra, but different for solana
-    // this is used to support transfers of tokens on solana
-    const custodyAddressBytes = contributorAddressBytes;
-
     try {
       // need to fix this to add custody account addr
       // try to perform the registration
@@ -54,7 +50,6 @@ async function main() {
         testnet.conductorAddress,
         config.contributorChainId,
         contributorAddressBytes,
-        custodyAddressBytes,
         wallet
       );
 

@@ -15,94 +15,94 @@ library ICCOStructs {
     }
 
     struct Contribution {
-        // Index in acceptedTokens array
+        /// index in acceptedTokens array
         uint8 tokenIndex;
         uint256 contributed;
     }
 
     struct Allocation {
-        // Index in acceptedTokens array
+        /// index in acceptedTokens array
         uint8 tokenIndex;
-        // amount of sold tokens allocated to contributors on this chain
+        /// amount of sold tokens allocated to contributors on this chain
         uint256 allocation;
-        // excess contributions refunded to contributors on this chain
+        /// excess contributions refunded to contributors on this chain
         uint256 excessContribution;
     }
 
     struct Raise {
-        // sale token address
+        /// sale token address
         bytes32 token;
-        // sale token chainId
+        /// sale token chainId
         uint16 tokenChain;
-        // token amount being sold
+        /// token amount being sold
         uint256 tokenAmount;
-        // min raise amount
+        /// min raise amount
         uint256 minRaise;
-        // max token amount
+        /// max token amount
         uint256 maxRaise;
-        // timestamp raise start
+        /// timestamp raise start
         uint256 saleStart;
-        // timestamp raise end
+        /// timestamp raise end
         uint256 saleEnd;
-        // recipient of proceeds
+        /// recipient of proceeds
         address recipient;
-        // refund recipient in cse the sale is aborted
+        /// refund recipient in cse the sale is aborted
         address refundRecipient;
     }
 
     struct SaleInit {
-        // PayloadID uint8 = 1
+        /// payloadID uint8 = 1
         uint8 payloadID;
-        // Sale ID
+        /// sale ID
         uint256 saleID;
-        // Address of the token. Left-zero-padded if shorter than 32 bytes
+        /// address of the token - left-zero-padded if shorter than 32 bytes
         bytes32 tokenAddress;
-        // Chain ID of the token
+        /// chain ID of the token
         uint16 tokenChain;
-        // token decimals 
+        /// token decimals 
         uint8 tokenDecimals;
-        // token amount being sold
+        /// token amount being sold
         uint256 tokenAmount;
-        // min raise amount
+        /// min raise amount
         uint256 minRaise;
-        // max raise amount
+        /// max raise amount
         uint256 maxRaise;
-        // timestamp raise start
+        /// timestamp raise start
         uint256 saleStart;
-        // timestamp raise end
+        /// timestamp raise end
         uint256 saleEnd;
-        // accepted Tokens
+        /// accepted Tokens
         Token[] acceptedTokens;
-        // recipient of proceeds
+        /// recipient of proceeds
         bytes32 recipient;
-        // refund recipient in case the sale is aborted
+        /// refund recipient in case the sale is aborted
         bytes32 refundRecipient;
     }
 
     struct ContributionsSealed {
-        // PayloadID uint8 = 2
+        /// payloadID uint8 = 2
         uint8 payloadID;
-        // Sale ID
+        /// sale ID
         uint256 saleID;
-        // Chain ID
+        /// chain ID
         uint16 chainID;
-        // sealed contributions for this sale
+        /// sealed contributions for this sale
         Contribution[] contributions;
     }
 
     struct SaleSealed {
-        // PayloadID uint8 = 3
+        /// payloadID uint8 = 3
         uint8 payloadID;
-        // Sale ID
+        /// sale ID
         uint256 saleID;
-        // allocations
+        /// allocations
         Allocation[] allocations;
     }
 
     struct SaleAborted {
-        // PayloadID uint8 = 4
+        /// payloadID uint8 = 4
         uint8 payloadID;
-        // Sale ID
+        /// sale ID
         uint256 saleID;
     }
 

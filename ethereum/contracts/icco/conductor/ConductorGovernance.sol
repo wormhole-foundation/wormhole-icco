@@ -54,7 +54,7 @@ contract ConductorGovernance is ConductorGetters, ConductorSetters, ERC1967Upgra
         emit ConsistencyLevelUpdated(currentConsistencyLevel, newConsistencyLevel);
     }
 
-    /// @dev transferOwnership serves to change the ownership of the Conductor contracts
+    /// @dev transferOwnership serves to change the ownership of the Conductor contract
     function transferOwnership(uint16 conductorChainId, address newOwner) public onlyOwner {
         require(conductorChainId == chainId(), "wrong chain id"); 
         require(newOwner != address(0), "new owner cannot be the zero address");

@@ -63,7 +63,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
         uint8 localTokenDecimals;  
         { /// avoid stack too deep errors
             /** 
-             * @dev Fetch the sale token decimals and place in the saleInit struct.
+             * @dev Fetch the sale token decimals and place in the SaleInit struct.
              * The contributors need to know this to scale allocations on non-evm chains.            
              */
             (,bytes memory queriedDecimals) = localTokenAddress.staticcall(
@@ -97,7 +97,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
             require(raise.tokenAmount == balanceAfter - balanceBefore, "fee-on-transfer tokens are not supported");
         }
         
-        /// create sale struct for Conductor's view of the sale
+        /// create Sale struct for Conductor's view of the sale
         saleId = useSaleId();
         ConductorStructs.Sale memory sale = ConductorStructs.Sale({
             saleID : saleId,
@@ -138,7 +138,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
         /// store sale info
         setSale(saleId, sale);
 
-        /// create sale struct to disseminate to contributors
+        /// create SaleInit struct to disseminate to contributors
         ICCOStructs.SaleInit memory saleInit = ICCOStructs.SaleInit({
             payloadID : 1,
             /// sale ID
@@ -168,7 +168,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
         });
 
         /**
-         * @dev send encoded saleInit struct to contributors via wormhole.
+         * @dev send encoded SaleInit struct to contributors via wormhole.
          * The msg.value is the fee collected by wormhole for messages.
          */
         wormholeSequence = wormhole().publishMessage{
@@ -198,7 +198,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
         /// set saleAborted
         setSaleAborted(sale.saleID);   
 
-        /// @dev send encoded saleAborted struct to Contributor contracts
+        /// @dev send encoded SaleAborted struct to Contributor contracts
         IWormhole wormhole = wormhole();
         wormholeSequence = wormhole.publishMessage{
             value : msg.value
@@ -219,7 +219,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
         require(valid, reason);
         require(verifyContributorVM(vm), "invalid emitter");
 
-        /// parse the contributionsSealed struct emitted by a Contributor contract
+        /// parse the ContributionsSealed struct emitted by a Contributor contract
         ICCOStructs.ContributionsSealed memory conSealed = ICCOStructs.parseContributionsSealed(vm.payload);
 
         require(conSealed.chainID == vm.emitterChainId, "contribution from wrong chain id");
@@ -345,7 +345,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
                     accounting.totalAllocated += allocation;
                 }
 
-                /// allocation information that is encoded in the saleSealed struct
+                /// allocation information that is encoded in the SaleSealed struct
                 saleSealed.allocations[i] = ICCOStructs.Allocation({
                     tokenIndex : uint8(i),
                     allocation : allocation,
@@ -369,7 +369,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
             /// set saleSealed
             setSaleSealed(saleId);
 
-            /// @dev send encoded saleSealed message to Contributor contracts
+            /// @dev send encoded SaleSealed message to Contributor contracts
             wormholeSequence = wormhole.publishMessage{
                 value : accounting.messageFee
             }(0, ICCOStructs.encodeSaleSealed(saleSealed), consistencyLevel());
@@ -377,7 +377,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
             /// set saleAborted
             setSaleAborted(sale.saleID);
 
-            /// @dev send encoded saleAborted message to Contributor contracts
+            /// @dev send encoded SaleAborted message to Contributor contracts
             wormholeSequence = wormhole.publishMessage{
                 value : msg.value
             }(0, ICCOStructs.encodeSaleAborted(ICCOStructs.SaleAborted({

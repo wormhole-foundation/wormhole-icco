@@ -20,12 +20,13 @@ contract ConductorGovernance is ConductorGetters, ConductorSetters, ERC1967Upgra
     event ConsistencyLevelUpdated(uint8 indexed oldLevel, uint8 indexed newLevel);
     event OwnershipTransfered(address indexed oldOwner, address indexed newOwner);
 
-    // register contributor contract
+    /// @dev registerChain serves to save Contributor contract addresses in Conductor state
     function registerChain(uint16 contributorChainId, bytes32 contributorAddress, bytes32 custodyAddress) public onlyOwner {
         require(contributorContracts(contributorChainId) == bytes32(0), "chain already registered");
         setContributor(contributorChainId, contributorAddress, custodyAddress);
     }   
 
+    /// @dev upgrade serves to upgrade contract implementations
     function upgrade(uint16 conductorChainId, address newImplementation) public onlyOwner {
         require(conductorChainId == chainId(), "wrong chain id");
 
@@ -33,7 +34,7 @@ contract ConductorGovernance is ConductorGetters, ConductorSetters, ERC1967Upgra
 
         _upgradeTo(newImplementation);
 
-        // Call initialize function of the new implementation
+        /// Call initialize function of the new implementation
         (bool success, bytes memory reason) = newImplementation.delegatecall(abi.encodeWithSignature("initialize()"));
 
         require(success, string(reason));
@@ -41,6 +42,7 @@ contract ConductorGovernance is ConductorGetters, ConductorSetters, ERC1967Upgra
         emit ContractUpgraded(currentImplementation, newImplementation);
     }
 
+    /// @dev updateConsisencyLevel serves to change the wormhole messaging consistencyLevel
     function updateConsistencyLevel(uint16 conductorChainId, uint8 newConsistencyLevel) public onlyOwner {
         require(conductorChainId == chainId(), "wrong chain id");
         require(newConsistencyLevel > 0, "newConsistencyLevel must be > 0");
@@ -52,6 +54,7 @@ contract ConductorGovernance is ConductorGetters, ConductorSetters, ERC1967Upgra
         emit ConsistencyLevelUpdated(currentConsistencyLevel, newConsistencyLevel);
     }
 
+    /// @dev transferOwnership serves to change the ownership of the Conductor contracts
     function transferOwnership(uint16 conductorChainId, address newOwner) public onlyOwner {
         require(conductorChainId == chainId(), "wrong chain id"); 
         require(newOwner != address(0), "new owner cannot be the zero address");

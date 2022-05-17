@@ -22,7 +22,7 @@ contract ContributorGovernance is ContributorGetters, ContributorSetters, ERC196
     event OwnershipTransfered(address indexed oldOwner, address indexed newOwner);
 
 
-    // upgrade contract implementation
+    /// @dev upgrade serves to upgrade contract implementations 
     function upgrade(uint16 contributorChainId, address newImplementation) public onlyOwner {
         require(contributorChainId == chainId(), "wrong chain id");
 
@@ -30,7 +30,7 @@ contract ContributorGovernance is ContributorGetters, ContributorSetters, ERC196
 
         _upgradeTo(newImplementation);
 
-        // Call initialize function of the new implementation
+        /// call initialize function of the new implementation
         (bool success, bytes memory reason) = newImplementation.delegatecall(abi.encodeWithSignature("initialize()"));
 
         require(success, string(reason));
@@ -38,6 +38,7 @@ contract ContributorGovernance is ContributorGetters, ContributorSetters, ERC196
         emit ContractUpgraded(currentImplementation, newImplementation);
     } 
 
+    /// @dev updateConsisencyLevel serves to change the wormhole messaging consistencyLevel
     function updateConsistencyLevel(uint16 contributorChainId, uint8 newConsistencyLevel) public onlyOwner {
         require(contributorChainId == chainId(), "wrong chain id");
         require(newConsistencyLevel > 0, "newConsistencyLevel must be > 0");
@@ -49,6 +50,7 @@ contract ContributorGovernance is ContributorGetters, ContributorSetters, ERC196
         emit ConsistencyLevelUpdated(currentConsistencyLevel, newConsistencyLevel);
     }
 
+    /// @dev updateAuthority serves to change the KYC authority public key
     function updateAuthority(uint16 contributorChainId, address newAuthority) public onlyOwner {
         require(contributorChainId == chainId(), "wrong chain id");
 
@@ -60,6 +62,7 @@ contract ContributorGovernance is ContributorGetters, ContributorSetters, ERC196
         emit AuthorityUpdated(currentAuthority, newAuthority);
     }
 
+    /// @dev transferOwnership serves to change the ownership of the Contributor contract
     function transferOwnership(uint16 contributorChainId, address newOwner) public onlyOwner {
         require(contributorChainId == chainId(), "wrong chain id");
         require(newOwner != address(0), "new owner cannot be the zero address");

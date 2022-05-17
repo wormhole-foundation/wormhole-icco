@@ -326,7 +326,9 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
                         /// get token decimals for normalization of token amount
                         uint8 acceptedTokenDecimals;
                         {/// bypass stack too deep
-                            (,bytes memory queriedDecimals) = acceptedTokenAddress.staticcall(abi.encodeWithSignature("decimals()"));
+                            (,bytes memory queriedDecimals) = acceptedTokenAddress.staticcall(
+                                abi.encodeWithSignature("decimals()")
+                            );
                             acceptedTokenDecimals = abi.decode(queriedDecimals, (uint8));
                         }
 
@@ -340,7 +342,11 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
                         );
 
                         /// transfer over wormhole token bridge
-                        SafeERC20.safeApprove(IERC20(acceptedTokenAddress), address(tknBridge), totalContributionsLessExcess);
+                        SafeERC20.safeApprove(
+                            IERC20(acceptedTokenAddress), 
+                            address(tknBridge), 
+                            totalContributionsLessExcess
+                        );
 
                         require(valueSent >= messageFee, "insufficient wormhole messaging fees");
                         valueSent -= messageFee;
@@ -430,7 +436,11 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
 
             /// grab the contributed token address  
             (, bytes32 tokenAddressBytes, ) = getSaleAcceptedTokenInfo(saleId, tokenIndex);
-            SafeERC20.safeTransfer(IERC20(address(uint160(uint256(tokenAddressBytes)))), msg.sender, thisExcessContribution);
+            SafeERC20.safeTransfer(
+                IERC20(address(uint160(uint256(tokenAddressBytes)))), 
+                msg.sender, 
+                thisExcessContribution
+            );
         }
     }
 

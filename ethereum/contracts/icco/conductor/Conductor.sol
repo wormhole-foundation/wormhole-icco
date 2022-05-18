@@ -48,7 +48,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
         require(raise.tokenAmount > 0, "amount must be > 0");
         require(acceptedTokens.length > 0, "must accept at least one token");
         require(acceptedTokens.length < 255, "too many tokens");
-        require(raise.maxRaise > raise.minRaise, "maxRaise must be > minRaise");
+        require(raise.maxRaise >= raise.minRaise, "maxRaise must be >= minRaise");
 
         /// grab the local token address (address of sale token on conductor chain)
         address localTokenAddress;

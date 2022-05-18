@@ -96,7 +96,7 @@ The Contributor contracts has two functions to consume the relevant attestations
 
 Owner Only:
 
-- `registerChain(uint16 contributorChainId, bytes32 contributorAddress, bytes32 custodyAddress)`
+- `registerChain(uint16 contributorChainId, bytes32 contributorAddress)`
 - `upgrade(uint16 conductorChainId, address newImplementation)`
 - `updateConsistencyLevel(uint16 conductorChainId, uint8 newConsistencyLevel)`
 - `transferOwnership(uint16 conductorChainId, address newOwner)`

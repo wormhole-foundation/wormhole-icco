@@ -311,7 +311,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
                         /// simple transfer on same chain
                         SafeERC20.safeTransfer(
                             IERC20(sale.localTokenAddress), 
-                            address(uint160(uint256(contributorCustody(sale.acceptedTokensChains[i])))),
+                            address(uint160(uint256(contributorContracts(sale.acceptedTokensChains[i])))),
                             allocation
                         );
                     } else {
@@ -337,7 +337,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
                             sale.localTokenAddress,
                             allocation,
                             sale.acceptedTokensChains[i],
-                            contributorCustody(sale.acceptedTokensChains[i]),
+                            contributorContracts(sale.acceptedTokensChains[i]),
                             0,
                             0
                         );

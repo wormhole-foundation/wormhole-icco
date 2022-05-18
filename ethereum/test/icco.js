@@ -136,7 +136,7 @@ contract("ICCO", function(accounts) {
     let failed = false;
     try {
       await initialized.methods
-        .registerChain(TEST_CHAIN_ID, contributorAddress, contributorAddress)
+        .registerChain(TEST_CHAIN_ID, contributorAddress)
         .send({
           value: 0,
           from: accounts[1],
@@ -153,7 +153,7 @@ contract("ICCO", function(accounts) {
     assert.ok(failed);
 
     await initialized.methods
-      .registerChain(TEST_CHAIN_ID, contributorAddress, contributorAddress)
+      .registerChain(TEST_CHAIN_ID, contributorAddress)
       .send({
         value: 0,
         from: accounts[0],
@@ -173,7 +173,7 @@ contract("ICCO", function(accounts) {
     failed = false;
     try {
       await initialized.methods
-        .registerChain(TEST_CHAIN_ID, contributorAddress, contributorAddress)
+        .registerChain(TEST_CHAIN_ID, contributorAddress)
         .send({
           value: 0,
           from: accounts[0],

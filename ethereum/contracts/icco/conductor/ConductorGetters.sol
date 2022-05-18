@@ -39,10 +39,6 @@ contract ConductorGetters is ConductorState {
         return _state.contributorImplementations[chainId_];
     }
 
-    function contributorCustody(uint16 chainId_) public view returns (bytes32){
-        return _state.contributorCustody[chainId_];
-    }
-
     function sales(uint saleId_) public view returns (ConductorStructs.Sale memory sale){
         return _state.sales[saleId_];
     }

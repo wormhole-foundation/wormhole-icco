@@ -26,7 +26,6 @@ contract ConductorStorage {
 
         /// mapping of Conductor contracts on other chains
         mapping(uint16 => bytes32) contributorImplementations;
-        mapping(uint16 => bytes32) contributorCustody;
 
         /// mapping of Sales
         mapping(uint => ConductorStructs.Sale) sales;

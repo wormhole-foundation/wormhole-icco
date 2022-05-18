@@ -41,7 +41,6 @@ const ConductorImplementationFullABI = jsonfile.readFileSync(
 const ContributorImplementationFullABI = jsonfile.readFileSync(
   "build/contracts/ContributorImplementation.json"
 ).abi;
-const ConsistencyLevel = process.env.CONSISTENCY_LEVEL;
 
 // global variables
 const TEST_CHAIN_ID = "2";
@@ -50,8 +49,6 @@ const GAS_LIMIT = "3000000";
 const ethereumRootPath = `${__dirname}/..`;
 const config = require(`${ethereumRootPath}/icco_deployment_config.js`)
   .development;
-
-// add a test that makes sure we pass the right token info for localTokenAddress lookup
 
 contract("ICCO", function(accounts) {
   const WORMHOLE = new web3.eth.Contract(
@@ -284,7 +281,7 @@ contract("ICCO", function(accounts) {
 
     assert.ok(failed);
 
-    // confirm that the implementation address changes
+    // confirm that the implementation address changed
     let before = await web3.eth.getStorageAt(
       TokenSaleContributor.address,
       "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc"
@@ -582,6 +579,12 @@ contract("ICCO", function(accounts) {
   let CONTRIBUTED_TOKEN_ONE;
   let CONTRIBUTED_TOKEN_TWO;
   let SOLD_TOKEN_DECIMALS;
+  let SALE_START;
+  let SALE_END;
+  let SALE_INIT_PAYLOAD;
+  let SALE_ID = 0;
+  let TOKEN_ONE_INDEX = 0;
+  let TOKEN_TWO_INDEX = 1;
   const SELLER = accounts[0];
   const BUYER_ONE = accounts[1];
   const BUYER_TWO = accounts[2];
@@ -650,17 +653,9 @@ contract("ICCO", function(accounts) {
     );
     await CONTRIBUTED_TOKEN_TWO.mint(BUYER_TWO, contributedTokensMintAmount);
 
-    // mint some token two to buyer1 for multi-asset contribution test
+    // mint extra token two to buyer1 for multi-asset contribution test
     await CONTRIBUTED_TOKEN_TWO.mint(BUYER_ONE, extraContributedTokensToMint);
   });
-
-  // more global sale test variables
-  let SALE_START;
-  let SALE_END;
-  let SALE_INIT_PAYLOAD;
-  let SALE_ID = 0;
-  let TOKEN_ONE_INDEX = 0;
-  let TOKEN_TWO_INDEX = 1;
 
   it("create a sale correctly and attest over wormhole", async function() {
     console.log(
@@ -723,7 +718,7 @@ contract("ICCO", function(accounts) {
       gasLimit: GAS_LIMIT,
     });
 
-    // Verify Payload sent to contributor
+    // verify payload sent to contributor
     const log = (
       await WORMHOLE.getPastEvents("LogMessagePublished", {
         fromBlock: "latest",
@@ -896,7 +891,7 @@ contract("ICCO", function(accounts) {
       TokenSaleContributor.address
     );
 
-    // initialize the sale
+    // create initSale VM
     const vm = await signAndEncodeVM(
       1,
       1,
@@ -909,6 +904,7 @@ contract("ICCO", function(accounts) {
       0
     );
 
+    // init the sale
     await initialized.methods.initSale("0x" + vm).send({
       from: SELLER,
       gasLimit: GAS_LIMIT,
@@ -1286,7 +1282,7 @@ contract("ICCO", function(accounts) {
     await wait(10);
 
     // test variables
-    const tokenTwoContributionAmount = 5000;
+    const tokenTwoContributionAmount = "5000";
 
     const initialized = new web3.eth.Contract(
       ContributorImplementationFullABI,
@@ -1329,8 +1325,8 @@ contract("ICCO", function(accounts) {
 
   it("should attest contributions correctly", async function() {
     // test variables
-    const tokenOneContributionAmount = 10000;
-    const tokenTwoContributionAmount = 7500;
+    const tokenOneContributionAmount = "10000";
+    const tokenTwoContributionAmount = "7500";
     const acceptedTokenLength = 2;
     const payloadIdType2 = "02";
 
@@ -1414,8 +1410,8 @@ contract("ICCO", function(accounts) {
 
   it("conductor should collect contributions correctly", async function() {
     // test variables
-    const tokenOneContributionAmount = 10000;
-    const tokenTwoContributionAmount = 7500;
+    const tokenOneContributionAmount = "10000";
+    const tokenTwoContributionAmount = "7500";
 
     const initialized = new web3.eth.Contract(
       ConductorImplementationFullABI,
@@ -1545,6 +1541,7 @@ contract("ICCO", function(accounts) {
       TokenSaleConductor.address
     );
 
+    // balance check before sealing the sale
     const actualContributorBalanceBefore = await SOLD_TOKEN.balanceOf(
       TokenSaleContributor.address
     );
@@ -1569,6 +1566,7 @@ contract("ICCO", function(accounts) {
       gasLimit: GAS_LIMIT,
     });
 
+    // balance check after sealing the sale
     const actualContributorBalanceAfter = await SOLD_TOKEN.balanceOf(
       TokenSaleContributor.address
     );
@@ -1793,6 +1791,7 @@ contract("ICCO", function(accounts) {
   });
 
   it("allocation should only be claimable once", async function() {
+    // revert first allocation claim
     await revert(ONE_CLAIM_SNAPSHOT);
 
     const initialized = new web3.eth.Contract(
@@ -2040,11 +2039,11 @@ contract("ICCO", function(accounts) {
 
   it("should init a second sale in the contributor", async function() {
     // test variables
-    const saleTokenAmount = 1000;
-    const minimumTokenRaise = 2000;
-    const maximumTokenRaise = 30000;
-    const tokenOneConversionRate = 1000000000000000000;
-    const tokenTwoConversionRate = 2000000000000000000;
+    const saleTokenAmount = "1000";
+    const minimumTokenRaise = "2000";
+    const maximumTokenRaise = "30000";
+    const tokenOneConversionRate = "1000000000000000000";
+    const tokenTwoConversionRate = "2000000000000000000";
     const saleRecipient = accounts[0];
     const refundRecipient = SALE_2_REFUND_RECIPIENT;
 
@@ -2412,8 +2411,8 @@ contract("ICCO", function(accounts) {
 
   it("conductor should collect second sale contributions correctly", async function() {
     // test variables
-    const tokenOneContributionAmount = 1000;
-    const tokenTwoContributionAmount = 200;
+    const tokenOneContributionAmount = "1000";
+    const tokenTwoContributionAmount = "200";
 
     const initialized = new web3.eth.Contract(
       ConductorImplementationFullABI,
@@ -2787,10 +2786,12 @@ contract("ICCO", function(accounts) {
       TokenSaleContributor.address
     );
 
+    // revert the refund so we can try to claim it again
     await revert(ONE_REFUND_SNAPSHOT);
 
     let failed = false;
     try {
+      // attempt to claim refund a second time
       await initialized.methods.claimRefund(SALE_2_ID, TOKEN_ONE_INDEX).send({
         from: BUYER_ONE,
         gasLimit: GAS_LIMIT,
@@ -3052,11 +3053,11 @@ contract("ICCO", function(accounts) {
 
   it("should init a third sale in the contributor", async function() {
     // test variables
-    const saleTokenAmount = 1000;
-    const minimumTokenRaise = 2000;
-    const maximumTokenRaise = 30000;
-    const tokenOneConversionRate = 1000000000000000000;
-    const tokenTwoConversionRate = 2000000000000000000;
+    const saleTokenAmount = "1000";
+    const minimumTokenRaise = "2000";
+    const maximumTokenRaise = "30000";
+    const tokenOneConversionRate = "1000000000000000000";
+    const tokenTwoConversionRate = "2000000000000000000";
     const saleRecipient = accounts[0];
     const refundRecipient = accounts[0];
 
@@ -4701,7 +4702,7 @@ contract("ICCO", function(accounts) {
       refundRecipient,
     ];
 
-    // create accepted tokens array
+    // create accepted tokens array with a bad token address (non-ERC20)
     const acceptedTokens = [
       [
         TEST_CHAIN_ID,
@@ -4710,7 +4711,7 @@ contract("ICCO", function(accounts) {
       ],
       [
         TEST_CHAIN_ID,
-        "0x000000000000000000000000" + accounts[0].substr(2), // create bad address
+        "0x000000000000000000000000" + accounts[0].substr(2), // create bad address by using wallet address
         tokenTwoConversionRate,
       ],
     ];
@@ -4724,7 +4725,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
 
-    // Grab the message generated by the conductor
+    // grab the message generated by the conductor
     const log = (
       await WORMHOLE.getPastEvents("LogMessagePublished", {
         fromBlock: "latest",

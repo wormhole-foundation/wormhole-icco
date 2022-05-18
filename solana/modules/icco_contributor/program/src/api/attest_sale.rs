@@ -38,7 +38,7 @@ use wormhole_sdk::{
 pub struct AttestIccoSale<'b> {
     pub payer: Mut<Signer<AccountInfo<'b>>>,
     pub config: ConfigAccount<'b, { AccountState::Initialized }>,
-    pub init_sale_vaa: ClaimedVAA<'b, SaleInit>,           // Was claimed.
+    pub init_sale_vaa: ClaimedVAA<'b, InitSale>,           // Was claimed.
     pub message: Mut<Signer<AccountInfo<'b>>>,
     pub rent: Sysvar<'b, Rent>,
     pub clock: Sysvar<'b, Clock>,

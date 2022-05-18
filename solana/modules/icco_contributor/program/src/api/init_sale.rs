@@ -3,14 +3,18 @@
 //#![allow(unused_imports)]
 
 use crate::{
-    messages::SaleInit,
+    messages:: {
+        InitSale,
+        get_sale_state_size,
+    },
     simple_account::create_simple_account,
-        accounts::{
+    accounts::{
         ConfigAccount,
         SaleStateAccount,
         SaleStateAccountDerivationData,
         CustodyAccount,
         CustodyAccountDerivationData,
+        SaleCustodyAccountDerivationData,
     },
     errors::Error::*,
     types::*,
@@ -47,16 +51,11 @@ use bridge::{
 pub struct CreateIccoSaleCustodyAccount<'b> {
     pub payer: Mut<Signer<AccountInfo<'b>>>,
     pub config: ConfigAccount<'b, { AccountState::Initialized }>,       // Must be created before Init
-
-    pub init_sale_vaa: ClaimableVAA<'b, SaleInit>,      // S/B unclaimed and stays unclaimed.
-
-//    pub mint: Mut<Data<'b, SplMint, { AccountState::Initialized }>>,        // From token
-    pub mint: Data<'b, SplMint, { AccountState::MaybeInitialized }>,        // From token
-
+    pub init_sale_vaa: ClaimableVAA<'b, InitSale>,      // S/B unclaimed and stays unclaimed.
+    pub mint: Data<'b, SplMint, { AccountState::MaybeInitialized }>,        // From token (Mut<Data<'b, SplMint, { AccountState::Initialized }>>)??
     pub custody: Mut<CustodyAccount<'b, { AccountState::MaybeInitialized }>>,
 
-    pub prog_id: AccountInfo<'b>,
-
+    pub prog_id: AccountInfo<'b>,   // needed for initialize_account invoke
     pub rent: Sysvar<'b, Rent>,
     pub clock: Sysvar<'b, Clock>,
     // Account [11] is the test.
@@ -71,11 +70,18 @@ impl<'a> From<&CreateIccoSaleCustodyAccount<'a>> for CustodyAccountDerivationDat
     }
 }
 
+impl<'a> From<&CreateIccoSaleCustodyAccount<'a>> for SaleCustodyAccountDerivationData {
+    fn from(accs: &CreateIccoSaleCustodyAccount<'a>) -> Self {
+        SaleCustodyAccountDerivationData {
+            foreign_mint: accs.init_sale_vaa.get_token_address_bytes(&accs.init_sale_vaa.meta().payload[..])  // Conductor chain mint address.
+        }
+    }
+}
+
 // No data so far. All is in VAA Account
 #[derive(BorshDeserialize, BorshSerialize, Default)]
 pub struct CreateIccoSaleCustodyAccountData {
 }
-
 
 pub fn create_icco_sale_custody_account(
     ctx: &ExecutionContext,
@@ -102,7 +108,8 @@ pub fn create_icco_sale_custody_account(
     // Create and init custody account as needed. It may be initialized already, if previous init sale failed after accounts were created.
     // https://github.com/certusone/wormhole/blob/1792141307c3979b1f267af3e20cfc2f011d7051/solana/modules/token_bridge/program/src/api/transfer.rs#L159
     if !accs.custody.is_initialized() {
-        accs.custody.create(&(&*accs).into(), ctx, accs.payer.key, Exempt)?;
+//        accs.custody.create(&(&*accs).into(), ctx, accs.payer.key, Exempt)?;
+        accs.custody.create(&CustodyAccountDerivationData::from(&*accs), ctx, accs.payer.key, Exempt)?;
         let init_ix = spl_token::instruction::initialize_account(
             &spl_token::id(),
             accs.custody.info().key,
@@ -121,7 +128,7 @@ pub fn create_icco_sale_custody_account(
 pub struct InitIccoSale<'b> {
     pub payer: Mut<Signer<AccountInfo<'b>>>,
     pub config: ConfigAccount<'b, { AccountState::Initialized }>,       // Must be created before Init
-    pub init_sale_vaa: ClaimableVAA<'b, SaleInit>,  // Claimed here.
+    pub init_sale_vaa: ClaimableVAA<'b, InitSale>,  // Claimed here.
 
     pub rent: Sysvar<'b, Rent>,
     pub clock: Sysvar<'b, Clock>,
@@ -191,7 +198,7 @@ pub fn init_icco_sale(
         create_simple_account (ctx,
             sale_state_account_info.key,
             accs.payer.key,
-            2 + 8 * accs.init_sale_vaa.token_cnt as usize,
+            get_sale_state_size(accs.init_sale_vaa.token_cnt),
             &SaleStateAccount::<'_, { AccountState::Uninitialized }>::seeds(&SaleStateAccountDerivationData{sale_id: sale_id}
         ))?;
     }

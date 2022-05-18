@@ -36,17 +36,23 @@ use wormhole_sdk::{
 
 // Seal sale is Two stage process.
 // 1. Transfer all or part of tokens from custody accounts to the conductor chain accounts.
+// 2. Process and claim sealSale VAA.
 
+// Step 1 contract call: TransferCustodyIccoTokens, called for each accetpted token on this chain.
+// Checks if saleToken custody account has expected amount.
+// Transfers accepted tokens from one custody account to conductor chain account via WH
+// SaleToken custody account was created in initSale call.
 #[derive(FromAccounts)]
-pub struct AttestIccoSale<'b> {
+pub struct TransferCustodyIccoToken<'b> {
     pub payer: Mut<Signer<AccountInfo<'b>>>,
     pub config: ConfigAccount<'b, { AccountState::Initialized }>,
-    pub init_sale_vaa: ClaimedVAA<'b, SaleInit>,           // Was claimed.
-    pub message: Mut<Signer<AccountInfo<'b>>>,
+    pub init_sale_vaa: ClaimedVAA<'b, InitSale>,           // Was claimed.
+    pub seal_sale_vaa: ClaimedVAA<'b, SealSale>,           // Was NOT claimed yet
+    pub sale_custody: Mut<SaleCustodyAccount<'b, { AccountState::Initialized }>>,      // To check if tokens are present
     pub rent: Sysvar<'b, Rent>,
     pub clock: Sysvar<'b, Clock>,
-    // Sale state is in ctx.accounts[6];
-    // --- starting at [6]: Needed for post_message call.
+    // Sale state is in ctx.accounts[..];
+    // --- starting at [6]: Needed for WH transfer.
     // AccountMeta::new(wormhole_config, false),
     // AccountMeta::new(fee_collector, false),
     // AccountMeta::new_readonly(emitter, false),

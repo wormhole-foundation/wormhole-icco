@@ -4,7 +4,7 @@
 
 use crate::{
     messages::{
-        SaleInit,
+        InitSale,
     },
     accounts::{
         AuthoritySigner,
@@ -191,7 +191,7 @@ pub fn create_icco_sale_custody_account_ix(
     );
     let ix = create_icco_sale_custody_account(
         program_id,
-        SaleInit::get_init_sale_sale_id(&vaa.payload),
+        InitSale::get_init_sale_sale_id(&vaa.payload),
         Pubkey::from_str(payer.as_str()).unwrap(),
         message_key,
         Pubkey::new(&vaa.emitter_address),
@@ -222,7 +222,7 @@ pub fn init_icco_sale_ix(
     );
     let ix = init_icco_sale(
         program_id,
-        SaleInit::get_init_sale_sale_id(&vaa.payload),
+        InitSale::get_init_sale_sale_id(&vaa.payload),
         Pubkey::from_str(payer.as_str()).unwrap(),
         message_key,
         Pubkey::new(&vaa.emitter_address),
@@ -251,7 +251,7 @@ pub fn abort_icco_sale_ix(
     );
     let ix = abort_icco_sale(
         program_id,
-        SaleInit::get_init_sale_sale_id(&vaa.payload),
+        InitSale::get_init_sale_sale_id(&vaa.payload),
         Pubkey::from_str(payer.as_str()).unwrap(),
         message_key,
         Pubkey::new(&vaa.emitter_address),
@@ -286,7 +286,7 @@ pub fn contribute_icco_sale_ix(
     );
     let ix = contribute_icco_sale(
         program_id,
-        SaleInit::get_init_sale_sale_id(&vaa.payload),
+        InitSale::get_init_sale_sale_id(&vaa.payload),
         Pubkey::from_str(payer.as_str()).unwrap(),
         from_account,
         message_key,
@@ -317,7 +317,7 @@ pub fn attest_icco_sale_ix(
     );
     let ix = attest_icco_sale(
         program_id,
-        SaleInit::get_init_sale_sale_id(&i_s_vaa.payload),
+        InitSale::get_init_sale_sale_id(&i_s_vaa.payload),
         Pubkey::from_str(payer.as_str()).unwrap(),
         init_sale_message_key,
         Pubkey::from_str(attest_vaa.as_str()).unwrap(),

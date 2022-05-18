@@ -471,10 +471,7 @@ describe("Solana dev Tests", () => {
         console.log(icco_state_pda_info);
 
         const sale_state = icco_state_pda_info!.data;
-        console.log("ICCO sale state bytes: " + sale_state[1]);
-        console.log(
-          "ICCO sale state bytes str: " + sale_state.toString("utf8")
-        );
+        console.log("ICCO sale state bytes str: " + sale_state.toString("hex"));
         expect(sale_state[0] === 0 && sale_state[1] === 1).toBeTruthy();
 
         // Done here.

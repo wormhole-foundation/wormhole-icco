@@ -58,7 +58,7 @@ use bridge::{
 pub struct ContributeIccoSale<'b> {
     pub payer: Mut<Signer<AccountInfo<'b>>>,
     pub config: ConfigAccount<'b, { AccountState::Initialized }>,
-    pub init_sale_vaa: ClaimedVAA<'b, SaleInit>,           // Was claimed.
+    pub init_sale_vaa: ClaimedVAA<'b, InitSale>,           // Was claimed.
 
     pub contribution_state: Mut<ContributionStateAccount<'b, { AccountState::MaybeInitialized }>>, 
 

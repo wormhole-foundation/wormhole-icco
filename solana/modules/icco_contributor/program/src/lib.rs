@@ -4,8 +4,8 @@
 
 // #![cfg(all(target_arch = "bpf", not(feature = "no-entrypoint")))]
 
-#[cfg(feature = "no-entrypoint")]
-pub mod instructions;
+// #[cfg(feature = "no-entrypoint")]
+// pub mod instructions;
 
 #[cfg(feature = "wasm")]
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
@@ -22,6 +22,7 @@ pub mod messages;
 pub mod types;
 pub mod claimed_vaa;
 pub mod simple_account;
+pub mod instructions;
 
 pub use api::{
     contribute_icco_sale, init_icco_sale, initialize, create_icco_sale_custody_account, abort_icco_sale, attest_icco_sale,

@@ -219,9 +219,9 @@ impl InitSale {
     pub fn get_token_address(&self, bf: &[u8]) -> Pubkey {
         Pubkey::new(&bf[33..])
     }
-    pub fn get_token_address_bytes(&self, bf: &[u8]) -> [u8; 32] {
-        bf[33..65].try_into().unwrap()
-    }
+    // pub fn get_token_address_bytes(&self, bf: &[u8]) -> [u8; 32] {
+    //     bf[33..65].try_into().unwrap()
+    // }
 
     pub fn get_token_chain(&self, bf: &[u8]) -> u16 {
         read_u16(&bf[65..])

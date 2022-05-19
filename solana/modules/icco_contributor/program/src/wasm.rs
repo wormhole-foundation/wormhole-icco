@@ -14,6 +14,7 @@ use crate::{
     instructions::{
         create_icco_sale_custody_account,
         get_icco_sale_custody_account_address,
+        get_icco_sale_custody_account_address_for_sale_token,
 //        get_test_account_address,
         get_icco_state_address,
         init_icco_sale,
@@ -169,6 +170,12 @@ pub fn icco_state_address(program_id: String, sale_id: u64) -> Pubkey {
 pub fn icco_sale_custody_account_address(program_id: String, sale_id: u64, mint: String) -> Pubkey {
     get_icco_sale_custody_account_address (Pubkey::from_str(program_id.as_str()).unwrap(), sale_id as u128, Pubkey::from_str(mint.as_str()).unwrap())
 }
+
+#[wasm_bindgen]
+pub fn icco_sale_custody_account_address_for_sale_token(program_id: String, src_mint: String) -> Pubkey {
+    get_icco_sale_custody_account_address_for_sale_token (Pubkey::from_str(program_id.as_str()).unwrap(), Pubkey::from_str(src_mint.as_str()).unwrap())
+}
+
 
 #[wasm_bindgen]
 pub fn create_icco_sale_custody_account_ix(

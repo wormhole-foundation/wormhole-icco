@@ -9,6 +9,7 @@ pub enum Error {
     VAAAlreadyExecuted,
     VAAInvalidPayloadId,
     VAAInvalidEmitterChain,
+    VAAInvalidEmitterAddress,
     VAAInvalid,
     InvalidTokenAddress,
     InvalidTokenIndex,
@@ -18,6 +19,7 @@ pub enum Error {
     SaleHasBeenSealed,
     SaleHasBeenAborted,
     VAATokenCountExceeded,
+    SaleStateAccountAddressIncorrect,
     SaleStateIsAlredyInitialized,
     TestAccountError,
 }

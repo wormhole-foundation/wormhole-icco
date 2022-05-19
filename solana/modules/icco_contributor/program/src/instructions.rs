@@ -8,6 +8,7 @@ use crate::{
         ConfigAccount,
         SaleStateAccount,
         SaleStateAccountDerivationData,
+        SaleCustodyAccountDerivationData,
         CustodyAccount,
         CustodyAccountDerivationData,
         CustodySigner,
@@ -83,6 +84,7 @@ use spl_token::{
 };
 
 use std::str::FromStr;
+use std::convert::TryInto;
 
 pub fn initialize(
     program_id: Pubkey,
@@ -231,6 +233,10 @@ pub fn get_icco_state_address (program_id: Pubkey, sale_id: u128) -> Pubkey {
 
 pub fn get_icco_sale_custody_account_address(program_id: Pubkey, sale_id: u128, token_mint: Pubkey) -> Pubkey {
     CustodyAccount::<'_, { AccountState::MaybeInitialized }>::key(&CustodyAccountDerivationData{sale_id: sale_id, mint: token_mint}, &program_id)
+}
+
+pub fn get_icco_sale_custody_account_address_for_sale_token(program_id: Pubkey, src_mint: Pubkey) -> Pubkey {
+    CustodyAccount::<'_, { AccountState::MaybeInitialized }>::key(&SaleCustodyAccountDerivationData{foreign_mint: src_mint}, &program_id)
 }
 
 pub fn abort_icco_sale(

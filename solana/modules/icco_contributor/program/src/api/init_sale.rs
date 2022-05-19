@@ -2,6 +2,8 @@
 //#![allow(unused_must_use)]
 //#![allow(unused_imports)]
 
+use std::convert::TryInto;
+
 use crate::{
     messages:: {
         InitSale,
@@ -18,6 +20,7 @@ use crate::{
     },
     instructions:: {
         get_icco_state_address,
+        get_icco_sale_custody_account_address_for_sale_token,
     },
     errors::Error::*,
     types::*,
@@ -26,7 +29,7 @@ use crate::{
 use solana_program::msg;
 
 use solana_program::{
-    // pubkey::Pubkey,  // Used in emitter address check. Do not delete.
+    pubkey::Pubkey,  // Used in emitter address check. Do not delete.
     // system_instruction,
     account_info::AccountInfo,
     // program::invoke,
@@ -75,7 +78,7 @@ impl<'a> From<&CreateIccoSaleCustodyAccount<'a>> for CustodyAccountDerivationDat
 impl<'a> From<&CreateIccoSaleCustodyAccount<'a>> for SaleCustodyAccountDerivationData {
     fn from(accs: &CreateIccoSaleCustodyAccount<'a>) -> Self {
         SaleCustodyAccountDerivationData {
-            foreign_mint: accs.init_sale_vaa.get_token_address(&accs.init_sale_vaa.meta().payload[..])  // Conductor chain mint address.
+            foreign_mint: InitSale::get_token_address_bytes(&accs.init_sale_vaa.meta().payload[..]).try_into().unwrap(),  // Conductor chain mint address.
         }
     }
 }
@@ -131,10 +134,12 @@ pub struct InitIccoSale<'b> {
     pub payer: Mut<Signer<AccountInfo<'b>>>,
     pub config: ConfigAccount<'b, { AccountState::Initialized }>,       // Must be created before Init
     pub init_sale_vaa: ClaimableVAA<'b, InitSale>,  // Claimed here.
+    pub sale_mint: Data<'b, SplMint, { AccountState::MaybeInitialized }>,           // From token (Mut<Data<'b, SplMint, { AccountState::Initialized }>>)??
+    pub sale_custody: Mut<CustodyAccount<'b, { AccountState::MaybeInitialized }>>,  // uses SaleCustodyAccountDerivationData.
 
     pub rent: Sysvar<'b, Rent>,
     pub clock: Sysvar<'b, Clock>,
-    // Sale state is in ctx.accounts[7];
+    // Sale state is in ctx.accounts[9];
 }
 
 /*
@@ -164,7 +169,6 @@ pub fn init_icco_sale(
     msg!("bbrp in init_icco_sale!");
 
     // TBD: --- Uncomment after script update ---
-    /*
     {
         let vaa_emitter = Pubkey::new(&accs.init_sale_vaa.meta().emitter_address);
         if  vaa_emitter != accs.config.icco_conductor {
@@ -172,7 +176,6 @@ pub fn init_icco_sale(
             return Err(VAAInvalidEmitterAddress.into());
         }
     }
-    */
 
     accs.init_sale_vaa.verify(ctx.program_id)?;
 
@@ -187,25 +190,35 @@ pub fn init_icco_sale(
     }
 
     let now_time = accs.clock.unix_timestamp;
-    let start_time = accs.init_sale_vaa.get_sale_start(&accs.init_sale_vaa.meta().payload[..]).1 as i64;
-    let end_time = accs.init_sale_vaa.get_sale_end(&accs.init_sale_vaa.meta().payload[..]).1 as i64;
+    let start_time = InitSale::get_sale_start(&accs.init_sale_vaa.meta().payload[..]).1 as i64;
+    let end_time = InitSale::get_sale_end(&accs.init_sale_vaa.meta().payload[..]).1 as i64;
     msg!("time: {:?} start: {:?} end: {:?}", now_time, start_time, end_time);
 
     let sale_id = accs.init_sale_vaa.sale_id;
     msg!("sale_id: {:?}", sale_id);
 
+    // Verify that saleCustody ATA address is corect and verify/create account it exists and owned by this contract.
+    {
+        let sale_token_dk = get_icco_sale_custody_account_address_for_sale_token(*ctx.program_id, InitSale::get_token_address_bytes(&accs.init_sale_vaa.meta().payload[..]).try_into().unwrap());
+        if sale_token_dk != *accs.sale_custody.info().key {
+            msg!("bbrp init_icco_sale bad sale_token_address {:?} / {:?}", sale_token_dk, *accs.sale_custody.info().key );
+            return Err(SaleTokenAccountAddressIncorrect.into());
+        }
+    }
 
     // Create sale_state account using Solana API.
     //msg!("ctx accounts Cnt: {}", ctx.accounts.len());
-    let sale_state_account_info = &ctx.accounts[7];
+    let sale_state_account_info = &ctx.accounts[9];
 
     // Verify that the sale_state account PDA was derived correctly
-    let sale_state_account_dk = get_icco_state_address(*ctx.program_id, sale_id);
-    if sale_state_account_dk != *sale_state_account_info.key {
-        msg!("bbrp init_icco_sale bad sale_state_address");
-        return Err(SaleStateAccountAddressIncorrect.into());
+    {
+        let sale_state_account_dk = get_icco_state_address(*ctx.program_id, sale_id);
+        if sale_state_account_dk != *sale_state_account_info.key {
+            msg!("bbrp init_icco_sale bad sale_state_address");
+            return Err(SaleStateAccountAddressIncorrect.into());
+        }
     }
-    
+
     if **sale_state_account_info.lamports.borrow() > 0 {
         return Err(SaleStateIsAlredyInitialized.into());
     } else {

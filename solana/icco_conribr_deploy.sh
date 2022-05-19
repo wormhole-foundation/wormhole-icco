@@ -24,5 +24,5 @@ minikube kubectl -- exec -c devnet solana-devnet-0 -- solana program deploy -u l
 # this succeds only first itme after tilt up, then it will fail because config PDA account was already initialized.
 
 # ./modules/icco_contributor/target/debug/client create-bridge 5yrpFgtmiBkRmDgveVErMWuxC25eK5QE5ouZgfi46aqM B6RHG3mfcckmrYN1UhmJzyS1XX3fZKbkeUcpJe9Sy3FE B6RHG3mfcckmrYN1UhmJzyS1XX3fZKbkeUcpJe9Sy3FE
-./modules/icco_contributor/target/debug/client create-bridge 5yrpFgtmiBkRmDgveVErMWuxC25eK5QE5ouZgfi46aqM B6RHG3mfcckmrYN1UhmJzyS1XX3fZKbkeUcpJe9Sy3FE 1111111111112Z7PqcdG8xjLGrXyxHskexmVnER6
-# test address: 0x6f84742680311CEF5ba42bc10A71a4708b4561d1 -> 1111111111112Z7PqcdG8xjLGrXyxHskexmVnER6 ??
+con_addr=$(node read_conductor_address.js)
+./modules/icco_contributor/target/debug/client create-bridge 5yrpFgtmiBkRmDgveVErMWuxC25eK5QE5ouZgfi46aqM B6RHG3mfcckmrYN1UhmJzyS1XX3fZKbkeUcpJe9Sy3FE ${con_addr}

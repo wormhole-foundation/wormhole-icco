@@ -99,8 +99,3 @@ kubectl exec -c devnet solana-devnet-0 -- solana program deploy -u l /usr/src/ic
 to register coreBridge and conductor run the following from solana/
 ./modules/icco_contributor/target/debug/client create-bridge 5yrpFgtmiBkRmDgveVErMWuxC25eK5QE5ouZgfi46aqM B6RHG3mfcckmrYN1UhmJzyS1XX3fZKbkeUcpJe9Sy3FE B6RHG3mfcckmrYN1UhmJzyS1XX3fZKbkeUcpJe9Sy3FE
 addresses are: contributor, coreBridge, Conductor(fake for now)
-
-TBDs:
------
-1. Uncomment actual emitter address verification. Need to pass Conductor address to the client command, last arg. (kk-script, sk-contract uncomment)
-2. Add saleCustodyAccount address derivation for JS. (sk)

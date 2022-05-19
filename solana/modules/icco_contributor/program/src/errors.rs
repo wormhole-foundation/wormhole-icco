@@ -21,6 +21,7 @@ pub enum Error {
     VAATokenCountExceeded,
     SaleStateAccountAddressIncorrect,
     SaleStateIsAlredyInitialized,
+    SaleTokenAccountAddressIncorrect,
     TestAccountError,
 }
 

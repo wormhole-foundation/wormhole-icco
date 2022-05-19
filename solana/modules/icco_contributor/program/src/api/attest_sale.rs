@@ -102,7 +102,7 @@ pub fn attest_icco_sale(
     let mut sol_cnt: u8 = 0;
     let mut token_idx: u8 = 0;
     while token_idx < accs.init_sale_vaa.token_cnt {
-        if accs.init_sale_vaa.get_accepted_token_chain(token_idx, &accs.init_sale_vaa.meta().payload) == 1 {
+        if InitSale::get_accepted_token_chain(token_idx, &accs.init_sale_vaa.meta().payload) == 1 {
             sol_cnt = sol_cnt+1;
         }
         token_idx = token_idx + 1;
@@ -119,7 +119,7 @@ pub fn attest_icco_sale(
     sol_cnt = 0;
     token_idx = 0;
     while token_idx < accs.init_sale_vaa.token_cnt {
-        if accs.init_sale_vaa.get_accepted_token_chain(token_idx, &accs.init_sale_vaa.meta().payload) == 1 {
+        if InitSale::get_accepted_token_chain(token_idx, &accs.init_sale_vaa.meta().payload) == 1 {
             let amount = get_sale_state_contribution(&state_data, token_idx);
             pack_sale_attested_vaa_token(& mut bf, token_idx, sol_cnt, amount);
             sol_cnt = sol_cnt+1;

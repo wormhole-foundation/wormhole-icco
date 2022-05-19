@@ -186,10 +186,13 @@ pub fn init_icco_sale(
     emitter: Pubkey,
     emitter_chain: u16,
     sequence: u64,
+    token_mint: &[u8;32],
+    tmp_token_key: Pubkey,
 ) -> Instruction {
     let config_key = ConfigAccount::<'_, { AccountState::Initialized }>::key(None, &program_id);
     let state_key = SaleStateAccount::<'_, { AccountState::Uninitialized }>::key(&SaleStateAccountDerivationData{sale_id: sale_id}, &program_id);
-    
+    let sale_custody = CustodyAccount::<'_, { AccountState::MaybeInitialized }>::key(&SaleCustodyAccountDerivationData{foreign_mint: *token_mint}, &program_id);
+
     let vaa_claim = Claim::<'_, { AccountState::Uninitialized }>::key(
         &ClaimDerivationData {
             emitter_address: emitter.to_bytes(),
@@ -206,6 +209,8 @@ pub fn init_icco_sale(
             AccountMeta::new_readonly(config_key, false),
             AccountMeta::new_readonly(vaa_message, false),
             AccountMeta::new(vaa_claim, false),
+            AccountMeta::new_readonly(tmp_token_key, false), // TBD MINT!!!
+            AccountMeta::new(sale_custody, false),
             AccountMeta::new_readonly(solana_program::sysvar::rent::id(), false),
             AccountMeta::new_readonly(solana_program::sysvar::clock::id(), false),
             AccountMeta::new_readonly(solana_program::system_program::id(), false),
@@ -235,7 +240,7 @@ pub fn get_icco_sale_custody_account_address(program_id: Pubkey, sale_id: u128, 
     CustodyAccount::<'_, { AccountState::MaybeInitialized }>::key(&CustodyAccountDerivationData{sale_id: sale_id, mint: token_mint}, &program_id)
 }
 
-pub fn get_icco_sale_custody_account_address_for_sale_token(program_id: Pubkey, src_mint: Pubkey) -> Pubkey {
+pub fn get_icco_sale_custody_account_address_for_sale_token(program_id: Pubkey, src_mint: [u8; 32]) -> Pubkey {
     CustodyAccount::<'_, { AccountState::MaybeInitialized }>::key(&SaleCustodyAccountDerivationData{foreign_mint: src_mint}, &program_id)
 }
 

@@ -216,14 +216,14 @@ impl InitSale {
          read_u256(&bf[1..]).1
     }
 
-    pub fn get_token_address(&self, bf: &[u8]) -> Pubkey {
-        Pubkey::new(&bf[33..])
-    }
-    // pub fn get_token_address_bytes(&self, bf: &[u8]) -> [u8; 32] {
-    //     bf[33..65].try_into().unwrap()
+    // pub fn get_token_address(&self, bf: &[u8]) -> Pubkey {       // It is not valid Pubkey
+    //     Pubkey::new(&bf[33..])
     // }
+    pub fn get_token_address_bytes(bf: &[u8]) -> [u8; 32] {
+        bf[33..65].try_into().unwrap()
+    }
 
-    pub fn get_token_chain(&self, bf: &[u8]) -> u16 {
+    pub fn get_token_chain(bf: &[u8]) -> u16 {
         read_u16(&bf[65..])
     }
 
@@ -231,23 +231,23 @@ impl InitSale {
         bf[67]
     }
 
-    pub fn get_token_amount(&self, bf: &[u8]) -> (u128, u128) {
+    pub fn get_token_amount(bf: &[u8]) -> (u128, u128) {
         read_u256(&bf[68..])
     }
 
-    pub fn get_min_raise(&self, bf: &[u8]) -> (u128, u128) {
+    pub fn get_min_raise(bf: &[u8]) -> (u128, u128) {
         read_u256(&bf[100..])
     }
 
-    pub fn get_max_raise(&self, bf: &[u8]) -> (u128, u128) {
+    pub fn get_max_raise(bf: &[u8]) -> (u128, u128) {
         read_u256(&bf[132..])
     }
 
-    pub fn get_sale_start(&self, bf: &[u8]) -> (u128, u128) {
+    pub fn get_sale_start(bf: &[u8]) -> (u128, u128) {
         read_u256(&bf[164..])
     }
 
-    pub fn get_sale_end(&self, bf: &[u8]) -> (u128, u128) {
+    pub fn get_sale_end(bf: &[u8]) -> (u128, u128) {
         read_u256(&bf[196..])
     }
 
@@ -263,17 +263,17 @@ impl InitSale {
 
     // Accepted tokens data getters
     // tokenAddress: Pubkey,
-    pub fn get_accepted_token_address(&self, idx: u8, bf: &[u8]) -> Pubkey {
+    pub fn get_accepted_token_address(idx: u8, bf: &[u8]) -> Pubkey {
         let t_offset: usize = 229 + (idx as usize) * 50;
         Pubkey::new(&bf[t_offset..t_offset + 32])
     }
 
-    pub fn get_accepted_token_chain(&self, idx: u8, bf: &[u8]) -> u16 {
+    pub fn get_accepted_token_chain(idx: u8, bf: &[u8]) -> u16 {
         let t_offset: usize = 229 + (idx as usize) * 50 + 32;
         read_u16(&bf[t_offset..])
     }
 
-    pub fn get_accepted_token_conversion_rate(&self, idx: u8, bf: &[u8]) -> u128 {
+    pub fn get_accepted_token_conversion_rate(idx: u8, bf: &[u8]) -> u128 {
         let t_offset: usize = 229 + (idx as usize) * 50 + 34;
         read_u128(&bf[t_offset..])
     }

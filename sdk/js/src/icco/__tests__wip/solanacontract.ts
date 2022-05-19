@@ -24,6 +24,7 @@ import {
   icco_state_address,
   create_icco_sale_custody_account_ix,
   icco_sale_custody_account_address,
+  icco_sale_custody_account_address_for_sale_token,
   init_icco_sale_ix,
   abort_icco_sale_ix,
   contribute_icco_sale_ix,
@@ -56,6 +57,10 @@ import {
 
 //import { registerChainOnEth } from "../../../../../sdk/js/lib/cjs/icco/registerChain";
 //import { registerChainOnEth } from "../../../";
+
+import {
+  nativeToUint8Array,
+} from "../misc";
 
 import {
   createSaleOnEthAndGetVaa,
@@ -143,7 +148,8 @@ describe("Solana dev Tests", () => {
           SOLANA_CONTRIBUTOR_ADDR,
           SOLANA_BRIDGE_ADDR,
           walletAccount.publicKey.toString(),
-          saleInitVaa
+          saleInitVaa,
+          SOLANA_TEST_TOKEN_MINT,
         )
       );
       // call contributor contract
@@ -223,6 +229,17 @@ describe("Solana dev Tests", () => {
         console.info("--> Sale Start: ", saleStart);
         const localTokenAddress = tokenAddress; // TBD. Local token may not be created yet.
         const tokenChain = CHAIN_ID_ETH; // needed to check if token is native or not
+
+        // Emitter address conv test.
+        const eba = nativeToUint8Array("0x6f84742680311CEF5ba42bc10A71a4708b4561d1", 2);
+        const ea = new Pubkey(eba);
+        console.log("Emmitter addr test: ", ea.toString());
+
+
+        // Let's print ATA for saleToken on Solana.
+        const tokenAddressBin = nativeToUint8Array(tokenAddress, 2);
+        const saleTokenATA = icco_sale_custody_account_address_for_sale_token(SOLANA_CONTRIBUTOR_ADDR, tokenAddressBin);
+        console.info("token: ", tokenAddress, " -> saleTokenATA: ", saleTokenATA.toString());
 
         const saleInitVaa = await createSaleOnEthAndGetVaa(
           conductorConfig.wallet,
@@ -305,14 +322,16 @@ describe("Solana dev Tests", () => {
           await solanaConnection.confirmTransaction(tx_id_create_custudy_acct);
 
           // Init sale.
-          const ix_init = ixFromRust(
-            init_icco_sale_ix(
+          const ixw = init_icco_sale_ix(
               SOLANA_CONTRIBUTOR_ADDR,
               SOLANA_BRIDGE_ADDR,
               walletAccount.publicKey.toString(),
-              saleInitVaa
-            )
-          );
+              saleInitVaa,
+              SOLANA_TEST_TOKEN_MINT
+            );
+          dumpInstructionAccounts(ixw);
+          const ix_init = ixFromRust(ixw);
+
           // call contributor contract
           const tx_init = new Transaction().add(ix_init);
           const tx_id = await solanaConnection.sendTransaction(

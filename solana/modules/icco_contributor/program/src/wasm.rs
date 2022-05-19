@@ -171,11 +171,6 @@ pub fn icco_sale_custody_account_address(program_id: String, sale_id: u64, mint:
     get_icco_sale_custody_account_address (Pubkey::from_str(program_id.as_str()).unwrap(), sale_id as u128, Pubkey::from_str(mint.as_str()).unwrap())
 }
 
-#[wasm_bindgen]
-pub fn icco_sale_custody_account_address_for_sale_token(program_id: String, src_mint: String) -> Pubkey {
-    get_icco_sale_custody_account_address_for_sale_token (Pubkey::from_str(program_id.as_str()).unwrap(), Pubkey::from_str(src_mint.as_str()).unwrap())
-}
-
 
 #[wasm_bindgen]
 pub fn create_icco_sale_custody_account_ix(
@@ -217,6 +212,7 @@ pub fn init_icco_sale_ix(
     bridge_id: String,
     payer: String,
     vaa: Vec<u8>,
+    token_mint: String,
 ) -> JsValue {
     let vaa = VAA::deserialize(vaa.as_slice()).unwrap();
     let bridge_id = Pubkey::from_str(bridge_id.as_str()).unwrap();
@@ -235,6 +231,8 @@ pub fn init_icco_sale_ix(
         Pubkey::new(&vaa.emitter_address),
         vaa.emitter_chain,
         vaa.sequence,
+        &InitSale::get_token_address_bytes(&vaa.payload),
+        Pubkey::from_str(token_mint.as_str()).unwrap(),
     );
     JsValue::from_serde(&ix).unwrap()
 }
@@ -332,3 +330,28 @@ pub fn attest_icco_sale_ix(
     );
     JsValue::from_serde(&ix).unwrap()
 }
+
+#[wasm_bindgen]
+pub fn icco_sale_custody_account_address_for_sale_token(program_id: String, src_mint: Vec<u8>) -> Pubkey {
+    let mut t_addr = [0u8; 32];
+    t_addr.copy_from_slice(&src_mint);
+    get_icco_sale_custody_account_address_for_sale_token (Pubkey::from_str(program_id.as_str()).unwrap(), t_addr)
+}
+
+// Dealing with non-Pubkey addresses.
+// #[wasm_bindgen]
+// pub fn wrapped_address(program_id: String, token_address: Vec<u8>, token_chain: u16) -> Vec<u8> {
+//     let program_id = Pubkey::from_str(program_id.as_str()).unwrap();
+//     let mut t_addr = [0u8; 32];
+//     t_addr.copy_from_slice(&token_address);
+
+//     let wrapped_addr = WrappedMint::<'_, { AccountState::Initialized }>::key(
+//         &WrappedDerivationData {
+//             token_address: t_addr,
+//             token_chain,
+//         },
+//         &program_id,
+//     );
+
+//     wrapped_addr.to_bytes().to_vec()
+// }

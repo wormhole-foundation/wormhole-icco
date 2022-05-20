@@ -15,6 +15,8 @@ contract ConductorStructs {
         uint8 localTokenDecimals;
         /// address of token on conductor chain
         address localTokenAddress;
+        /// sale token ATA for Solana
+        bytes32 solanaTokenAccount;
         /// token amount being sold
         uint256 tokenAmount;
         /// min raise amount

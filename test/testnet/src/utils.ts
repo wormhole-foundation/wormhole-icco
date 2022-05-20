@@ -9,6 +9,7 @@ import {
   nativeToHexString,
   importCoreWasm,
   redeemOnEth,
+  CHAIN_ID_ETH,
 } from "@certusone/wormhole-sdk";
 import {
   AcceptedToken,
@@ -33,6 +34,7 @@ import {
   claimAllocationOnEth,
   getAllocationIsClaimedOnEth,
   getSaleContributionOnEth,
+  nativeToUint8Array,
 } from "wormhole-icco-sdk";
 import {
   WORMHOLE_ADDRESSES,
@@ -193,7 +195,8 @@ export async function createSaleOnEthAndGetVaa(
   saleEnd: ethers.BigNumberish,
   recipientAddress,
   refundRecipientAddress,
-  acceptedTokens: AcceptedToken[]
+  acceptedTokens: AcceptedToken[],
+  solanaTokenAccount: ethers.BytesLike
 ): Promise<Uint8Array> {
   // create
   const receipt = await createSaleOnEth(
@@ -207,6 +210,7 @@ export async function createSaleOnEthAndGetVaa(
     saleStart,
     saleEnd,
     acceptedTokens,
+    solanaTokenAccount,
     recipientAddress,
     refundRecipientAddress,
     seller
@@ -237,6 +241,12 @@ export async function createSaleOnEthAndInit(
   const saleStart = getCurrentTime() + raiseParams.saleStartTimer;
   const saleEnd = saleStart + raiseParams.saleDurationSeconds;
 
+  // create fake solana ATA
+  const solanaTokenAccount = nativeToUint8Array(
+    raiseParams.localTokenAddress,
+    CHAIN_ID_ETH // will be CHAIN_ID_SOLANA with a real token
+  );
+
   // create the sale
   const saleInitVaa = await createSaleOnEthAndGetVaa(
     initiatorConductorWallet,
@@ -258,7 +268,8 @@ export async function createSaleOnEthAndInit(
     saleEnd,
     raiseParams.recipient,
     raiseParams.refundRecipient,
-    acceptedTokens
+    acceptedTokens,
+    solanaTokenAccount
   );
 
   // parse the sale init payload for return value

@@ -48,6 +48,8 @@ library ICCOStructs {
         address recipient;
         /// refund recipient in cse the sale is aborted
         address refundRecipient;
+        /// sale token ATA for Solana
+        bytes32 solanaTokenAccount;
     }
 
     struct SaleInit {
@@ -73,6 +75,8 @@ library ICCOStructs {
         uint256 saleEnd;
         /// accepted Tokens
         Token[] acceptedTokens;
+        /// sale token ATA for solana
+        bytes32 solanaTokenAccount;
         /// recipient of proceeds
         bytes32 recipient;
         /// refund recipient in case the sale is aborted
@@ -133,6 +137,7 @@ library ICCOStructs {
             saleInit.saleStart,
             saleInit.saleEnd,
             encodeTokens(saleInit.acceptedTokens),
+            saleInit.solanaTokenAccount,
             saleInit.recipient,
             saleInit.refundRecipient
         );
@@ -176,6 +181,9 @@ library ICCOStructs {
         uint len = 1 + 50 * uint256(uint8(encoded[index]));
         saleInit.acceptedTokens = parseTokens(encoded.slice(index, len));
         index += len;
+
+        saleInit.solanaTokenAccount = encoded.toBytes32(index);
+        index += 32;
 
         saleInit.recipient = encoded.toBytes32(index);
         index += 32;

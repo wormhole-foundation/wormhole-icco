@@ -29,6 +29,9 @@ contract ContributorStructs {
         bytes32[] acceptedTokensAddresses;
         uint128[] acceptedTokensConversionRates;
 
+        /// sale token ATA for Solana
+        bytes32 solanaTokenAccount;
+
         /// recipient of proceeds
         bytes32 recipient;
         /// refund recipient in case the sale is aborted

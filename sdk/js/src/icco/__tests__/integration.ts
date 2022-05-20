@@ -3,6 +3,7 @@ import { ethers } from "ethers";
 import {
   CHAIN_ID_BSC,
   CHAIN_ID_ETH,
+  CHAIN_ID_SOLANA,
   nativeToHexString,
   redeemOnEth,
   setDefaultWasm,
@@ -13,6 +14,7 @@ import {
   getContributorContractOnEth,
   getSaleFromConductorOnEth,
   getSaleFromContributorOnEth,
+  nativeToUint8Array,
   sealSaleOnEth,
 } from "../..";
 import {
@@ -266,6 +268,14 @@ describe("Integration Tests", () => {
           // which means it has the same local token address
           const localTokenAddress = tokenAddress;
 
+          // create fake solana ATA
+          const solanaTokenAccount = nativeToUint8Array(
+            localTokenAddress,
+            CHAIN_ID_ETH // will be CHAIN_ID_SOLANA with a real token
+          );
+
+          console.log(solanaTokenAccount);
+
           const saleInit = await createSaleOnEthAndInit(
             conductorConfig,
             contributorConfigs,
@@ -277,7 +287,8 @@ describe("Integration Tests", () => {
             maxRaise,
             saleStart,
             saleDuration,
-            acceptedTokens
+            acceptedTokens,
+            solanaTokenAccount
           );
           console.log("Parsed Sale Init:", saleInit);
 
@@ -719,6 +730,12 @@ describe("Integration Tests", () => {
           // which means it has the same local token address
           const localTokenAddress = tokenAddress;
 
+          // create fake solana ATA
+          const solanaTokenAccount = nativeToUint8Array(
+            localTokenAddress,
+            CHAIN_ID_ETH // will be CHAIN_ID_SOLANA with a real token
+          );
+
           const saleInit = await createSaleOnEthAndInit(
             conductorConfig,
             contributorConfigs,
@@ -730,7 +747,8 @@ describe("Integration Tests", () => {
             maxRaise,
             saleStart,
             saleDuration,
-            acceptedTokens
+            acceptedTokens,
+            solanaTokenAccount
           );
           console.log("Parsed Sale Init:", saleInit);
 
@@ -971,6 +989,12 @@ describe("Integration Tests", () => {
           // which means it has the same local token address
           const localTokenAddress = tokenAddress;
 
+          // create fake solana ATA
+          const solanaTokenAccount = nativeToUint8Array(
+            localTokenAddress,
+            CHAIN_ID_ETH // will be CHAIN_ID_SOLANA with a real token
+          );
+
           const saleInit = await createSaleOnEthAndInit(
             conductorConfig,
             contributorConfigs,
@@ -982,7 +1006,8 @@ describe("Integration Tests", () => {
             maxRaise,
             saleStart + 20, // 20 second duration
             saleDuration,
-            acceptedTokens
+            acceptedTokens,
+            solanaTokenAccount
           );
           console.log("Parsed Sale Init:", saleInit);
 

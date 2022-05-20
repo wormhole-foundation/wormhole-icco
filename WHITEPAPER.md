@@ -45,6 +45,7 @@ To create a sale, a user invokes the `createSale()` method on the sale conductor
   - A maximum USD amount to raise
   - The address that can claim the proceeds of the sale
   - The address that should receive the offered tokens in case the minimum raise amount is not met
+  - The ATA on the Solana contributor where offered tokens will be sent
 - An array of accepted tokens on each chain + the USD conversion rate which they are accepted at
 
 The `createSale()` method deposits the offered tokens, assigns an ID which identifies the sale and attests a `SaleInit` packet over the wormhole. This packet contains all the information from above.
@@ -140,7 +141,7 @@ Owner Only:
   - uint256 excessContribution (excess contributions refunded to contributors on this chain)
 
 - Raise
-  - address token (sale token native address)
+  - bytes32 token (sale token native address)
   - uint16 tokenChain (sale token native chainId)
   - uint256 tokenAmount (token amount being sold)
   - uint256 minRaise (min raise amount)
@@ -149,6 +150,7 @@ Owner Only:
   - uint256 saleEnd (timestamp raise end)
   - address recipient (recipient of sale proceeds)
   - address refundRecipient (refund recipient in case the sale is aborted)
+  - bytes32 solanaTokenAccount (sale token ATA for Solana)
 
 ---
 
@@ -188,6 +190,8 @@ uint8 tokensLen;
   // conversion rate for the token
   uint256 conversionRate;
 
+// sale token ATA for Solana
+bytes32 solanaTokenAccount
 // recipient of proceeds
 bytes32 recipient;
 // refund recipient in case the sale is aborted

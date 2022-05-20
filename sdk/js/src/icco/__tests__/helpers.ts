@@ -448,7 +448,8 @@ export async function createSaleOnEthAndGetVaa(
   maxRaise: ethers.BigNumberish,
   saleStart: ethers.BigNumberish,
   saleEnd: ethers.BigNumberish,
-  acceptedTokens: AcceptedToken[]
+  acceptedTokens: AcceptedToken[],
+  solanaTokenAccount: ethers.BytesLike
 ): Promise<Uint8Array> {
   // create
   const receipt = await createSaleOnEth(
@@ -462,6 +463,7 @@ export async function createSaleOnEthAndGetVaa(
     saleStart,
     saleEnd,
     acceptedTokens,
+    solanaTokenAccount,
     seller.address,
     seller.address,
     seller
@@ -663,7 +665,8 @@ export async function createSaleOnEthAndInit(
   maxRaise: string,
   saleStart: number,
   saleDuration: number,
-  acceptedTokens: AcceptedToken[]
+  acceptedTokens: AcceptedToken[],
+  solanaTokenAccount: ethers.BytesLike
 ): Promise<SaleInit> {
   const tokenOffered = ERC20__factory.connect(
     saleTokenAddress,
@@ -684,7 +687,8 @@ export async function createSaleOnEthAndInit(
     ethers.utils.parseUnits(maxRaise, DENOMINATION_DECIMALS),
     saleStart,
     saleEnd,
-    acceptedTokens
+    acceptedTokens,
+    solanaTokenAccount
   );
 
   console.info("Sale Init VAA:", Buffer.from(saleInitVaa).toString("hex"));

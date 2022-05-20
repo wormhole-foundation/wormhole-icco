@@ -35,23 +35,36 @@ contract ConductorGetters is ConductorState {
         return _state.consistencyLevel;
     }
 
-    function contributorContracts(uint16 chainId_) public view returns (bytes32){
+    function contributorContracts(uint16 chainId_) public view returns (bytes32) {
         return _state.contributorImplementations[chainId_];
     }
 
-    function sales(uint saleId_) public view returns (ConductorStructs.Sale memory sale){
+    function solanaWallet(uint saleId_) public view returns (bytes32) {
+        return _state.sales[saleId_].solanaTokenAccount;
+    }
+
+    function contributorWallets(uint saleId_, uint16 chainId_) public view returns (bytes32) {
+        /// @dev Solana chainID == 1
+        if (chainId_ == 1) {
+            return solanaWallet(saleId_); 
+        } else {
+            return contributorContracts(chainId_);
+        }
+    }
+
+    function sales(uint saleId_) public view returns (ConductorStructs.Sale memory sale) {
         return _state.sales[saleId_];
     }
 
-    function getNextSaleId() public view returns (uint){
+    function getNextSaleId() public view returns (uint) {
         return _state.nextSaleId;
     }
 
-    function saleContributionIsCollected(uint saleId_, uint tokenIndex) public view returns (bool){
+    function saleContributionIsCollected(uint saleId_, uint tokenIndex) public view returns (bool) {
         return _state.sales[saleId_].contributionsCollected[tokenIndex];
     }
 
-    function saleContributions(uint saleId_) public view returns (uint[] memory){
+    function saleContributions(uint saleId_) public view returns (uint[] memory) {
         return _state.sales[saleId_].contributions;
     }
 }

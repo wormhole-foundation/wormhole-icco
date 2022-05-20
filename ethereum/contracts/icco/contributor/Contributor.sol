@@ -60,6 +60,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
             acceptedTokensChains : new uint16[](saleInit.acceptedTokens.length),
             acceptedTokensAddresses : new bytes32[](saleInit.acceptedTokens.length),
             acceptedTokensConversionRates : new uint128[](saleInit.acceptedTokens.length),
+            solanaTokenAccount: saleInit.solanaTokenAccount,
             recipient : saleInit.recipient,
             refundRecipient : saleInit.refundRecipient,
             isSealed : false,

@@ -19,7 +19,7 @@ contract ConductorStorage {
         address owner;
         
         /// number of confirmations for wormhole messages
-        uint8 consistencyLevel;
+        uint8 consistencyLevel; 
 
         /// mapping of initialized implementations
         mapping(address => bool) initializedImplementations;

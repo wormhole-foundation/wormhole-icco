@@ -105,7 +105,8 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
             tokenAddress : raise.token,
             tokenChain : raise.tokenChain,
             localTokenDecimals: localTokenDecimals,
-            localTokenAddress: localTokenAddress,     
+            localTokenAddress: localTokenAddress,    
+            solanaTokenAccount: raise.solanaTokenAccount,
             tokenAmount : raise.tokenAmount,
             minRaise: raise.minRaise,
             maxRaise: raise.maxRaise,
@@ -161,6 +162,8 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
             saleEnd : raise.saleEnd,
             /// accepted Tokens
             acceptedTokens : acceptedTokens,
+            /// sale token ATA for Solana
+            solanaTokenAccount: raise.solanaTokenAccount,
             /// recipient of proceeds
             recipient : bytes32(uint256(uint160(raise.recipient))),
             /// refund recipient in case the sale is aborted
@@ -309,9 +312,10 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
                     /// send allocations to Contributor contracts
                     if (sale.acceptedTokensChains[i] == chainId()) {
                         /// simple transfer on same chain
+                        /// @dev use saleID from sale struct to bypass stack too deep
                         SafeERC20.safeTransfer(
                             IERC20(sale.localTokenAddress), 
-                            address(uint160(uint256(contributorContracts(sale.acceptedTokensChains[i])))),
+                            address(uint160(uint256(contributorWallets(sale.saleID, sale.acceptedTokensChains[i])))),
                             allocation
                         );
                     } else {
@@ -337,7 +341,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
                             sale.localTokenAddress,
                             allocation,
                             sale.acceptedTokensChains[i],
-                            contributorContracts(sale.acceptedTokensChains[i]),
+                            contributorWallets(sale.saleID, sale.acceptedTokensChains[i]),
                             0,
                             0
                         );

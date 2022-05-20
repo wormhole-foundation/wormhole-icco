@@ -676,6 +676,7 @@ contract("ICCO", function(accounts) {
     const refundRecipient = accounts[0];
     const acceptedTokenLength = 2;
     const payloadIdType1 = "01";
+    const solanaChainId = "1";
 
     const initialized = new web3.eth.Contract(
       ConductorImplementationFullABI,
@@ -695,6 +696,7 @@ contract("ICCO", function(accounts) {
       SALE_END,
       saleRecipient,
       refundRecipient,
+      SOLD_TOKEN_BYTES32_ADDRESS,
     ];
 
     // create accepted tokens array
@@ -717,6 +719,19 @@ contract("ICCO", function(accounts) {
       from: SELLER,
       gasLimit: GAS_LIMIT,
     });
+
+    // verify contributorWallets getter
+    const solanaWallet = await initialized.methods
+      .contributorWallets(SALE_ID, solanaChainId)
+      .call();
+
+    assert.equal(
+      solanaWallet,
+      web3.eth.abi.encodeParameter(
+        "address",
+        "0x" + SOLD_TOKEN_BYTES32_ADDRESS.substring(26)
+      )
+    );
 
     // verify payload sent to contributor
     const log = (
@@ -846,6 +861,18 @@ contract("ICCO", function(accounts) {
     );
     index += 32;
 
+    // solana ATA
+    assert.equal(
+      log.payload.substr(index, 64),
+      web3.eth.abi
+        .encodeParameter(
+          "address",
+          "0x" + SOLD_TOKEN_BYTES32_ADDRESS.substring(26)
+        )
+        .substring(2)
+    );
+    index += 64;
+
     // recipient of proceeds
     assert.equal(
       log.payload.substr(index, 64),
@@ -947,6 +974,15 @@ contract("ICCO", function(accounts) {
     assert.equal(
       sale.acceptedTokensConversionRates[TOKEN_TWO_INDEX],
       parseInt(tokenTwoConversionRate)
+    );
+    assert.equal(
+      sale.solanaTokenAccount.substring(2),
+      web3.eth.abi
+        .encodeParameter(
+          "address",
+          "0x" + SOLD_TOKEN_BYTES32_ADDRESS.substring(26)
+        )
+        .substring(2)
     );
     assert.equal(
       sale.recipient.substring(2),
@@ -1859,6 +1895,7 @@ contract("ICCO", function(accounts) {
       SALE_2_END,
       saleRecipient,
       refundRecipient,
+      SOLD_TOKEN_BYTES32_ADDRESS,
     ];
 
     // create accepted tokens array
@@ -2009,6 +2046,18 @@ contract("ICCO", function(accounts) {
     );
     index += 32;
 
+    // solana ATA
+    assert.equal(
+      log.payload.substr(index, 64),
+      web3.eth.abi
+        .encodeParameter(
+          "address",
+          "0x" + SOLD_TOKEN_BYTES32_ADDRESS.substring(26)
+        )
+        .substring(2)
+    );
+    index += 64;
+
     // recipient of proceeds
     assert.equal(
       log.payload.substr(index, 64),
@@ -2105,6 +2154,15 @@ contract("ICCO", function(accounts) {
     assert.equal(
       sale.acceptedTokensConversionRates[TOKEN_TWO_INDEX],
       tokenTwoConversionRate
+    );
+    assert.equal(
+      sale.solanaTokenAccount.substring(2),
+      web3.eth.abi
+        .encodeParameter(
+          "address",
+          "0x" + SOLD_TOKEN_BYTES32_ADDRESS.substring(26)
+        )
+        .substring(2)
     );
     assert.equal(
       sale.recipient.substring(2),
@@ -2873,6 +2931,7 @@ contract("ICCO", function(accounts) {
       SALE_3_END,
       saleRecipient,
       refundRecipient,
+      SOLD_TOKEN_BYTES32_ADDRESS,
     ];
 
     // create accepted tokens array
@@ -3023,6 +3082,18 @@ contract("ICCO", function(accounts) {
     );
     index += 32;
 
+    // solana ATA
+    assert.equal(
+      log.payload.substr(index, 64),
+      web3.eth.abi
+        .encodeParameter(
+          "address",
+          "0x" + SOLD_TOKEN_BYTES32_ADDRESS.substring(26)
+        )
+        .substring(2)
+    );
+    index += 64;
+
     // recipient of proceeds
     assert.equal(
       log.payload.substr(index, 64),
@@ -3119,6 +3190,15 @@ contract("ICCO", function(accounts) {
     assert.equal(
       sale.acceptedTokensConversionRates[TOKEN_TWO_INDEX],
       tokenTwoConversionRate
+    );
+    assert.equal(
+      sale.solanaTokenAccount.substring(2),
+      web3.eth.abi
+        .encodeParameter(
+          "address",
+          "0x" + SOLD_TOKEN_BYTES32_ADDRESS.substring(26)
+        )
+        .substring(2)
     );
     assert.equal(
       sale.recipient.substring(2),
@@ -3655,6 +3735,7 @@ contract("ICCO", function(accounts) {
       SALE_4_END,
       saleRecipient,
       refundRecipient,
+      SOLD_TOKEN_BYTES32_ADDRESS,
     ];
 
     // create accepted tokens array
@@ -3807,6 +3888,18 @@ contract("ICCO", function(accounts) {
     );
     index += 32;
 
+    // solana ATA
+    assert.equal(
+      log.payload.substr(index, 64),
+      web3.eth.abi
+        .encodeParameter(
+          "address",
+          "0x" + SOLD_TOKEN_BYTES32_ADDRESS.substring(26)
+        )
+        .substring(2)
+    );
+    index += 64;
+
     // recipient of proceeds
     assert.equal(
       log.payload.substr(index, 64),
@@ -3903,6 +3996,15 @@ contract("ICCO", function(accounts) {
     assert.equal(
       sale.acceptedTokensConversionRates[TOKEN_TWO_INDEX],
       tokenTwoConversionRate
+    );
+    assert.equal(
+      sale.solanaTokenAccount.substring(2),
+      web3.eth.abi
+        .encodeParameter(
+          "address",
+          "0x" + SOLD_TOKEN_BYTES32_ADDRESS.substring(26)
+        )
+        .substring(2)
     );
     assert.equal(
       sale.recipient.substring(2),
@@ -4598,6 +4700,7 @@ contract("ICCO", function(accounts) {
       saleEnd,
       saleRecipient,
       refundRecipient,
+      SOLD_TOKEN_BYTES32_ADDRESS,
     ];
 
     // create accepted tokens array
@@ -4700,6 +4803,7 @@ contract("ICCO", function(accounts) {
       saleEnd,
       saleRecipient,
       refundRecipient,
+      SOLD_TOKEN_BYTES32_ADDRESS,
     ];
 
     // create accepted tokens array with a bad token address (non-ERC20)
@@ -4817,6 +4921,7 @@ contract("ICCO", function(accounts) {
       saleEnd,
       saleRecipient,
       refundRecipient,
+      SOLD_TOKEN_BYTES32_ADDRESS,
     ];
 
     // create accepted tokens array
@@ -4904,6 +5009,7 @@ contract("ICCO", function(accounts) {
       saleEnd,
       saleRecipient,
       refundRecipient,
+      SOLD_TOKEN_BYTES32_ADDRESS,
     ];
 
     // create accepted tokens array
@@ -5000,6 +5106,7 @@ contract("ICCO", function(accounts) {
       saleEnd,
       saleRecipient,
       refundRecipient,
+      SOLD_TOKEN_BYTES32_ADDRESS,
     ];
 
     // create accepted tokens array

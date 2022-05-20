@@ -91,7 +91,8 @@ use std::convert::TryInto;
 pub fn initialize(
     program_id: Pubkey,
     payer: Pubkey,
-    bridge: Pubkey,
+    core_bridge: Pubkey,
+    token_bridge: Pubkey,
     conductor: Pubkey,
 ) -> solitaire::Result<Instruction> {
     let config_key = ConfigAccount::<'_, { AccountState::Uninitialized }>::key(None, &program_id);
@@ -104,7 +105,7 @@ pub fn initialize(
             AccountMeta::new(solana_program::sysvar::rent::id(), false),
             AccountMeta::new(solana_program::system_program::id(), false),
         ],
-        data: (crate::instruction::Instruction::Initialize, bridge, conductor).try_to_vec()?,
+        data: (crate::instruction::Instruction::Initialize, core_bridge, token_bridge, conductor).try_to_vec()?,
     })
 }
 

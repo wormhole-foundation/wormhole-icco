@@ -70,14 +70,14 @@ struct Config {
 type Error = Box<dyn std::error::Error>;
 type CommmandResult = Result<Option<Transaction>, Error>;
 
-fn command_init_bridge(config: &Config, bridge: &Pubkey, core_bridge: &Pubkey, icco_conductor: &Pubkey) -> CommmandResult {
+fn command_init_bridge(config: &Config, bridge: &Pubkey, core_bridge: &Pubkey, token_bridge: &Pubkey, icco_conductor: &Pubkey) -> CommmandResult {
     println!("Initializing icco contributor {}", bridge);
 
     let minimum_balance_for_rent_exemption = config
         .rpc_client
         .get_minimum_balance_for_rent_exemption(size_of::<icco_contributor::types::Config>())?;
 
-    let ix = icco_contributor::instructions::initialize(*bridge, config.owner.pubkey(), *core_bridge, *icco_conductor).unwrap();
+    let ix = icco_contributor::instructions::initialize(*bridge, config.owner.pubkey(), *core_bridge, *token_bridge, *icco_conductor).unwrap();
     println!("config account: {}, ", ix.accounts[1].pubkey.to_string());
     let mut transaction = Transaction::new_with_payer(&[ix], Some(&config.fee_payer.pubkey()));
 
@@ -205,11 +205,20 @@ fn main() {
                         .help("Address of the Wormhole core bridge program"),
                 )
                 .arg(
+                    Arg::with_name("token-bridge")
+                        .validator(is_pubkey_or_keypair)
+                        .value_name("TOKEN_BRIDGE_KEY")
+                        .takes_value(true)
+                        .index(3)
+                        .required(true)
+                        .help("Address of the Wormhole token bridge program"),
+                )
+                .arg(
                     Arg::with_name("icco-conductor")
                         .validator(is_pubkey_or_keypair)
                         .value_name("ICCO_CONDUCTOR_KEY")
                         .takes_value(true)
-                        .index(3)
+                        .index(4)
                         .required(false)
                         .help("Address of conductor for icco"),
                 ),
@@ -316,9 +325,10 @@ fn main() {
         ("create-bridge", Some(arg_matches)) => {
             let contributor = pubkey_of(arg_matches, "icco-contributor").unwrap();
             let core_bridge = pubkey_of(arg_matches, "core-bridge").unwrap();
+            let token_bridge = pubkey_of(arg_matches, "token-bridge").unwrap();
             let conductor = pubkey_of(arg_matches, "icco-conductor").unwrap();
 
-            command_init_bridge(&config, &contributor, &core_bridge, &conductor)
+            command_init_bridge(&config, &contributor, &core_bridge, &token_bridge, &conductor)
         }
         ("create-meta", Some(arg_matches)) => {
             let mint = pubkey_of(arg_matches, "mint").unwrap();

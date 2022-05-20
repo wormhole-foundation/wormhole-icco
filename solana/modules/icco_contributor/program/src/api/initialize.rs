@@ -33,7 +33,8 @@ pub struct Initialize<'b> {
 // Config account and InitializeData - only stores bridge address.
 #[derive(BorshDeserialize, BorshSerialize, Default)]
 pub struct InitializeContributorData {
-    pub bridge: Pubkey,     // Not sure if Bridge is needed. We can access it?
+    pub core_bridge: Pubkey,
+    pub token_bridge: Pubkey,
     pub conductor: Pubkey,
 }
 
@@ -49,7 +50,8 @@ pub fn initialize(
 // msg!("bbrp in icco initialize {} {}", data.bridge, data.conductor);
     // Create the config account.
     accs.config.create(ctx, accs.payer.key, Exempt)?;
-    accs.config.wormhole_bridge = data.bridge;
+    accs.config.wormhole_core_bridge = data.core_bridge;
+    accs.config.wormhole_token_bridge = data.token_bridge;
     accs.config.icco_conductor = data.conductor;
     Ok(())
 }

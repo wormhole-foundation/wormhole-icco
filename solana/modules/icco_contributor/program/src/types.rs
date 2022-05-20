@@ -14,7 +14,8 @@ pub type ChainID = u16;
 /// icco contributor contract configuration Data.
 #[derive(Default, Clone, Copy, BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 pub struct Config {
-    pub wormhole_bridge: Pubkey,
+    pub wormhole_core_bridge: Pubkey,
+    pub wormhole_token_bridge: Pubkey,
     pub icco_conductor: Pubkey,
 }
 

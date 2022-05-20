@@ -6,6 +6,11 @@
 set -x
 
 cd modules/icco_contributor
+EMITTER_ADDRESS="11111111111111111111111111111115" BRIDGE_ADDRESS="Bridge1p5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o" cargo build
+EMITTER_ADDRESS="11111111111111111111111111111115" BRIDGE_ADDRESS="Bridge1p5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o" cargo build-bpf
+cd -
+
+cd modules/icco_contributor
 EMITTER_ADDRESS="11111111111111111111111111111115" BRIDGE_ADDRESS="Bridge1p5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o" cargo build-bpf
 cd -
 
@@ -25,4 +30,4 @@ minikube kubectl -- exec -c devnet solana-devnet-0 -- solana program deploy -u l
 
 # ./modules/icco_contributor/target/debug/client create-bridge 5yrpFgtmiBkRmDgveVErMWuxC25eK5QE5ouZgfi46aqM B6RHG3mfcckmrYN1UhmJzyS1XX3fZKbkeUcpJe9Sy3FE B6RHG3mfcckmrYN1UhmJzyS1XX3fZKbkeUcpJe9Sy3FE
 con_addr=$(node read_conductor_address.js)
-./modules/icco_contributor/target/debug/client create-bridge 5yrpFgtmiBkRmDgveVErMWuxC25eK5QE5ouZgfi46aqM B6RHG3mfcckmrYN1UhmJzyS1XX3fZKbkeUcpJe9Sy3FE ${con_addr}
+./modules/icco_contributor/target/debug/client create-bridge 5yrpFgtmiBkRmDgveVErMWuxC25eK5QE5ouZgfi46aqM Bridge1p5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o B6RHG3mfcckmrYN1UhmJzyS1XX3fZKbkeUcpJe9Sy3FE ${con_addr}

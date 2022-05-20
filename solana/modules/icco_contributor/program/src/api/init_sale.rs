@@ -57,7 +57,7 @@ pub struct CreateIccoSaleCustodyAccount<'b> {
     pub payer: Mut<Signer<AccountInfo<'b>>>,
     pub config: ConfigAccount<'b, { AccountState::Initialized }>,       // Must be created before Init
     pub init_sale_vaa: ClaimableVAA<'b, InitSale>,      // S/B unclaimed and stays unclaimed.
-    pub mint: Data<'b, SplMint, { AccountState::MaybeInitialized }>,        // From token (Mut<Data<'b, SplMint, { AccountState::Initialized }>>)??
+    pub mint: Data<'b, SplMint, { AccountState::Initialized }>,        // From token (Mut<Data<'b, SplMint, { AccountState::Initialized }>>)??
     pub custody: Mut<CustodyAccount<'b, { AccountState::MaybeInitialized }>>,
 
     pub prog_id: AccountInfo<'b>,   // needed for initialize_account invoke
@@ -71,14 +71,6 @@ impl<'a> From<&CreateIccoSaleCustodyAccount<'a>> for CustodyAccountDerivationDat
         CustodyAccountDerivationData {
             sale_id: accs.init_sale_vaa.sale_id,
             mint: *accs.mint.info().key,
-        }
-    }
-}
-
-impl<'a> From<&CreateIccoSaleCustodyAccount<'a>> for SaleCustodyAccountDerivationData {
-    fn from(accs: &CreateIccoSaleCustodyAccount<'a>) -> Self {
-        SaleCustodyAccountDerivationData {
-            foreign_mint: InitSale::get_token_address_bytes(&accs.init_sale_vaa.meta().payload[..]).try_into().unwrap(),  // Conductor chain mint address.
         }
     }
 }
@@ -134,12 +126,20 @@ pub struct InitIccoSale<'b> {
     pub payer: Mut<Signer<AccountInfo<'b>>>,
     pub config: ConfigAccount<'b, { AccountState::Initialized }>,       // Must be created before Init
     pub init_sale_vaa: ClaimableVAA<'b, InitSale>,  // Claimed here.
-    pub sale_mint: Data<'b, SplMint, { AccountState::MaybeInitialized }>,           // From token (Mut<Data<'b, SplMint, { AccountState::Initialized }>>)??
+    pub sale_mint: Data<'b, SplMint, { AccountState::Initialized }>,           // From token (Mut<Data<'b, SplMint, { AccountState::Initialized }>>)??
     pub sale_custody: Mut<CustodyAccount<'b, { AccountState::MaybeInitialized }>>,  // uses SaleCustodyAccountDerivationData.
 
     pub rent: Sysvar<'b, Rent>,
     pub clock: Sysvar<'b, Clock>,
     // Sale state is in ctx.accounts[9];
+}
+
+impl<'a> From<&InitIccoSale<'a>> for SaleCustodyAccountDerivationData {
+    fn from(accs: &InitIccoSale<'a>) -> Self {
+        SaleCustodyAccountDerivationData {
+            foreign_mint: InitSale::get_token_address_bytes(&accs.init_sale_vaa.meta().payload[..]).try_into().unwrap(),  // Conductor chain mint address.
+        }
+    }
 }
 
 /*
@@ -205,7 +205,17 @@ pub fn init_icco_sale(
             return Err(SaleTokenAccountAddressIncorrect.into());
         }
     }
-
+    if !accs.sale_custody.is_initialized() {
+        accs.sale_custody.create(&SaleCustodyAccountDerivationData::from(&*accs), ctx, accs.payer.key, Exempt)?;
+        let init_ix = spl_token::instruction::initialize_account(
+            &spl_token::id(),
+            accs.sale_custody.info().key,
+            accs.sale_mint.info().key,
+            ctx.program_id,
+        )?;
+        invoke_signed(&init_ix, ctx.accounts, &[])?;
+    }
+        
     // Create sale_state account using Solana API.
     //msg!("ctx accounts Cnt: {}", ctx.accounts.len());
     let sale_state_account_info = &ctx.accounts[9];

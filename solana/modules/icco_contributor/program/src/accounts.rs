@@ -92,6 +92,27 @@ impl<'b, const STATE: AccountState> Seeded<&CustodyAccountDerivationData>
 }
 
 ///-------------------------------------------------------------------
+/// Sale Token mint derivation data. PDA <= "salecustody", foreignMint
+pub type SaleTokenAccount<'b, const STATE: AccountState>  = Data<'b, SaleMint, { STATE }>;
+
+pub struct SaleTokenAccountDerivationData {
+    pub chain_id: u16,
+    pub foreign_mint: [u8; 32],
+}
+
+impl<'b, const STATE: AccountState> Seeded<&SaleTokenAccountDerivationData>
+    for SaleTokenAccount<'b, { STATE }>
+{
+    fn seeds(accs: &SaleTokenAccountDerivationData) -> Vec<Vec<u8>> { 
+        vec![
+            String::from("wrapped").as_bytes().to_vec(),
+            accs.chain_id.to_be_bytes().to_vec(),
+            accs.foreign_mint.to_vec(),
+        ]
+    }
+}
+
+///-------------------------------------------------------------------
 /// Sale Token Custody Account derivation data. PDA <= "salecustody", foreignMint
 pub struct SaleCustodyAccountDerivationData {
     pub foreign_mint: [u8; 32],

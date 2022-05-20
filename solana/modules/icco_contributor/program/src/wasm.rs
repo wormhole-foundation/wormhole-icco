@@ -15,7 +15,8 @@ use crate::{
         create_icco_sale_custody_account,
         get_icco_sale_custody_account_address,
         get_icco_sale_custody_account_address_for_sale_token,
-//        get_test_account_address,
+        get_icco_sale_mint_address_for_sale_token,
+            //    get_test_account_address,
         get_icco_state_address,
         init_icco_sale,
         abort_icco_sale,
@@ -338,6 +339,13 @@ pub fn icco_sale_custody_account_address_for_sale_token(program_id: String, src_
     get_icco_sale_custody_account_address_for_sale_token (Pubkey::from_str(program_id.as_str()).unwrap(), t_addr)
 }
 
+#[wasm_bindgen]
+pub fn icco_sale_mint_address_for_sale_token(program_id: String, src_chain: u16, src_mint: Vec<u8>) -> Pubkey {
+    let mut t_addr = [0u8; 32];
+    t_addr.copy_from_slice(&src_mint);
+    get_icco_sale_mint_address_for_sale_token (Pubkey::from_str(program_id.as_str()).unwrap(), t_addr, src_chain)
+}
+
 // Dealing with non-Pubkey addresses.
 // #[wasm_bindgen]
 // pub fn wrapped_address(program_id: String, token_address: Vec<u8>, token_chain: u16) -> Vec<u8> {
@@ -354,4 +362,14 @@ pub fn icco_sale_custody_account_address_for_sale_token(program_id: String, src_
 //     );
 
 //     wrapped_addr.to_bytes().to_vec()
+// }
+
+// impl<'b, const State: AccountState> Seeded<&WrappedDerivationData> for WrappedMint<'b, { State }> {
+//     fn seeds(data: &WrappedDerivationData) -> Vec<Vec<u8>> {
+//         vec![
+//             String::from("wrapped").as_bytes().to_vec(),
+//             data.token_chain.to_be_bytes().to_vec(),
+//             data.token_address.to_vec(),
+//         ]
+//     }
 // }

@@ -37,6 +37,19 @@ impl Owned for TestStruct {
 }
 
 
+/// icco sale state. Writeable in init, seal, abort.
+/// Only static sizing is working well in here, so 256 is preallocated.
+//#[derive(Clone, Copy, BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[derive(Default, Clone, Copy, BorshDeserialize, BorshSerialize)]
+pub struct SaleMint {
+}
+
+impl Owned for SaleMint {
+    fn owner(&self) -> AccountOwner {
+        AccountOwner::Any
+    }
+}
+
 
 /// icco sale state. Writeable in init, seal, abort.
 /// Only static sizing is working well in here, so 256 is preallocated.

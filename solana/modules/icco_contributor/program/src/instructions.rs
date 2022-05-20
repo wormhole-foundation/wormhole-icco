@@ -11,6 +11,8 @@ use crate::{
         SaleCustodyAccountDerivationData,
         CustodyAccount,
         CustodyAccountDerivationData,
+        SaleTokenAccount,
+        SaleTokenAccountDerivationData,
         CustodySigner,
         EmitterAccount,
         SplTokenMeta,
@@ -215,6 +217,8 @@ pub fn init_icco_sale(
             AccountMeta::new_readonly(solana_program::sysvar::clock::id(), false),
             AccountMeta::new_readonly(solana_program::system_program::id(), false),
             AccountMeta::new(state_key, false),
+            AccountMeta::new_readonly(program_id, false),       // <--- As sale custody owner?
+            AccountMeta::new_readonly(spl_token::id(), false),
         ],
 
         data: (
@@ -242,6 +246,10 @@ pub fn get_icco_sale_custody_account_address(program_id: Pubkey, sale_id: u128, 
 
 pub fn get_icco_sale_custody_account_address_for_sale_token(program_id: Pubkey, src_mint: [u8; 32]) -> Pubkey {
     CustodyAccount::<'_, { AccountState::MaybeInitialized }>::key(&SaleCustodyAccountDerivationData{foreign_mint: src_mint}, &program_id)
+}
+
+pub fn get_icco_sale_mint_address_for_sale_token(program_id: Pubkey, src_mint: [u8; 32], chain_id: u16) -> Pubkey {
+    SaleTokenAccount::<'_, { AccountState::MaybeInitialized }>::key(&SaleTokenAccountDerivationData{foreign_mint: src_mint, chain_id: chain_id}, &program_id)
 }
 
 pub fn abort_icco_sale(

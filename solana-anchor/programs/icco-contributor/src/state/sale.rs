@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use num_derive::*;
 
-use crate::{state::config::ContributorConfig, wormhole::parse_vaa};
+use crate::{state::config::Contributor, wormhole::parse_vaa};
 
 const INDEX_ACCEPTED_TOKENS_START: usize = 228;
 const INDEX_ALLOCATIONS_START: usize = 33;
@@ -15,19 +15,24 @@ const PAYLOAD_SALE_ABORTED: u8 = 4;
 
 #[error_code]
 pub enum SaleError {
+    #[msg("IncorrectSale")]
+    IncorrectSale,
+
     #[msg("IncorrectVaaPayload")]
     IncorrectVaaPayload,
 
     #[msg("InvalidVaaAction")]
     InvalidVaaAction,
 
-    #[msg("IncorrectSale")]
-    IncorrectSale,
+    #[msg("SaleEnded")]
+    SaleEnded,
+
+    #[msg("SaleNotFinished")]
+    SaleNotFinished,
 }
 
 #[account]
 pub struct Sale {
-    id: [u8; 32],            // 32
     token_address: [u8; 32], // 32
     token_chain: u16,        // 2
     token_decimals: u8,      // 1
@@ -35,14 +40,17 @@ pub struct Sale {
     recipient: [u8; 32],     // 32
     num_accepted: u8,        // 1
     status: SaleStatus,      // 1
+
+    pub id: [u8; 32], // 32
+    pub bump: u8,     // 1
 }
 
 impl Sale {
-    pub const MAXIMUM_SIZE: usize = 32 + 32 + 2 + 1 + 8 + 8 + 32 + 1 + 1;
+    pub const MAXIMUM_SIZE: usize = 32 + 32 + 2 + 1 + 8 + 8 + 32 + 1 + 1 + 1;
 
-    pub fn initialize(&mut self, config: &ContributorConfig, signed_vaa: &[u8]) -> Result<()> {
+    pub fn initialize(&mut self, contributor: &Contributor, signed_vaa: &[u8]) -> Result<()> {
         let parsed = parse_vaa(signed_vaa)?;
-        config.verify_conductor(parsed.emitter_chain, parsed.emitter_address)?;
+        contributor.verify_conductor(parsed.emitter_chain, parsed.emitter_address)?;
 
         // now deserialize payload
         let payload = parsed.payload;
@@ -91,13 +99,15 @@ impl Sale {
         Ok(())
     }
 
-    pub fn attest_contributions(&mut self) -> Result<()> {
+    pub fn attest_contributions(&mut self, time: u64) -> Result<()> {
+        require!(!self.has_ended(), SaleError::SaleEnded);
+        require!(time > self.times.end, SaleError::SaleNotFinished);
         Ok(())
     }
 
-    pub fn seal(&mut self, config: &ContributorConfig, signed_vaa: &[u8]) -> Result<()> {
+    pub fn seal(&mut self, contributor: &Contributor, signed_vaa: &[u8]) -> Result<()> {
         let parsed = parse_vaa(signed_vaa)?;
-        config.verify_conductor(parsed.emitter_chain, parsed.emitter_address)?;
+        contributor.verify_conductor(parsed.emitter_chain, parsed.emitter_address)?;
 
         // now deserialize payload
         let payload = parsed.payload;
@@ -127,6 +137,8 @@ impl Sale {
         // TODO: check balance of the sale token on the contract to make sure
         // we have enough for claimants
 
+        // TODO: need to bridge collateral over to recipient
+
         // finally set the status to sealed
         self.status = SaleStatus::Sealed;
 
@@ -134,12 +146,15 @@ impl Sale {
     }
 
     pub fn claim_allocation(&mut self) -> Result<()> {
+        // TODO: devs do something
         Ok(())
     }
 
-    pub fn abort(&mut self, config: &ContributorConfig, signed_vaa: &[u8]) -> Result<()> {
+    pub fn abort(&mut self, contributor: &Contributor, signed_vaa: &[u8]) -> Result<()> {
         let parsed = parse_vaa(signed_vaa)?;
-        config.verify_conductor(parsed.emitter_chain, parsed.emitter_address)?;
+        contributor.verify_conductor(parsed.emitter_chain, parsed.emitter_address)?;
+
+        require!(!self.has_ended(), SaleError::SaleEnded);
 
         // now deserialize payload
         let payload = parsed.payload;
@@ -165,6 +180,7 @@ impl Sale {
     }
 
     pub fn claim_refund(&mut self) -> Result<()> {
+        // TODO: devs do something
         Ok(())
     }
 

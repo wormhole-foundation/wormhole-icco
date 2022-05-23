@@ -1,47 +1,74 @@
 use anchor_lang::prelude::*;
+use std::str;
 
-use crate::state::{config::ContributorConfig, sale::Sale};
+use crate::state::{config::Contributor, sale::Sale};
+
+use crate::config::ContributorError;
+
+const SEED_PREFIX_SALE: &str = "icco-sale";
 
 pub fn init_sale(ctx: Context<IccoVaa>) -> Result<()> {
-    ctx.accounts.sale.initialize(
-        ctx.accounts.config.as_ref(),
+    let sale = &mut ctx.accounts.sale;
+
+    // initialize sale
+    sale.initialize(
+        ctx.accounts.contributor.as_ref(),
         ctx.accounts.claimable_vaa.data.borrow().as_ref(),
-    )
+    )?;
+
+    // create bump for pda
+    // TODO: is this right? I want to create a seed based
+    // on the contributor's key and sale id
+    let mut concatenated: Vec<u8> = SEED_PREFIX_SALE.into();
+    concatenated.extend(sale.id);
+
+    let result = str::from_utf8(concatenated.as_slice());
+    require!(result.is_ok(), ContributorError::InvalidConductor);
+
+    sale.bump = *ctx.bumps.get(result.unwrap()).unwrap();
+    Ok(())
 }
 
 pub fn sale_sealed(ctx: Context<IccoVaa>) -> Result<()> {
     ctx.accounts.sale.seal(
-        ctx.accounts.config.as_ref(),
+        ctx.accounts.contributor.as_ref(),
         ctx.accounts.claimable_vaa.data.borrow().as_ref(),
     )
 }
 
 pub fn sale_aborted(ctx: Context<IccoVaa>) -> Result<()> {
     ctx.accounts.sale.abort(
-        ctx.accounts.config.as_ref(),
+        ctx.accounts.contributor.as_ref(),
         ctx.accounts.claimable_vaa.data.borrow().as_ref(),
     )
 }
 
 #[derive(Accounts)]
 pub struct IccoVaa<'info> {
-    // TODO: why add 8?
-    #[account(init, payer = owner, space = Sale::MAXIMUM_SIZE + 8)]
+    #[account(
+        init,
+        payer = owner,
+        space = 8 + Contributor::MAXIMUM_SIZE,
+    )]
+    pub contributor: Account<'info, Contributor>,
+
+    #[account(
+        mut,
+        seeds = [SEED_PREFIX_SALE.as_bytes(), &sale.id, contributor.key().as_ref()],
+        bump = sale.bump
+    )]
     pub sale: Account<'info, Sale>,
 
-    #[account(init, payer = owner, space = ContributorConfig::MAXIMUM_SIZE + 8)]
-    pub config: Account<'info, ContributorConfig>,
-
-    /// CHECK: ...
+    /// CHECK: pda of vaa bytes
     pub claimable_vaa: AccountInfo<'info>,
 
     // seeds: emitter_addr, emitter_chain, seq
     // pid: core bridge
-    /// CHECK: ...
+    /// CHECK: pda to check whether vaa was claimed already
     #[account(mut)]
     pub claim_pda: AccountInfo<'info>,
 
-    /// CHECK: ...
+    /// CHECK: wormhole program
     #[account(executable)]
     pub core_bridge: AccountInfo<'info>,
 

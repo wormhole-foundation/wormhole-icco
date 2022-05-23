@@ -14,14 +14,14 @@ pub mod icco_contributor {
     use super::*;
 
     pub fn create_config(
-        ctx: Context<CreateContributorConfig>,
+        ctx: Context<CreateContributor>,
         conductor_chain: u16,
         conductor_address: Vec<u8>,
         wormhole: Pubkey,
         token_bridge: Pubkey,
     ) -> Result<()> {
         let config = &mut ctx.accounts.config;
-        require!(conductor_chain != 1u16, ConfigError::InvalidConductor);
+        require!(conductor_chain != 1u16, ContributorError::InvalidConductor);
 
         config.conductor_chain = conductor_chain;
         config.conductor_address = conductor_address.try_into().expect("incorrect byte length");

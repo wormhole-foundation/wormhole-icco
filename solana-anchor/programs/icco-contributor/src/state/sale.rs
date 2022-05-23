@@ -87,6 +87,14 @@ impl Sale {
         Ok(())
     }
 
+    pub fn contribute(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    pub fn attest_contributions(&mut self) -> Result<()> {
+        Ok(())
+    }
+
     pub fn seal(&mut self, config: &ContributorConfig, signed_vaa: &[u8]) -> Result<()> {
         let parsed = parse_vaa(signed_vaa)?;
         config.verify_conductor(parsed.emitter_chain, parsed.emitter_address)?;
@@ -125,6 +133,10 @@ impl Sale {
         Ok(())
     }
 
+    pub fn claim_allocation(&mut self) -> Result<()> {
+        Ok(())
+    }
+
     pub fn abort(&mut self, config: &ContributorConfig, signed_vaa: &[u8]) -> Result<()> {
         let parsed = parse_vaa(signed_vaa)?;
         config.verify_conductor(parsed.emitter_chain, parsed.emitter_address)?;
@@ -149,6 +161,10 @@ impl Sale {
         // finally set the status to aborted
         self.status = SaleStatus::Aborted;
 
+        Ok(())
+    }
+
+    pub fn claim_refund(&mut self) -> Result<()> {
         Ok(())
     }
 

@@ -611,6 +611,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "icco-contributor"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "num-derive",
+ "num-traits",
+]
+
+[[package]]
 name = "instant"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"

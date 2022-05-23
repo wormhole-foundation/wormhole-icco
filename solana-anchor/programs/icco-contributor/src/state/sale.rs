@@ -1,8 +1,7 @@
 use anchor_lang::prelude::*;
 use num_derive::*;
-use num_traits::*;
 
-use crate::wormhole::parse_vaa;
+use crate::{state::config::ContributorConfig, wormhole::parse_vaa};
 
 const INDEX_ACCEPTED_TOKENS_START: usize = 228;
 const INDEX_ALLOCATIONS_START: usize = 33;
@@ -41,10 +40,9 @@ pub struct Sale {
 impl Sale {
     pub const MAXIMUM_SIZE: usize = 32 + 32 + 2 + 1 + 8 + 8 + 32 + 1 + 1;
 
-    pub fn initialize(&mut self, signed_vaa: &[u8]) -> Result<()> {
+    pub fn initialize(&mut self, config: &ContributorConfig, signed_vaa: &[u8]) -> Result<()> {
         let parsed = parse_vaa(signed_vaa)?;
-
-        // TODO: verify emitter here
+        config.verify_conductor(parsed.emitter_chain, parsed.emitter_address)?;
 
         // now deserialize payload
         let payload = parsed.payload;
@@ -89,10 +87,9 @@ impl Sale {
         Ok(())
     }
 
-    pub fn seal(&mut self, signed_vaa: &[u8]) -> Result<()> {
+    pub fn seal(&mut self, config: &ContributorConfig, signed_vaa: &[u8]) -> Result<()> {
         let parsed = parse_vaa(signed_vaa)?;
-
-        // TODO: verify emitter here
+        config.verify_conductor(parsed.emitter_chain, parsed.emitter_address)?;
 
         // now deserialize payload
         let payload = parsed.payload;
@@ -128,10 +125,9 @@ impl Sale {
         Ok(())
     }
 
-    pub fn abort(&mut self, signed_vaa: &[u8]) -> Result<()> {
+    pub fn abort(&mut self, config: &ContributorConfig, signed_vaa: &[u8]) -> Result<()> {
         let parsed = parse_vaa(signed_vaa)?;
-
-        // TODO: verify emitter here
+        config.verify_conductor(parsed.emitter_chain, parsed.emitter_address)?;
 
         // now deserialize payload
         let payload = parsed.payload;

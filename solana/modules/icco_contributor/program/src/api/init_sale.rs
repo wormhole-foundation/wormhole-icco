@@ -89,6 +89,15 @@ pub fn create_icco_sale_custody_account(
 
     accs.init_sale_vaa.verify(ctx.program_id)?;
 
+    // VAA emitter must be registered conductor
+    {
+        let vaa_emitter = Pubkey::new(&accs.init_sale_vaa.meta().emitter_address);
+        if  vaa_emitter != accs.config.icco_conductor {
+            msg!("bbrp init_icco_sale bad emitter addr: {:?} expected: {:?}", vaa_emitter, accs.config.icco_conductor);
+            return Err(VAAInvalidEmitterAddress.into());
+        }
+    }
+    
     if accs.init_sale_vaa.payload_id != 1 {
         msg!("bbrp create_icco_sale_escrow! bad payloadId");
         return Err(VAAInvalidPayloadId.into());
@@ -168,7 +177,7 @@ pub fn init_icco_sale(
 ) -> Result<()> {
     msg!("bbrp in init_icco_sale!");
 
-    // TBD: --- Uncomment after script update ---
+    // VAA emitter must be registered conductor
     {
         let vaa_emitter = Pubkey::new(&accs.init_sale_vaa.meta().emitter_address);
         if  vaa_emitter != accs.config.icco_conductor {

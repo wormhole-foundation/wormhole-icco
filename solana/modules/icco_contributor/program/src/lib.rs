@@ -25,8 +25,21 @@ pub mod simple_account;
 pub mod instructions;
 
 pub use api::{
-    contribute_icco_sale, init_icco_sale, initialize, create_icco_sale_custody_account, abort_icco_sale, attest_icco_sale,
-    ContributeIccoSale, InitIccoSale, Initialize, CreateIccoSaleCustodyAccount, AbortIccoSale, AttestIccoSale,
+    contribute_icco_sale,
+    init_icco_sale,
+    initialize,
+    create_icco_sale_custody_account,
+    abort_icco_sale,
+    attest_icco_sale,
+    attest_icco_sale_transfer_native_custody, 
+
+    ContributeIccoSale,
+    InitIccoSale,
+    Initialize,
+    CreateIccoSaleCustodyAccount,
+    AbortIccoSale,
+    AttestIccoSale,
+    TransferCustodyIccoTokenNative,
 };
 
 use solitaire::*;

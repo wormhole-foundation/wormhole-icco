@@ -17,6 +17,7 @@ pub enum Error {
     SaleHasNotStarted,
     SaleHasEnded,
     SaleHasBeenSealed,
+    SaleHasNotBeenSealed,
     SaleHasBeenAborted,
     VAATokenCountExceeded,
     SaleStateAccountAddressIncorrect,

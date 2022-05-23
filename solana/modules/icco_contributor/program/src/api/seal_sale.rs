@@ -5,8 +5,9 @@
 use crate::{
     messages::*,
     accounts::{
+        CustodyAccount,
         ConfigAccount,
-//        SaleStateAccountDerivationData,
+        SaleStateAccountDerivationData,
     },
     errors::Error::*,
     claimed_vaa::ClaimedVAA,
@@ -25,11 +26,11 @@ use solitaire::{
     *,
 };
 
-use wormhole_sdk::{
-    ConsistencyLevel,
-    post_message,    // SDK call.
+//use wormhole_sdk::{
+//    ConsistencyLevel,
+//    post_message,    // SDK call.
 //    id as bridge_id,              // Get Bridge Id
-};
+//};
 
 //use bridge::{  vaa::{ ClaimableVAA, }, };
 
@@ -43,16 +44,17 @@ use wormhole_sdk::{
 // Transfers accepted tokens from one custody account to conductor chain account via WH
 // SaleToken custody account was created in initSale call.
 #[derive(FromAccounts)]
-pub struct TransferCustodyIccoToken<'b> {
+pub struct TransferCustodyIccoTokenNative<'b> {
     pub payer: Mut<Signer<AccountInfo<'b>>>,
     pub config: ConfigAccount<'b, { AccountState::Initialized }>,
     pub init_sale_vaa: ClaimedVAA<'b, InitSale>,           // Was claimed.
-    pub seal_sale_vaa: ClaimedVAA<'b, SealSale>,           // Was NOT claimed yet
-    pub sale_custody: Mut<SaleCustodyAccount<'b, { AccountState::Initialized }>>,      // To check if tokens are present
-    pub rent: Sysvar<'b, Rent>,
+    pub seal_sale_vaa: ClaimedVAA<'b, SaleSealed>,           // Was NOT claimed yet
+    pub sale_custody: Mut<CustodyAccount<'b, { AccountState::Initialized }>>,      // To check if sale token account has expected amount.
     pub clock: Sysvar<'b, Clock>,
-    // Sale state is in ctx.accounts[..];
-    // --- starting at [6]: Needed for WH transfer.
+
+    // Sale state is in ctx.accounts[7];
+    
+    // --- starting here Needed for WH transfer.
     // AccountMeta::new(wormhole_config, false),
     // AccountMeta::new(fee_collector, false),
     // AccountMeta::new_readonly(emitter, false),
@@ -61,28 +63,27 @@ pub struct TransferCustodyIccoToken<'b> {
     // AccountMeta::new_readonly(solana_program::system_program::id(), false),
 }
 
-/*
-// May need this later Just for PDA verification.
-impl<'a> From<&AttestIccoSale<'a>> for SaleStateAccountDerivationData {
-    fn from(accs: &AttestIccoSale<'a>) -> Self {
+// May need this later for PDA verification.
+impl<'a> From<&TransferCustodyIccoTokenNative<'a>> for SaleStateAccountDerivationData {
+    fn from(accs: &TransferCustodyIccoTokenNative<'a>) -> Self {
         SaleStateAccountDerivationData {
-            sale_id: accs.attest_sale_vaa.sale_id,
+            sale_id: accs.init_sale_vaa.sale_id,
         }
     }
 }
-*/
 
 // No data so far.
 #[derive(BorshDeserialize, BorshSerialize, Default)]
-pub struct AttestIccoSaleData {
+pub struct AttestIccoSaleTransferCustodyIccoTokenData {
+    pub token_idx: u8,
 }
 
-pub fn attest_icco_sale(
+pub fn attest_icco_sale_transfer_native_custody(
     ctx: &ExecutionContext,
-    accs: &mut AttestIccoSale,
-    _data: AttestIccoSaleData,
+    _accs: &mut TransferCustodyIccoTokenNative,
+    data: AttestIccoSaleTransferCustodyIccoTokenData,
 ) -> Result<()> {
-    msg!("bbrp in attest_icco_sale!");
+    msg!("bbrp in attest_icco_sale_transfer_native_custody");
 
     // let now_time = accs.clock.unix_timestamp;
     // let start_time = accs.init_sale_vaa.get_sale_start(&accs.init_sale_vaa.meta().payload[..]).1 as i64;
@@ -95,59 +96,34 @@ pub fn attest_icco_sale(
 //    accs.sale_state.verify_derivation(ctx.program_id, &derivation_data)?;
 
     // msg!("state: {:?}", ctx.accounts[6].key);
-    let sale_state_account_info = &ctx.accounts[6];
+    let token_idx = data.token_idx;
+    let sale_state_account_info = &ctx.accounts[7];
     let state_data = sale_state_account_info.data.borrow();
-    if get_sale_state_sealed(&state_data) {
-        // msg!("sealed!");
-        return Err(SaleHasBeenSealed.into());
+    if !get_sale_state_sealed(&state_data) {
+        // msg!("not sealed!");
+        return Err(SaleHasNotBeenSealed.into());
     }
     if get_sale_state_aborted(&state_data) {
         // msg!("aborted!");
         return Err(SaleHasBeenAborted.into());
     }
 
-    // msg!("counting tokens");
-    // Let's count solana tokens.
-    let mut sol_cnt: u8 = 0;
-    let mut token_idx: u8 = 0;
-    while token_idx < accs.init_sale_vaa.token_cnt {
-        if accs.init_sale_vaa.get_accepted_token_chain(token_idx, &accs.init_sale_vaa.meta().payload) == 1 {
-            sol_cnt = sol_cnt+1;
-        }
-        token_idx = token_idx + 1;
-    }
-    // Allocate and fill the VAA payload.
-    msg!("alloc: {} / {}", sol_cnt, token_idx);
+    // TBD Check saleToken if custody account has expected amount.
 
-    let mut vaa_bf = std::iter::repeat(0 as u8).take(get_sale_attested_size(sol_cnt) as usize).collect::<Vec<_>>();
-    let mut bf = & mut vaa_bf;
-    pack_sale_attested_vaa_header(& mut bf, accs.init_sale_vaa.sale_id, sol_cnt);
+    // Check if this token was transferred already.
+    // msg!("pre-transfer check");
+    let sale_state_account_info = &ctx.accounts[11];
+    let mut state_data = sale_state_account_info.data.borrow_mut();
 
-    // Store solana amounts.
-    // msg!("making VAA");
-    sol_cnt = 0;
-    token_idx = 0;
-    while token_idx < accs.init_sale_vaa.token_cnt {
-        if accs.init_sale_vaa.get_accepted_token_chain(token_idx, &accs.init_sale_vaa.meta().payload) == 1 {
-            let amount = get_sale_state_contribution(&state_data, token_idx);
-            pack_sale_attested_vaa_token(& mut bf, token_idx, sol_cnt, amount);
-            sol_cnt = sol_cnt+1;
-        }
-        token_idx = token_idx + 1;
+    if get_sale_state_contribution_transferred(&state_data, token_idx) {
+        // This custody account was processed already.
+        return Ok(());
     }
 
-    // post sale_attested_vaa.
-    msg!("posting VAA");
-    post_message(
-        *ctx.program_id,
-        *accs.payer.key,
-        *accs.message.key,
-        &bf,
-        ConsistencyLevel::Confirmed,
-        None,
-        ctx.accounts,
-        0
-    )?;
+    // TBD token bridge native xfer.
+
+    // Mark this token as transferred.
+    set_sale_state_contribution_transferred(&mut state_data, token_idx, true);
 
     Ok(())
 }

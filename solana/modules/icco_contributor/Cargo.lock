@@ -1262,6 +1262,7 @@ dependencies = [
  "borsh",
  "bstr",
  "byteorder",
+ "getrandom 0.1.16",
  "hex",
  "hex-literal",
  "libsecp256k1 0.3.5",
@@ -1277,6 +1278,7 @@ dependencies = [
  "solitaire-client",
  "spl-token",
  "spl-token-metadata 0.0.1 (git+https://github.com/certusone/wormhole)",
+ "token-bridge",
  "wasm-bindgen",
  "wormhole-bridge-solana",
  "wormhole-sdk",
@@ -2121,7 +2123,7 @@ dependencies = [
 [[package]]
 name = "rocksalt"
 version = "0.1.0"
-source = "git+https://github.com/certusone/wormhole#a4854f936868e0ae85137bf265079b9b660e6c37"
+source = "git+https://github.com/certusone/wormhole#7dc2b7b7ae796d8e1ebd1048921bb99bfa7c9e2e"
 dependencies = [
  "byteorder",
  "proc-macro2 1.0.28",
@@ -2974,7 +2976,7 @@ dependencies = [
 [[package]]
 name = "solitaire"
 version = "0.1.0"
-source = "git+https://github.com/certusone/wormhole#a4854f936868e0ae85137bf265079b9b660e6c37"
+source = "git+https://github.com/certusone/wormhole#7dc2b7b7ae796d8e1ebd1048921bb99bfa7c9e2e"
 dependencies = [
  "borsh",
  "byteorder",
@@ -2986,7 +2988,7 @@ dependencies = [
 [[package]]
 name = "solitaire-client"
 version = "0.1.0"
-source = "git+https://github.com/certusone/wormhole#a4854f936868e0ae85137bf265079b9b660e6c37"
+source = "git+https://github.com/certusone/wormhole#7dc2b7b7ae796d8e1ebd1048921bb99bfa7c9e2e"
 dependencies = [
  "borsh",
  "solana-program",
@@ -3045,7 +3047,7 @@ dependencies = [
 [[package]]
 name = "spl-token-metadata"
 version = "0.0.1"
-source = "git+https://github.com/certusone/wormhole#a4854f936868e0ae85137bf265079b9b660e6c37"
+source = "git+https://github.com/certusone/wormhole#7dc2b7b7ae796d8e1ebd1048921bb99bfa7c9e2e"
 dependencies = [
  "borsh",
  "solana-program",
@@ -3238,6 +3240,26 @@ name = "tinyvec_macros"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
+
+[[package]]
+name = "token-bridge"
+version = "0.1.0"
+source = "git+https://github.com/certusone/wormhole#7dc2b7b7ae796d8e1ebd1048921bb99bfa7c9e2e"
+dependencies = [
+ "borsh",
+ "bstr",
+ "byteorder",
+ "primitive-types",
+ "rand 0.7.3",
+ "rocksalt",
+ "serde",
+ "sha3",
+ "solana-program",
+ "solitaire",
+ "spl-token",
+ "spl-token-metadata 0.0.1 (git+https://github.com/certusone/wormhole)",
+ "wormhole-bridge-solana",
+]
 
 [[package]]
 name = "tokio"
@@ -3628,7 +3650,7 @@ dependencies = [
 [[package]]
 name = "wormhole-bridge-solana"
 version = "0.1.0"
-source = "git+https://github.com/certusone/wormhole#a4854f936868e0ae85137bf265079b9b660e6c37"
+source = "git+https://github.com/certusone/wormhole#7dc2b7b7ae796d8e1ebd1048921bb99bfa7c9e2e"
 dependencies = [
  "borsh",
  "byteorder",
@@ -3642,7 +3664,7 @@ dependencies = [
 [[package]]
 name = "wormhole-core"
 version = "0.1.0"
-source = "git+https://github.com/certusone/wormhole#a4854f936868e0ae85137bf265079b9b660e6c37"
+source = "git+https://github.com/certusone/wormhole#7dc2b7b7ae796d8e1ebd1048921bb99bfa7c9e2e"
 dependencies = [
  "bstr",
  "byteorder",
@@ -3655,7 +3677,7 @@ dependencies = [
 [[package]]
 name = "wormhole-sdk"
 version = "0.1.0"
-source = "git+https://github.com/certusone/wormhole#a4854f936868e0ae85137bf265079b9b660e6c37"
+source = "git+https://github.com/certusone/wormhole#7dc2b7b7ae796d8e1ebd1048921bb99bfa7c9e2e"
 dependencies = [
  "borsh",
  "nom",

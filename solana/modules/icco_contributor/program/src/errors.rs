@@ -23,6 +23,7 @@ pub enum Error {
     SaleStateAccountAddressIncorrect,
     SaleStateIsAlredyInitialized,
     SaleTokenAccountAddressIncorrect,
+    SaleTokenCustodyAccountEmpty,
     TestAccountError,
 }
 

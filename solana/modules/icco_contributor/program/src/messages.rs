@@ -251,14 +251,14 @@ impl InitSale {
         read_u256(&bf[196..])
     }
 
-    pub fn get_sale_recepient(&self, bf: &[u8]) -> Pubkey {
-        let recipient_offset: usize = 229 + usize::from(self.token_cnt) * 50;
-        Pubkey::new(&bf[recipient_offset..recipient_offset + 32])
+    pub fn get_sale_recepient_bytes(&self, bf: &[u8]) -> [u8; 32] {
+        let offset: usize = 229 + usize::from(self.token_cnt) * 50;
+        bf[offset..offset + 32].try_into().unwrap()
     }
 
-    pub fn get_refund_recepient(&self, bf: &[u8]) -> Pubkey {
-        let recipient_offset: usize = 261 + usize::from(self.token_cnt) * 50;
-        Pubkey::new(&bf[recipient_offset + 32..recipient_offset + 64])
+    pub fn get_refund_recepient_bytes(&self, bf: &[u8]) -> [u8; 32] {
+        let offset: usize = 261 + usize::from(self.token_cnt) * 50;
+        bf[offset..offset + 32].try_into().unwrap()
     }
 
     // Accepted tokens data getters

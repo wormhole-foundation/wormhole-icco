@@ -2,6 +2,8 @@
 //#![allow(unused_must_use)]
 //#![allow(unused_imports)]
 
+use std::convert::TryInto;
+
 use crate::{
     messages::*,
     accounts::{
@@ -9,6 +11,9 @@ use crate::{
         ConfigAccount,
         SaleStateAccountDerivationData,
     },
+    instructions:: {
+        get_icco_sale_custody_account_address_for_sale_token,
+     },
     errors::Error::*,
     claimed_vaa::ClaimedVAA,
 };
@@ -19,6 +24,17 @@ use solana_program::{
     account_info::AccountInfo,
     sysvar::clock::Clock,
     sysvar::rent::Rent,
+};
+
+use token_bridge:: {
+    instructions:: {
+        transfer_native as wh_transfer_native,
+    },
+    TransferNativeData,
+};
+
+use wormhole_sdk::{
+    id as core_bridge_id,
 };
 
 use solitaire::{
@@ -49,17 +65,23 @@ pub struct TransferCustodyIccoTokenNative<'b> {
     pub config: ConfigAccount<'b, { AccountState::Initialized }>,
     pub init_sale_vaa: ClaimedVAA<'b, InitSale>,           // Was claimed.
     pub seal_sale_vaa: ClaimedVAA<'b, SaleSealed>,           // Was NOT claimed yet
-    pub sale_custody: Mut<CustodyAccount<'b, { AccountState::Initialized }>>,      // To check if sale token account has expected amount.
+    pub message: Mut<Signer<AccountInfo<'b>>>,          // Transfer  VAA account.
+    pub sale_custody: Mut<CustodyAccount<'b, { AccountState::Initialized }>>,         // To check if sale token account has expected amount.
+    pub sale_custody_mint: Mut<CustodyAccount<'b, { AccountState::Initialized }>>,    // To check if sale token account has expected amount.
+    pub token_custody: Mut<CustodyAccount<'b, { AccountState::Initialized }>>,        // Custody account to transfer tokens from to the seller.
+
     pub clock: Sysvar<'b, Clock>,
 
-    // Sale state is in ctx.accounts[7];
+    // Sale state is in ctx.accounts        [9];
     
-    // --- starting here Needed for WH transfer.
+    // AccountMeta::new_readonly(core_bridge, false),   // Use addr from SDK
+    // AccountMeta::new_readonly(token_bridge, false),  // [11]
+
+    // --- starting here Needed for WH transfer, not used here.
     // AccountMeta::new(wormhole_config, false),
     // AccountMeta::new(fee_collector, false),
     // AccountMeta::new_readonly(emitter, false),
     // AccountMeta::new(sequence, false),
-    // AccountMeta::new_readonly(wormhole, false),
     // AccountMeta::new_readonly(solana_program::system_program::id(), false),
 }
 
@@ -80,7 +102,7 @@ pub struct AttestIccoSaleTransferCustodyIccoTokenData {
 
 pub fn attest_icco_sale_transfer_native_custody(
     ctx: &ExecutionContext,
-    _accs: &mut TransferCustodyIccoTokenNative,
+    accs: &mut TransferCustodyIccoTokenNative,
     data: AttestIccoSaleTransferCustodyIccoTokenData,
 ) -> Result<()> {
     msg!("bbrp in attest_icco_sale_transfer_native_custody");
@@ -97,7 +119,7 @@ pub fn attest_icco_sale_transfer_native_custody(
 
     // msg!("state: {:?}", ctx.accounts[6].key);
     let token_idx = data.token_idx;
-    let sale_state_account_info = &ctx.accounts[7];
+    let sale_state_account_info = &ctx.accounts[9];
     let state_data = sale_state_account_info.data.borrow();
     if !get_sale_state_sealed(&state_data) {
         // msg!("not sealed!");
@@ -108,7 +130,19 @@ pub fn attest_icco_sale_transfer_native_custody(
         return Err(SaleHasBeenAborted.into());
     }
 
+    // Verify that saleCustody ATA address is corect and verify/create account it exists and owned by this contract.
+    {
+        let sale_token_dk = get_icco_sale_custody_account_address_for_sale_token(*ctx.program_id, InitSale::get_token_address_bytes(&accs.init_sale_vaa.meta().payload[..]).try_into().unwrap());
+        if sale_token_dk != *accs.sale_custody.info().key {
+            msg!("bbrp init_icco_sale bad sale_token_address {:?} / {:?}", sale_token_dk, *accs.sale_custody.info().key );
+            return Err(SaleTokenAccountAddressIncorrect.into());
+        }
+    }
+
     // TBD Check saleToken if custody account has expected amount.
+    if accs.sale_custody.amount == 0 {
+        return Err(SaleTokenCustodyAccountEmpty.into());
+    }
 
     // Check if this token was transferred already.
     // msg!("pre-transfer check");
@@ -120,7 +154,21 @@ pub fn attest_icco_sale_transfer_native_custody(
         return Ok(());
     }
 
-    // TBD token bridge native xfer.
+    let ix = wh_transfer_native(
+        *ctx.accounts[10].info().key, // tokenBridge
+        core_bridge_id(),  // CoreBridge
+        *accs.payer.key,
+        *accs.message.key,
+        *accs.sale_custody.info().key,
+        *accs.sale_custody_mint.info().key,
+        TransferNativeData {
+            nonce: 0,  //nonce,
+            amount: accs.token_custody.amount, // amount,   // TBD! Needs to be prorated!
+            fee: 0, //fee,
+            target_address: accs.init_sale_vaa.get_sale_recepient_bytes(&accs.init_sale_vaa.meta().payload[..]),     //target_address: target_addr,
+            target_chain: InitSale::get_token_chain(&accs.init_sale_vaa.meta().payload[..]),     // target_chain,
+        },
+    ).unwrap();
 
     // Mark this token as transferred.
     set_sale_state_contribution_transferred(&mut state_data, token_idx, true);

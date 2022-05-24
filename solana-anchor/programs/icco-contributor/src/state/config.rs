@@ -12,7 +12,6 @@ pub struct Contributor {
     pub conductor_address: [u8; 32],
     pub wormhole: Pubkey,     // 32 bytes
     pub token_bridge: Pubkey, // 32 bytes
-    pub bump: u8,
 }
 
 impl Contributor {
@@ -34,14 +33,14 @@ impl Contributor {
 // validation struct
 #[derive(Accounts)]
 pub struct CreateContributor<'info> {
-    #[account(mut)]
-    pub owner: Signer<'info>,
-
     #[account(
         init,
         payer = owner,
         space = 8 + Contributor::MAXIMUM_SIZE,
     )]
-    pub config: Account<'info, Contributor>,
+    pub contributor: Account<'info, Contributor>,
+
+    #[account(mut)]
+    pub owner: Signer<'info>,
     pub system_program: Program<'info, System>,
 }

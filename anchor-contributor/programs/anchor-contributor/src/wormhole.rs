@@ -1,8 +1,6 @@
 use anchor_lang::prelude::*;
 use borsh::{BorshDeserialize, BorshSerialize};
-use std::{
-    io::Write,
-};
+use std::io::Write;
 
 #[derive(AnchorDeserialize, AnchorSerialize)]
 pub struct PostMessageData {
@@ -19,11 +17,11 @@ pub struct PostMessageData {
 #[derive(AnchorDeserialize, AnchorSerialize)]
 pub enum ConsistencyLevel {
     Confirmed,
-    Finalized
+    Finalized,
 }
 
 #[derive(AnchorDeserialize, AnchorSerialize)]
-pub enum Instruction{
+pub enum Instruction {
     Initialize,
     PostMessage,
     PostVAA,
@@ -108,4 +106,8 @@ impl AnchorDeserialize for PostedMessageData {
             <MessageData as BorshDeserialize>::deserialize(buf)?,
         ))
     }
+}
+
+pub fn get_message_data<'info>(vaa_account: &AccountInfo<'info>) -> Result<MessageData> {
+    Ok(PostedMessageData::try_from_slice(&vaa_account.data.borrow())?.0)
 }

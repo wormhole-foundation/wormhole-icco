@@ -1,16 +1,16 @@
 use anchor_lang::prelude::*;
 
+mod constants;
 mod context;
+mod error;
 mod state;
 mod wormhole;
-mod error;
-mod constants;
 
 use constants::*;
 use context::*;
-use state::*;
 use error::*;
-
+use state::*;
+use wormhole::get_message_data;
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
@@ -36,9 +36,13 @@ pub mod anchor_contributor {
         Ok(())
     }
 
-    pub fn init_sale(ctx:Context<InitSale>) -> Result<()> {
+    pub fn init_sale(ctx: Context<InitSale>) -> Result<()> {
+        let sale = &mut ctx.accounts.sale;
+
+        let msg = get_message_data(&ctx.accounts.core_bridge_vaa)?;
+        sale.parse_sale_init(&msg.payload)?;
         Ok(())
-    }    
+    }
 }
 
 #[derive(Accounts)]

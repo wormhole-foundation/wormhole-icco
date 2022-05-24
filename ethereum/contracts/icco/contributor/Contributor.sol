@@ -96,7 +96,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
      * - it computes the keccak256 hash of data passed by the client
      * - it recovers the KYC authority key from the hashed data and signature
      */ 
-    function verifySignature(bytes memory encodedHashData, bytes memory sig) public pure returns (address key) {
+    function verifySignature(bytes memory encodedHashData, bytes memory sig) public view returns (bool) {
         require(sig.length == 65, "incorrect signature length"); 
         require(encodedHashData.length > 0, "no hash data");
 
@@ -115,7 +115,14 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
         uint8 v = sig.toUint8(index) + 27;
 
         /// recovered key
-        key = ecrecover(hash_, v, r, s);
+        address key = ecrecover(hash_, v, r, s);
+
+        /// confirm that the recovered key is the authority
+        if (key == authority()) {
+            return true;
+        } else {
+            return false;
+        }
     }
 
     /**
@@ -155,7 +162,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
                 msg.sender, 
                 getSaleContribution(saleId, tokenIndex, msg.sender)
             ); 
-            require(verifySignature(encodedHashData, sig) == authority(), "unauthorized contributor");
+            require(verifySignature(encodedHashData, sig), "unauthorized contributor");
         }
 
         /// query own token balance before transfer

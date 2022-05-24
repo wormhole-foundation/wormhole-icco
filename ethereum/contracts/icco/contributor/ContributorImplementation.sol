@@ -11,7 +11,7 @@ import "./Contributor.sol";
 
 contract ContributorImplementation is Contributor {
     function initialize() initializer public virtual {
-        // this function needs to be exposed for an upgrade to pass
+        /// @dev this function needs to be exposed for an upgrade to pass
     }
 
     modifier initializer() {

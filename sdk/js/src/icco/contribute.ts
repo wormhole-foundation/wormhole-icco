@@ -78,7 +78,7 @@ export async function secureContributeOnEth(
     sale.tokenChain as ChainId
   );
   if (expected === null) {
-    throw Error("cannot convert expecteSaleTokenAddress to hex string");
+    throw Error("cannot convert expectedSaleTokenAddress to hex string");
   }
 
   if (expected !== actual) {

@@ -251,13 +251,18 @@ impl InitSale {
         read_u256(&bf[196..])
     }
 
-    pub fn get_sale_recepient_bytes(&self, bf: &[u8]) -> [u8; 32] {
+    pub fn get_solana_token_account_bytes(&self, bf: &[u8]) -> [u8; 32] {
         let offset: usize = 229 + usize::from(self.token_cnt) * 50;
         bf[offset..offset + 32].try_into().unwrap()
     }
 
-    pub fn get_refund_recepient_bytes(&self, bf: &[u8]) -> [u8; 32] {
+    pub fn get_sale_recepient_bytes(&self, bf: &[u8]) -> [u8; 32] {
         let offset: usize = 261 + usize::from(self.token_cnt) * 50;
+        bf[offset..offset + 32].try_into().unwrap()
+    }
+
+    pub fn get_refund_recepient_bytes(&self, bf: &[u8]) -> [u8; 32] {
+        let offset: usize = 293 + usize::from(self.token_cnt) * 50;
         bf[offset..offset + 32].try_into().unwrap()
     }
 

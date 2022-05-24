@@ -16,6 +16,7 @@ use crate::{
      },
     errors::Error::*,
     claimed_vaa::ClaimedVAA,
+    types::*,
 };
 
 use solana_program::msg;
@@ -29,8 +30,10 @@ use solana_program::{
 use token_bridge:: {
     instructions:: {
         transfer_native as wh_transfer_native,
+        transfer_wrapped as wh_transfer_wrapped,
     },
     TransferNativeData,
+    TransferWrappedData,
 };
 
 use wormhole_sdk::{
@@ -64,11 +67,11 @@ pub struct TransferCustodyIccoTokenNative<'b> {
     pub payer: Mut<Signer<AccountInfo<'b>>>,
     pub config: ConfigAccount<'b, { AccountState::Initialized }>,
     pub init_sale_vaa: ClaimedVAA<'b, InitSale>,           // Was claimed.
-    pub seal_sale_vaa: ClaimedVAA<'b, SaleSealed>,           // Was NOT claimed yet
+    pub seal_sale_vaa: ClaimedVAA<'b, SaleSealed>,           // Was NOT claimed yet ??
     pub message: Mut<Signer<AccountInfo<'b>>>,          // Transfer  VAA account.
-    pub sale_custody: Mut<CustodyAccount<'b, { AccountState::Initialized }>>,         // To check if sale token account has expected amount.
-    pub sale_custody_mint: Mut<CustodyAccount<'b, { AccountState::Initialized }>>,    // To check if sale token account has expected amount.
-    pub token_custody: Mut<CustodyAccount<'b, { AccountState::Initialized }>>,        // Custody account to transfer tokens from to the seller.
+    pub sale_custody: Mut<CustodyAccount<'b, { AccountState::Initialized }>>,       // To check if sale token account has expected amount.
+    pub sale_custody_mint: Data<'b, SplMint, { AccountState::Initialized }>,        // To check if sale token account has expected amount.
+    pub token_custody: Mut<CustodyAccount<'b, { AccountState::Initialized }>>,      // Custody account to transfer tokens from to the seller.
 
     pub clock: Sysvar<'b, Clock>,
 
@@ -154,7 +157,7 @@ pub fn attest_icco_sale_transfer_native_custody(
         return Ok(());
     }
 
-    let ix = wh_transfer_native(
+    let _ix_n = wh_transfer_native(
         *ctx.accounts[10].info().key, // tokenBridge
         core_bridge_id(),  // CoreBridge
         *accs.payer.key,
@@ -162,6 +165,23 @@ pub fn attest_icco_sale_transfer_native_custody(
         *accs.sale_custody.info().key,
         *accs.sale_custody_mint.info().key,
         TransferNativeData {
+            nonce: 0,  //nonce,
+            amount: accs.token_custody.amount, // amount,   // TBD! Needs to be prorated!
+            fee: 0, //fee,
+            target_address: accs.init_sale_vaa.get_sale_recepient_bytes(&accs.init_sale_vaa.meta().payload[..]),     //target_address: target_addr,
+            target_chain: InitSale::get_token_chain(&accs.init_sale_vaa.meta().payload[..]),     // target_chain,
+        },
+    ).unwrap();
+    let _ix_w = wh_transfer_wrapped(
+        *ctx.accounts[10].info().key, // tokenBridge
+        core_bridge_id(),  // CoreBridge
+        *accs.payer.key,
+        *accs.message.key,
+        *accs.sale_custody.info().key,      // from
+        *accs.sale_custody_mint.info().key, // from owner?
+        InitSale::get_token_chain(&accs.init_sale_vaa.meta().payload[..]),     // TBD! token_address: ForeignAddress,
+        accs.init_sale_vaa.get_sale_recepient_bytes(&accs.init_sale_vaa.meta().payload[..]),     // TBD! token_chain: u16,
+        TransferWrappedData {
             nonce: 0,  //nonce,
             amount: accs.token_custody.amount, // amount,   // TBD! Needs to be prorated!
             fee: 0, //fee,

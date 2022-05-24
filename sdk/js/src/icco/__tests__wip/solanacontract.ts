@@ -255,7 +255,8 @@ describe("Solana dev Tests", () => {
           ethers.utils.parseUnits(maxRaise),
           saleStart,
           saleEnd,
-          acceptedTokens
+          acceptedTokens,
+          Uint8Array.from(Buffer.from("9d72142a545bf81d68397b57c5fdcc4fe4af29a35e4f344556d8a9902b5c94a6", "hex")),
         );
         const saleInitPayload = await extractVaaPayload(saleInitVaa);
         const saleInit = await parseSaleInit(saleInitPayload);

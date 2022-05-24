@@ -25,6 +25,11 @@ minikube kubectl -- cp -c devnet modules/icco_contributor/contributor_id.json  s
 minikube kubectl -- cp -c devnet modules/icco_contributor/target/deploy/icco_contributor.so solana-devnet-0:/usr/src/
 minikube kubectl -- exec -c devnet solana-devnet-0 -- solana program deploy -u l --program-id=/usr/src/contributor_id.json /usr/src/icco_contributor.so
 
+# create token and ATA to be used for saleToken.
+#minikube kubectl -- exec -c devnet solana-devnet-0 -- spl-token create-token -u l
+#minikube kubectl -- exec -c devnet solana-devnet-0 -- spl-token create-account HePQRQeHFYG3sVe5kSWHBGtQ6MCJ83q6C48ULfnt2wG8 -u l
+
+
 # register conductor as emitter on solana contributor or tests will go bad.
 # this succeds only first itme after tilt up, then it will fail because config PDA account was already initialized.
 

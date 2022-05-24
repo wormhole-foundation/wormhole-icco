@@ -14,6 +14,15 @@ pub enum SaleError {
     #[msg("IncorrectVaaPayload")]
     IncorrectVaaPayload,
 
+    #[msg("InvalidAcceptedTokenPayload")]
+    InvalidAcceptedTokenPayload,
+
+    #[msg("InvalidAcceptedIndex")]
+    InvalidAcceptedIndex,
+
+    #[msg("InvalidTokenIndex")]
+    InvalidTokenIndex,
+
     #[msg("InvalidVaaAction")]
     InvalidVaaAction,
 
@@ -22,4 +31,7 @@ pub enum SaleError {
 
     #[msg("SaleNotFinished")]
     SaleNotFinished,
+
+    #[msg("BuyerNotActive")]
+    BuyerNotActive,
 }

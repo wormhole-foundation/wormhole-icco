@@ -8,6 +8,7 @@ pub enum ContributorError {
 
 #[account]
 pub struct Contributor {
+    pub owner: Pubkey,
     pub conductor_chain: u16,
     pub conductor_address: [u8; 32],
     pub wormhole: Pubkey,     // 32 bytes

@@ -26,6 +26,7 @@ use crate::{
         AbortIccoSaleData,
         ContributeIccoSaleData,
         AttestIccoSaleData,
+        SealIccoSaleData,
     },
 };
 
@@ -296,6 +297,53 @@ pub fn abort_icco_sale(
             .unwrap(),
     }
 }
+
+
+// 99% copy of abort_sale, but may diverge in the future..
+pub fn seal_icco_sale(
+    program_id: Pubkey,
+    sale_id: u128,
+    payer: Pubkey,
+    vaa_message: Pubkey,    // Seal VAA. (3)
+    emitter: Pubkey,
+    emitter_chain: u16,
+    sequence: u64,
+) -> Instruction {
+    let config_key = ConfigAccount::<'_, { AccountState::Initialized }>::key(None, &program_id);
+    let state_key = SaleStateAccount::<'_, { AccountState::Initialized }>::key(&SaleStateAccountDerivationData{sale_id: sale_id}, &program_id);
+    
+    let vaa_claim = Claim::<'_, { AccountState::Uninitialized }>::key(
+        &ClaimDerivationData {
+            emitter_address: emitter.to_bytes(),
+            emitter_chain: emitter_chain,
+            sequence,
+        },
+        &program_id,
+    );
+
+    Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new(payer, true),
+            AccountMeta::new_readonly(config_key, false),
+            AccountMeta::new_readonly(vaa_message, false),
+            AccountMeta::new(vaa_claim, false),
+//            AccountMeta::new(program_id, false),
+            AccountMeta::new_readonly(solana_program::sysvar::rent::id(), false),
+            AccountMeta::new_readonly(solana_program::sysvar::clock::id(), false),
+            AccountMeta::new_readonly(solana_program::system_program::id(), false),
+            AccountMeta::new(state_key, false),
+        ],
+
+        data: (
+            crate::instruction::Instruction::SealIccoSale,
+            SealIccoSaleData {},
+        )
+            .try_to_vec()
+            .unwrap(),
+    }
+}
+
 
 
 pub fn contribute_icco_sale(

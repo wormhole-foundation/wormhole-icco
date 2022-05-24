@@ -64,8 +64,8 @@ pub struct ContributeIccoSale<'b> {
 
     pub from: Mut<Data<'b, SplAccount, { AccountState::Initialized }>>,     // From account
 //    pub mint: Mut<Data<'b, SplMint, { AccountState::Initialized }>>,        // From token Why Mut??
-    pub mint: Data<'b, SplMint, { AccountState::Initialized }>,        // From token Why Mut??
 
+    pub mint: Data<'b, SplMint, { AccountState::Initialized }>,        // From token Why Mut??
     pub custody: Mut<CustodyAccount<'b, { AccountState::Initialized }>>, 
 
     pub clock: Sysvar<'b, Clock>,

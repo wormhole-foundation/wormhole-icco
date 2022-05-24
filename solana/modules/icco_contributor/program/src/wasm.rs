@@ -23,7 +23,8 @@ use crate::{
         contribute_icco_sale,
         attest_icco_sale,
         seal_icco_sale,
-        },
+        seal_icco_sale_transfer_custody,
+    },
     types::{
         EndpointRegistration,
 //        WrappedMeta
@@ -243,18 +244,18 @@ pub fn init_icco_sale_ix(
 #[wasm_bindgen]
 pub fn abort_icco_sale_ix(
     program_id: String,
-    bridge_id: String,
+    core_bridge_id: String,
     payer: String,
     vaa: Vec<u8>,
 ) -> JsValue {
     let vaa = VAA::deserialize(vaa.as_slice()).unwrap();
-    let bridge_id = Pubkey::from_str(bridge_id.as_str()).unwrap();
+    let core_bridge_id = Pubkey::from_str(core_bridge_id.as_str()).unwrap();
     let program_id = Pubkey::from_str(program_id.as_str()).unwrap();
     let message_key = bridge::accounts::PostedVAA::<'_, { AccountState::Uninitialized }>::key(
         &PostedVAADerivationData {
             payload_hash: hash_vaa(&vaa.clone().into()).to_vec(),
         },
-        &bridge_id,
+        &core_bridge_id,
     );
     let ix = abort_icco_sale(
         program_id,
@@ -272,18 +273,18 @@ pub fn abort_icco_sale_ix(
 #[wasm_bindgen]
 pub fn seal_icco_sale_ix(
     program_id: String,
-    bridge_id: String,
+    core_bridge_id: String,
     payer: String,
     vaa: Vec<u8>,
 ) -> JsValue {
     let vaa = VAA::deserialize(vaa.as_slice()).unwrap();
-    let bridge_id = Pubkey::from_str(bridge_id.as_str()).unwrap();
+    let core_bridge_id = Pubkey::from_str(core_bridge_id.as_str()).unwrap();
     let program_id = Pubkey::from_str(program_id.as_str()).unwrap();
     let message_key = bridge::accounts::PostedVAA::<'_, { AccountState::Uninitialized }>::key(
         &PostedVAADerivationData {
             payload_hash: hash_vaa(&vaa.clone().into()).to_vec(),
         },
-        &bridge_id,
+        &core_bridge_id,
     );
     let ix = seal_icco_sale(
         program_id,
@@ -293,6 +294,55 @@ pub fn seal_icco_sale_ix(
         Pubkey::new(&vaa.emitter_address),
         vaa.emitter_chain,
         vaa.sequence,
+    );
+    JsValue::from_serde(&ix).unwrap()
+}
+
+
+#[wasm_bindgen]
+pub fn seal_icco_sale_transfer_custody_ix(
+    program_id: String,
+    core_bridge_id: String,
+    payer: String,
+    token_index: u8,
+    custody_token_mint: String,
+    init_sale_vaa: Vec<u8>,
+    seal_sale_vaa: Vec<u8>,
+    xfer_vaa: String,
+    wrapped_sale_token_mint: String,
+    token_bridge: String,
+) -> JsValue {
+    let program_id = Pubkey::from_str(program_id.as_str()).unwrap();
+    let core_bridge_id = Pubkey::from_str(core_bridge_id.as_str()).unwrap();
+
+    let init_sale_vaa = VAA::deserialize(init_sale_vaa.as_slice()).unwrap();
+    let init_sale_vaa_message = bridge::accounts::PostedVAA::<'_, { AccountState::Uninitialized }>::key(
+        &PostedVAADerivationData {
+            payload_hash: hash_vaa(&init_sale_vaa.clone().into()).to_vec(),
+        },
+        &core_bridge_id,
+    );
+
+    let seal_sale_vaa = VAA::deserialize(seal_sale_vaa.as_slice()).unwrap();
+    let seal_sale_vaa_message = bridge::accounts::PostedVAA::<'_, { AccountState::Uninitialized }>::key(
+        &PostedVAADerivationData {
+            payload_hash: hash_vaa(&seal_sale_vaa.clone().into()).to_vec(),
+        },
+        &core_bridge_id,
+    );
+
+    let ix = seal_icco_sale_transfer_custody(
+        program_id,
+        InitSale::get_init_sale_sale_id(&init_sale_vaa.payload),
+        Pubkey::from_str(payer.as_str()).unwrap(),
+        token_index,
+        &InitSale::get_token_address_bytes(&init_sale_vaa.payload),     // Foreign, from initSale VAA
+        Pubkey::from_str(custody_token_mint.as_str()).unwrap(),
+        Pubkey::from_str(token_bridge.as_str()).unwrap(),
+        init_sale_vaa_message,
+        seal_sale_vaa_message,
+        Pubkey::from_str(xfer_vaa.as_str()).unwrap(),      // vaa to be created for tokenBridge (new keypair)
+        Pubkey::from_str(wrapped_sale_token_mint.as_str()).unwrap(),
     );
     JsValue::from_serde(&ix).unwrap()
 }

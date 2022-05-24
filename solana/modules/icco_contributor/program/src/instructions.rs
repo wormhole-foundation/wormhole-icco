@@ -27,6 +27,7 @@ use crate::{
         ContributeIccoSaleData,
         AttestIccoSaleData,
         SealIccoSaleData,
+        SealIccoSaleTransferCustodyIccoTokenData
     },
 };
 
@@ -344,6 +345,62 @@ pub fn seal_icco_sale(
     }
 }
 
+
+pub fn seal_icco_sale_transfer_custody(
+    program_id: Pubkey,
+    sale_id: u128,
+    payer: Pubkey,
+    token_index: u8,
+    sale_token_mint: &[u8;32],      // Foreign, from initSale VAA
+    custody_token_mint: Pubkey,
+    token_bridge: Pubkey,
+    init_sale_vaa_message: Pubkey,    // initSale, claimed
+    seal_sale_vaa_message: Pubkey,    // sealSale, claimed
+    xfer_vaa_message: Pubkey,      // vaa to be created for tokenBridge (new keypair)
+    wrapped_sale_token_mint: Pubkey,          // TBD wrapped sale token mint. Needs to be derived??
+) -> Instruction {
+    // icco
+    let config_key = ConfigAccount::<'_, { AccountState::Initialized }>::key(None, &program_id);
+    let state_key = SaleStateAccount::<'_, { AccountState::Initialized }>::key(&SaleStateAccountDerivationData{sale_id: sale_id}, &program_id);
+    let sale_custody_key = CustodyAccount::<'_, { AccountState::Initialized }>::key(&SaleCustodyAccountDerivationData{foreign_mint: *sale_token_mint}, &program_id);
+    let custody_key = CustodyAccount::<'_, { AccountState::MaybeInitialized }>::key(&CustodyAccountDerivationData{sale_id: sale_id, mint: custody_token_mint}, &program_id);
+    // bridge
+    let core_bridge = wormhole_sdk::id();
+    let wormhole_config = config(&core_bridge);
+    let fee_collector = fee_collector(&core_bridge);
+    let (emitter, _, _) = emitter(&program_id);
+    let sequence = sequence(&core_bridge, &emitter);
+
+    Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new(payer, true),
+            AccountMeta::new_readonly(config_key, false),
+            AccountMeta::new_readonly(init_sale_vaa_message, false),
+            AccountMeta::new_readonly(seal_sale_vaa_message, false),
+            AccountMeta::new_readonly(xfer_vaa_message, false),
+            AccountMeta::new(sale_custody_key, false),              // sale token account
+            AccountMeta::new_readonly(wrapped_sale_token_mint, false),
+            AccountMeta::new(custody_key, false),             // Custody accounts
+            AccountMeta::new_readonly(custody_token_mint, false),
+            AccountMeta::new_readonly(solana_program::sysvar::clock::id(), false),
+            AccountMeta::new(state_key, false),                     // --- [10]
+            AccountMeta::new_readonly(core_bridge, false),          // vv forwarded vv
+            AccountMeta::new_readonly(token_bridge, false),
+            AccountMeta::new(wormhole_config, false),
+            AccountMeta::new(fee_collector, false),
+            AccountMeta::new_readonly(emitter, false),
+            AccountMeta::new(sequence, false),
+            AccountMeta::new_readonly(solana_program::system_program::id(), false),
+        ],
+        data: (
+            crate::instruction::Instruction::TransferCustodyIccoToken,
+            SealIccoSaleTransferCustodyIccoTokenData {token_idx: token_index},
+        )
+            .try_to_vec()
+            .unwrap(),
+    }
+}
 
 
 pub fn contribute_icco_sale(

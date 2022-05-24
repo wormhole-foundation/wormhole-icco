@@ -143,7 +143,6 @@ pub fn seal_icco_sale(
 }
 
 
-
 // Step 2 contract call: TransferCustodyIccoTokens, called for each accetpted token on this chain.
 // Checks if saleToken custody account has expected amount.
 // Transfers accepted tokens from one custody account to conductor chain account via WH
@@ -166,8 +165,7 @@ pub struct TransferCustodyIccoToken<'b> {
     
     // AccountMeta::new_readonly(core_bridge, false),   // Use addr from SDK
     // AccountMeta::new_readonly(token_bridge, false),
-
-    // --- starting here Needed for WH transfer, not used here.
+        // --- starting here Needed for WH transfer, not used here.
     // AccountMeta::new(wormhole_config, false),
     // AccountMeta::new(fee_collector, false),
     // AccountMeta::new_readonly(emitter, false),

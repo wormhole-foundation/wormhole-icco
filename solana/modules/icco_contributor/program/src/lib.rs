@@ -31,17 +31,17 @@ pub use api::{
     create_icco_sale_custody_account,
     abort_icco_sale,
     attest_icco_sale,
-    seal_icco_sale_transfer_custody, 
     seal_icco_sale,
-    
+    seal_icco_sale_transfer_custody, 
+
     ContributeIccoSale,
     InitIccoSale,
     Initialize,
     CreateIccoSaleCustodyAccount,
     AbortIccoSale,
     AttestIccoSale,
-    TransferCustodyIccoToken,
     SealIccoSale,
+    TransferCustodyIccoToken,
 };
 
 use solitaire::*;
@@ -54,4 +54,5 @@ solitaire! {
     AttestIccoSale  => attest_icco_sale,
     ContributeIccoSale => contribute_icco_sale,
     SealIccoSale  => seal_icco_sale,
+    TransferCustodyIccoToken => seal_icco_sale_transfer_custody,
 }

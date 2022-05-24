@@ -21,6 +21,8 @@ pub mod icco_contributor {
         token_bridge: Pubkey,
     ) -> Result<()> {
         let config = &mut ctx.accounts.config;
+
+        // there isn't a solana conductor (yet? bwahaha)
         require!(conductor_chain != 1u16, ContributorError::InvalidConductor);
 
         config.conductor_chain = conductor_chain;
@@ -32,15 +34,15 @@ pub mod icco_contributor {
         Ok(())
     }
 
-    pub fn init_sale(ctx: Context<IccoVaa>) -> Result<()> {
+    pub fn init_sale(ctx: Context<CreateWithVaa>) -> Result<()> {
         instructions::init_sale(ctx)
     }
 
-    pub fn sale_sealed(ctx: Context<IccoVaa>) -> Result<()> {
+    pub fn sale_sealed(ctx: Context<ModifyWithVaa>) -> Result<()> {
         instructions::sale_sealed(ctx)
     }
 
-    pub fn sale_aborted(ctx: Context<IccoVaa>) -> Result<()> {
+    pub fn sale_aborted(ctx: Context<ModifyWithVaa>) -> Result<()> {
         instructions::sale_aborted(ctx)
     }
 }

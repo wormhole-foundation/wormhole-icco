@@ -1,17 +1,17 @@
 use anchor_lang::prelude::*;
 use num_derive::*;
 
-use crate::{state::config::Contributor, wormhole::parse_vaa};
+use crate::{state::config::Contributor, wormhole::WormholeMessage};
 
 const INDEX_ACCEPTED_TOKENS_START: usize = 228;
 const INDEX_ALLOCATIONS_START: usize = 33;
 const ACCEPTED_TOKENS_N_BYTES: usize = 50;
 
 // payloads
-const PAYLOAD_SALE_INIT: u8 = 4;
-const PAYLOAD_ATTEST_CONTRIBUTIONS: u8 = 2;
-const PAYLOAD_SALE_SEALED: u8 = 3;
-const PAYLOAD_SALE_ABORTED: u8 = 4;
+pub const PAYLOAD_SALE_INIT: u8 = 1;
+pub const PAYLOAD_ATTEST_CONTRIBUTIONS: u8 = 2;
+pub const PAYLOAD_SALE_SEALED: u8 = 3;
+pub const PAYLOAD_SALE_ABORTED: u8 = 4;
 
 #[error_code]
 pub enum SaleError {
@@ -32,29 +32,54 @@ pub enum SaleError {
 }
 
 #[account]
-pub struct Sale {
-    token_address: [u8; 32], // 32
-    token_chain: u16,        // 2
-    token_decimals: u8,      // 1
-    times: SaleTimes,        // 8 + 8
-    recipient: [u8; 32],     // 32
-    num_accepted: u8,        // 1
-    status: SaleStatus,      // 1
+pub struct SaleMessage {
+    pub id: Vec<u8>, // 32
+}
 
-    pub id: [u8; 32], // 32
-    pub bump: u8,     // 1
+impl SaleMessage {
+    pub const MAXIMUM_SIZE: usize = 33;
+
+    pub fn deserialize_header(
+        &mut self,
+        contributor: &Contributor,
+        parsed: WormholeMessage,
+        expected_payload: u8,
+    ) -> Result<Vec<u8>> {
+        contributor.verify_conductor(parsed.emitter_chain, parsed.emitter_address)?;
+
+        // move from parsed and return w/ this after checking payload type
+        let payload = parsed.payload;
+        require!(payload[0] == expected_payload, SaleError::InvalidVaaAction);
+
+        // save the sale id (this will be used to seed sale pda)
+        self.id = payload[1..33].into();
+        Ok(payload)
+    }
+}
+
+#[account]
+pub struct Sale {
+    token_address: Vec<u8>, // 32
+    token_chain: u16,       // 2
+    token_decimals: u8,     // 1
+    times: SaleTimes,       // 8 + 8
+    recipient: [u8; 32],    // 32
+    num_accepted: u8,       // 1
+    status: SaleStatus,     // 1
+
+    pub id: Vec<u8>, // 32
+    pub bump: u8,    // 1
 }
 
 impl Sale {
     pub const MAXIMUM_SIZE: usize = 32 + 32 + 2 + 1 + 8 + 8 + 32 + 1 + 1 + 1;
 
-    pub fn initialize(&mut self, contributor: &Contributor, signed_vaa: &[u8]) -> Result<()> {
-        let parsed = parse_vaa(signed_vaa)?;
-        contributor.verify_conductor(parsed.emitter_chain, parsed.emitter_address)?;
-
-        // now deserialize payload
-        let payload = parsed.payload;
-
+    pub fn initialize(
+        &mut self,
+        contributor: &Contributor,
+        sale_id: Vec<u8>,
+        payload: &[u8],
+    ) -> Result<()> {
         // check that the payload has at least the number of bytes
         // required to define the number of accepted tokens
         require!(
@@ -62,13 +87,10 @@ impl Sale {
             SaleError::IncorrectVaaPayload
         );
 
-        // check that this is a SaleInit vaa (payload 1)
-        require!(payload[0] == PAYLOAD_SALE_INIT, SaleError::InvalidVaaAction);
-
+        self.id = sale_id;
         self.num_accepted = payload[INDEX_ACCEPTED_TOKENS_START];
 
         // deserialize other things
-        self.id = payload[1..33].try_into().unwrap();
         self.token_address = payload[33..65].try_into().unwrap();
         self.token_chain = u16::from_be_bytes(payload[65..67].try_into().unwrap());
         self.token_decimals = payload[67];
@@ -95,39 +117,34 @@ impl Sale {
         Ok(())
     }
 
-    pub fn contribute(&mut self) -> Result<()> {
+    pub fn contribute(&mut self, contributor: &Contributor) -> Result<()> {
+        // TODO: devs do something
         Ok(())
     }
 
-    pub fn attest_contributions(&mut self, time: u64) -> Result<()> {
+    pub fn attest_contributions(&mut self, contributor: &Contributor, time: u64) -> Result<()> {
         require!(!self.has_ended(), SaleError::SaleEnded);
         require!(time > self.times.end, SaleError::SaleNotFinished);
+
+        // TODO: devs do something
         Ok(())
     }
 
-    pub fn seal(&mut self, contributor: &Contributor, signed_vaa: &[u8]) -> Result<()> {
-        let parsed = parse_vaa(signed_vaa)?;
-        contributor.verify_conductor(parsed.emitter_chain, parsed.emitter_address)?;
-
-        // now deserialize payload
-        let payload = parsed.payload;
-
+    pub fn seal(
+        &mut self,
+        contributor: &Contributor,
+        sale_id: Vec<u8>,
+        payload: &[u8],
+    ) -> Result<()> {
         // check that the payload has at least the number of bytes
         // required to define the number of allocations
         require!(
             payload.len() > INDEX_ALLOCATIONS_START,
             SaleError::IncorrectVaaPayload
         );
-
-        // check that this is a SaleInit vaa (payload 1)
-        require!(
-            payload[0] == PAYLOAD_SALE_SEALED,
-            SaleError::InvalidVaaAction
-        );
+        require!(sale_id == self.id, SaleError::IncorrectSale);
 
         // deserialize other things
-        let sale_id: [u8; 32] = payload[1..33].try_into().unwrap();
-        require!(sale_id == self.id, SaleError::IncorrectSale);
 
         // TODO: we should have an index of which allocations we care about. we check
         // those and sum the allocations. These allocations are stored as uint256, so we
@@ -145,32 +162,22 @@ impl Sale {
         Ok(())
     }
 
-    pub fn claim_allocation(&mut self) -> Result<()> {
+    pub fn claim_allocation(&mut self, contributor: &Contributor) -> Result<()> {
         // TODO: devs do something
         Ok(())
     }
 
-    pub fn abort(&mut self, contributor: &Contributor, signed_vaa: &[u8]) -> Result<()> {
-        let parsed = parse_vaa(signed_vaa)?;
-        contributor.verify_conductor(parsed.emitter_chain, parsed.emitter_address)?;
-
+    pub fn abort(
+        &mut self,
+        contributor: &Contributor,
+        sale_id: Vec<u8>,
+        payload: &[u8],
+    ) -> Result<()> {
         require!(!self.has_ended(), SaleError::SaleEnded);
-
-        // now deserialize payload
-        let payload = parsed.payload;
 
         // check that the payload has the correct size
         // payload type + sale id
         require!(payload.len() == 33, SaleError::IncorrectVaaPayload);
-
-        // check that this is a SaleInit vaa (payload 1)
-        require!(
-            payload[0] == PAYLOAD_SALE_ABORTED,
-            SaleError::InvalidVaaAction
-        );
-
-        // deserialize other things
-        let sale_id: [u8; 32] = payload[1..33].try_into().unwrap();
         require!(sale_id == self.id, SaleError::IncorrectSale);
 
         // finally set the status to aborted
@@ -179,7 +186,7 @@ impl Sale {
         Ok(())
     }
 
-    pub fn claim_refund(&mut self) -> Result<()> {
+    pub fn claim_refund(&mut self, contributor: &Contributor) -> Result<()> {
         // TODO: devs do something
         Ok(())
     }

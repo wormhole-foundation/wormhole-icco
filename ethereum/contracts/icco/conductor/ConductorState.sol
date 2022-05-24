@@ -8,37 +8,29 @@ import "./ConductorStructs.sol";
 contract ConductorStorage {
     struct Provider {
         uint16 chainId;
-
-        uint16 governanceChainId;
-        bytes32 governanceContract;
-
         address payable wormhole;
-
         address tokenBridge;
     }
 
     struct State {
         Provider provider;
 
-        // contract deployer
+        /// contract deployer
         address owner;
-        // # of confirmations for wormhole messages
-        uint8 consistencyLevel;
+        
+        /// number of confirmations for wormhole messages
+        uint8 consistencyLevel; 
 
-        // Mapping of consumed governance actions
-        mapping(bytes32 => bool) consumedGovernanceActions;
-
-        // Mapping of initialized implementations
+        /// mapping of initialized implementations
         mapping(address => bool) initializedImplementations;
 
-        // Mapping of Conductor contracts on other chains
+        /// mapping of Conductor contracts on other chains
         mapping(uint16 => bytes32) contributorImplementations;
-        mapping(uint16 => bytes32) contributorCustody;
 
-        // Mapping of Sales
+        /// mapping of Sales
         mapping(uint => ConductorStructs.Sale) sales;
 
-        // Next sale id
+        /// next sale id
         uint256 nextSaleId;
     }
 }

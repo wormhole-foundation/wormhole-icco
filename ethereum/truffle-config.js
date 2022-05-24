@@ -146,4 +146,7 @@ module.exports = {
   },
 
   plugins: ["@chainsafe/truffle-plugin-abigen", "truffle-plugin-verify"],
+  api_keys: {
+    etherscan: process.env.ETHERSCAN_KEY,
+  },
 };

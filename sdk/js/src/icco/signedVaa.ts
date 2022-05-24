@@ -38,11 +38,14 @@ export async function parseSaleInit(payload: Uint8Array): Promise<SaleInit> {
     saleStart: ethers.BigNumber.from(payload.slice(164, 196)).toString(),
     saleEnd: ethers.BigNumber.from(payload.slice(196, 228)).toString(),
     acceptedTokens: parseAcceptedTokens(payload, numAcceptedTokens),
-    recipient: uint8ArrayToHex(
+    solanaTokenAccount: uint8ArrayToHex(
       payload.slice(recipientIndex, recipientIndex + 32)
     ),
-    refundRecipient: uint8ArrayToHex(
+    recipient: uint8ArrayToHex(
       payload.slice(recipientIndex + 32, recipientIndex + 64)
+    ),
+    refundRecipient: uint8ArrayToHex(
+      payload.slice(recipientIndex + 64, recipientIndex + 96)
     ),
   };
 }

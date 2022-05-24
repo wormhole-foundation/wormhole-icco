@@ -41,7 +41,6 @@ const ConductorImplementationFullABI = jsonfile.readFileSync(
 const ContributorImplementationFullABI = jsonfile.readFileSync(
   "build/contracts/ContributorImplementation.json"
 ).abi;
-const ConsistencyLevel = process.env.CONSISTENCY_LEVEL;
 
 // global variables
 const TEST_CHAIN_ID = "2";
@@ -50,8 +49,6 @@ const GAS_LIMIT = "3000000";
 const ethereumRootPath = `${__dirname}/..`;
 const config = require(`${ethereumRootPath}/icco_deployment_config.js`)
   .development;
-
-// add a test that makes sure we pass the right token info for localTokenAddress lookup
 
 contract("ICCO", function(accounts) {
   const WORMHOLE = new web3.eth.Contract(
@@ -139,7 +136,7 @@ contract("ICCO", function(accounts) {
     let failed = false;
     try {
       await initialized.methods
-        .registerChain(TEST_CHAIN_ID, contributorAddress, contributorAddress)
+        .registerChain(TEST_CHAIN_ID, contributorAddress)
         .send({
           value: 0,
           from: accounts[1],
@@ -156,7 +153,7 @@ contract("ICCO", function(accounts) {
     assert.ok(failed);
 
     await initialized.methods
-      .registerChain(TEST_CHAIN_ID, contributorAddress, contributorAddress)
+      .registerChain(TEST_CHAIN_ID, contributorAddress)
       .send({
         value: 0,
         from: accounts[0],
@@ -176,7 +173,7 @@ contract("ICCO", function(accounts) {
     failed = false;
     try {
       await initialized.methods
-        .registerChain(TEST_CHAIN_ID, contributorAddress, contributorAddress)
+        .registerChain(TEST_CHAIN_ID, contributorAddress)
         .send({
           value: 0,
           from: accounts[0],
@@ -284,7 +281,7 @@ contract("ICCO", function(accounts) {
 
     assert.ok(failed);
 
-    // confirm that the implementation address changes
+    // confirm that the implementation address changed
     let before = await web3.eth.getStorageAt(
       TokenSaleContributor.address,
       "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc"
@@ -582,6 +579,12 @@ contract("ICCO", function(accounts) {
   let CONTRIBUTED_TOKEN_ONE;
   let CONTRIBUTED_TOKEN_TWO;
   let SOLD_TOKEN_DECIMALS;
+  let SALE_START;
+  let SALE_END;
+  let SALE_INIT_PAYLOAD;
+  let SALE_ID = 0;
+  let TOKEN_ONE_INDEX = 0;
+  let TOKEN_TWO_INDEX = 1;
   const SELLER = accounts[0];
   const BUYER_ONE = accounts[1];
   const BUYER_TWO = accounts[2];
@@ -650,17 +653,9 @@ contract("ICCO", function(accounts) {
     );
     await CONTRIBUTED_TOKEN_TWO.mint(BUYER_TWO, contributedTokensMintAmount);
 
-    // mint some token two to buyer1 for multi-asset contribution test
+    // mint extra token two to buyer1 for multi-asset contribution test
     await CONTRIBUTED_TOKEN_TWO.mint(BUYER_ONE, extraContributedTokensToMint);
   });
-
-  // more global sale test variables
-  let SALE_START;
-  let SALE_END;
-  let SALE_INIT_PAYLOAD;
-  let SALE_ID = 0;
-  let TOKEN_ONE_INDEX = 0;
-  let TOKEN_TWO_INDEX = 1;
 
   it("create a sale correctly and attest over wormhole", async function() {
     console.log(
@@ -681,6 +676,7 @@ contract("ICCO", function(accounts) {
     const refundRecipient = accounts[0];
     const acceptedTokenLength = 2;
     const payloadIdType1 = "01";
+    const solanaChainId = "1";
 
     const initialized = new web3.eth.Contract(
       ConductorImplementationFullABI,
@@ -700,6 +696,7 @@ contract("ICCO", function(accounts) {
       SALE_END,
       saleRecipient,
       refundRecipient,
+      SOLD_TOKEN_BYTES32_ADDRESS,
     ];
 
     // create accepted tokens array
@@ -723,7 +720,20 @@ contract("ICCO", function(accounts) {
       gasLimit: GAS_LIMIT,
     });
 
-    // Verify Payload sent to contributor
+    // verify contributorWallets getter
+    const solanaWallet = await initialized.methods
+      .contributorWallets(SALE_ID, solanaChainId)
+      .call();
+
+    assert.equal(
+      solanaWallet,
+      web3.eth.abi.encodeParameter(
+        "address",
+        "0x" + SOLD_TOKEN_BYTES32_ADDRESS.substring(26)
+      )
+    );
+
+    // verify payload sent to contributor
     const log = (
       await WORMHOLE.getPastEvents("LogMessagePublished", {
         fromBlock: "latest",
@@ -851,6 +861,18 @@ contract("ICCO", function(accounts) {
     );
     index += 32;
 
+    // solana ATA
+    assert.equal(
+      log.payload.substr(index, 64),
+      web3.eth.abi
+        .encodeParameter(
+          "address",
+          "0x" + SOLD_TOKEN_BYTES32_ADDRESS.substring(26)
+        )
+        .substring(2)
+    );
+    index += 64;
+
     // recipient of proceeds
     assert.equal(
       log.payload.substr(index, 64),
@@ -896,7 +918,7 @@ contract("ICCO", function(accounts) {
       TokenSaleContributor.address
     );
 
-    // initialize the sale
+    // create initSale VM
     const vm = await signAndEncodeVM(
       1,
       1,
@@ -909,6 +931,7 @@ contract("ICCO", function(accounts) {
       0
     );
 
+    // init the sale
     await initialized.methods.initSale("0x" + vm).send({
       from: SELLER,
       gasLimit: GAS_LIMIT,
@@ -951,6 +974,15 @@ contract("ICCO", function(accounts) {
     assert.equal(
       sale.acceptedTokensConversionRates[TOKEN_TWO_INDEX],
       parseInt(tokenTwoConversionRate)
+    );
+    assert.equal(
+      sale.solanaTokenAccount.substring(2),
+      web3.eth.abi
+        .encodeParameter(
+          "address",
+          "0x" + SOLD_TOKEN_BYTES32_ADDRESS.substring(26)
+        )
+        .substring(2)
     );
     assert.equal(
       sale.recipient.substring(2),
@@ -1286,7 +1318,7 @@ contract("ICCO", function(accounts) {
     await wait(10);
 
     // test variables
-    const tokenTwoContributionAmount = 5000;
+    const tokenTwoContributionAmount = "5000";
 
     const initialized = new web3.eth.Contract(
       ContributorImplementationFullABI,
@@ -1329,8 +1361,8 @@ contract("ICCO", function(accounts) {
 
   it("should attest contributions correctly", async function() {
     // test variables
-    const tokenOneContributionAmount = 10000;
-    const tokenTwoContributionAmount = 7500;
+    const tokenOneContributionAmount = "10000";
+    const tokenTwoContributionAmount = "7500";
     const acceptedTokenLength = 2;
     const payloadIdType2 = "02";
 
@@ -1414,8 +1446,8 @@ contract("ICCO", function(accounts) {
 
   it("conductor should collect contributions correctly", async function() {
     // test variables
-    const tokenOneContributionAmount = 10000;
-    const tokenTwoContributionAmount = 7500;
+    const tokenOneContributionAmount = "10000";
+    const tokenTwoContributionAmount = "7500";
 
     const initialized = new web3.eth.Contract(
       ConductorImplementationFullABI,
@@ -1545,6 +1577,7 @@ contract("ICCO", function(accounts) {
       TokenSaleConductor.address
     );
 
+    // balance check before sealing the sale
     const actualContributorBalanceBefore = await SOLD_TOKEN.balanceOf(
       TokenSaleContributor.address
     );
@@ -1569,6 +1602,7 @@ contract("ICCO", function(accounts) {
       gasLimit: GAS_LIMIT,
     });
 
+    // balance check after sealing the sale
     const actualContributorBalanceAfter = await SOLD_TOKEN.balanceOf(
       TokenSaleContributor.address
     );
@@ -1793,6 +1827,7 @@ contract("ICCO", function(accounts) {
   });
 
   it("allocation should only be claimable once", async function() {
+    // revert first allocation claim
     await revert(ONE_CLAIM_SNAPSHOT);
 
     const initialized = new web3.eth.Contract(
@@ -1860,6 +1895,7 @@ contract("ICCO", function(accounts) {
       SALE_2_END,
       saleRecipient,
       refundRecipient,
+      SOLD_TOKEN_BYTES32_ADDRESS,
     ];
 
     // create accepted tokens array
@@ -2010,6 +2046,18 @@ contract("ICCO", function(accounts) {
     );
     index += 32;
 
+    // solana ATA
+    assert.equal(
+      log.payload.substr(index, 64),
+      web3.eth.abi
+        .encodeParameter(
+          "address",
+          "0x" + SOLD_TOKEN_BYTES32_ADDRESS.substring(26)
+        )
+        .substring(2)
+    );
+    index += 64;
+
     // recipient of proceeds
     assert.equal(
       log.payload.substr(index, 64),
@@ -2040,11 +2088,11 @@ contract("ICCO", function(accounts) {
 
   it("should init a second sale in the contributor", async function() {
     // test variables
-    const saleTokenAmount = 1000;
-    const minimumTokenRaise = 2000;
-    const maximumTokenRaise = 30000;
-    const tokenOneConversionRate = 1000000000000000000;
-    const tokenTwoConversionRate = 2000000000000000000;
+    const saleTokenAmount = "1000";
+    const minimumTokenRaise = "2000";
+    const maximumTokenRaise = "30000";
+    const tokenOneConversionRate = "1000000000000000000";
+    const tokenTwoConversionRate = "2000000000000000000";
     const saleRecipient = accounts[0];
     const refundRecipient = SALE_2_REFUND_RECIPIENT;
 
@@ -2106,6 +2154,15 @@ contract("ICCO", function(accounts) {
     assert.equal(
       sale.acceptedTokensConversionRates[TOKEN_TWO_INDEX],
       tokenTwoConversionRate
+    );
+    assert.equal(
+      sale.solanaTokenAccount.substring(2),
+      web3.eth.abi
+        .encodeParameter(
+          "address",
+          "0x" + SOLD_TOKEN_BYTES32_ADDRESS.substring(26)
+        )
+        .substring(2)
     );
     assert.equal(
       sale.recipient.substring(2),
@@ -2412,8 +2469,8 @@ contract("ICCO", function(accounts) {
 
   it("conductor should collect second sale contributions correctly", async function() {
     // test variables
-    const tokenOneContributionAmount = 1000;
-    const tokenTwoContributionAmount = 200;
+    const tokenOneContributionAmount = "1000";
+    const tokenTwoContributionAmount = "200";
 
     const initialized = new web3.eth.Contract(
       ConductorImplementationFullABI,
@@ -2787,10 +2844,12 @@ contract("ICCO", function(accounts) {
       TokenSaleContributor.address
     );
 
+    // revert the refund so we can try to claim it again
     await revert(ONE_REFUND_SNAPSHOT);
 
     let failed = false;
     try {
+      // attempt to claim refund a second time
       await initialized.methods.claimRefund(SALE_2_ID, TOKEN_ONE_INDEX).send({
         from: BUYER_ONE,
         gasLimit: GAS_LIMIT,
@@ -2872,6 +2931,7 @@ contract("ICCO", function(accounts) {
       SALE_3_END,
       saleRecipient,
       refundRecipient,
+      SOLD_TOKEN_BYTES32_ADDRESS,
     ];
 
     // create accepted tokens array
@@ -3022,6 +3082,18 @@ contract("ICCO", function(accounts) {
     );
     index += 32;
 
+    // solana ATA
+    assert.equal(
+      log.payload.substr(index, 64),
+      web3.eth.abi
+        .encodeParameter(
+          "address",
+          "0x" + SOLD_TOKEN_BYTES32_ADDRESS.substring(26)
+        )
+        .substring(2)
+    );
+    index += 64;
+
     // recipient of proceeds
     assert.equal(
       log.payload.substr(index, 64),
@@ -3052,11 +3124,11 @@ contract("ICCO", function(accounts) {
 
   it("should init a third sale in the contributor", async function() {
     // test variables
-    const saleTokenAmount = 1000;
-    const minimumTokenRaise = 2000;
-    const maximumTokenRaise = 30000;
-    const tokenOneConversionRate = 1000000000000000000;
-    const tokenTwoConversionRate = 2000000000000000000;
+    const saleTokenAmount = "1000";
+    const minimumTokenRaise = "2000";
+    const maximumTokenRaise = "30000";
+    const tokenOneConversionRate = "1000000000000000000";
+    const tokenTwoConversionRate = "2000000000000000000";
     const saleRecipient = accounts[0];
     const refundRecipient = accounts[0];
 
@@ -3118,6 +3190,15 @@ contract("ICCO", function(accounts) {
     assert.equal(
       sale.acceptedTokensConversionRates[TOKEN_TWO_INDEX],
       tokenTwoConversionRate
+    );
+    assert.equal(
+      sale.solanaTokenAccount.substring(2),
+      web3.eth.abi
+        .encodeParameter(
+          "address",
+          "0x" + SOLD_TOKEN_BYTES32_ADDRESS.substring(26)
+        )
+        .substring(2)
     );
     assert.equal(
       sale.recipient.substring(2),
@@ -3654,6 +3735,7 @@ contract("ICCO", function(accounts) {
       SALE_4_END,
       saleRecipient,
       refundRecipient,
+      SOLD_TOKEN_BYTES32_ADDRESS,
     ];
 
     // create accepted tokens array
@@ -3806,6 +3888,18 @@ contract("ICCO", function(accounts) {
     );
     index += 32;
 
+    // solana ATA
+    assert.equal(
+      log.payload.substr(index, 64),
+      web3.eth.abi
+        .encodeParameter(
+          "address",
+          "0x" + SOLD_TOKEN_BYTES32_ADDRESS.substring(26)
+        )
+        .substring(2)
+    );
+    index += 64;
+
     // recipient of proceeds
     assert.equal(
       log.payload.substr(index, 64),
@@ -3902,6 +3996,15 @@ contract("ICCO", function(accounts) {
     assert.equal(
       sale.acceptedTokensConversionRates[TOKEN_TWO_INDEX],
       tokenTwoConversionRate
+    );
+    assert.equal(
+      sale.solanaTokenAccount.substring(2),
+      web3.eth.abi
+        .encodeParameter(
+          "address",
+          "0x" + SOLD_TOKEN_BYTES32_ADDRESS.substring(26)
+        )
+        .substring(2)
     );
     assert.equal(
       sale.recipient.substring(2),
@@ -4597,6 +4700,7 @@ contract("ICCO", function(accounts) {
       saleEnd,
       saleRecipient,
       refundRecipient,
+      SOLD_TOKEN_BYTES32_ADDRESS,
     ];
 
     // create accepted tokens array
@@ -4613,7 +4717,7 @@ contract("ICCO", function(accounts) {
       ],
     ];
 
-    // create a another sale
+    // create another sale
     await initialized.methods.createSale(saleParams, acceptedTokens).send({
       value: "0",
       from: SELLER,
@@ -4699,9 +4803,10 @@ contract("ICCO", function(accounts) {
       saleEnd,
       saleRecipient,
       refundRecipient,
+      SOLD_TOKEN_BYTES32_ADDRESS,
     ];
 
-    // create accepted tokens array
+    // create accepted tokens array with a bad token address (non-ERC20)
     const acceptedTokens = [
       [
         TEST_CHAIN_ID,
@@ -4710,12 +4815,12 @@ contract("ICCO", function(accounts) {
       ],
       [
         TEST_CHAIN_ID,
-        "0x000000000000000000000000" + accounts[0].substr(2), // create bad address
+        "0x000000000000000000000000" + accounts[0].substr(2), // create bad address by using wallet address
         tokenTwoConversionRate,
       ],
     ];
 
-    // create a another sale
+    // create another sale
     await initializedConductor.methods
       .createSale(saleParams, acceptedTokens)
       .send({
@@ -4724,7 +4829,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
 
-    // Grab the message generated by the conductor
+    // grab the message generated by the conductor
     const log = (
       await WORMHOLE.getPastEvents("LogMessagePublished", {
         fromBlock: "latest",
@@ -4816,6 +4921,7 @@ contract("ICCO", function(accounts) {
       saleEnd,
       saleRecipient,
       refundRecipient,
+      SOLD_TOKEN_BYTES32_ADDRESS,
     ];
 
     // create accepted tokens array
@@ -4903,6 +5009,7 @@ contract("ICCO", function(accounts) {
       saleEnd,
       saleRecipient,
       refundRecipient,
+      SOLD_TOKEN_BYTES32_ADDRESS,
     ];
 
     // create accepted tokens array
@@ -4931,6 +5038,226 @@ contract("ICCO", function(accounts) {
     }
 
     assert.ok(failed);
+  });
+
+  it("conductor should allow fair launch sale (raiseAmount == minRaise && maxRaise", async function() {
+    // test variables
+    const current_block = await web3.eth.getBlock("latest");
+    const saleStart = current_block.timestamp + 5;
+    const saleEnd = saleStart + 8;
+    const saleTokenAmount = "1000";
+    const minimumTokenRaise = "2000";
+    const maximumTokenRaise = "2000";
+    const tokenOneConversionRate = "1000000000000000000";
+    const saleRecipient = accounts[0];
+    const refundRecipient = accounts[0];
+    const SOLD_TOKEN_DECIMALS = 18;
+    const mintAccount = SELLER;
+    const tokenSequence = 0; // set to 0 for the test
+    const tokenChainId = 0; // set to 0 for the test
+    const nativeContractAddress = "0x00"; // set to 0 for the test
+
+    // expected output
+    const expectedAllocation = saleTokenAmount;
+    const expectedExcessContribution = "0";
+
+    // create sale token again
+    const saleTokenMintAmount = "2000";
+    const soldToken = await TokenImplementation.new();
+    const soldTokenName = "Sold Token";
+    const soldTokenSymbol = "SOLD";
+    const soldTokenBytes32 =
+      "0x000000000000000000000000" + soldToken.address.substr(2);
+
+    await soldToken.initialize(
+      soldTokenName,
+      soldTokenSymbol,
+      SOLD_TOKEN_DECIMALS,
+      tokenSequence,
+      mintAccount,
+      tokenChainId,
+      nativeContractAddress
+    );
+    await soldToken.mint(SELLER, saleTokenMintAmount);
+    await soldToken.approve(TokenSaleConductor.address, saleTokenAmount);
+
+    // setup smart contracts
+    const initializedConductor = new web3.eth.Contract(
+      ConductorImplementationFullABI,
+      TokenSaleConductor.address
+    );
+    const initializedContributor = new web3.eth.Contract(
+      ContributorImplementationFullABI,
+      TokenSaleContributor.address
+    );
+
+    const saleId = await initializedConductor.methods.getNextSaleId().call();
+
+    await soldToken.approve(TokenSaleConductor.address, saleTokenAmount);
+
+    // create array (solidity struct) for sale params
+    const saleParams = [
+      soldTokenBytes32,
+      TEST_CHAIN_ID,
+      saleTokenAmount,
+      minimumTokenRaise,
+      maximumTokenRaise,
+      saleStart,
+      saleEnd,
+      saleRecipient,
+      refundRecipient,
+      SOLD_TOKEN_BYTES32_ADDRESS,
+    ];
+
+    // create accepted tokens array
+    const acceptedTokens = [
+      [
+        TEST_CHAIN_ID,
+        "0x000000000000000000000000" + CONTRIBUTED_TOKEN_ONE.address.substr(2),
+        tokenOneConversionRate,
+      ],
+    ];
+
+    // create another sale
+    await initializedConductor.methods
+      .createSale(saleParams, acceptedTokens)
+      .send({
+        value: "0",
+        from: SELLER,
+        gasLimit: GAS_LIMIT,
+      });
+
+    // grab the message generated by the conductor
+    const log = (
+      await WORMHOLE.getPastEvents("LogMessagePublished", {
+        fromBlock: "latest",
+      })
+    )[0].returnValues;
+
+    // create the vaa to initialize the sale
+    const vm = await signAndEncodeVM(
+      1,
+      1,
+      TEST_CHAIN_ID,
+      "0x000000000000000000000000" + TokenSaleConductor.address.substr(2),
+      0,
+      log.payload.toString(),
+      [testSigner1PK],
+      0,
+      0
+    );
+
+    // initialize the sale
+    await initializedContributor.methods.initSale("0x" + vm).send({
+      from: SELLER,
+      gasLimit: GAS_LIMIT,
+    });
+
+    // wait for sale to start
+    await wait(5);
+
+    // make contribution equal to the minRaise amount
+    await CONTRIBUTED_TOKEN_ONE.approve(
+      TokenSaleContributor.address,
+      maximumTokenRaise,
+      {
+        from: BUYER_ONE,
+      }
+    );
+
+    // perform "kyc" and contribute tokens to the sale for BUYER_ONE
+    const kycSig1 = await signContribution(
+      CONDUCTOR_BYTES32_ADDRESS,
+      saleId,
+      TOKEN_ONE_INDEX,
+      maximumTokenRaise,
+      BUYER_ONE,
+      kycSignerPK
+    );
+    await initializedContributor.methods
+      .contribute(saleId, TOKEN_ONE_INDEX, parseInt(maximumTokenRaise), kycSig1)
+      .send({
+        from: BUYER_ONE,
+        gasLimit: GAS_LIMIT,
+      });
+
+    // wait for sale to end
+    await wait(10);
+
+    // attest contributions
+    await initializedContributor.methods.attestContributions(saleId).send({
+      from: BUYER_ONE,
+      gasLimit: GAS_LIMIT,
+    });
+
+    // grab the message generated by the conductor
+    const log2 = (
+      await WORMHOLE.getPastEvents("LogMessagePublished", {
+        fromBlock: "latest",
+      })
+    )[0].returnValues;
+
+    // create the vaa to initialize the sale
+    const vm2 = await signAndEncodeVM(
+      1,
+      1,
+      TEST_CHAIN_ID,
+      "0x000000000000000000000000" + TokenSaleContributor.address.substr(2),
+      0,
+      log2.payload.toString(),
+      [testSigner1PK],
+      0,
+      0
+    );
+
+    // attest contributions
+    await initializedConductor.methods.collectContribution("0x" + vm2).send({
+      from: BUYER_ONE,
+      gasLimit: GAS_LIMIT,
+    });
+
+    // seal the sale in the conductor and check allocation details
+    await initializedConductor.methods.sealSale(saleId).send({
+      from: SELLER,
+      gasLimit: GAS_LIMIT,
+    });
+
+    // grab the message generated by the conductor
+    const log3 = (
+      await WORMHOLE.getPastEvents("LogMessagePublished", {
+        fromBlock: "latest",
+      })
+    )[0].returnValues;
+
+    // create the vaa to initialize the sale
+    const vm3 = await signAndEncodeVM(
+      1,
+      1,
+      TEST_CHAIN_ID,
+      "0x000000000000000000000000" + TokenSaleConductor.address.substr(2),
+      0,
+      log3.payload.toString(),
+      [testSigner1PK],
+      0,
+      0
+    );
+
+    // seal the sale in the contributor
+    await initializedContributor.methods.saleSealed("0x" + vm3).send({
+      from: SELLER,
+      gasLimit: GAS_LIMIT,
+    });
+
+    // confirm that the allocations and excessContributions are correct
+    const actualAllocation = await initializedContributor.methods
+      .getSaleAllocation(saleId, TOKEN_ONE_INDEX)
+      .call();
+    const actualExcessContribution = await initializedContributor.methods
+      .getSaleExcessContribution(saleId, TOKEN_ONE_INDEX)
+      .call();
+
+    assert.equal(actualAllocation, expectedAllocation);
+    assert.equal(actualExcessContribution, expectedExcessContribution);
   });
 });
 

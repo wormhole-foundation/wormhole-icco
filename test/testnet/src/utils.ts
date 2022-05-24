@@ -9,6 +9,7 @@ import {
   nativeToHexString,
   importCoreWasm,
   redeemOnEth,
+  CHAIN_ID_ETH,
 } from "@certusone/wormhole-sdk";
 import {
   AcceptedToken,
@@ -33,6 +34,9 @@ import {
   claimAllocationOnEth,
   getAllocationIsClaimedOnEth,
   getSaleContributionOnEth,
+  nativeToUint8Array,
+  abortSaleBeforeStartOnEth,
+  saleAbortedOnEth,
 } from "wormhole-icco-sdk";
 import {
   WORMHOLE_ADDRESSES,
@@ -193,7 +197,8 @@ export async function createSaleOnEthAndGetVaa(
   saleEnd: ethers.BigNumberish,
   recipientAddress,
   refundRecipientAddress,
-  acceptedTokens: AcceptedToken[]
+  acceptedTokens: AcceptedToken[],
+  solanaTokenAccount: ethers.BytesLike
 ): Promise<Uint8Array> {
   // create
   const receipt = await createSaleOnEth(
@@ -207,6 +212,7 @@ export async function createSaleOnEthAndGetVaa(
     saleStart,
     saleEnd,
     acceptedTokens,
+    solanaTokenAccount,
     recipientAddress,
     refundRecipientAddress,
     seller
@@ -237,6 +243,12 @@ export async function createSaleOnEthAndInit(
   const saleStart = getCurrentTime() + raiseParams.saleStartTimer;
   const saleEnd = saleStart + raiseParams.saleDurationSeconds;
 
+  // create fake solana ATA
+  const solanaTokenAccount = nativeToUint8Array(
+    raiseParams.localTokenAddress,
+    CHAIN_ID_ETH // will be CHAIN_ID_SOLANA with a real token
+  );
+
   // create the sale
   const saleInitVaa = await createSaleOnEthAndGetVaa(
     initiatorConductorWallet,
@@ -258,7 +270,8 @@ export async function createSaleOnEthAndInit(
     saleEnd,
     raiseParams.recipient,
     raiseParams.refundRecipient,
-    acceptedTokens
+    acceptedTokens,
+    solanaTokenAccount
   );
 
   // parse the sale init payload for return value
@@ -458,6 +471,23 @@ export async function attestAndCollectContributions(
     );
   }
   console.info("Finished collecting contributions.");
+
+  // confirm that all contributions were actually collected
+  const conductorSale = await getSaleFromConductorOnEth(
+    CONDUCTOR_ADDRESS,
+    testProvider(CONDUCTOR_NETWORK),
+    saleInit.saleId
+  );
+
+  for (let i = 0; i < conductorSale.contributionsCollected.length; i++) {
+    console.log(
+      "Contribution",
+      i,
+      "was accepted:",
+      conductorSale.contributionsCollected[i]
+    );
+  }
+
   return;
 }
 
@@ -616,12 +646,21 @@ export async function claimContributorAllocationOnEth(
     return false;
   }
 
-  const receipt = await claimAllocationOnEth(
-    TESTNET_ADDRESSES[network],
-    saleId,
-    tokenIndex[1],
-    wallet
-  );
+  let receipt;
+  try {
+    receipt = await claimAllocationOnEth(
+      TESTNET_ADDRESSES[network],
+      saleId,
+      tokenIndex[1],
+      wallet
+    );
+  } catch (error) {
+    if (error.message.includes("allocation already claimed")) {
+      return false;
+    } else {
+      console.log(error);
+    }
+  }
 
   return getAllocationIsClaimedOnEth(
     TESTNET_ADDRESSES[network],
@@ -679,4 +718,43 @@ export async function redeemCrossChainContributions(
     );
   }
   return true;
+}
+
+export async function abortSaleEarlyAtConductor(
+  saleInit: SaleInit
+): Promise<ethers.ContractReceipt> {
+  const receipt = await abortSaleBeforeStartOnEth(
+    CONDUCTOR_ADDRESS,
+    saleInit.saleId,
+    initiatorWallet(CONDUCTOR_NETWORK)
+  );
+  return receipt;
+}
+
+export async function abortSaleEarlyAtContributor(
+  saleInit: SaleInit,
+  abortEarlyReceipt: ethers.ContractReceipt
+) {
+  const saleAbortedVaa = await getSignedVaaFromReceiptOnEth(
+    CONDUCTOR_CHAIN_ID,
+    CONDUCTOR_ADDRESS,
+    abortEarlyReceipt,
+    CONDUCTOR_NETWORK
+  );
+
+  // need to call sale aborted
+  {
+    const receipts = await Promise.all(
+      CONTRIBUTOR_NETWORKS.map(async (network) => {
+        return saleAbortedOnEth(
+          TESTNET_ADDRESSES[network],
+          saleAbortedVaa,
+          initiatorWallet(network),
+          saleInit.saleId
+        );
+      })
+    );
+  }
+
+  return;
 }

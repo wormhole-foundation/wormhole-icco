@@ -1,12 +1,12 @@
 [package]
-name = "icco-contributor"
+name = "anchor-contributor"
 version = "0.1.0"
 description = "ICCO Contributor"
 edition = "2021"
 
 [lib]
 crate-type = ["cdylib", "lib"]
-name = "icco_contributor"
+name = "anchor_contributor"
 
 [features]
 no-entrypoint = []
@@ -22,3 +22,4 @@ overflow-checks = true
 anchor-lang = "0.24.2"
 num-traits = "0.2"
 num-derive = "0.3"
+borsh = "0.9.3"

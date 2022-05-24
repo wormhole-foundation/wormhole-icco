@@ -13,6 +13,10 @@ pub mod wormhole;
 pub mod icco_contributor {
     use super::*;
 
+    pub fn debug(ctx: Context<Debug>) -> Result<()> {
+        Ok(())
+    }
+
     pub fn create_contributor(
         ctx: Context<CreateContributor>,
         conductor_chain: u16,
@@ -30,6 +34,7 @@ pub mod icco_contributor {
             conductor_address.try_into().expect("incorrect byte length");
         contributor.wormhole = wormhole;
         contributor.token_bridge = token_bridge;
+        contributor.owner = ctx.accounts.owner.key();
 
         Ok(())
     }
@@ -45,4 +50,9 @@ pub mod icco_contributor {
     pub fn sale_aborted(ctx: Context<ModifyWithVaa>) -> Result<()> {
         instructions::sale_aborted(ctx)
     }
+}
+
+#[derive(Accounts)]
+pub struct Debug{
+    
 }

@@ -22,8 +22,6 @@ pub fn init_sale(ctx: Context<CreateWithVaa>) -> Result<()> {
     let payload = message.deserialize_header(contributor, parsed, PAYLOAD_SALE_INIT)?;
 
     let sale = &mut ctx.accounts.sale;
-
-    // initialize sale
     sale.initialize(contributor, message.id.clone(), &payload)?;
 
     // create bump for pda

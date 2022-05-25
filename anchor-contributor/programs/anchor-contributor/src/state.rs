@@ -80,8 +80,8 @@ pub struct Sale {
 
 impl Sale {
     pub const MAXIMUM_SIZE: usize =
-        32 + 2 + 1 + (8 + 8) + 32 + 1 + 1 + 128 * AcceptedToken::MAXIMUM_SIZE + 32 + 1;
-
+        32 + 2 + 1 + (8 + 8) + 32 + 1 + 1 + 128 * (AcceptedToken::MAXIMUM_SIZE + 8 * 3) + 32 + 1;
+        
     pub fn parse_sale_init(&mut self, payload: &[u8], contributor: &Pubkey) -> Result<()> {
         // check that the payload has at least the number of bytes
         // required to define the number of accepted tokens

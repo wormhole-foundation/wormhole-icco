@@ -119,6 +119,7 @@ describe("anchor-contributor", () => {
     const parsedVaa = parse_vaa(initSaleVaa);
     //console.log(JSON.stringify(parse_vaa(Buffer.from(initSaleVaa, "hex")), null, 2));
 
+
     //Post VAA to Core Bridge
     await postVaaSolanaWithRetry(
       program.provider.connection,

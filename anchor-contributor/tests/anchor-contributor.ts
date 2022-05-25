@@ -7,6 +7,8 @@ import {
   importCoreWasm,
   setDefaultWasm,
   nativeToHexString,
+  CHAIN_ID_TERRA,
+  CHAIN_ID_SOLANA,
 } from "@certusone/wormhole-sdk";
 import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey";
 import fs from "fs";
@@ -63,20 +65,15 @@ describe("anchor-contributor", () => {
     const maxRaise = "14000000000000000000";
 
     // set up sale time based on block time
-    const blockTime = await getBlockTime(terra);
+    const blockTime = 0; //await getBlockTime(terra);
     const saleStart = blockTime + 5;
     const saleEnd = blockTime + 35;
 
     const acceptedTokens: AcceptedToken[] = [
       {
-        address: nativeToHexString("uluna", CHAIN_ID_TERRA)!,
-        chain: 3,
+        address: nativeToHexString("So11111111111111111111111111111111111111112", CHAIN_ID_SOLANA)!,
+        chain: CHAIN_ID_SOLANA as number,
         conversionRate: "1000000000000000000",
-      },
-      {
-        address: nativeToHexString(mockToken, CHAIN_ID_TERRA)!,
-        chain: 3,
-        conversionRate: "200000000000000000",
       },
     ];
 
@@ -173,20 +170,3 @@ describe("anchor-contributor", () => {
     console.log(await program.account.sale.fetch(sale_acc));
   });
 });
-
-export function signAndEncodeConductorVaa(
-  timestamp: number,
-  nonce: number,
-  sequence: number,
-  data: Buffer
-): Buffer {
-  return signAndEncodeVaa(
-    //return signAndEncodeVaaLegacy(
-    timestamp,
-    nonce,
-    CONDUCTOR_CHAIN,
-    CONDUCTOR_ADDRESS,
-    sequence,
-    data
-  );
-}

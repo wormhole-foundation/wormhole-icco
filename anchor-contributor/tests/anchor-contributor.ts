@@ -6,13 +6,14 @@ import {
   postVaaSolanaWithRetry,
   importCoreWasm,
   setDefaultWasm,
+  nativeToHexString,
 } from "@certusone/wormhole-sdk";
 import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey";
 import fs from "fs";
 import * as b from "byteify";
 import keccak256 from "keccak256";
 import { parseSaleInit } from "../../sdk/js/src/icco/signedVaa";
-import { encodeSaleInit, signAndEncodeVaa } from "./lib";
+import { AcceptedToken, encodeSaleInit, signAndEncodeVaa } from "./lib";
 
 describe("anchor-contributor", () => {
   // Configure the client to use the local cluster.

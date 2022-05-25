@@ -58,11 +58,11 @@ pub struct AssetTotals {
     pub excess_contributions: u64,
 }
 
-#[account]
+#[account(zero_copy)]
 pub struct Sale {
     // TODO: I don't think we need the token address if we are passing
     // the sale token ATA info in the sale init vaa. Is this true?
-    token_address: Vec<u8>, // 32
+    token_address: [u8; 32], // 32
     token_chain: u16,       // 2
     token_decimals: u8,     // 1
     times: SaleTimes,       // 8 + 8
@@ -71,10 +71,10 @@ pub struct Sale {
     status: SaleStatus,     // 1
 
     // NOTE: we only care about our own (i.e. only look for chain == 1)
-    accepted_tokens: Vec<AcceptedToken>, // up to 256 * 65
-    totals: Vec<AssetTotals>,            // up to 256 * (8 * 3)
+    accepted_tokens: [AcceptedToken; 256], // up to 256 * 65
+    totals: [AssetTotals; 256],            // up to 256 * (8 * 3)
 
-    pub id: Vec<u8>, // 32
+    pub id: [u8; 32], // 32
     pub bump: u8,    // 1
 }
 

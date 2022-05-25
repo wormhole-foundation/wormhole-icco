@@ -64,10 +64,10 @@ pub struct Sale {
     status: SaleStatus,     // 1
 
     // NOTE: we only care about our own (i.e. only look for chain == 1)
-    accepted_tokens: Vec<AcceptedToken>, // up to 256 * 65
-    total_contributions: Vec<u64>,
-    total_allocations: Vec<u64>,
-    total_excess_contributions: Vec<u64>,
+    accepted_tokens: Vec<AcceptedToken>,  // up to 256 * 65
+    total_contributions: Vec<u64>,        // up to 256 * 8
+    total_allocations: Vec<u64>,          // up to 256 * 8
+    total_excess_contributions: Vec<u64>, // up to 256 * 8
 
     pub id: Vec<u8>, // 32
     pub bump: u8,    // 1

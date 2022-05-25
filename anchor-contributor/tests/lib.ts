@@ -90,6 +90,7 @@ export function encodeSaleInit(
   saleId: number,
   tokenAddress: string, // 32 bytes
   tokenChain: number,
+  tokenDecimals: number,
   tokenAmount: string, // uint256
   minRaise: string, // uint256
   maxRaise: string, // uint256
@@ -100,21 +101,22 @@ export function encodeSaleInit(
   refundRecipient: string // 32 bytes
 ): Buffer {
   const numTokens = acceptedTokens.length;
-  const encoded = Buffer.alloc(292 + numTokens * NUM_BYTES_ACCEPTED_TOKEN);
+  const encoded = Buffer.alloc(293 + numTokens * NUM_BYTES_ACCEPTED_TOKEN);
 
   encoded.writeUInt8(1, 0); // initSale payload = 1
   encoded.write(toBigNumberHex(saleId, 32), 1, "hex");
   encoded.write(tokenAddress, 33, "hex");
   encoded.writeUint16BE(tokenChain, 65);
-  encoded.write(toBigNumberHex(tokenAmount, 32), 67, "hex");
-  encoded.write(toBigNumberHex(minRaise, 32), 99, "hex");
-  encoded.write(toBigNumberHex(maxRaise, 32), 131, "hex");
-  encoded.write(toBigNumberHex(saleStart, 32), 163, "hex");
-  encoded.write(toBigNumberHex(saleEnd, 32), 195, "hex");
-  encoded.writeUInt8(numTokens, 227);
-  encoded.write(encodeAcceptedTokens(acceptedTokens).toString("hex"), 228, "hex");
+  encoded.writeUint16BE(tokenDecimals, 67);
+  encoded.write(toBigNumberHex(tokenAmount, 32), 68, "hex");
+  encoded.write(toBigNumberHex(minRaise, 32), 100, "hex");
+  encoded.write(toBigNumberHex(maxRaise, 32), 132, "hex");
+  encoded.write(toBigNumberHex(saleStart, 32), 164, "hex");
+  encoded.write(toBigNumberHex(saleEnd, 32), 196, "hex");
+  encoded.writeUInt8(numTokens, 228);
+  encoded.write(encodeAcceptedTokens(acceptedTokens).toString("hex"), 229, "hex");
 
-  const recipientIndex = 228 + numTokens * NUM_BYTES_ACCEPTED_TOKEN;
+  const recipientIndex = 229 + numTokens * NUM_BYTES_ACCEPTED_TOKEN;
   encoded.write(recipient, recipientIndex, "hex");
   encoded.write(refundRecipient, recipientIndex + 32, "hex");
   return encoded;

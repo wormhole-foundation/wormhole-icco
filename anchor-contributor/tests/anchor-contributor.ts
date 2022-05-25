@@ -6,9 +6,9 @@ import {
   postVaaSolanaWithRetry,
   importCoreWasm,
   setDefaultWasm,
-  nativeToHexString,
-  CHAIN_ID_TERRA,
+  tryNativeToHexString,
   CHAIN_ID_SOLANA,
+  CHAIN_ID_ETH,
 } from "@certusone/wormhole-sdk";
 import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey";
 import fs from "fs";
@@ -23,17 +23,12 @@ describe("anchor-contributor", () => {
 
   const program = anchor.workspace.AnchorContributor as Program<AnchorContributor>;
 
-  const CONDUCTOR_CHAIN = 2;
-  const CONDUCTOR_ADDRESS = tryNativeToUint8Array(
-    "0x5c49f34D92316A2ac68d10A1e2168e16610e84f9",
-    "ethereum"
-  );
+  const CONDUCTOR_CHAIN = CHAIN_ID_ETH as number;
+  const CONDUCTOR_ADDRESS = tryNativeToUint8Array("0x5c49f34D92316A2ac68d10A1e2168e16610e84f9", CHAIN_ID_ETH);
   const owner = anchor.web3.Keypair.fromSecretKey(
     Uint8Array.from(JSON.parse(fs.readFileSync("./tests/test_keypair.json").toString()))
   );
-  const CORE_BRIDGE_ADDRESS = new anchor.web3.PublicKey(
-    "Bridge1p5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o"
-  );
+  const CORE_BRIDGE_ADDRESS = new anchor.web3.PublicKey("Bridge1p5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o");
 
   const [contributor_acc, contributor_bmp] = findProgramAddressSync(
     [Buffer.from("contributor"), CONDUCTOR_ADDRESS],
@@ -60,6 +55,7 @@ describe("anchor-contributor", () => {
     const saleId = 1;
     const tokenAddress = "00000000000000000000000083752ecafebf4707258dedffbd9c7443148169db";
     const tokenChain = 2;
+    const tokenDecimals = 18;
     const tokenAmount = "1000000000000000000";
     const minRaise = "10000000000000000000";
     const maxRaise = "14000000000000000000";
@@ -71,8 +67,18 @@ describe("anchor-contributor", () => {
 
     const acceptedTokens: AcceptedToken[] = [
       {
-        address: nativeToHexString("So11111111111111111111111111111111111111112", CHAIN_ID_SOLANA)!,
+        address: tryNativeToHexString("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", CHAIN_ID_ETH),
+        chain: CHAIN_ID_ETH as number,
+        conversionRate: "1000000000000000000",
+      },
+      {
+        address: tryNativeToHexString("So11111111111111111111111111111111111111112", CHAIN_ID_SOLANA),
         chain: CHAIN_ID_SOLANA as number,
+        conversionRate: "1000000000000000000",
+      },
+      {
+        address: tryNativeToHexString("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", CHAIN_ID_ETH),
+        chain: CHAIN_ID_ETH as number,
         conversionRate: "1000000000000000000",
       },
     ];
@@ -80,32 +86,30 @@ describe("anchor-contributor", () => {
     const recipient = "00000000000000000000000022d491bde2303f2f43325b2108d26f1eaba1e32b";
     const refundRecipient = "00000000000000000000000022d491bde2303f2f43325b2108d26f1eaba1e32b";
 
-    const data = encodeSaleInit(
-      saleId,
-      tokenAddress,
-      tokenChain,
-      tokenAmount,
-      minRaise,
-      maxRaise,
-      saleStart,
-      saleEnd,
-      acceptedTokens,
-      recipient,
-      refundRecipient
-    );
-
     const timestamp = 1;
     const nonce = 0;
     const sequence = 3;
 
     const initSaleVaa = signAndEncodeVaa(
-      //return signAndEncodeVaaLegacy(
       timestamp,
       nonce,
       CONDUCTOR_CHAIN,
       Buffer.from(CONDUCTOR_ADDRESS).toString("hex"),
       sequence,
-      data
+      encodeSaleInit(
+        saleId,
+        tokenAddress,
+        tokenChain,
+        tokenDecimals,
+        tokenAmount,
+        minRaise,
+        maxRaise,
+        saleStart,
+        saleEnd,
+        acceptedTokens,
+        recipient,
+        refundRecipient
+      )
     );
 
     //const initSaleVaa =
@@ -145,15 +149,10 @@ describe("anchor-contributor", () => {
     buffer_array.push(b.serializeUint8(parsedVaa.consistency_level));
     buffer_array.push(Uint8Array.from(parsedVaa.payload));
     const hash = keccak256(Buffer.concat(buffer_array));
+    console.log("hash", hash);
 
-    let core_bridge_vaa_key = findProgramAddressSync(
-      [Buffer.from("PostedVAA"), hash],
-      CORE_BRIDGE_ADDRESS
-    )[0];
-    console.log(
-      "Core Bridge VAA: ",
-      await program.provider.connection.getAccountInfo(core_bridge_vaa_key)
-    );
+    let core_bridge_vaa_key = findProgramAddressSync([Buffer.from("PostedVAA"), hash], CORE_BRIDGE_ADDRESS)[0];
+    console.log("Core Bridge VAA: ", await program.provider.connection.getAccountInfo(core_bridge_vaa_key));
 
     // Call Init Sale
     await program.methods

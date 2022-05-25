@@ -72,11 +72,15 @@ pub mod anchor_contributor {
     ) -> Result<()> {
         // get accepted token index
         let sale = &mut ctx.accounts.sale;
-        let idx = sale.get_accepted_token_index(token_index)?;
-        let contributed = ctx.accounts.buyer.contribute(idx, amount)?;
 
-        // now update total contributions
-        sale.update_total_contributions(idx, contributed)
+        // leverage token index search from sale's accepted tokens to find index
+        // on buyer's contributions
+        let idx = sale.update_total_contributions(token_index, amount)?;
+
+        // now update buyer's contributions
+        ctx.accounts.buyer.contribute(idx, amount)?;
+
+        Ok(())
     }
 
     pub fn seal_sale(ctx: Context<SealSale>) -> Result<()> {
@@ -92,5 +96,4 @@ pub mod anchor_contributor {
         let msg = get_message_data(&ctx.accounts.core_bridge_vaa)?;
         sale.parse_sale_aborted(&msg.payload)
     }
-
 }

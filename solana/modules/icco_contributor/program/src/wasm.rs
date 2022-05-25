@@ -24,6 +24,7 @@ use crate::{
         attest_icco_sale,
         seal_icco_sale,
         seal_icco_sale_transfer_custody,
+        claim_refund_icco_sale,
     },
     types::{
         EndpointRegistration,
@@ -384,6 +385,41 @@ pub fn contribute_icco_sale_ix(
 }
 
 
+
+#[wasm_bindgen]
+pub fn claim_refund_icco_sale_ix(
+    program_id: String,
+    bridge_id: String,
+    payer: String,
+    from_account: String,
+    init_sale_vaa: Vec<u8>,
+    token_mint: String,
+    token_index: u8,
+) -> JsValue {
+    let vaa = VAA::deserialize(init_sale_vaa.as_slice()).unwrap();
+    let bridge_id = Pubkey::from_str(bridge_id.as_str()).unwrap();
+    let program_id = Pubkey::from_str(program_id.as_str()).unwrap();
+    let from_account = Pubkey::from_str(from_account.as_str()).unwrap();
+    let token_mint = Pubkey::from_str(token_mint.as_str()).unwrap();
+    let message_key = bridge::accounts::PostedVAA::<'_, { AccountState::Uninitialized }>::key(
+        &PostedVAADerivationData {
+            payload_hash: hash_vaa(&vaa.clone().into()).to_vec(),
+        },
+        &bridge_id,
+    );
+    let ix = claim_refund_icco_sale(
+        program_id,
+        InitSale::get_init_sale_sale_id(&vaa.payload),
+        Pubkey::from_str(payer.as_str()).unwrap(),
+        from_account,
+        message_key,
+        token_mint,
+        token_index,
+    );
+    JsValue::from_serde(&ix).unwrap()
+}
+
+
 #[wasm_bindgen]
 pub fn attest_icco_sale_ix(
     program_id: String,
@@ -453,3 +489,4 @@ pub fn icco_sale_mint_address_for_sale_token(program_id: String, src_chain: u16,
 //         ]
 //     }
 // }
+

@@ -15,6 +15,7 @@ pub enum Error {
     InvalidTokenIndex,
     SaleSealedOrAborted,
     SaleHasNotStarted,
+    SaleIsNotAborted,
     SaleHasEnded,
     SaleHasBeenSealed,
     SaleHasNotBeenSealed,
@@ -25,6 +26,7 @@ pub enum Error {
     SaleTokenAccountAddressIncorrect,
     SaleTokenCustodyAccountEmpty,
     TestAccountError,
+    NotEnoughTokensInCustody,
 }
 
 /// Errors thrown by the program will bubble up to the solitaire wrapper, which needs a way to

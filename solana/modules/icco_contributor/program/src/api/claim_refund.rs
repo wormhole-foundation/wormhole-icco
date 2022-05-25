@@ -55,26 +55,22 @@ use bridge::{
 
 
 #[derive(FromAccounts)]
-pub struct ContributeIccoSale<'b> {
+pub struct ClaimRefundIccoSale<'b> {
     pub payer: Mut<Signer<AccountInfo<'b>>>,
     pub config: ConfigAccount<'b, { AccountState::Initialized }>,
-    pub init_sale_vaa: ClaimedVAA<'b, InitSale>,           // Was claimed.
-
-    pub contribution_state: Mut<ContributionStateAccount<'b, { AccountState::MaybeInitialized }>>, 
-
-    pub from: Mut<Data<'b, SplAccount, { AccountState::Initialized }>>,     // From account
-//    pub mint: Mut<Data<'b, SplMint, { AccountState::Initialized }>>,        // From token Why Mut??
-
-    pub mint: Data<'b, SplMint, { AccountState::Initialized }>,        // From token Why Mut??
-    pub custody: Mut<CustodyAccount<'b, { AccountState::Initialized }>>, 
+    pub init_sale_vaa: ClaimedVAA<'b, InitSale>,           // Not sure if needed..
+    pub contribution_state: Mut<ContributionStateAccount<'b, { AccountState::Initialized }>>, 
+    pub from: Mut<Data<'b, SplAccount, { AccountState::Initialized }>>,     // From account. To receive refund.
+    pub mint: Data<'b, SplMint, { AccountState::Initialized }>,             // From token Why Mut??
+    pub custody: Mut<CustodyAccount<'b, { AccountState::Initialized }>>,    
 
     pub clock: Sysvar<'b, Clock>,
-    // Sale state is in ctx.accounts[11]; // after more sys accounts. See instructions.rs
+    // Sale state is in ctx.accounts[11]; // see instructions.rs
 }
 
 /*
-impl<'a> From<&ContributeIccoSale<'a>> for SaleStateAccountDerivationData {
-    fn from(accs: &ContributeIccoSale<'a>) -> Self {
+impl<'a> From<&ClaimRefundIccoSale<'a>> for SaleStateAccountDerivationData {
+    fn from(accs: &ClaimRefundIccoSale<'a>) -> Self {
         SaleStateAccountDerivationData {
             sale_id: accs.init_sale_vaa.sale_id,
         }
@@ -82,8 +78,8 @@ impl<'a> From<&ContributeIccoSale<'a>> for SaleStateAccountDerivationData {
 }
 */
 
-impl<'a> From<&ContributeIccoSale<'a>> for CustodyAccountDerivationData {
-    fn from(accs: &ContributeIccoSale<'a>) -> Self {
+impl<'a> From<&ClaimRefundIccoSale<'a>> for CustodyAccountDerivationData {
+    fn from(accs: &ClaimRefundIccoSale<'a>) -> Self {
         CustodyAccountDerivationData {
             sale_id: accs.init_sale_vaa.sale_id,
             mint: *accs.mint.info().key,
@@ -91,8 +87,8 @@ impl<'a> From<&ContributeIccoSale<'a>> for CustodyAccountDerivationData {
     }
 }
 
-impl<'a> From<&ContributeIccoSale<'a>> for ContributionStateAccountDerivationData {
-    fn from(accs: &ContributeIccoSale<'a>) -> Self {
+impl<'a> From<&ClaimRefundIccoSale<'a>> for ContributionStateAccountDerivationData {
+    fn from(accs: &ClaimRefundIccoSale<'a>) -> Self {
         ContributionStateAccountDerivationData {
             sale_id: accs.init_sale_vaa.sale_id,
             contributor: *accs.payer.info().key,    // Needs to be wallet to be able to potentially use multiple contrib subaccounts?
@@ -103,28 +99,27 @@ impl<'a> From<&ContributeIccoSale<'a>> for ContributionStateAccountDerivationDat
 
 
 #[derive(BorshDeserialize, BorshSerialize, Default)]
-pub struct ContributeIccoSaleData {
-    pub amount: u64,
+pub struct ClaimRefundIccoSaleData {
     pub token_idx: u8,
 }
 
-impl<'b> InstructionContext<'b> for ContributeIccoSale<'b> {
+impl<'b> InstructionContext<'b> for ClaimRefundIccoSale<'b> {
 }
 
-pub fn contribute_icco_sale(
+pub fn claim_refund_icco_sale(
     ctx: &ExecutionContext,
-    accs: &mut ContributeIccoSale,
-    data: ContributeIccoSaleData,
+    accs: &mut ClaimRefundIccoSale,
+    data: ClaimRefundIccoSaleData,
 ) -> Result<()> {
-    msg!("In contribute_icco_sale!");
+    msg!("In claim_refund_icco_sale!");
 
     let sale_state_account_info = &ctx.accounts[11];
     //msg!("state_key: {:?}", sale_state_account_info.key);
     let mut state_data = sale_state_account_info.data.borrow_mut();
 
     // Check sale status.
-    if get_sale_state_sealed(&state_data) || get_sale_state_aborted(&state_data) {
-        return Err(SaleSealedOrAborted.into());
+    if get_sale_state_sealed(&state_data) || !get_sale_state_aborted(&state_data) {
+        return Err(SaleIsNotAborted.into());
     }
 /*
     // TBD This does not work yet. EVM Time is not Linux.
@@ -153,30 +148,36 @@ pub fn contribute_icco_sale(
     }
 */
 
-// Create/Load contribution PDA account. 
-    if !accs.contribution_state.is_initialized() {
-        accs.contribution_state.create(&(&*accs).into(), ctx, accs.payer.key, Exempt)?;
+    let token_idx = data.token_idx;
+    // Get amounts from token custody and contribution state.
+    let custody_account_amount = get_sale_state_contribution(&state_data, token_idx);
+    let amount = accs.contribution_state.amount;
+    // check if amount in Custody is >= contribution.
+    if amount > custody_account_amount {
+        return Err(NotEnoughTokensInCustody.into());
     }
+    set_sale_state_contribution(& mut state_data, token_idx, custody_account_amount - amount);
 
-    // Transfer tokens from->custody. Non-WH transfer.
+    // Transfer tokens  custody -> from. Non-WH transfer.
     let transfer_ix = spl_token::instruction::transfer(
         &spl_token::id(),
-        accs.from.info().key,
         accs.custody.info().key,
-        accs.payer.key,   // accs.authority_signer.key,      // Payer?
+        accs.from.info().key,
+        ctx.program_id, // accs.payer.key,   // accs.authority_signer.key,      // Payer?
         &[],
-        data.amount,
+        amount,
     )?;
     invoke_signed(&transfer_ix, ctx.accounts, &[])?;
 
-//    invoke_seeded(&transfer_ix, ctx, &accs.payer, None)?;
-//    invoke_seeded(&transfer_ix, ctx, &accs.authority_signer, None)?;
+    // Close contribution_state. Transfer rent back to the user.
+    let close_ix = spl_token::instruction::close_account(
+        &spl_token::id(),
+        accs.contribution_state.info().key, // Close this
+        accs.payer.info().key,              // lamports go here.
+        ctx.program_id,                     // Owner
+        &[],
+    )?;
+    invoke_signed(&close_ix, ctx.accounts, &[])?;
 
-    // store new amount in Custody and State accounts.
-    let token_idx = data.token_idx;
-    let tmp_v = get_sale_state_contribution(&state_data, token_idx) + data.amount;
-    set_sale_state_contribution(& mut state_data, token_idx, tmp_v);
-//    accs.sale_state.contributions[token_idx] = accs.sale_state.contributions[token_idx] + data.amount;
-    accs.contribution_state.amount = accs.contribution_state.amount + data.amount;
     Ok(())
 }

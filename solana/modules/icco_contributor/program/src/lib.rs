@@ -33,6 +33,7 @@ pub use api::{
     attest_icco_sale,
     seal_icco_sale,
     seal_icco_sale_transfer_custody, 
+    claim_refund_icco_sale,
 
     ContributeIccoSale,
     InitIccoSale,
@@ -42,6 +43,7 @@ pub use api::{
     AttestIccoSale,
     SealIccoSale,
     TransferCustodyIccoToken,
+    ClaimRefundIccoSale,
 };
 
 use solitaire::*;
@@ -55,4 +57,5 @@ solitaire! {
     ContributeIccoSale => contribute_icco_sale,
     SealIccoSale  => seal_icco_sale,
     TransferCustodyIccoToken => seal_icco_sale_transfer_custody,
+    ClaimRefundIccoSale => claim_refund_icco_sale,
 }

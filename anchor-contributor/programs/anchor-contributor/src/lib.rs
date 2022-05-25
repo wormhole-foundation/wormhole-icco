@@ -92,7 +92,5 @@ pub mod anchor_contributor {
         let msg = get_message_data(&ctx.accounts.core_bridge_vaa)?;
         sale.parse_sale_aborted(&msg.payload)
     }
-}
 
-#[derive(Accounts)]
-pub struct Initialize {}
+}

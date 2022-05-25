@@ -31,7 +31,7 @@ pub struct InitializeSale<'info> {
     #[account(
         init,
         seeds = [
-            SEED_PREFIX_SALE.as_bytes().as_ref(), // can we remove as_ref()?
+            SEED_PREFIX_SALE.as_bytes(), // can we remove as_ref()?
             &get_sale_id(&core_bridge_vaa)?,
         ],
         payer = owner,

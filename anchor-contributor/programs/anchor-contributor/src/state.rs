@@ -22,7 +22,7 @@ impl Contributor {
     pub const MAXIMUM_SIZE: usize = 32 + 2 + 32;
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
+#[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq, Default)]
 pub struct AcceptedToken {
     pub index: u8,    // 1
     pub mint: Pubkey, // 32
@@ -51,7 +51,7 @@ impl AcceptedToken {
     }
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
+#[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq, Default)]
 pub struct AssetTotals {
     pub contributions: u64,
     pub allocations: u64,
@@ -59,6 +59,7 @@ pub struct AssetTotals {
 }
 
 #[account(zero_copy)]
+#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq)]
 pub struct Sale {
     // TODO: I don't think we need the token address if we are passing
     // the sale token ATA info in the sale init vaa. Is this true?
@@ -80,7 +81,7 @@ pub struct Sale {
 
 impl Sale {
     pub const MAXIMUM_SIZE: usize =
-        32 + 2 + 1 + (8 + 8) + 32 + 1 + 1 + 128 * (AcceptedToken::MAXIMUM_SIZE + 8 * 3) + 32 + 1;
+        32 + 2 + 1 + (8 + 8) + 32 + 1 + 1 + 256 * (AcceptedToken::MAXIMUM_SIZE + 8 * 3) + 32 + 1;
         
     pub fn parse_sale_init(&mut self, payload: &[u8], contributor: &Pubkey) -> Result<()> {
         // check that the payload has at least the number of bytes
@@ -323,7 +324,7 @@ pub enum BuyerStatus {
         require!(result != None, SaleError::InvalidAcceptedIndex);
 */
 
-fn try_find_index(accepted_tokens: &Vec<AcceptedToken>, token_index: u8) -> Result<usize> {
+fn try_find_index(accepted_tokens: &[u8; 256], token_index: u8) -> Result<usize> {
     let result = accepted_tokens
         .iter()
         .position(|token| token.index == token_index);

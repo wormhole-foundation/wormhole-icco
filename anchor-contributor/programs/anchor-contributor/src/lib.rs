@@ -41,28 +41,19 @@ pub mod anchor_contributor {
         let sale = &mut ctx.accounts.sale;
 
         let msg = get_message_data(&ctx.accounts.core_bridge_vaa)?;
-        sale.parse_sale_init(&msg.payload, &ctx.accounts.contributor.key())?;
+        sale.parse_sale_init(&msg.payload)?;
 
-        // NOTE: do we create atas here?
-        // not sure how CpiContext works
-        /*
-        for token in &sale.accepted_tokens {
-            let cpi_ctx = CpiContext::new_with_signer(
-                ctx.accounts.owner.to_account_info(),
-                creation_accounts,
-                &[&to_seeds],
-            );
-            associated_token::create()
-        }
-        */
         Ok(())
     }
 
+    pub fn create_token_custody(ctx: Context<CreateTokenCustody>) -> Result<()> {
+        Ok(())
+    }
 
     pub fn contribute(
         ctx: Context<Contribute>,
         sale_id: Vec<u8>,
-        token_index: u8,
+        token_index: usize,
         amount: u64,
     ) -> Result<()> {
         // get accepted token index
@@ -70,10 +61,10 @@ pub mod anchor_contributor {
 
         // leverage token index search from sale's accepted tokens to find index
         // on buyer's contributions
-        let idx = sale.update_total_contributions(token_index, amount)?;
+        sale.update_total_contributions(token_index, amount)?;
 
         // now update buyer's contributions
-        ctx.accounts.buyer.contribute(idx, amount)?;
+        ctx.accounts.buyer.contribute(token_index, amount)?;
 
         Ok(())
     }

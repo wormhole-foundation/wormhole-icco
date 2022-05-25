@@ -11,6 +11,7 @@ pub const PAYLOAD_SALE_ABORTED: u8 = 4;
 // for sale init
 pub const INDEX_ACCEPTED_TOKENS_START: usize = 228;
 pub const ACCEPTED_TOKENS_N_BYTES: usize = 50;
+pub const ACCEPTED_TOKENS_MAX: usize = 256;
 
 // for sale sealed
 pub const INDEX_ALLOCATIONS_START: usize = 33;

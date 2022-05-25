@@ -51,6 +51,13 @@ pub struct InitializeSale<'info> {
     pub system_program: Program<'info, System>,
 }
 
+// TODO
+#[derive(Accounts)]
+#[instruction(token_pubkey: Pubkey)]
+pub struct CreateTokenCustody<'info> {
+    pub contributor: Account<'info, Contributor>,
+}
+
 /// Contribute is used for buyers to contribute collateral
 #[derive(Accounts)]
 #[instruction(sale_id: Vec<u8>, token_index: u8, amount: u64)]

@@ -6,7 +6,10 @@ use num_derive::*;
 use std::io::Write;
 
 use crate::{
-    constants::{ACCEPTED_TOKENS_N_BYTES, INDEX_ACCEPTED_TOKENS_START, INDEX_ALLOCATIONS_START},
+    constants::{
+        ACCEPTED_TOKENS_MAX, ACCEPTED_TOKENS_N_BYTES, INDEX_ACCEPTED_TOKENS_START,
+        INDEX_ALLOCATIONS_START,
+    },
     error::SaleError,
 };
 
@@ -26,26 +29,21 @@ impl Contributor {
 pub struct AcceptedToken {
     pub index: u8,    // 1
     pub mint: Pubkey, // 32
-    pub ata: Pubkey,  // 32
 }
 
 impl AcceptedToken {
-    pub const MAXIMUM_SIZE: usize = 65;
+    pub const MAXIMUM_SIZE: usize = 33;
 
-    pub fn new(index: u8, token_address: &[u8], contributor: &Pubkey) -> Self {
+    pub fn new(index: u8, token_address: &[u8]) -> Self {
         let mint = Pubkey::new(token_address);
-        AcceptedToken {
-            index,
-            mint,
-            ata: get_associated_token_address(contributor, &mint),
-        }
+        AcceptedToken { index, mint }
     }
 
-    pub fn make_from_slice(index: u8, bytes: &[u8], contributor: &Pubkey) -> Option<Self> {
+    pub fn make_from_slice(index: u8, bytes: &[u8]) -> Option<Self> {
         // chain id starts at 32
         // we don't need the conversion rate for anything, so don't bother deserializing it
         match u16::from_be_bytes(bytes[32..34].try_into().unwrap()) {
-            1u16 => Some(AcceptedToken::new(index, &bytes[0..32], contributor)),
+            1u16 => Some(AcceptedToken::new(index, &bytes[0..32])),
             _ => None,
         }
     }
@@ -64,25 +62,24 @@ pub struct Sale {
     // TODO: I don't think we need the token address if we are passing
     // the sale token ATA info in the sale init vaa. Is this true?
     token_address: [u8; 32], // 32
-    token_chain: u16,       // 2
-    token_decimals: u8,     // 1
-    times: SaleTimes,       // 8 + 8
-    recipient: [u8; 32],    // 32
-    num_accepted: u8,       // 1
-    status: SaleStatus,     // 1
+    token_chain: u16,        // 2
+    token_decimals: u8,      // 1
+    times: SaleTimes,        // 8 + 8
+    recipient: [u8; 32],     // 32
+    num_accepted: u8,        // 1
+    status: SaleStatus,      // 1
 
     // NOTE: we only care about our own (i.e. only look for chain == 1)
-    accepted_tokens: [AcceptedToken; 256], // up to 256 * 65
-    totals: [AssetTotals; 256],            // up to 256 * (8 * 3)
+    accepted_tokens: [AcceptedToken; ACCEPTED_TOKENS_MAX], // 256 * 33
+    totals: [AssetTotals; ACCEPTED_TOKENS_MAX],            // 256 * (8 * 3)
 
     pub id: [u8; 32], // 32
-    pub bump: u8,    // 1
+    pub bump: u8,     // 1
 }
 
 impl Sale {
     pub const MAXIMUM_SIZE: usize =
         32 + 2 + 1 + (8 + 8) + 32 + 1 + 1 + 256 * (AcceptedToken::MAXIMUM_SIZE + 8 * 3) + 32 + 1;
-        
     pub fn parse_sale_init(&mut self, payload: &[u8], contributor: &Pubkey) -> Result<()> {
         // check that the payload has at least the number of bytes
         // required to define the number of accepted tokens
@@ -91,11 +88,11 @@ impl Sale {
             SaleError::IncorrectVaaPayload
         );
 
-        self.id = payload[1..33].into();
+        self.id = payload[1..33].try_into().unwrap();
         self.num_accepted = payload[INDEX_ACCEPTED_TOKENS_START];
 
         // deserialize other things
-        self.token_address = payload[33..65].into();
+        self.token_address = payload[33..65].try_into().unwrap();
         self.token_chain = u16::from_be_bytes(payload[65..67].try_into().unwrap());
         self.token_decimals = payload[67];
 
@@ -114,22 +111,20 @@ impl Sale {
 
         // We need to put the accepted tokens somewhere. we only care about solana-specific
         // tokens. Will create ATAs afterwards outside of parsing sale init
-        self.accepted_tokens = Vec::with_capacity(self.num_accepted as usize);
-        self.totals = Vec::with_capacity(self.num_accepted as usize);
+
         for index in 0..self.num_accepted {
-            let start =
-                INDEX_ACCEPTED_TOKENS_START + 1 + (index as usize) * ACCEPTED_TOKENS_N_BYTES;
+            let token_index = index as usize;
+            let start = INDEX_ACCEPTED_TOKENS_START + 1 + token_index * ACCEPTED_TOKENS_N_BYTES;
             if let Some(token) = AcceptedToken::make_from_slice(
                 index,
                 &payload[start..start + ACCEPTED_TOKENS_N_BYTES],
-                &contributor,
             ) {
-                self.accepted_tokens.push(token);
-                self.totals.push(AssetTotals {
+                self.accepted_tokens[token_index] = token;
+                self.totals[token_index] = AssetTotals {
                     contributions: 0,
                     allocations: 0,
                     excess_contributions: 0,
-                });
+                };
             }
         }
 
@@ -141,12 +136,15 @@ impl Sale {
 
     pub fn update_total_contributions(
         &mut self,
-        token_index: u8,
+        token_index: usize,
         contributed: u64,
-    ) -> Result<usize> {
-        let idx = try_find_index(&self.accepted_tokens, token_index)?;
-        self.totals[idx].contributions += contributed;
-        Ok(idx)
+    ) -> Result<()> {
+        require!(
+            token_index < ACCEPTED_TOKENS_MAX,
+            SaleError::InvalidTokenIndex
+        );
+        self.totals[token_index].contributions += contributed;
+        Ok(())
     }
 
     pub fn parse_sale_sealed(&mut self, payload: &[u8]) -> Result<()> {
@@ -196,22 +194,16 @@ impl Sale {
         self.accepted_tokens.len()
     }
 
-    pub fn get_accepted_tokens(&self) -> &Vec<AcceptedToken> {
+    pub fn get_accepted_tokens(&self) -> &[AcceptedToken; ACCEPTED_TOKENS_MAX] {
         &self.accepted_tokens
     }
 
-    pub fn get_accepted_token_index(&self, token_index: u8) -> Result<usize> {
-        let result = self
-            .accepted_tokens
-            .iter()
-            .position(|token| token.index == token_index);
-        require!(result != None, SaleError::InvalidTokenIndex);
-
-        Ok(result.unwrap())
-    }
-
-    pub fn get_totals(&self, token_index: u8) -> Result<&AssetTotals> {
-        try_index_at(&self.accepted_tokens, &self.totals, token_index)
+    pub fn get_totals(&self, token_index: usize) -> Result<&AssetTotals> {
+        require!(
+            token_index < ACCEPTED_TOKENS_MAX,
+            SaleError::InvalidTokenIndex
+        );
+        Ok(&self.totals[token_index])
     }
 
     pub fn is_active(&self, time: u64) -> bool {
@@ -316,46 +308,4 @@ pub enum BuyerStatus {
     Active,
     AllocationIsClaimed,
     RefundIsClaimed,
-}
-
-/*
-    pub fn update_total_contributions(&mut self, idx: usize, contributed: u64) -> Result<()> {
-        let result = self.totals.get_mut(idx);
-        require!(result != None, SaleError::InvalidAcceptedIndex);
-*/
-
-fn try_find_index(accepted_tokens: &[u8; 256], token_index: u8) -> Result<usize> {
-    let result = accepted_tokens
-        .iter()
-        .position(|token| token.index == token_index);
-    require!(result != None, SaleError::InvalidTokenIndex);
-    Ok(result.unwrap())
-}
-
-fn try_index_at<'a, T: PartialEq>(
-    accepted_tokens: &Vec<AcceptedToken>,
-    items: &'a Vec<T>,
-    token_index: u8,
-) -> Result<&'a T> {
-    require!(
-        accepted_tokens.len() == items.len(),
-        SaleError::InvalidTokenIndex
-    );
-    Ok(items
-        .get(try_find_index(accepted_tokens, token_index)?)
-        .unwrap())
-}
-
-fn mut_try_index_at<'a, T: PartialEq>(
-    accepted_tokens: &Vec<AcceptedToken>,
-    items: &'a mut Vec<T>,
-    token_index: u8,
-) -> Result<&'a T> {
-    require!(
-        accepted_tokens.len() == items.len(),
-        SaleError::InvalidTokenIndex
-    );
-    Ok(items
-        .get(try_find_index(accepted_tokens, token_index)?)
-        .unwrap())
 }

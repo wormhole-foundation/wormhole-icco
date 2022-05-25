@@ -7,8 +7,10 @@
         "@certusone/wormhole-sdk": "^0.3.4",
         "@project-serum/anchor": "^0.24.2",
         "byteify": "^2.0.10",
+        "elliptic": "^6.5.4",
         "ethers": "^5.6.8",
-        "keccak256": "^1.0.6"
+        "keccak256": "^1.0.6",
+        "web3-utils": "^1.7.3"
     },
     "devDependencies": {
         "@types/bn.js": "^5.1.0",

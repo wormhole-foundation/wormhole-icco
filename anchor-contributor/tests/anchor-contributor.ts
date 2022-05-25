@@ -124,7 +124,7 @@ describe("anchor-contributor", () => {
       },
       CORE_BRIDGE_ADDRESS.toString(),
       owner.publicKey.toString(),
-      Buffer.from(initSaleVaa, "hex"),
+      initSaleVaa,
       10
     );
     await new Promise((r) => setTimeout(r, 5000));

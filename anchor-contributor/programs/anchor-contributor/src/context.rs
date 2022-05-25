@@ -51,40 +51,6 @@ pub struct InitializeSale<'info> {
     pub system_program: Program<'info, System>,
 }
 
-/// CreateBuyerAccount is used for buyers to contribute collateral
-#[derive(Accounts)]
-#[instruction(sale_id: Vec<u8>, token_index: u8)]
-pub struct CreateBuyerAccount<'info> {
-    pub contributor: Account<'info, Contributor>,
-
-    #[account(
-        init,
-        seeds = [
-            SEED_PREFIX_SALE.as_bytes().as_ref(),
-            &sale_id.as_ref(),
-        ],
-        payer = owner,
-        bump,
-        space = Sale::MAXIMUM_SIZE
-    )]
-    pub sale: Account<'info, Sale>,
-
-    #[account(
-        mut,
-        seeds = [
-            SEED_PREFIX_SALE.as_bytes().as_ref(),
-            &sale_id.as_ref(),
-            &owner.key().as_ref(),
-        ],
-        bump = buyer.bump,
-    )]
-    pub buyer: Account<'info, Buyer>,
-
-    #[account(mut)]
-    pub owner: Signer<'info>,
-    pub system_program: Program<'info, System>,
-}
-
 /// Contribute is used for buyers to contribute collateral
 #[derive(Accounts)]
 #[instruction(sale_id: Vec<u8>, token_index: u8, amount: u64)]
@@ -92,12 +58,14 @@ pub struct Contribute<'info> {
     pub contributor: Account<'info, Contributor>,
 
     #[account(
-        mut,
+        init_if_needed,
         seeds = [
             SEED_PREFIX_SALE.as_bytes().as_ref(),
             &sale_id.as_ref(),
         ],
-        bump = sale.bump,
+        bump,
+        space=Sale::MAXIMUM_SIZE,
+        payer=owner
     )]
     pub sale: Account<'info, Sale>,
 

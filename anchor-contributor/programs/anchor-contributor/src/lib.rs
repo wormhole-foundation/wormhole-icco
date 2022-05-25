@@ -58,11 +58,6 @@ pub mod anchor_contributor {
         Ok(())
     }
 
-    pub fn create_buyer_account(ctx: Context<CreateBuyerAccount>) -> Result<()> {
-        ctx.accounts
-            .buyer
-            .new(ctx.accounts.sale.get_num_accepted_tokens())
-    }
 
     pub fn contribute(
         ctx: Context<Contribute>,

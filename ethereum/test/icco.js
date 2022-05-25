@@ -1,6 +1,8 @@
 const jsonfile = require("jsonfile");
 const elliptic = require("elliptic");
 const { assert } = require("chai");
+const truffleAssert = require("truffle-assertions");
+const ethers = require("ethers");
 
 const TokenImplementation = artifacts.require("TokenImplementation");
 
@@ -152,7 +154,7 @@ contract("ICCO", function(accounts) {
 
     assert.ok(failed);
 
-    await initialized.methods
+    const tx = await initialized.methods
       .registerChain(TEST_CHAIN_ID, contributorAddress)
       .send({
         value: 0,
@@ -228,11 +230,13 @@ contract("ICCO", function(accounts) {
       ConductorImplementation.address.toLowerCase()
     );
 
-    await initialized.methods.upgrade(TEST_CHAIN_ID, mock.address).send({
-      value: 0,
-      from: accounts[0],
-      gasLimit: GAS_LIMIT,
-    });
+    const upgradeTx = await initialized.methods
+      .upgrade(TEST_CHAIN_ID, mock.address)
+      .send({
+        value: 0,
+        from: accounts[0],
+        gasLimit: GAS_LIMIT,
+      });
 
     let after = await web3.eth.getStorageAt(
       TokenSaleConductor.address,
@@ -240,6 +244,15 @@ contract("ICCO", function(accounts) {
     );
 
     assert.equal(after.toLowerCase(), mock.address.toLowerCase());
+
+    // confirm that the ContractUpgraded event is emitted
+    let eventOutput = upgradeTx["events"]["ContractUpgraded"]["returnValues"];
+
+    assert.equal(
+      eventOutput["oldContract"].toLowerCase(),
+      before.toLowerCase()
+    );
+    assert.equal(eventOutput["newContract"].toLowerCase(), after.toLowerCase());
 
     const mockImpl = new web3.eth.Contract(
       MockConductorImplementation.abi,
@@ -292,11 +305,13 @@ contract("ICCO", function(accounts) {
       ContributorImplementation.address.toLowerCase()
     );
 
-    await initialized.methods.upgrade(TEST_CHAIN_ID, mock.address).send({
-      value: 0,
-      from: accounts[0],
-      gasLimit: GAS_LIMIT,
-    });
+    const upgradeTx = await initialized.methods
+      .upgrade(TEST_CHAIN_ID, mock.address)
+      .send({
+        value: 0,
+        from: accounts[0],
+        gasLimit: GAS_LIMIT,
+      });
 
     let after = await web3.eth.getStorageAt(
       TokenSaleContributor.address,
@@ -304,6 +319,15 @@ contract("ICCO", function(accounts) {
     );
 
     assert.equal(after.toLowerCase(), mock.address.toLowerCase());
+
+    // confirm that the ContractUpgraded event is emitted
+    let eventOutput = upgradeTx["events"]["ContractUpgraded"]["returnValues"];
+
+    assert.equal(
+      eventOutput["oldContract"].toLowerCase(),
+      before.toLowerCase()
+    );
+    assert.equal(eventOutput["newContract"].toLowerCase(), after.toLowerCase());
 
     const mockImpl = new web3.eth.Contract(
       MockContributorImplementation.abi,
@@ -328,7 +352,7 @@ contract("ICCO", function(accounts) {
     );
 
     // update the kyc authority
-    await initialized.methods
+    const updateTx = await initialized.methods
       .updateAuthority(TEST_CHAIN_ID, newAuthority)
       .send({
         value: "0",
@@ -342,6 +366,18 @@ contract("ICCO", function(accounts) {
       .call();
 
     assert.equal(contributorAuthorityAfterUpdate, newAuthority);
+
+    // confirm that the AuthorityUpdated event is emitted
+    let eventOutput = updateTx["events"]["AuthorityUpdated"]["returnValues"];
+
+    assert.equal(
+      eventOutput["oldAuthority"].toLowerCase(),
+      currentAuthority.toLowerCase()
+    );
+    assert.equal(
+      eventOutput["newAuthority"].toLowerCase(),
+      newAuthority.toLowerCase()
+    );
 
     // make sure only the Contributor owner can change authority
     let failed = false;
@@ -388,7 +424,7 @@ contract("ICCO", function(accounts) {
     );
 
     // update the consistency level
-    await contributorContract.methods
+    const contributorTx = await contributorContract.methods
       .updateConsistencyLevel(TEST_CHAIN_ID, updatedConsistencyLevel)
       .send({
         value: "0",
@@ -396,7 +432,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
 
-    await conductorContract.methods
+    const conductorTx = await conductorContract.methods
       .updateConsistencyLevel(TEST_CHAIN_ID, updatedConsistencyLevel)
       .send({
         value: "0",
@@ -414,6 +450,23 @@ contract("ICCO", function(accounts) {
 
     assert.equal(contributorConsistencyLevelAfter, updatedConsistencyLevel);
     assert.equal(conductorConsistencyLevelAfter, updatedConsistencyLevel);
+
+    // confirm that the ConsistencyLevelUpdate event is emitted for contributor
+    let contributorEventOutput =
+      contributorTx["events"]["ConsistencyLevelUpdated"]["returnValues"];
+
+    assert.equal(
+      contributorEventOutput["oldLevel"],
+      initializedConsistencyLevel
+    );
+    assert.equal(contributorEventOutput["newLevel"], updatedConsistencyLevel);
+
+    // confirm that the ConsistencyLevelUpdate event is emitted for conductor
+    let conductorEventOutput =
+      conductorTx["events"]["ConsistencyLevelUpdated"]["returnValues"];
+
+    assert.equal(conductorEventOutput["oldLevel"], initializedConsistencyLevel);
+    assert.equal(conductorEventOutput["newLevel"], updatedConsistencyLevel);
 
     // revert consistencyLevel back to initialized value
     // update the consistency level
@@ -488,7 +541,7 @@ contract("ICCO", function(accounts) {
     );
 
     // transfer ownership
-    await contributorContract.methods
+    const contributorTx = await contributorContract.methods
       .transferOwnership(TEST_CHAIN_ID, newOwner)
       .send({
         value: "0",
@@ -496,7 +549,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
 
-    await conductorContract.methods
+    const conductorTx = await conductorContract.methods
       .transferOwnership(TEST_CHAIN_ID, newOwner)
       .send({
         value: "0",
@@ -510,6 +563,32 @@ contract("ICCO", function(accounts) {
 
     assert.equal(contributorOwner, newOwner);
     assert.equal(conductorOwner, newOwner);
+
+    // confirm that the ConsistencyLevelUpdate event is emitted for contributor
+    let contributorEventOutput =
+      contributorTx["events"]["OwnershipTransfered"]["returnValues"];
+
+    assert.equal(
+      contributorEventOutput["oldOwner"].toLowerCase(),
+      currentOwner.toLowerCase()
+    );
+    assert.equal(
+      contributorEventOutput["newOwner"].toLowerCase(),
+      newOwner.toLowerCase()
+    );
+
+    // confirm that the ConsistencyLevelUpdate event is emitted for conductor
+    let conductorEventOutput =
+      conductorTx["events"]["OwnershipTransfered"]["returnValues"];
+
+    assert.equal(
+      conductorEventOutput["oldOwner"].toLowerCase(),
+      currentOwner.toLowerCase()
+    );
+    assert.equal(
+      conductorEventOutput["newOwner"].toLowerCase(),
+      newOwner.toLowerCase()
+    );
 
     // make sure only the owner can transfer ownership
     let contributorFailed = false;
@@ -5040,7 +5119,7 @@ contract("ICCO", function(accounts) {
     assert.ok(failed);
   });
 
-  it("conductor should allow fair launch sale (raiseAmount == minRaise && maxRaise", async function() {
+  it("conductor should allow fair launch sale (raiseAmount == minRaise && maxRaise)", async function() {
     // test variables
     const current_block = await web3.eth.getBlock("latest");
     const saleStart = current_block.timestamp + 5;
@@ -5259,6 +5338,61 @@ contract("ICCO", function(accounts) {
     assert.equal(actualAllocation, expectedAllocation);
     assert.equal(actualExcessContribution, expectedExcessContribution);
   });
+
+  it("sdk should correctly convert conversion rates based on the saleToken decimals", async function() {
+    // conversion rate ("price" * 1e18) for both accepted tokens
+    const rawConversionRate = "1";
+
+    // expected accepted token decimals
+    const conductorDecimals = 9;
+    const acceptedTokenDecimals = conductorDecimals;
+
+    // decimals of the sale token on the Conductor chain
+    const denominationDecimals1 = 6;
+    const denominationDecimals2 = 18;
+    const denominationDecimals3 = 9;
+
+    // the expected output of the function
+    const expectedNormalizedConversionRate1 = "1000000000000000";
+    const expectedNormalizedConversionRate2 = "1000000000000000000000000000";
+    const expectedNormalizedConversionRate3 = "1000000000000000000";
+
+    // normalize to denom with 6 decimals
+    const normalizedConversionRate1 = await normalizeConversionRate(
+      denominationDecimals1,
+      acceptedTokenDecimals,
+      rawConversionRate,
+      conductorDecimals
+    );
+    // normalize to denom with 18 decimals
+    const normalizedConversionRate2 = await normalizeConversionRate(
+      denominationDecimals2,
+      acceptedTokenDecimals,
+      rawConversionRate,
+      conductorDecimals
+    );
+    // normalized to denomc with 9 decimals
+    const normalizedConversionRate3 = await normalizeConversionRate(
+      denominationDecimals3,
+      acceptedTokenDecimals,
+      rawConversionRate,
+      conductorDecimals
+    );
+
+    // make sure the function is producing the expected result
+    assert.equal(
+      normalizedConversionRate1.toString(),
+      expectedNormalizedConversionRate1
+    );
+    assert.equal(
+      normalizedConversionRate2.toString(),
+      expectedNormalizedConversionRate2
+    );
+    assert.equal(
+      normalizedConversionRate3.toString(),
+      expectedNormalizedConversionRate3
+    );
+  });
 });
 
 contract("ICCO Library Upgrade", function(accounts) {
@@ -5388,6 +5522,32 @@ contract("ICCO Library Upgrade", function(accounts) {
     assert.ok(isLibraryUpgraded);
   });
 });
+
+async function normalizeConversionRate(
+  denominationDecimals,
+  acceptedTokenDecimals,
+  rawConversionRate,
+  conductorDecimals
+) {
+  const precision = 18;
+  const normDecimals = denominationDecimals + precision - acceptedTokenDecimals;
+  let normalizedConversionRate = ethers.utils.parseUnits(
+    rawConversionRate,
+    normDecimals
+  );
+
+  if (acceptedTokenDecimals === conductorDecimals) {
+    return normalizedConversionRate;
+  } else if (acceptedTokenDecimals > conductorDecimals) {
+    return normalizedConversionRate.div(
+      ethers.utils.parseUnits("1", acceptedTokenDecimals - conductorDecimals)
+    );
+  } else {
+    return normalizedConversionRate.mul(
+      ethers.utils.parseUnits("1", conductorDecimals - acceptedTokenDecimals)
+    );
+  }
+}
 
 const signContribution = async function(
   conductorAddress,

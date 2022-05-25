@@ -37,6 +37,7 @@ import {
   nativeToUint8Array,
   abortSaleBeforeStartOnEth,
   saleAbortedOnEth,
+  getSaleIdFromIccoVaa,
 } from "wormhole-icco-sdk";
 import {
   WORMHOLE_ADDRESSES,
@@ -48,6 +49,7 @@ import {
   KYC_AUTHORITY_KEY,
   CHAIN_ID_TO_NETWORK,
   CONDUCTOR_CHAIN_ID,
+  RETRY_TIMEOUT_SECONDS,
 } from "./consts";
 import {
   TokenConfig,
@@ -57,6 +59,7 @@ import {
   SaleSealed,
 } from "./structs";
 import { signContribution } from "./kyc";
+import { assert } from "console";
 
 export async function extractVaaPayload(
   signedVaa: Uint8Array
@@ -152,6 +155,7 @@ export async function getSignedVaaFromSequence(
   emitterAddress: string,
   sequence: string
 ): Promise<Uint8Array> {
+  console.log("Searching for VAA with sequence:", sequence);
   const result = await getSignedVAAWithRetry(
     WORMHOLE_ADDRESSES.guardianRpc,
     chainId,
@@ -159,8 +163,10 @@ export async function getSignedVaaFromSequence(
     sequence,
     {
       transport: NodeHttpTransport(),
-    }
+    },
+    RETRY_TIMEOUT_SECONDS
   );
+  console.log("Found VAA for sequence:", sequence);
   return result.vaaBytes;
 }
 
@@ -469,6 +475,7 @@ export async function attestAndCollectContributions(
       signedVaas,
       initiatorWallet(CONDUCTOR_NETWORK)
     );
+    assert(receipts.length == signedVaas.length);
   }
   console.info("Finished collecting contributions.");
 
@@ -496,11 +503,10 @@ export async function sealSaleAndParseReceiptOnEth(
   saleId: ethers.BigNumberish,
   coreBridgeAddress: string,
   tokenBridgeAddress: string,
-  wormholeHosts: string[],
-  extraGrpcOpts: any = {},
   wallet: ethers.Wallet
 ): Promise<SealSaleResult> {
   const receipt = await sealSaleOnEth(conductorAddress, saleId, wallet);
+  console.log("Finished sealing the sale on the Conductor.");
 
   const sale = await getSaleFromConductorOnEth(
     conductorAddress,
@@ -515,37 +521,35 @@ export async function sealSaleAndParseReceiptOnEth(
     throw Error("no vaa sequences found");
   }
 
-  const result = await getSignedVAAWithRetry(
-    wormholeHosts,
+  // fetch the VAA
+  const sealSaleVaa = await getSignedVaaFromSequence(
     emitterChain,
     getEmitterAddressEth(conductorAddress),
-    sealSaleSequence,
-    extraGrpcOpts
+    sealSaleSequence
   );
-  const sealSaleVaa = result.vaaBytes;
+  console.log("Found the sealSale VAA emitted from the Conductor.");
 
+  // search for allocations
   // doing it serially for ease of putting into the map
   const mapped = new Map<ChainId, Uint8Array[]>();
-  for (const sequence of sequences) {
-    const result = await getSignedVAAWithRetry(
-      wormholeHosts,
-      emitterChain,
-      getEmitterAddressEth(tokenBridgeAddress),
-      sequence,
-      extraGrpcOpts
-    );
-    const signedVaa = result.vaaBytes;
-    const vaaPayload = await extractVaaPayload(signedVaa);
-    const chainId = await getTargetChainIdFromTransferVaa(vaaPayload);
+  if (sale.isSealed) {
+    for (const sequence of sequences) {
+      const signedVaa = await getSignedVaaFromSequence(
+        emitterChain,
+        getEmitterAddressEth(tokenBridgeAddress),
+        sequence
+      );
+      const vaaPayload = await extractVaaPayload(signedVaa);
+      const chainId = await getTargetChainIdFromTransferVaa(vaaPayload);
 
-    const signedVaas = mapped.get(chainId);
-    if (signedVaas === undefined) {
-      mapped.set(chainId, [signedVaa]);
-    } else {
-      signedVaas.push(signedVaa);
+      const signedVaas = mapped.get(chainId);
+      if (signedVaas === undefined) {
+        mapped.set(chainId, [signedVaa]);
+      } else {
+        signedVaas.push(signedVaa);
+      }
     }
   }
-
   return {
     sale: sale,
     transferVaas: mapped,
@@ -563,10 +567,6 @@ export async function sealOrAbortSaleOnEth(
     saleId,
     WORMHOLE_ADDRESSES[CONDUCTOR_NETWORK].wormhole,
     WORMHOLE_ADDRESSES[CONDUCTOR_NETWORK].tokenBridge,
-    WORMHOLE_ADDRESSES.guardianRpc,
-    {
-      transport: NodeHttpTransport(),
-    },
     initiatorWallet(CONDUCTOR_NETWORK)
   );
 }
@@ -687,18 +687,13 @@ export async function redeemCrossChainContributions(
   }
 
   for (const sequence of sequences) {
-    const result = await getSignedVAAWithRetry(
-      WORMHOLE_ADDRESSES.guardianRpc,
+    const signedVaa = await getSignedVaaFromSequence(
       emitterChain,
       getEmitterAddressEth(
         WORMHOLE_ADDRESSES[CHAIN_ID_TO_NETWORK.get(emitterChain)].tokenBridge
       ),
-      sequence,
-      {
-        transport: NodeHttpTransport(),
-      }
+      sequence
     );
-    const signedVaa = result.vaaBytes;
     const vaaPayload = await extractVaaPayload(signedVaa);
     const chainId = await getTargetChainIdFromTransferVaa(vaaPayload);
     const targetNetwork = CHAIN_ID_TO_NETWORK.get(chainId);
@@ -753,6 +748,29 @@ export async function abortSaleEarlyAtContributor(
           saleInit.saleId
         );
       })
+    );
+  }
+
+  return;
+}
+
+export async function abortSaleAtContributors(saleResult: SealSaleResult) {
+  const signedVaa = saleResult.sealSaleVaa;
+  const vaaPayload = await extractVaaPayload(signedVaa);
+  const saleId = await getSaleIdFromIccoVaa(vaaPayload);
+
+  {
+    const receipts = await Promise.all(
+      CONTRIBUTOR_NETWORKS.map(
+        async (network): Promise<ethers.ContractReceipt> => {
+          return saleAbortedOnEth(
+            TESTNET_ADDRESSES[network],
+            signedVaa,
+            initiatorWallet(network),
+            saleId
+          );
+        }
+      )
     );
   }
 

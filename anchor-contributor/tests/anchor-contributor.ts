@@ -151,6 +151,7 @@ describe("anchor-contributor", () => {
     let core_bridge_vaa_key = findProgramAddressSync([Buffer.from("PostedVAA"), hash], CORE_BRIDGE_ADDRESS)[0];
     console.log("Core Bridge VAA: ", await program.provider.connection.getAccountInfo(core_bridge_vaa_key));
 
+    console.log(parsedVaa.payload.slice(1,33));
 
     // Call the Init Pages
     let pages = (acceptedTokens.length / MAX_TOKENS_PER_PAGE) + 1;
@@ -159,7 +160,7 @@ describe("anchor-contributor", () => {
     for(let page = 1; page <= pages; page++ ){
       const pg_acc = findProgramAddressSync([
         Buffer.from("accepted-token-page"),
-        initSaleVaa.slice(1,33),
+        parsedVaa.payload.slice(1,33),
         b.serializeUint8(page)
       ], program.programId)
       console.log("Page: ", page, " ", pg_acc[0].toString());
@@ -172,7 +173,7 @@ describe("anchor-contributor", () => {
           owner: owner.publicKey,
           systemProgram: anchor.web3.SystemProgram.programId
         })
-        .rpc();
+        .rpc({skipPreflight: true});
 
       console.log(tx);
       pageAccounts.push({

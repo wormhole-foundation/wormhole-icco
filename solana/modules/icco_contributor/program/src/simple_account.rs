@@ -1,7 +1,11 @@
+use crate:: {
+    errors::Error::*,
+};
+
 use solana_program::{
     pubkey::Pubkey,
     system_instruction,
-    //account_info::AccountInfo,
+    account_info::AccountInfo,
     program::invoke,
     program::invoke_signed,
     // program_error::ProgramError,
@@ -39,5 +43,29 @@ pub fn create_simple_account (
     // assign ownership
     let assign_ix = system_instruction::assign(pubkey, ctx.program_id);
     invoke_signed(&assign_ix, ctx.accounts, sig_seeds)?;
+    Ok(())
+}
+
+// Zero out non-SPL accout and return lamports to the user.
+pub fn close_nonspl_accout (
+    account: & AccountInfo ,
+    payer: & AccountInfo ,
+) -> Result<()> {
+    {
+        match  payer.lamports().checked_add(account.lamports()) {
+            None => return Err(PayerLapmortsOverflow.into()),
+            Some( amt ) => {
+                **payer.try_borrow_mut_lamports()? = amt;
+                **account.try_borrow_mut_lamports()? = 0;
+            },
+        }
+    }
+    {
+        let d_len = account.data_len();
+        let d = & mut *account.try_borrow_mut_data()?;
+        for i in 0..d_len {
+            d[i] = 0;
+        }
+    }
     Ok(())
 }

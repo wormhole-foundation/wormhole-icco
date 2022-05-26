@@ -19,6 +19,7 @@ use crate::{
     errors::Error::*,
     types::*,
     claimed_vaa::ClaimedVAA,
+    simple_account::close_nonspl_accout,
 };
 
 use solana_program::msg;
@@ -189,22 +190,10 @@ pub fn claim_refund_icco_sale(
     // invoke_signed(&close_ix, ctx.accounts, &[&[&b"configz"[..], &[cfg_bump]]])?;
 
     // Zero out non-SPL accout and return lamports to the user.
-    {
-        match  accs.payer.info().lamports().checked_add(accs.contribution_state.info().lamports()) {
-            None => return Err(NotEnoughTokensInCustody.into()),
-            Some( amt ) => {
-                **accs.payer.info().try_borrow_mut_lamports()? = amt;
-                **accs.contribution_state.info().try_borrow_mut_lamports()? = 0;
-            },
-        }
-    }
-    {
-        let d_len = accs.contribution_state.info().data_len();
-        let d = & mut *accs.contribution_state.info().try_borrow_mut_data()?;
-        for i in 0..d_len {
-            d[i] = 0;
-        }
-    }
+    close_nonspl_accout (
+        accs.contribution_state.info(),
+        accs.payer.info(),
+    )?;
 
-    Ok(())
+     Ok(())
 }

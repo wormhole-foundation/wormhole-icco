@@ -25,6 +25,9 @@ pub enum SaleError {
 
     #[msg("InvalidVaaAction")]
     InvalidVaaAction,
+    
+    #[msg("InvalidTokensAccepted")]
+    InvalidAcceptedTokens,
 
     #[msg("SaleEnded")]
     SaleEnded,

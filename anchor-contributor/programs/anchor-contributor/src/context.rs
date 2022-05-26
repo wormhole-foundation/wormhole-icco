@@ -25,11 +25,23 @@ pub struct CreateContributor<'info> {
 }
 
 #[derive(Accounts)]
-pub struct InitializeSale<'info> {
+#[instruction(_pg_num:u8)]
+pub struct InitAcceptedTokenPage<'info> {
     pub contributor: Account<'info, Contributor>,
 
-    #[account(zero)]
-    pub sale: AccountLoader<'info, Sale>,
+    #[account(
+        init,
+        payer=owner,
+        space = 10000,
+        seeds = [
+            SEED_PREFIX_ACCEPTED_TOKEN_PAGE.as_bytes(),
+            &get_sale_id(&core_bridge_vaa)?,
+            &_pg_num.to_be_bytes()
+        ],  
+        bump,
+    )]
+    pub token_page: Account<'info, AcceptedTokenPage>,
+
 
     #[account(
         constraint = verify_conductor_vaa(&core_bridge_vaa, &contributor, PAYLOAD_SALE_INIT)?,
@@ -42,6 +54,34 @@ pub struct InitializeSale<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+pub struct InitializeSale<'info> {
+    pub contributor: Account<'info, Contributor>,
+
+    #[account(
+        init,
+        seeds = [
+            SEED_PREFIX_SALE.as_bytes(),
+            &get_sale_id(&core_bridge_vaa)?,
+        ],
+        payer = owner,
+        bump,
+        space = 8+Sale::MAXIMUM_SIZE
+    )]
+    pub sale: Account<'info, Sale>,
+
+    #[account(
+        constraint = verify_conductor_vaa(&core_bridge_vaa, &contributor, PAYLOAD_SALE_INIT)?,
+    )]
+    /// CHECK: This account is owned by Core Bridge so we trust it
+    pub core_bridge_vaa: AccountInfo<'info>,
+
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+/*
 // TODO
 #[derive(Accounts)]
 #[instruction(token_pubkey: Pubkey)]
@@ -56,12 +96,14 @@ pub struct Contribute<'info> {
     pub contributor: Account<'info, Contributor>,
 
     #[account(
-        mut,
+        init_if_needed,
         seeds = [
             SEED_PREFIX_SALE.as_bytes().as_ref(),
             &sale_id.as_ref(),
         ],
         bump,
+        space=Sale::MAXIMUM_SIZE,
+        payer=owner
     )]
     pub sale: AccountLoader<'info, Sale>,
 
@@ -198,6 +240,7 @@ pub struct ClaimRefund<'info> {
     pub owner: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
+*/
 
 fn verify_conductor_vaa<'info>(
     vaa_account: &AccountInfo<'info>,

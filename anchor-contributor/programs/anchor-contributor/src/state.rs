@@ -1,16 +1,12 @@
 use anchor_lang::prelude::*;
-use anchor_spl::associated_token::get_associated_token_address;
 
 use borsh::BorshDeserialize;
 use num_derive::*;
 use std::io::Write;
 
 use crate::{
-    constants::{
-        ACCEPTED_TOKENS_MAX, ACCEPTED_TOKENS_N_BYTES, INDEX_ACCEPTED_TOKENS_START,
-        INDEX_ALLOCATIONS_START,
-    },
-    error::SaleError,
+    constants::*,
+    error::*,
 };
 
 #[account]
@@ -25,63 +21,71 @@ impl Contributor {
     pub const MAXIMUM_SIZE: usize = 32 + 2 + 32;
 }
 
-#[zero_copy]
-#[derive(Eq, PartialEq, Default)]
-pub struct AcceptedToken {
-    pub index: u8,    // 1
-    pub mint: Pubkey, // 32
-}
-
-impl AcceptedToken {
-    pub const MAXIMUM_SIZE: usize = 33;
-
-    pub fn new(index: u8, token_address: &[u8]) -> Self {
-        let mint = Pubkey::new(token_address);
-        AcceptedToken { index, mint }
-    }
-
-    pub fn make_from_slice(index: u8, bytes: &[u8]) -> Option<Self> {
-        // chain id starts at 32
-        // we don't need the conversion rate for anything, so don't bother deserializing it
-        match u16::from_be_bytes(bytes[32..34].try_into().unwrap()) {
-            1u16 => Some(AcceptedToken::new(index, &bytes[0..32])),
-            _ => None,
-        }
-    }
-}
-
-#[zero_copy]
-#[derive(PartialEq, Eq, Default)]
-pub struct AssetTotals {
-    pub contributions: u64,
-    pub allocations: u64,
-    pub excess_contributions: u64,
-}
-
-#[account(zero_copy)]
-#[derive(PartialEq, Eq)]
+#[account]
 pub struct Sale {
     // TODO: I don't think we need the token address if we are passing
     // the sale token ATA info in the sale init vaa. Is this true?
-    token_address: [u8; 32], // 32
-    token_chain: u16,        // 2
-    token_decimals: u8,      // 1
-    times: SaleTimes,        // 8 + 8
-    recipient: [u8; 32],     // 32
-    num_accepted: u8,        // 1
-    status: SaleStatus,      // 1
+    pub token_address: [u8; 32], // 32
+    pub token_chain: u16,        // 2
+    pub token_decimals: u8,      // 1
+    pub times: SaleTimes,        // 8 + 8
+    pub recipient: [u8; 32],     // 32
+    pub num_accepted: u8,        // 1
+    pub status: SaleStatus,      // 1
 
     // NOTE: we only care about our own (i.e. only look for chain == 1)
-    accepted_tokens: [AcceptedToken; ACCEPTED_TOKENS_MAX], // 256 * 33
-    totals: [AssetTotals; ACCEPTED_TOKENS_MAX],            // 256 * (8 * 3)
+    //accepted_tokens: [AcceptedToken; ACCEPTED_TOKENS_MAX], // 256 * 33
+    //totals: [AssetTotals; ACCEPTED_TOKENS_MAX],            // 256 * (8 * 3)
 
     pub id: [u8; 32], // 32
     pub bump: u8,     // 1
 }
 
+#[account]
+pub struct AcceptedTokenPage{
+    pub accepted_tokens: Vec<AcceptedToken>,
+    pub totals: Vec<AssetTotal>
+}
+
+impl AcceptedTokenPage {
+    pub fn add_token(&mut self, accepted_token:AcceptedToken, asset_total: AssetTotal){
+        if self.accepted_tokens.len() < ACCEPTED_TOKENS_PER_PAGE as usize {
+            self.accepted_tokens.push(accepted_token);
+            self.totals.push(asset_total)
+        }
+    }
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
+pub struct SaleTimes {
+    start: u64,
+    end: u64,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, FromPrimitive, ToPrimitive, Copy, Clone, PartialEq, Eq,)]
+pub enum SaleStatus {
+    Active,
+    Sealed,
+    Aborted,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, Default, PartialEq, Eq)]
+pub struct AcceptedToken {
+    pub index: u8,    // 1
+    pub mint: Pubkey, // 32
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, Default, PartialEq, Eq)]
+pub struct AssetTotal {
+    pub contributions: u64, //8
+    pub allocations: u64,   //8
+    pub excess_contributions: u64, //8
+}
+
+//256 * (AcceptedToken::MAXIMUM_SIZE + 8 * 3)
 impl Sale {
     pub const MAXIMUM_SIZE: usize =
-        32 + 2 + 1 + (8 + 8) + 32 + 1 + 1 + 256 * (AcceptedToken::MAXIMUM_SIZE + 8 * 3) + 32 + 1;
+        32 + 2 + 1 + (8 + 8) + 32 + 1 + 1 + 32 + 1;
     pub fn parse_sale_init(&mut self, payload: &[u8]) -> Result<()> {
         // check that the payload has at least the number of bytes
         // required to define the number of accepted tokens
@@ -111,41 +115,9 @@ impl Sale {
             .try_into()
             .expect("incorrect bytes length");
 
-        // We need to put the accepted tokens somewhere. we only care about solana-specific
-        // tokens. Will create ATAs afterwards outside of parsing sale init
-
-        for index in 0..self.num_accepted {
-            let token_index = index as usize;
-            let start = INDEX_ACCEPTED_TOKENS_START + 1 + token_index * ACCEPTED_TOKENS_N_BYTES;
-            if let Some(token) = AcceptedToken::make_from_slice(
-                index,
-                &payload[start..start + ACCEPTED_TOKENS_N_BYTES],
-            ) {
-                self.accepted_tokens[token_index] = token;
-                self.totals[token_index] = AssetTotals {
-                    contributions: 0,
-                    allocations: 0,
-                    excess_contributions: 0,
-                };
-            }
-        }
-
         // finally set the status to active
         self.status = SaleStatus::Active;
 
-        Ok(())
-    }
-
-    pub fn update_total_contributions(
-        &mut self,
-        token_index: usize,
-        contributed: u64,
-    ) -> Result<()> {
-        require!(
-            token_index < ACCEPTED_TOKENS_MAX,
-            SaleError::InvalidTokenIndex
-        );
-        self.totals[token_index].contributions += contributed;
         Ok(())
     }
 
@@ -192,20 +164,8 @@ impl Sale {
         Ok(())
     }
 
-    pub fn get_num_accepted_tokens(&self) -> usize {
-        self.accepted_tokens.len()
-    }
-
-    pub fn get_accepted_tokens(&self) -> &[AcceptedToken; ACCEPTED_TOKENS_MAX] {
-        &self.accepted_tokens
-    }
-
-    pub fn get_totals(&self, token_index: usize) -> Result<&AssetTotals> {
-        require!(
-            token_index < ACCEPTED_TOKENS_MAX,
-            SaleError::InvalidTokenIndex
-        );
-        Ok(&self.totals[token_index])
+    pub fn get_num_accepted_tokens(&self) -> u8 {
+        self.num_accepted
     }
 
     pub fn is_active(&self, time: u64) -> bool {
@@ -231,83 +191,20 @@ impl Sale {
     }
 }
 
-// NOTE: see above defined in the Sale struct
-//pub fn parse_sale_payload(payload: Vec<u8>) {}
+impl AcceptedToken {
+    pub const MAXIMUM_SIZE: usize = 33;
 
-#[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
-pub struct SaleTimes {
-    start: u64,
-    end: u64,
-}
-
-#[derive(
-    AnchorSerialize, AnchorDeserialize, FromPrimitive, ToPrimitive, Copy, Clone, PartialEq, Eq,
-)]
-pub enum SaleStatus {
-    Active,
-    Sealed,
-    Aborted,
-}
-
-#[account]
-pub struct Buyer {
-    contributed: Vec<u64>, // 8 * 256
-    status: BuyerStatus,   // 1
-
-    pub bump: u8, // 1
-}
-
-impl Buyer {
-    const MAXIMUM_SIZE: usize = 8 * 256 + 1 + 1;
-
-    pub fn new(&mut self, n_reserve: usize) -> Result<()> {
-        self.contributed = Vec::with_capacity(n_reserve);
-        self.status = BuyerStatus::Active;
-        Ok(())
+    pub fn new(index: u8, token_address: &[u8]) -> Self {
+        let mint = Pubkey::new(token_address);
+        AcceptedToken { index, mint }
     }
 
-    pub fn contribute(&mut self, idx: usize, amount: u64) -> Result<()> {
-        self.contributed[idx] += amount;
-        Ok(())
+    pub fn make_from_slice(index: u8, bytes: &[u8]) -> Option<Self> {
+        // chain id starts at 32
+        // we don't need the conversion rate for anything, so don't bother deserializing it
+        match u16::from_be_bytes(bytes[32..34].try_into().unwrap()) {
+            1u16 => Some(AcceptedToken::new(index, &bytes[0..32])),
+            _ => None,
+        }
     }
-
-    // when a sale is sealed, we will now have information about
-    // total allocations and excess contributions for each
-    // token index
-    pub fn claim_allocation(
-        &mut self,
-        idx: u8,
-        total_contributions: u64,
-        total_allocations: u64,
-        total_excess: u64,
-    ) -> Result<(u64, u64)> {
-        require!(self.is_active(), SaleError::BuyerNotActive);
-
-        let contributed = self.contributed[idx as usize];
-        self.status = BuyerStatus::AllocationIsClaimed;
-        Ok((
-            total_allocations * contributed / total_contributions,
-            total_excess * contributed / total_contributions,
-        ))
-    }
-
-    pub fn claim_refund(&mut self, idx: u8) -> Result<u64> {
-        require!(self.is_active(), SaleError::BuyerNotActive);
-
-        self.status = BuyerStatus::RefundIsClaimed;
-        Ok(self.contributed[idx as usize])
-    }
-
-    fn is_active(&self) -> bool {
-        self.status == BuyerStatus::Active
-    }
-}
-
-#[derive(
-    AnchorSerialize, AnchorDeserialize, FromPrimitive, ToPrimitive, Copy, Clone, PartialEq, Eq,
-)]
-pub enum BuyerStatus {
-    Active,
-    AllocationIsClaimed,
-    RefundIsClaimed,
 }

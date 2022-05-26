@@ -9,9 +9,12 @@ pub const PAYLOAD_SALE_SEALED: u8 = 3;
 pub const PAYLOAD_SALE_ABORTED: u8 = 4;
 
 // for sale init
+pub const SEED_PREFIX_ACCEPTED_TOKEN_PAGE: &str = "accepted-token-page";
 pub const INDEX_ACCEPTED_TOKENS_START: usize = 228;
 pub const ACCEPTED_TOKENS_N_BYTES: usize = 50;
 pub const ACCEPTED_TOKENS_MAX: usize = 256;
+pub const ACCEPTED_TOKENS_PER_PAGE: u8 = 170;
+
 
 // for sale sealed
 pub const INDEX_ALLOCATIONS_START: usize = 33;

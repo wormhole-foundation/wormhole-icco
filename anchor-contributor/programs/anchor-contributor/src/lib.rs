@@ -17,6 +17,8 @@ declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
 #[program]
 pub mod anchor_contributor {
+    use anchor_spl::token;
+
     use super::*;
 
     pub fn create_contributor(
@@ -37,20 +39,47 @@ pub mod anchor_contributor {
         Ok(())
     }
 
+
+    pub fn init_accepted_token_page(ctx: Context<InitAcceptedTokenPage>, _pg_num:u8) -> Result<()> {
+        Ok(())
+    }
+
+
     pub fn init_sale(ctx: Context<InitializeSale>) -> Result<()> {
-        ctx.accounts.sale.load_init()?;
         let sale = &mut ctx.accounts.sale;
-
         let msg = get_message_data(&ctx.accounts.core_bridge_vaa)?;
-        sale.load_mut().unwrap().parse_sale_init(&msg.payload)?;
+        sale.parse_sale_init(&msg.payload)?;
 
+        let mut pages:u8 = 1;
+        require!(sale.num_accepted != 0, SaleError::InvalidAcceptedTokens);
+
+
+        //We are going to fetch all the accepted tokens and store them in pages
+        // Each page is 10 KB. Each page maintains two arrays, AcceptedToken[] (size 33) and AssetTotal[] (size 24)
+        // This means each page can store up to 175 entries each. Leaving a small buffer for metadata,
+        // Lets cap it at 170 entries per page.
+
+        let accepted_token_pages_amt = (sale.num_accepted / ACCEPTED_TOKENS_PER_PAGE) + 1; //feel free to replace with fancier scale math
+        for page_num in 1..accepted_token_pages_amt {
+            let mut page: AcceptedTokenPage = AcceptedTokenPage::try_from_slice(&ctx.remaining_accounts[page_num as usize].data.borrow_mut())?;
+            
+            for idx in 0..ACCEPTED_TOKENS_PER_PAGE {
+                let token_index = (idx * page_num) as usize;
+                let start = INDEX_ACCEPTED_TOKENS_START + 1 + (token_index * ACCEPTED_TOKENS_N_BYTES);
+                if let Some(token) = AcceptedToken::make_from_slice(
+                    idx,
+                    &msg.payload[start..start + ACCEPTED_TOKENS_N_BYTES],
+                ) {
+                    page.add_token(token, AssetTotal { contributions: 0, allocations: 0, excess_contributions: 0 });
+                }
+            }
+            
+        }   
         Ok(())
     }
 
-    pub fn create_token_custody(ctx: Context<CreateTokenCustody>) -> Result<()> {
-        Ok(())
-    }
 
+    /*
     pub fn contribute(
         ctx: Context<Contribute>,
         sale_id: Vec<u8>,
@@ -83,4 +112,5 @@ pub mod anchor_contributor {
         let msg = get_message_data(&ctx.accounts.core_bridge_vaa)?;
         sale.load_mut().unwrap().parse_sale_aborted(&msg.payload)
     }
+    */
 }

@@ -29,6 +29,7 @@ describe("anchor-contributor", () => {
     Uint8Array.from(JSON.parse(fs.readFileSync("./tests/test_keypair.json").toString()))
   );
   const CORE_BRIDGE_ADDRESS = new anchor.web3.PublicKey("Bridge1p5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o");
+  const MAX_TOKENS_PER_PAGE = 170;
 
   const [contributor_acc, contributor_bmp] = findProgramAddressSync(
     [Buffer.from("contributor"), CONDUCTOR_ADDRESS],
@@ -134,13 +135,6 @@ describe("anchor-contributor", () => {
     );
     await new Promise((r) => setTimeout(r, 5000));
 
-    const [sale_acc, sale_bmp] = findProgramAddressSync(
-      [Buffer.from("icco-sale"), parsedVaa.payload.slice(1, 33)],
-      program.programId
-    );
-
-    const createSaleIx = await program.account.sale.createInstruction(sale_acc)
-
     //Find the Core Bridge VAA address (uses hash of)
     //Create VAA Hash to use in core bridge key
     let buffer_array = [];
@@ -157,6 +151,43 @@ describe("anchor-contributor", () => {
     let core_bridge_vaa_key = findProgramAddressSync([Buffer.from("PostedVAA"), hash], CORE_BRIDGE_ADDRESS)[0];
     console.log("Core Bridge VAA: ", await program.provider.connection.getAccountInfo(core_bridge_vaa_key));
 
+
+    // Call the Init Pages
+    let pages = (acceptedTokens.length / MAX_TOKENS_PER_PAGE) + 1;
+    let pageAccounts = [];
+    for(let page = 1; page <= pages; page++ ){
+      const pg_acc = findProgramAddressSync([
+        Buffer.from("accepted-token-page"),
+        initSaleVaa.slice(1,33),
+        b.serializeUint8(page)
+      ], program.programId)
+
+      await program.methods
+        .initAcceptedTokenPage(page)
+        .accounts({
+          contributor: contributor_acc, 
+          tokenPage: pg_acc[0],
+          coreBridgeVaa: core_bridge_vaa_key,
+          owner: owner.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId
+        })
+        .rpc();
+
+      pageAccounts.push({
+        isWritable: true,
+        isSigner: false,
+        pubkey: pg_acc[0]
+      })
+    }
+
+    console.log("Page Accounts made: ", JSON.stringify(pageAccounts, null, 2));
+
+    const [sale_acc, sale_bmp] = findProgramAddressSync(
+      [Buffer.from("icco-sale"), parsedVaa.payload.slice(1, 33)],
+      program.programId
+    );
+
+
     // Call Init Sale
     await program.methods
       .initSale()
@@ -167,6 +198,7 @@ describe("anchor-contributor", () => {
         owner: owner.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
+      .remainingAccounts(pageAccounts)
       .rpc();
 
     console.log(await program.account.sale.fetch(sale_acc));

@@ -28,7 +28,16 @@ pub struct CreateContributor<'info> {
 pub struct InitializeSale<'info> {
     pub contributor: Account<'info, Contributor>,
 
-    #[account(zero)]
+    #[account(
+        init,
+        seeds = [
+            SEED_PREFIX_SALE.as_bytes(),
+            &get_sale_id(&core_bridge_vaa)?,
+        ],
+        payer = owner,
+        bump,
+        space = Sale::MAXIMUM_SIZE
+    )]
     pub sale: AccountLoader<'info, Sale>,
 
     #[account(

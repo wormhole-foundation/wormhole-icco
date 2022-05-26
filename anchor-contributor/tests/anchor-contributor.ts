@@ -139,8 +139,6 @@ describe("anchor-contributor", () => {
       program.programId
     );
 
-    const createSaleIx = await program.account.sale.createInstruction(sale_acc)
-
     //Find the Core Bridge VAA address (uses hash of)
     //Create VAA Hash to use in core bridge key
     let buffer_array = [];
@@ -167,7 +165,7 @@ describe("anchor-contributor", () => {
         owner: owner.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
-      .rpc();
+      .rpc({skipPreflight: false});
 
     console.log(await program.account.sale.fetch(sale_acc));
   });

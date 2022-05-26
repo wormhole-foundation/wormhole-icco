@@ -59,6 +59,59 @@ contract("ICCO", function(accounts) {
   const CONDUCTOR_BYTES32_ADDRESS =
     "0x000000000000000000000000" + TokenSaleConductor.address.substr(2);
 
+  const WORMHOLE_FEE = 1000;
+
+  it("should set and enforce fees", async function() {
+    console.log(
+      "\n       -------------------------- Set Wormhole Messaging Fee --------------------------"
+    );
+    const timestamp = 1000;
+    const nonce = 1001;
+    const emitterChainId = "1";
+    const emitterAddress =
+      "0x0000000000000000000000000000000000000000000000000000000000000004";
+    const newMessageFee = WORMHOLE_FEE;
+
+    data = [
+      //Core
+      "0x" +
+        Buffer.from("Core")
+          .toString("hex")
+          .padStart(64, 0),
+      // Action 3 (Set Message Fee)
+      "03",
+      // ChainID
+      web3.eth.abi.encodeParameter("uint16", "2").substring(2 + (64 - 4)),
+      // Message Fee
+      web3.eth.abi.encodeParameter("uint256", newMessageFee).substring(2),
+    ].join("");
+
+    const vm = await signAndEncodeVM(
+      timestamp,
+      nonce,
+      emitterChainId,
+      emitterAddress,
+      0,
+      data,
+      [testSigner1PK],
+      0,
+      2
+    );
+
+    let before = await WORMHOLE.methods.messageFee().call();
+
+    await WORMHOLE.methods.submitSetMessageFee("0x" + vm).send({
+      value: 0,
+      from: accounts[0],
+      gasLimit: 1000000,
+    });
+
+    let after = await WORMHOLE.methods.messageFee().call();
+
+    assert.notEqual(before, after);
+    assert.equal(after, newMessageFee);
+  });
+
   it("conductor should be initialized with the correct values", async function() {
     console.log(
       "\n       -------------------------- Initialization and Upgrades --------------------------"
@@ -793,7 +846,7 @@ contract("ICCO", function(accounts) {
 
     // create the sale
     await initialized.methods.createSale(saleParams, acceptedTokens).send({
-      value: "0",
+      value: WORMHOLE_FEE,
       from: SELLER,
       gasLimit: GAS_LIMIT,
     });
@@ -1452,6 +1505,7 @@ contract("ICCO", function(accounts) {
     // attest contributions
     await initialized.methods.attestContributions(SALE_ID).send({
       from: BUYER_ONE,
+      value: WORMHOLE_FEE,
       gasLimit: GAS_LIMIT,
     });
 
@@ -1676,6 +1730,7 @@ contract("ICCO", function(accounts) {
 
     // seal the sale
     await initialized.methods.sealSale(SALE_ID).send({
+      value: WORMHOLE_FEE,
       from: SELLER,
       gasLimit: GAS_LIMIT,
     });
@@ -1992,7 +2047,7 @@ contract("ICCO", function(accounts) {
 
     // create a second sale
     await initialized.methods.createSale(saleParams, acceptedTokens).send({
-      value: "0",
+      value: WORMHOLE_FEE,
       from: SELLER,
       gasLimit: GAS_LIMIT,
     });
@@ -2478,6 +2533,7 @@ contract("ICCO", function(accounts) {
     // attest contributions
     await initialized.methods.attestContributions(SALE_2_ID).send({
       from: BUYER_ONE,
+      value: WORMHOLE_FEE,
       gasLimit: GAS_LIMIT,
     });
 
@@ -2636,6 +2692,7 @@ contract("ICCO", function(accounts) {
 
     await initialized.methods.sealSale(SALE_2_ID).send({
       from: SELLER,
+      value: WORMHOLE_FEE,
       gasLimit: GAS_LIMIT,
     });
 
@@ -3028,7 +3085,7 @@ contract("ICCO", function(accounts) {
 
     // create a third sale
     await initialized.methods.createSale(saleParams, acceptedTokens).send({
-      value: "0",
+      value: WORMHOLE_FEE,
       from: SELLER,
       gasLimit: GAS_LIMIT,
     });
@@ -3357,6 +3414,7 @@ contract("ICCO", function(accounts) {
     try {
       await initialized.methods.abortSaleBeforeStartTime(SALE_3_ID).send({
         from: BUYER_ONE,
+        value: WORMHOLE_FEE,
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
@@ -3372,6 +3430,7 @@ contract("ICCO", function(accounts) {
     // abort the sale
     await initialized.methods.abortSaleBeforeStartTime(SALE_3_ID).send({
       from: SELLER, // must be the sale initiator (msg.sender in createSale())
+      value: WORMHOLE_FEE,
       gasLimit: GAS_LIMIT,
     });
 
@@ -3832,7 +3891,7 @@ contract("ICCO", function(accounts) {
 
     // create the sale
     await initialized.methods.createSale(saleParams, acceptedTokens).send({
-      value: "0",
+      value: WORMHOLE_FEE,
       from: SELLER,
       gasLimit: GAS_LIMIT,
     });
@@ -4320,6 +4379,7 @@ contract("ICCO", function(accounts) {
     // attest contributions
     await initialized.methods.attestContributions(SALE_4_ID).send({
       from: BUYER_ONE,
+      value: WORMHOLE_FEE,
       gasLimit: GAS_LIMIT,
     });
 
@@ -4481,6 +4541,7 @@ contract("ICCO", function(accounts) {
     // seal the sale
     await initialized.methods.sealSale(SALE_4_ID).send({
       from: SELLER,
+      value: WORMHOLE_FEE,
       gasLimit: GAS_LIMIT,
     });
 
@@ -4797,7 +4858,7 @@ contract("ICCO", function(accounts) {
 
     // create another sale
     await initialized.methods.createSale(saleParams, acceptedTokens).send({
-      value: "0",
+      value: WORMHOLE_FEE,
       from: SELLER,
       gasLimit: GAS_LIMIT,
     });
@@ -4902,7 +4963,7 @@ contract("ICCO", function(accounts) {
     await initializedConductor.methods
       .createSale(saleParams, acceptedTokens)
       .send({
-        value: "0",
+        value: WORMHOLE_FEE,
         from: SELLER,
         gasLimit: GAS_LIMIT,
       });
@@ -5020,7 +5081,7 @@ contract("ICCO", function(accounts) {
     try {
       // try to create a sale with a token with zero multiplier
       await initialized.methods.createSale(saleParams, acceptedTokens).send({
-        value: "0",
+        value: WORMHOLE_FEE,
         from: SELLER,
         gasLimit: GAS_LIMIT,
       });
@@ -5103,7 +5164,7 @@ contract("ICCO", function(accounts) {
     try {
       // try to create a sale with sale start/end times larger than uint64
       await initialized.methods.createSale(saleParams, acceptedTokens).send({
-        value: "0",
+        value: WORMHOLE_FEE,
         from: SELLER,
         gasLimit: GAS_LIMIT,
       });
@@ -5200,7 +5261,7 @@ contract("ICCO", function(accounts) {
     await initializedConductor.methods
       .createSale(saleParams, acceptedTokens)
       .send({
-        value: "0",
+        value: WORMHOLE_FEE,
         from: SELLER,
         gasLimit: GAS_LIMIT,
       });
@@ -5265,6 +5326,7 @@ contract("ICCO", function(accounts) {
     // attest contributions
     await initializedContributor.methods.attestContributions(saleId).send({
       from: BUYER_ONE,
+      value: WORMHOLE_FEE,
       gasLimit: GAS_LIMIT,
     });
 
@@ -5297,6 +5359,7 @@ contract("ICCO", function(accounts) {
     // seal the sale in the conductor and check allocation details
     await initializedConductor.methods.sealSale(saleId).send({
       from: SELLER,
+      value: WORMHOLE_FEE,
       gasLimit: GAS_LIMIT,
     });
 

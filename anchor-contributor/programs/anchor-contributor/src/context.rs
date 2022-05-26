@@ -28,17 +28,8 @@ pub struct CreateContributor<'info> {
 pub struct InitializeSale<'info> {
     pub contributor: Account<'info, Contributor>,
 
-    #[account(
-        init,
-        seeds = [
-            SEED_PREFIX_SALE.as_bytes(), // can we remove as_ref()?
-            &get_sale_id(&core_bridge_vaa)?,
-        ],
-        payer = owner,
-        bump,
-        space = Sale::MAXIMUM_SIZE
-    )]
-    pub sale: Account<'info, Sale>,
+    #[account(zero)]
+    pub sale: AccountLoader<'info, Sale>,
 
     #[account(
         constraint = verify_conductor_vaa(&core_bridge_vaa, &contributor, PAYLOAD_SALE_INIT)?,
@@ -65,16 +56,14 @@ pub struct Contribute<'info> {
     pub contributor: Account<'info, Contributor>,
 
     #[account(
-        init_if_needed,
+        mut,
         seeds = [
             SEED_PREFIX_SALE.as_bytes().as_ref(),
             &sale_id.as_ref(),
         ],
         bump,
-        space=Sale::MAXIMUM_SIZE,
-        payer=owner
     )]
-    pub sale: Account<'info, Sale>,
+    pub sale: AccountLoader<'info, Sale>,
 
     #[account(
         mut,
@@ -103,9 +92,9 @@ pub struct SealSale<'info> {
             SEED_PREFIX_SALE.as_bytes().as_ref(),
             &get_sale_id(&core_bridge_vaa)?.as_ref(),
         ],
-        bump = sale.bump,
+        bump,
     )]
-    pub sale: Account<'info, Sale>,
+    pub sale: AccountLoader<'info, Sale>,
 
     #[account(
         constraint = verify_conductor_vaa(&core_bridge_vaa, &contributor, PAYLOAD_SALE_SEALED)?,
@@ -130,9 +119,9 @@ pub struct ClaimAllocation<'info> {
             SEED_PREFIX_SALE.as_bytes().as_ref(),
             &sale_id.as_ref(),
         ],
-        bump = sale.bump,
+        bump,
     )]
-    pub sale: Account<'info, Sale>,
+    pub sale: AccountLoader<'info, Sale>,
 
     #[account(
         mut,
@@ -162,9 +151,9 @@ pub struct AbortSale<'info> {
             SEED_PREFIX_SALE.as_bytes().as_ref(),
             &get_sale_id(&core_bridge_vaa)?.as_ref(),
         ],
-        bump = sale.bump,
+        bump,
     )]
-    pub sale: Account<'info, Sale>,
+    pub sale: AccountLoader<'info, Sale>,
 
     #[account(
         constraint = verify_conductor_vaa(&core_bridge_vaa, &contributor, PAYLOAD_SALE_ABORTED)?,
@@ -189,9 +178,9 @@ pub struct ClaimRefund<'info> {
             SEED_PREFIX_SALE.as_bytes().as_ref(),
             &sale_id.as_ref(),
         ],
-        bump = sale.bump,
+        bump,
     )]
-    pub sale: Account<'info, Sale>,
+    pub sale: AccountLoader<'info, Sale>,
 
     #[account(
         mut,

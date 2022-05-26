@@ -38,10 +38,11 @@ pub mod anchor_contributor {
     }
 
     pub fn init_sale(ctx: Context<InitializeSale>) -> Result<()> {
+        ctx.accounts.sale.load_init()?;
         let sale = &mut ctx.accounts.sale;
 
         let msg = get_message_data(&ctx.accounts.core_bridge_vaa)?;
-        sale.parse_sale_init(&msg.payload)?;
+        sale.load_mut().unwrap().parse_sale_init(&msg.payload)?;
 
         Ok(())
     }
@@ -53,7 +54,7 @@ pub mod anchor_contributor {
     pub fn contribute(
         ctx: Context<Contribute>,
         sale_id: Vec<u8>,
-        token_index: usize,
+        token_index: u8,
         amount: u64,
     ) -> Result<()> {
         // get accepted token index
@@ -61,10 +62,10 @@ pub mod anchor_contributor {
 
         // leverage token index search from sale's accepted tokens to find index
         // on buyer's contributions
-        sale.update_total_contributions(token_index, amount)?;
+        sale.load_mut().unwrap().update_total_contributions(token_index as usize, amount)?;
 
         // now update buyer's contributions
-        ctx.accounts.buyer.contribute(token_index, amount)?;
+        ctx.accounts.buyer.contribute(token_index as usize, amount)?;
 
         Ok(())
     }
@@ -73,13 +74,13 @@ pub mod anchor_contributor {
         let sale = &mut ctx.accounts.sale;
 
         let msg = get_message_data(&ctx.accounts.core_bridge_vaa)?;
-        sale.parse_sale_sealed(&msg.payload)
+        sale.load_mut().unwrap().parse_sale_sealed(&msg.payload)
     }
 
     pub fn abort_sale(ctx: Context<AbortSale>) -> Result<()> {
         let sale = &mut ctx.accounts.sale;
 
         let msg = get_message_data(&ctx.accounts.core_bridge_vaa)?;
-        sale.parse_sale_aborted(&msg.payload)
+        sale.load_mut().unwrap().parse_sale_aborted(&msg.payload)
     }
 }

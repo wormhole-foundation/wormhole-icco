@@ -139,6 +139,8 @@ describe("anchor-contributor", () => {
       program.programId
     );
 
+    const createSaleIx = await program.account.sale.createInstruction(sale_acc)
+
     //Find the Core Bridge VAA address (uses hash of)
     //Create VAA Hash to use in core bridge key
     let buffer_array = [];

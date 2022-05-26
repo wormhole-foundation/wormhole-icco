@@ -25,7 +25,8 @@ impl Contributor {
     pub const MAXIMUM_SIZE: usize = 32 + 2 + 32;
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq, Default)]
+#[zero_copy]
+#[derive(Eq, PartialEq, Default)]
 pub struct AcceptedToken {
     pub index: u8,    // 1
     pub mint: Pubkey, // 32
@@ -49,7 +50,8 @@ impl AcceptedToken {
     }
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq, Default)]
+#[zero_copy]
+#[derive(PartialEq, Eq, Default)]
 pub struct AssetTotals {
     pub contributions: u64,
     pub allocations: u64,
@@ -57,7 +59,7 @@ pub struct AssetTotals {
 }
 
 #[account(zero_copy)]
-#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub struct Sale {
     // TODO: I don't think we need the token address if we are passing
     // the sale token ATA info in the sale init vaa. Is this true?
@@ -80,7 +82,7 @@ pub struct Sale {
 impl Sale {
     pub const MAXIMUM_SIZE: usize =
         32 + 2 + 1 + (8 + 8) + 32 + 1 + 1 + 256 * (AcceptedToken::MAXIMUM_SIZE + 8 * 3) + 32 + 1;
-    pub fn parse_sale_init(&mut self, payload: &[u8], contributor: &Pubkey) -> Result<()> {
+    pub fn parse_sale_init(&mut self, payload: &[u8]) -> Result<()> {
         // check that the payload has at least the number of bytes
         // required to define the number of accepted tokens
         require!(

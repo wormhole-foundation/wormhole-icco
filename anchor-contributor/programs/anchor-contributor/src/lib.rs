@@ -40,7 +40,7 @@ pub mod anchor_contributor {
     }
 
 
-    pub fn init_accepted_token_page(ctx: Context<InitAcceptedTokenPage>, _pg_num:u8) -> Result<()> {
+    pub fn init_accepted_token_page(_ctx: Context<InitAcceptedTokenPage>, _pg_num:u8) -> Result<()> {
         Ok(())
     }
 
@@ -50,7 +50,6 @@ pub mod anchor_contributor {
         let msg = get_message_data(&ctx.accounts.core_bridge_vaa)?;
         sale.parse_sale_init(&msg.payload)?;
 
-        let mut pages:u8 = 1;
         require!(sale.num_accepted != 0, SaleError::InvalidAcceptedTokens);
 
 

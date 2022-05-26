@@ -154,6 +154,7 @@ describe("anchor-contributor", () => {
 
     // Call the Init Pages
     let pages = (acceptedTokens.length / MAX_TOKENS_PER_PAGE) + 1;
+    console.log("Total Pages: ", pages);
     let pageAccounts = [];
     for(let page = 1; page <= pages; page++ ){
       const pg_acc = findProgramAddressSync([
@@ -161,8 +162,8 @@ describe("anchor-contributor", () => {
         initSaleVaa.slice(1,33),
         b.serializeUint8(page)
       ], program.programId)
-
-      await program.methods
+      console.log("Page: ", page, " ", pg_acc[0].toString());
+      const tx = await program.methods
         .initAcceptedTokenPage(page)
         .accounts({
           contributor: contributor_acc, 
@@ -173,6 +174,7 @@ describe("anchor-contributor", () => {
         })
         .rpc();
 
+      console.log(tx);
       pageAccounts.push({
         isWritable: true,
         isSigner: false,

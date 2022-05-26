@@ -120,8 +120,7 @@ pub fn create_icco_sale_custody_account(
             &spl_token::id(),
             accs.custody.info().key,
             accs.mint.info().key,
-//            accs.payer.info().key,
-            ctx.program_id,
+            accs.config.info().key,    //  ctx.program_id,
         )?;
         invoke_signed(&init_ix, ctx.accounts, &[])?;
     }

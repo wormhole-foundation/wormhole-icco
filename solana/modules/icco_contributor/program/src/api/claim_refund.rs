@@ -148,7 +148,9 @@ pub fn claim_refund_icco_sale(
     }
 */
 
+    // let sale_id = accs.init_sale_vaa.sale_id;
     let token_idx = data.token_idx;
+
     // Get amounts from token custody and contribution state.
     let custody_account_amount = get_sale_state_contribution(&state_data, token_idx);
     let amount = accs.contribution_state.amount;
@@ -158,26 +160,51 @@ pub fn claim_refund_icco_sale(
     }
     set_sale_state_contribution(& mut state_data, token_idx, custody_account_amount - amount);
 
+    // msg!("In claim_refund_icco_sale before xfer");
+
     // Transfer tokens  custody -> from. Non-WH transfer.
+    let (_, cfg_bump) = Pubkey::find_program_address(&[b"config"], ctx.program_id);     // Given that contract addr is fixed - it can be precalculated.
+    // Get seeds and bump for config accout. It is owner of custody ATAs
     let transfer_ix = spl_token::instruction::transfer(
         &spl_token::id(),
         accs.custody.info().key,
         accs.from.info().key,
-        ctx.program_id, // accs.payer.key,   // accs.authority_signer.key,      // Payer?
-        &[],
+        &accs.config.info().key,
+        &[&accs.config.info().key],
         amount,
     )?;
-    invoke_signed(&transfer_ix, ctx.accounts, &[])?;
+    invoke_signed(&transfer_ix, ctx.accounts, &[&[&b"config"[..], &[cfg_bump]]])?;
 
-    // Close contribution_state. Transfer rent back to the user.
-    let close_ix = spl_token::instruction::close_account(
-        &spl_token::id(),
-        accs.contribution_state.info().key, // Close this
-        accs.payer.info().key,              // lamports go here.
-        ctx.program_id,                     // Owner
-        &[],
-    )?;
-    invoke_signed(&close_ix, ctx.accounts, &[])?;
+    // msg!("In claim_refund_icco_sale before close");
+
+    // Close contribution_state. Transfer rent back to the user. WRONG!! Works on SPL accounts only!
+    // This is here just for the reference. This contract is not going to close any SPL accounts so far.
+    // let close_ix = spl_token::instruction::close_account(
+    //     &spl_token::id(),
+    //     accs.contribution_state.info().key, // Close this
+    //     accs.payer.info().key,              // lamports go here.
+    //     &accs.config.info().key,
+    //     &[&accs.config.info().key],
+    // )?;
+    // invoke_signed(&close_ix, ctx.accounts, &[&[&b"configz"[..], &[cfg_bump]]])?;
+
+    // Zero out non-SPL accout and return lamports to the user.
+    {
+        match  accs.payer.info().lamports().checked_add(accs.contribution_state.info().lamports()) {
+            None => return Err(NotEnoughTokensInCustody.into()),
+            Some( amt ) => {
+                **accs.payer.info().try_borrow_mut_lamports()? = amt;
+                **accs.contribution_state.info().try_borrow_mut_lamports()? = 0;
+            },
+        }
+    }
+    {
+        let d_len = accs.contribution_state.info().data_len();
+        let d = & mut *accs.contribution_state.info().try_borrow_mut_data()?;
+        for i in 0..d_len {
+            d[i] = 0;
+        }
+    }
 
     Ok(())
 }

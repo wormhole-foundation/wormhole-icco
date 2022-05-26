@@ -30,6 +30,7 @@ import {
   abort_icco_sale_ix,
   contribute_icco_sale_ix,
   attest_icco_sale_ix,
+  claim_refund_icco_sale_ix,
   Pubkey,
   //  test_account_address,
 } from "../../solana/icco_contributor-node";
@@ -414,7 +415,7 @@ describe("Solana dev Tests", () => {
         }
 
         // -----------------------
-        // Now abort this sale.
+        // Now Abort this sale.
         console.log("-->> abort_icco_sale");
         // abort the sale early in the conductor
         const abortEarlyReceipt = await abortSaleEarlyAtConductor(
@@ -460,6 +461,37 @@ describe("Solana dev Tests", () => {
             )
           );
           // call contributor contract
+          const tx = new Transaction().add(ix);
+          const tx_id = await solanaConnection.sendTransaction(
+            tx,
+            [walletAccount],
+            {
+              skipPreflight: false,
+              preflightCommitment: "singleGossip",
+            }
+          );
+          await solanaConnection.confirmTransaction(tx_id);
+        }
+
+        // -----------------------
+        // Claim refund [functionality test].
+        {
+          console.log("---- Claiming refund ------");
+          // Make contribute instruction.
+          const ixw = claim_refund_icco_sale_ix(
+            SOLANA_CONTRIBUTOR_ADDR,
+            SOLANA_BRIDGE_ADDR,
+            walletAccount.publicKey.toString(),
+            SOLANA_TEST_TOKEN_ACCOUNT,
+            saleInitVaa, // init_sale_vaa: Vec<u8>,
+            SOLANA_TEST_TOKEN_MINT,
+            0, // Token idx
+            // BigInt(1000000000) // Amount contributed.
+          );
+          dumpInstructionAccounts(ixw);
+          const ix = ixFromRust(ixw);
+
+          // call the contract
           const tx = new Transaction().add(ix);
           const tx_id = await solanaConnection.sendTransaction(
             tx,

@@ -529,12 +529,12 @@ pub fn claim_refund_icco_sale(
             AccountMeta::new(from_account, false),
             AccountMeta::new_readonly(token_mint, false),       // Mint.
             AccountMeta::new(custody_key, false),
-//Not needed            AccountMeta::new_readonly(program_id, false),       // <--- As custody owner?
             AccountMeta::new_readonly(solana_program::sysvar::clock::id(), false),
             AccountMeta::new_readonly(solana_program::sysvar::rent::id(), false),
             AccountMeta::new_readonly(solana_program::system_program::id(), false),
             AccountMeta::new_readonly(spl_token::id(), false),
             AccountMeta::new(state_key, false),
+            AccountMeta::new_readonly(program_id, false),       // Custody owner
         ],
         data: (
             crate::instruction::Instruction::ClaimRefundIccoSale,

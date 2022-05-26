@@ -11,7 +11,13 @@ use solana_program::{
 
 use solitaire::*;
 
-pub fn create_simple_account (ctx: &ExecutionContext, pubkey: &Pubkey, payer: &Pubkey, size: usize, vseeds: &Vec<Vec<u8>>) -> Result<()> {
+pub fn create_simple_account (
+    ctx: &ExecutionContext,
+    pubkey: &Pubkey,
+    payer: &Pubkey,
+    size: usize,
+    vseeds: &Vec<Vec<u8>>
+) -> Result<()> {
     let target_rent =  Rent::default().minimum_balance(size);
     // top up account to target rent
     let transfer_ix = system_instruction::transfer(payer, pubkey, target_rent);

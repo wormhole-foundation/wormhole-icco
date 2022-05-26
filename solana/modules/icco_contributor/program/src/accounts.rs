@@ -23,7 +23,6 @@ pub type EmitterAccount<'b> = Derive<Info<'b>, "emitter">;
 pub type ConfigAccount<'b, const STATE: AccountState> =
     Derive<Data<'b, Config, { STATE }>, "config">;
 
-
 ///-------------------------------------------------------------------
 /// icco Sale state. PDA <= "state", SaleId
 pub type SaleStateAccount<'b, const STATE: AccountState> =

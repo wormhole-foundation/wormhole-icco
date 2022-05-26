@@ -12,6 +12,7 @@ module.exports = {
     tokenBridge: "0x3ee18B2214AFF97000D974cf647E7C347E8fa585",
     mnemonic: "",
     rpc: "",
+    deployImplementationOnly: false,
   },
   binance: {
     conductorChainId: 2,
@@ -22,6 +23,7 @@ module.exports = {
     tokenBridge: "0xB6F6D86a8f9879A9c87f643768d9efc38c1Da6E7",
     mnemonic: "",
     rpc: "",
+    deployImplementationOnly: false,
   },
   polygon: {
     conductorChainId: 2,
@@ -32,6 +34,7 @@ module.exports = {
     tokenBridge: "0x5a58505a96D1dbf8dF91cB21B54419FC36e93fdE",
     mnemonic: "",
     rpc: "",
+    deployImplementationOnly: false,
   },
   avalanche: {
     conductorChainId: 2,
@@ -42,6 +45,7 @@ module.exports = {
     tokenBridge: "0x0e082F06FF657D94310cB8cE8B0D9a04541d8052",
     mnemonic: "",
     rpc: "",
+    deployImplementationOnly: false,
   },
   development: {
     conductorChainId: 2,
@@ -76,6 +80,7 @@ module.exports = {
     tokenBridge: "0xF890982f9310df57d00f659cf4fd87e65adEd8d7",
     mnemonic: "",
     rpc: "",
+    deployImplementationOnly: false,
   },
   fuji: {
     conductorChainId: 2,
@@ -86,6 +91,7 @@ module.exports = {
     tokenBridge: "0x61E44E506Ca5659E6c0bba9b678586fA2d729756",
     mnemonic: "",
     rpc: "",
+    deployImplementationOnly: false,
   },
   binance_testnet: {
     conductorChainId: 2,
@@ -96,6 +102,7 @@ module.exports = {
     tokenBridge: "0x9dcF9D205C9De35334D646BeE44b2D2859712A09",
     mnemonic: "",
     rpc: "",
+    deployImplementationOnly: false,
   },
   mumbai: {
     conductorChainId: 2,
@@ -106,6 +113,7 @@ module.exports = {
     tokenBridge: "0x377D55a7928c046E18eEbb61977e714d2a76472a",
     mnemonic: "",
     rpc: "",
+    deployImplementationOnly: false,
   },
   fantom_testnet: {
     conductorChainId: 2,
@@ -116,5 +124,6 @@ module.exports = {
     tokenBridge: "0x599CEa2204B4FaECd584Ab1F2b6aCA137a0afbE8",
     mnemonic: "",
     rpc: "",
+    deployImplementationOnly: false,
   },
 };

@@ -12,7 +12,8 @@
   },
   "include": [
     "register_tilt_contributors.ts",
-    "register_testnet_contributors.ts"
+    "register_testnet_contributors.ts",
+    "upgrade_testnet_contracts.ts"
   ],
   "exclude": ["node_modules"]
 }

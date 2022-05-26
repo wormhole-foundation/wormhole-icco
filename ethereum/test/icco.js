@@ -1,7 +1,6 @@
 const jsonfile = require("jsonfile");
 const elliptic = require("elliptic");
 const { assert } = require("chai");
-const truffleAssert = require("truffle-assertions");
 const ethers = require("ethers");
 
 const TokenImplementation = artifacts.require("TokenImplementation");

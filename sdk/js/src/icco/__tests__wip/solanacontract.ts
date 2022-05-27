@@ -451,8 +451,8 @@ describe("Solana dev Tests", () => {
             SOLANA_CONTRIBUTOR_ADDR,
             SOLANA_BRIDGE_ADDR,
             walletAccount.publicKey.toString(),
-            SOLANA_TEST_TOKEN_ACCOUNT,
             saleInitVaa, // init_sale_vaa: Vec<u8>,
+            SOLANA_TEST_TOKEN_ACCOUNT,
             SOLANA_TEST_TOKEN_MINT,
             0, // Token idx
             // BigInt(1000000000) // Amount contributed.

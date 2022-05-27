@@ -29,6 +29,7 @@ use crate::{
         SealIccoSaleData,
         SealIccoSaleTransferCustodyIccoTokenData,
         ClaimRefundIccoSaleData,
+        ClaimAllocationIccoSaleData,
     },
 };
 
@@ -504,10 +505,10 @@ pub fn claim_refund_icco_sale(
     program_id: Pubkey,
     sale_id: u128,
     payer: Pubkey,
-    from_account: Pubkey,   // Payer token account
     vaa_message: Pubkey,    // initSale, claimed
-    token_mint: Pubkey,
-    token_index: u8,  // TBD For validation against VAA. 
+    account_for_refund: Pubkey,   // Payer token account
+    token_mint_refund: Pubkey,
+    token_index_refund: u8,  // TBD For validation against VAA. 
 ) -> Instruction {
     let config_key = ConfigAccount::<'_, { AccountState::Initialized }>::key(None, &program_id);
     let state_key = SaleStateAccount::<'_, { AccountState::Initialized }>::key(&SaleStateAccountDerivationData{sale_id: sale_id}, &program_id);
@@ -515,9 +516,9 @@ pub fn claim_refund_icco_sale(
         ContributionStateAccount::<'_, { AccountState::MaybeInitialized }>::key(&ContributionStateAccountDerivationData{
             sale_id: sale_id,
             contributor: payer,
-            token: token_mint,
+            token: token_mint_refund,
         }, &program_id);
-    let custody_key = CustodyAccount::<'_, { AccountState::MaybeInitialized }>::key(&CustodyAccountDerivationData{sale_id: sale_id, mint: token_mint}, &program_id);
+    let custody_key = CustodyAccount::<'_, { AccountState::MaybeInitialized }>::key(&CustodyAccountDerivationData{sale_id: sale_id, mint: token_mint_refund}, &program_id);
 
     Instruction {
         program_id,
@@ -526,8 +527,8 @@ pub fn claim_refund_icco_sale(
             AccountMeta::new_readonly(config_key, false),
             AccountMeta::new_readonly(vaa_message, false),
             AccountMeta::new(contribution_state_key, false),
-            AccountMeta::new(from_account, false),
-            AccountMeta::new_readonly(token_mint, false),       // Mint.
+            AccountMeta::new(account_for_refund, false),
+            AccountMeta::new_readonly(token_mint_refund, false),       // Mint.
             AccountMeta::new(custody_key, false),
             AccountMeta::new_readonly(solana_program::sysvar::clock::id(), false),
             AccountMeta::new_readonly(solana_program::sysvar::rent::id(), false),
@@ -538,7 +539,59 @@ pub fn claim_refund_icco_sale(
         ],
         data: (
             crate::instruction::Instruction::ClaimRefundIccoSale,
-            ClaimRefundIccoSaleData {token_idx: token_index},
+            ClaimRefundIccoSaleData {token_idx: token_index_refund},
+        )
+            .try_to_vec()
+            .unwrap(),
+    }
+}
+
+
+pub fn claim_allocation_icco_sale(
+    program_id: Pubkey,
+    sale_id: u128,
+    payer: Pubkey,
+    vaa_message: Pubkey,    // initSale, claimed
+    account_for_allocation: Pubkey,   // Payer token account
+    token_mint_allocation: Pubkey,
+    account_for_refund: Pubkey,   // Payer token account
+    token_mint_refund: Pubkey,
+    token_index_refund: u8,  // TBD For validation against VAA. 
+) -> Instruction {
+    let config_key = ConfigAccount::<'_, { AccountState::Initialized }>::key(None, &program_id);
+    let state_key = SaleStateAccount::<'_, { AccountState::Initialized }>::key(&SaleStateAccountDerivationData{sale_id: sale_id}, &program_id);
+    let contribution_state_key =
+        ContributionStateAccount::<'_, { AccountState::MaybeInitialized }>::key(&ContributionStateAccountDerivationData{
+            sale_id: sale_id,
+            contributor: payer,
+            token: token_mint_refund,
+        }, &program_id);
+    let custody_key_allocation = CustodyAccount::<'_, { AccountState::MaybeInitialized }>::key(&CustodyAccountDerivationData{sale_id: sale_id, mint: token_mint_allocation}, &program_id);
+    let custody_key_refund = CustodyAccount::<'_, { AccountState::MaybeInitialized }>::key(&CustodyAccountDerivationData{sale_id: sale_id, mint: token_mint_refund}, &program_id);
+
+    Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new(payer, true),
+            AccountMeta::new_readonly(config_key, false),
+            AccountMeta::new_readonly(vaa_message, false),
+            AccountMeta::new(contribution_state_key, false),
+            AccountMeta::new(account_for_allocation, false),
+            AccountMeta::new_readonly(token_mint_allocation, false),       // Mint.
+            AccountMeta::new(account_for_refund, false),
+            AccountMeta::new_readonly(token_mint_refund, false),       // Mint.
+            AccountMeta::new(custody_key_allocation, false),
+            AccountMeta::new(custody_key_refund, false),
+            AccountMeta::new_readonly(solana_program::sysvar::clock::id(), false),
+            AccountMeta::new_readonly(solana_program::sysvar::rent::id(), false),
+            AccountMeta::new_readonly(solana_program::system_program::id(), false),
+            AccountMeta::new_readonly(spl_token::id(), false),
+            AccountMeta::new(state_key, false),
+            AccountMeta::new_readonly(program_id, false),       // Custody owner
+        ],
+        data: (
+            crate::instruction::Instruction::ClaimAllocationIccoSale,
+            ClaimAllocationIccoSaleData {token_idx: token_index_refund},
         )
             .try_to_vec()
             .unwrap(),

@@ -108,8 +108,6 @@ pub struct ContributeIccoSaleData {
     pub token_idx: u8,
 }
 
-impl<'b> InstructionContext<'b> for ContributeIccoSale<'b> {
-}
 
 pub fn contribute_icco_sale(
     ctx: &ExecutionContext,

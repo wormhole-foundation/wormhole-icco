@@ -166,8 +166,6 @@ impl<'a> From<&InitIccoSale<'a>> for SaleStateAccountDerivationData {
 pub struct InitIccoSaleData {
 }
 
-// impl<'b> InstructionContext<'b> for InitIccoSale<'b> {
-// }
 
 pub fn init_icco_sale(
     ctx: &ExecutionContext,

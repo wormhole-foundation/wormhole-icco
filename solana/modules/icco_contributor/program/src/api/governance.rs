@@ -90,8 +90,6 @@ pub struct UpgradeContract<'b> {
     pub system: Info<'b>,
 }
 
-impl<'b> InstructionContext<'b> for UpgradeContract<'b> {
-}
 
 #[derive(BorshDeserialize, BorshSerialize, Default)]
 pub struct UpgradeContractData {}
@@ -142,8 +140,6 @@ impl<'a> From<&RegisterChain<'a>> for EndpointDerivationData {
     }
 }
 
-impl<'b> InstructionContext<'b> for RegisterChain<'b> {
-}
 
 #[derive(BorshDeserialize, BorshSerialize, Default)]
 pub struct RegisterChainData {}

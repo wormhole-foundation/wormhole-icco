@@ -38,8 +38,6 @@ pub struct InitializeContributorData {
     pub conductor: Pubkey,
 }
 
-impl<'b> InstructionContext<'b> for Initialize<'b> {
-}
 
 pub fn initialize(
     ctx: &ExecutionContext,

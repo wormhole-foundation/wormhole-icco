@@ -56,40 +56,44 @@ use bridge::{
 
 
 #[derive(FromAccounts)]
-pub struct ClaimRefundIccoSale<'b> {
+pub struct ClaimAllocationIccoSale<'b> {
     pub payer: Mut<Signer<AccountInfo<'b>>>,
     pub config: ConfigAccount<'b, { AccountState::Initialized }>,
     pub init_sale_vaa: ClaimedVAA<'b, InitSale>,           // Not sure if needed..
     pub contribution_state: Mut<ContributionStateAccount<'b, { AccountState::Initialized }>>, 
-    pub from: Mut<Data<'b, SplAccount, { AccountState::Initialized }>>,     // From account. To receive refund.
-    pub mint: Data<'b, SplMint, { AccountState::Initialized }>,             // From token Why Mut??
-    pub custody: Mut<CustodyAccount<'b, { AccountState::Initialized }>>,    
+    pub from_allocation: Mut<Data<'b, SplAccount, { AccountState::Initialized }>>,     // From account. To receive allocation.
+    pub mint_allocation: Data<'b, SplMint, { AccountState::Initialized }>,             // From token Why Mut??
+    pub from_refund: Mut<Data<'b, SplAccount, { AccountState::Initialized }>>,     // From account. To receive refund.
+    pub mint_refund: Data<'b, SplMint, { AccountState::Initialized }>,             // From token Why Mut??
+    pub custody_sale_token: Mut<CustodyAccount<'b, { AccountState::Initialized }>>,
+    pub custody_refund: Mut<CustodyAccount<'b, { AccountState::Initialized }>>,
 
     pub clock: Sysvar<'b, Clock>,
-    // Sale state is in ctx.accounts[11]; // see instructions.rs
+    // Sale state is in ctx.accounts[14]; // see instructions.rs
 }
 
 /*
-impl<'a> From<&ClaimRefundIccoSale<'a>> for SaleStateAccountDerivationData {
-    fn from(accs: &ClaimRefundIccoSale<'a>) -> Self {
+impl<'a> From<&ClaimAllocationIccoSale<'a>> for SaleStateAccountDerivationData {
+    fn from(accs: &ClaimAllocationIccoSale<'a>) -> Self {
         SaleStateAccountDerivationData {
             sale_id: accs.init_sale_vaa.sale_id,
         }
     }
 }
 */
-
-impl<'a> From<&ClaimRefundIccoSale<'a>> for CustodyAccountDerivationData {
-    fn from(accs: &ClaimRefundIccoSale<'a>) -> Self {
+/*
+impl<'a> From<&ClaimAllocationIccoSale<'a>> for CustodyAccountDerivationData {      // Which one!
+    fn from(accs: &ClaimAllocationIccoSale<'a>) -> Self {
         CustodyAccountDerivationData {
             sale_id: accs.init_sale_vaa.sale_id,
             mint: *accs.mint.info().key,
         }
     }
 }
-
-impl<'a> From<&ClaimRefundIccoSale<'a>> for ContributionStateAccountDerivationData {
-    fn from(accs: &ClaimRefundIccoSale<'a>) -> Self {
+*/
+/*
+impl<'a> From<&ClaimAllocationIccoSale<'a>> for ContributionStateAccountDerivationData {
+    fn from(accs: &ClaimAllocationIccoSale<'a>) -> Self {
         ContributionStateAccountDerivationData {
             sale_id: accs.init_sale_vaa.sale_id,
             contributor: *accs.payer.info().key,    // Needs to be wallet to be able to potentially use multiple contrib subaccounts?
@@ -97,20 +101,20 @@ impl<'a> From<&ClaimRefundIccoSale<'a>> for ContributionStateAccountDerivationDa
         }
     }
 }
-
+*/
 
 #[derive(BorshDeserialize, BorshSerialize, Default)]
-pub struct ClaimRefundIccoSaleData {
+pub struct ClaimAllocationIccoSaleData {
     pub token_idx: u8,
 }
 
 
-pub fn claim_refund_icco_sale(
+pub fn claim_allocation_icco_sale(
     ctx: &ExecutionContext,
-    accs: &mut ClaimRefundIccoSale,
-    data: ClaimRefundIccoSaleData,
+    accs: &mut ClaimAllocationIccoSale,
+    data: ClaimAllocationIccoSaleData,
 ) -> Result<()> {
-    msg!("In claim_refund_icco_sale!");
+    msg!("In claim_allocation_icco_sale!");
 
     let sale_state_account_info = &ctx.accounts[11];
     //msg!("state_key: {:?}", sale_state_account_info.key);
@@ -157,35 +161,37 @@ pub fn claim_refund_icco_sale(
     if amount > custody_account_amount {
         return Err(NotEnoughTokensInCustody.into());
     }
-    set_sale_state_contribution(& mut state_data, token_idx, custody_account_amount - amount);
+    set_sale_state_contribution(& mut state_data, token_idx, custody_account_amount - amount);      // We still remove whole contribution from state.
 
     // msg!("In claim_refund_icco_sale before xfer");
+    // TBD Compute fractional transfer for offered token and refund.
 
     // Transfer tokens  custody -> from. Non-WH transfer.
     let (_, cfg_bump) = Pubkey::find_program_address(&[b"config"], ctx.program_id);     // Given that contract addr is fixed - it can be precalculated.
-    // Get seeds and bump for config accout. It is owner of custody ATAs
-    let transfer_ix = spl_token::instruction::transfer(
-        &spl_token::id(),
-        accs.custody.info().key,
-        accs.from.info().key,
-        &accs.config.info().key,
-        &[&accs.config.info().key],
-        amount,
-    )?;
-    invoke_signed(&transfer_ix, ctx.accounts, &[&[&b"config"[..], &[cfg_bump]]])?;
-
+    
+    {
+        let transfer_ix_allocation = spl_token::instruction::transfer(
+            &spl_token::id(),
+            accs.custody_sale_token.info().key,
+            accs.from_allocation.info().key,
+            &accs.config.info().key,
+            &[&accs.config.info().key],
+            amount,
+        )?;
+        invoke_signed(&transfer_ix_allocation, ctx.accounts, &[&[&b"config"[..], &[cfg_bump]]])?;
+    }
+    {
+        let transfer_ix_refund = spl_token::instruction::transfer(
+            &spl_token::id(),
+            accs.custody_refund.info().key,
+            accs.from_refund.info().key,
+            &accs.config.info().key,
+            &[&accs.config.info().key],
+            amount,
+        )?;
+        invoke_signed(&transfer_ix_refund, ctx.accounts, &[&[&b"config"[..], &[cfg_bump]]])?;
+    }
     // msg!("In claim_refund_icco_sale before close");
-
-    // Close contribution_state. Transfer rent back to the user. WRONG!! Works on SPL accounts only!
-    // This is here just for the reference. This contract is not going to close any SPL accounts so far.
-    // let close_ix = spl_token::instruction::close_account(
-    //     &spl_token::id(),
-    //     accs.contribution_state.info().key, // Close this
-    //     accs.payer.info().key,              // lamports go here.
-    //     &accs.config.info().key,
-    //     &[&accs.config.info().key],
-    // )?;
-    // invoke_signed(&close_ix, ctx.accounts, &[&[&b"configz"[..], &[cfg_bump]]])?;
 
     // Zero out non-SPL accout and return lamports to the user.
     close_nonspl_accout (

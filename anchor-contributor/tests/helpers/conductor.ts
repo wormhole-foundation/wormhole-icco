@@ -1,7 +1,7 @@
 import { web3 } from "@project-serum/anchor";
 import { CHAIN_ID_ETH, CHAIN_ID_SOLANA, tryNativeToHexString } from "@certusone/wormhole-sdk";
-import { createMint, getOrCreateAssociatedTokenAccount, mintTo } from "@solana/spl-token";
-import { BigNumber } from "ethers";
+import { createMint } from "@solana/spl-token";
+import { BigNumber, BigNumberish } from "ethers";
 
 import { toBigNumberHex } from "./utils";
 import { CONDUCTOR_ADDRESS, CONDUCTOR_CHAIN } from "./consts";
@@ -23,6 +23,7 @@ export class DummyConductor {
 
   saleTokenOnSolana: string;
   acceptedTokens: AcceptedToken[];
+  allocations: Allocation[];
 
   constructor() {
     this.saleId = 0;
@@ -32,6 +33,7 @@ export class DummyConductor {
     this.saleEnd = 0;
 
     this.acceptedTokens = [];
+    this.allocations = [];
   }
 
   async attestSaleToken(connection: web3.Connection, payer: web3.Keypair): Promise<void> {
@@ -46,11 +48,27 @@ export class DummyConductor {
 
   async createAcceptedTokens(connection: web3.Connection, payer: web3.Keypair): Promise<AcceptedToken[]> {
     const tokenIndices = [2, 3, 5, 8, 13, 21, 34, 55];
+    const allocations = [
+      "10000000000",
+      "10000000000",
+      "20000000000",
+      "30000000000",
+      "50000000000",
+      "80000000000",
+      "130000000000",
+      "210000000000",
+    ];
+    const excessContributions = ["1234567", "8901234", "5678901", "2345678", "3456789", "123456", "7890123", "4567890"];
     for (let i = 0; i < MAX_ACCEPTED_TOKENS; ++i) {
       // just make everything the same number of decimals (9)
       const mint = await createMint(connection, payer, payer.publicKey, payer.publicKey, 9);
       const acceptedToken = makeAcceptedToken(tokenIndices[i], mint.toBase58());
       this.acceptedTokens.push(acceptedToken);
+
+      // make up allocations, too
+      const allocation = makeAllocation(tokenIndices[i], allocations[i], excessContributions[i]);
+      this.allocations.push(allocation);
+      //this.allocations
     }
     return this.acceptedTokens;
   }
@@ -87,6 +105,17 @@ export class DummyConductor {
     return this.initSaleVaa;
   }
 
+  sealSale(blockTime: number): Buffer {
+    return signAndEncodeVaa(
+      blockTime,
+      this.nonce,
+      CONDUCTOR_CHAIN,
+      Buffer.from(CONDUCTOR_ADDRESS).toString("hex"),
+      this.wormholeSequence,
+      encodeSaleSealed(this.saleId, this.allocations)
+    );
+  }
+
   abortSale(blockTime: number): Buffer {
     return signAndEncodeVaa(
       blockTime,
@@ -110,6 +139,10 @@ export class DummyConductor {
 
 function makeAcceptedToken(index: number, pubkey: string): AcceptedToken {
   return { index, address: tryNativeToHexString(pubkey, CHAIN_ID_SOLANA) };
+}
+
+function makeAllocation(index: number, allocation: string, excessContribution: string): Allocation {
+  return { index, allocation, excessContribution };
 }
 
 export interface AcceptedToken {
@@ -158,8 +191,9 @@ export function encodeSaleInit(
 }
 
 export interface Allocation {
-  allocation: BigNumber; // uint256
-  excessContribution: BigNumber; // uint256
+  index: number;
+  allocation: string; // big number, uint256
+  excessContribution: string; // big number, uint256
 }
 
 export function encodeAllocations(allocations: Allocation[]): Buffer {
@@ -168,7 +202,7 @@ export function encodeAllocations(allocations: Allocation[]): Buffer {
   for (let i = 0; i < n; ++i) {
     const item = allocations[i];
     const start = i * NUM_BYTES_ALLOCATION;
-    encoded.writeUint8(i, start);
+    encoded.writeUint8(item.index, start);
     encoded.write(toBigNumberHex(item.allocation, 32), start + 1, "hex");
     encoded.write(toBigNumberHex(item.excessContribution, 32), start + 33, "hex");
   }
@@ -183,9 +217,10 @@ export function encodeSaleSealed(
   const numAllocations = allocations.length;
   const encoded = Buffer.alloc(headerLen + numAllocations * NUM_BYTES_ALLOCATION);
 
-  encoded.writeUInt8(6, 0); // saleSealed payload for solana = 6
+  encoded.writeUInt8(3, 0); // saleSealed payload = 3
   encoded.write(toBigNumberHex(saleId, 32), 1, "hex");
-  encoded.write(encodeAllocations(allocations).toString("hex"), headerLen, "hex");
+  encoded.writeUint8(numAllocations, headerLen);
+  encoded.write(encodeAllocations(allocations).toString("hex"), headerLen + 1, "hex");
 
   return encoded;
 }

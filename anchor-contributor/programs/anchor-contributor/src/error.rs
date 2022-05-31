@@ -2,6 +2,9 @@ use anchor_lang::prelude::*;
 
 #[error_code]
 pub enum SaleError {
+    #[msg("AmountTooLarge")]
+    AmountTooLarge,
+
     #[msg("ContributionTooEarly")]
     ContributionTooEarly,
 
@@ -16,6 +19,9 @@ pub enum SaleError {
 
     #[msg("InvalidConductor")]
     InvalidConductor,
+
+    #[msg("InvalidTokenDecimals")]
+    InvalidTokenDecimals,
 
     #[msg("InvalidTokenIndex")]
     InvalidTokenIndex,

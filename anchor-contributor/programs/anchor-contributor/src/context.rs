@@ -59,25 +59,37 @@ pub struct Contribute<'info> {
     pub system_program: Program<'info, System>,
 }
 
-/*
-/// SealSale is used to close sale so users can claim allocations (min raise met)
+/// TODO: write something here
 #[derive(Accounts)]
-pub struct SealSale<'info> {
-    pub contributor: Account<'info, Contributor>,
-
+pub struct AttestContributions<'info> {
     #[account(
         mut,
         seeds = [
-            SEED_PREFIX_SALE.as_bytes().as_ref(),
-            &get_sale_id(&core_bridge_vaa)?.as_ref(),
+            SEED_PREFIX_SALE.as_bytes(),
+            &sale.id,
         ],
         bump,
     )]
     pub sale: Account<'info, Sale>,
 
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+/// SealSale is used to close sale so users can claim allocations (min raise met)
+#[derive(Accounts)]
+pub struct SealSale<'info> {
     #[account(
-        constraint = verify_conductor_vaa(&core_bridge_vaa, &contributor, PAYLOAD_SALE_SEALED)?,
+        mut,
+        seeds = [
+            SEED_PREFIX_SALE.as_bytes(),
+            &get_sale_id(&core_bridge_vaa)?,
+        ],
+        bump,
     )]
+    pub sale: Account<'info, Sale>,
+
     /// CHECK: This account is owned by Core Bridge so we trust it
     pub core_bridge_vaa: AccountInfo<'info>,
 
@@ -86,6 +98,7 @@ pub struct SealSale<'info> {
     pub system_program: Program<'info, System>,
 }
 
+/*
 /// ClaimAllocation is used for buyers to collect their contributed collateral back
 #[derive(Accounts)]
 #[instruction(sale_id: Vec<u8>)]

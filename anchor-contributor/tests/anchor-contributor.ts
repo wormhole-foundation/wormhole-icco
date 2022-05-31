@@ -319,12 +319,39 @@ describe("anchor-contributor", () => {
 
     // TODO
     it("Orchestrator Seals Sale with Signed VAA", async () => {
-      //const saleSealedVaa = dummyConductor.sealSale();
-      //const tx = await contributor.sealSale(orchestrator, saleSealedVaa);
+      const saleSealedVaa = dummyConductor.sealSale(await getBlockTime(connection));
+      console.log("saleSealedVaa", saleSealedVaa.toString("hex"));
+      const tx = await contributor.sealSale(orchestrator, saleSealedVaa);
+
+      {
+        // get the first sale state
+        const saleId = dummyConductor.getSaleId();
+        const saleState = await contributor.getSale(saleId);
+
+        // verify
+        expect(saleState.status).has.key("sealed");
+
+        // TODO: check totals
+      }
     });
 
     // TODO
     it("Orchestrator Cannot Seal Sale Again with Signed VAA", async () => {
+      /*
+      const saleSealedVaa = dummyConductor.sealSale(await getBlockTime(connection));
+
+      let caughtError = false;
+      try {
+        const tx = await contributor.sealSale(orchestrator, saleSealedVaa);
+      } catch (e) {
+        //caughtError = e.error.errorCode.code == "SaleEnded";
+        console.log(e.error.errorCode.code);
+      }
+
+      if (!caughtError) {
+        throw Error("did not catch expected error");
+      }
+    */
       expect(false).to.be.true;
     });
 

@@ -3,7 +3,7 @@ import { BN, Program, web3 } from "@project-serum/anchor";
 import { AnchorContributor } from "../../target/types/anchor_contributor";
 
 import { findBuyerAccount, findSaleAccount, findSignedVaaAccount, KeyBump } from "./accounts";
-import { getBuyerState,  getSaleState } from "./fetch";
+import { getBuyerState, getSaleState } from "./fetch";
 import { postVaa } from "./wormhole";
 
 export class IccoContributor {
@@ -13,7 +13,6 @@ export class IccoContributor {
   constructor(program: Program<AnchorContributor>) {
     this.program = program;
   }
-
 
   async initSale(payer: web3.Keypair, initSaleVaa: Buffer): Promise<string> {
     const program = this.program;
@@ -48,6 +47,27 @@ export class IccoContributor {
       .accounts({
         sale: saleAccount.key,
         buyer: buyerAccount.key,
+        owner: payer.publicKey,
+        systemProgram: web3.SystemProgram.programId,
+      })
+      .rpc();
+  }
+
+  async sealSale(payer: web3.Keypair, saleSealedVaa: Buffer): Promise<string> {
+    const program = this.program;
+
+    // first post signed vaa to wormhole
+    await postVaa(program.provider.connection, payer, saleSealedVaa);
+    const signedVaaAccount = findSignedVaaAccount(saleSealedVaa);
+
+    const saleId = await parseSaleId(saleSealedVaa);
+    const saleAccount = findSaleAccount(program.programId, saleId);
+
+    return program.methods
+      .sealSale()
+      .accounts({
+        sale: saleAccount.key,
+        coreBridgeVaa: signedVaaAccount.key,
         owner: payer.publicKey,
         systemProgram: web3.SystemProgram.programId,
       })

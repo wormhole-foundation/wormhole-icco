@@ -1,7 +1,8 @@
 use anchor_lang::prelude::*;
-use anchor_spl::associated_token;
+use anchor_spl::associated_token::get_associated_token_address;
+use num::bigint::BigUint;
 use num_derive::*;
-use std::str::FromStr;
+use std::{str::FromStr, u64};
 
 use crate::{
     constants::*,
@@ -13,18 +14,17 @@ use crate::{
 #[account]
 #[derive(Debug)]
 pub struct Sale {
-    // TODO: I don't think we need the token address if we are passing
-    // the sale token ATA info in the sale init vaa. Is this true?
-    pub id: [u8; 32],            // 32
-    pub token_address: [u8; 32], // 32
-    pub token_chain: u16,        // 2
-    pub token_decimals: u8,      // 1
-    pub times: SaleTimes,        // 8 + 8
-    pub recipient: [u8; 32],     // 32
-    pub status: SaleStatus,      // 1
-    pub initialized: bool,       // 1
+    pub id: [u8; 32],                          // 32
+    pub associated_sale_token_address: Pubkey, // 32
+    pub token_chain: u16,                      // 2
+    pub token_decimals: u8,                    // 1
+    pub times: SaleTimes,                      // 8 + 8
+    pub recipient: [u8; 32],                   // 32
+    pub status: SaleStatus,                    // 1
+    pub initialized: bool,                     // 1
 
     pub totals: Vec<AssetTotal>, // 4 + AssetTotal::MAXIMUM_SIZE * ACCEPTED_TOKENS_MAX
+    pub native_token_decimals: u8, // 1
 
     pub bump: u8, // 1
 }
@@ -65,10 +65,13 @@ impl AssetTotal {
     pub const MAXIMUM_SIZE: usize = 1 + 32 + 8 + 8 + 8;
 
     pub fn make_from_slice(bytes: &[u8]) -> Result<Self> {
-        require!(bytes.len() == 33, SaleError::InvalidAcceptedTokenPayload);
+        require!(
+            bytes.len() == INDEX_ACCEPTED_TOKEN_END,
+            SaleError::InvalidAcceptedTokenPayload
+        );
         Ok(AssetTotal {
-            token_index: bytes[0],
-            mint: Pubkey::new(&bytes[1..33]),
+            token_index: bytes[INDEX_ACCEPTED_TOKEN_INDEX],
+            mint: Pubkey::new(&bytes[INDEX_ACCEPTED_TOKEN_ADDRESS..INDEX_ACCEPTED_TOKEN_END]),
             contributions: 0,
             allocations: 0,
             excess_contributions: 0,
@@ -84,7 +87,9 @@ impl Sale {
         + (8 + 8)
         + 32
         + 1
+        + 1
         + (4 + AssetTotal::MAXIMUM_SIZE * ACCEPTED_TOKENS_MAX)
+        + 1
         + 1;
 
     pub fn parse_sale_init(&mut self, payload: &[u8]) -> Result<()> {
@@ -94,11 +99,11 @@ impl Sale {
         // check that the payload has at least the number of bytes
         // required to define the number of accepted tokens
         require!(
-            payload.len() > INIT_INDEX_ACCEPTED_TOKENS_START,
+            payload.len() > INDEX_SALE_INIT_ACCEPTED_TOKENS_START,
             SaleError::IncorrectVaaPayload
         );
 
-        let num_accepted = payload[INIT_INDEX_ACCEPTED_TOKENS_START] as usize;
+        let num_accepted = payload[INDEX_SALE_INIT_ACCEPTED_TOKENS_START] as usize;
         require!(
             num_accepted <= ACCEPTED_TOKENS_MAX,
             SaleError::TooManyAcceptedTokens
@@ -106,27 +111,28 @@ impl Sale {
 
         self.totals = Vec::with_capacity(ACCEPTED_TOKENS_MAX);
         for i in 0..num_accepted {
-            let start = INIT_INDEX_ACCEPTED_TOKENS_START + 1 + ACCEPTED_TOKENS_N_BYTES * i;
+            let start = INDEX_SALE_INIT_ACCEPTED_TOKENS_START + 1 + ACCEPTED_TOKEN_NUM_BYTES * i;
             self.totals.push(AssetTotal::make_from_slice(
-                &payload[start..start + ACCEPTED_TOKENS_N_BYTES],
+                &payload[start..start + ACCEPTED_TOKEN_NUM_BYTES],
             )?);
         }
 
         self.id = Sale::get_id(payload);
 
         // deserialize other things
-        self.token_address = to_bytes32(payload, INIT_INDEX_TOKEN_ADDRESS);
-        self.token_chain = to_u16_be(payload, INIT_INDEX_TOKEN_CHAIN);
-        self.token_decimals = payload[INIT_INDEX_TOKEN_DECIMALS];
+        self.associated_sale_token_address =
+            Pubkey::new(&to_bytes32(payload, INDEX_SALE_INIT_TOKEN_ADDRESS));
+        self.token_chain = to_u16_be(payload, INDEX_SALE_INIT_TOKEN_CHAIN);
+        self.token_decimals = payload[INDEX_SALE_INIT_TOKEN_DECIMALS];
 
         // assume these times are actually u64... these are stored as uint256 in evm
-        self.times.start = to_u64_be(payload, INIT_INDEX_SALE_START + 24);
-        self.times.end = to_u64_be(payload, INIT_INDEX_SALE_END + 24);
+        self.times.start = to_u64_be(payload, INDEX_SALE_INIT_SALE_START + 24);
+        self.times.end = to_u64_be(payload, INDEX_SALE_INIT_SALE_END + 24);
 
         // because the accepted tokens are packed in before the recipient... we need to find
         // where this guy is based on how many accepted tokens there are. yes, we hate this, too
         let recipient_idx =
-            INIT_INDEX_ACCEPTED_TOKENS_START + 1 + ACCEPTED_TOKENS_N_BYTES * num_accepted;
+            INDEX_SALE_INIT_ACCEPTED_TOKENS_START + 1 + ACCEPTED_TOKEN_NUM_BYTES * num_accepted;
         self.recipient = to_bytes32(payload, recipient_idx);
 
         // finally set the status to active
@@ -135,9 +141,22 @@ impl Sale {
         Ok(())
     }
 
-    pub fn get_accepted_ata(&self, contributor: &Pubkey, token_index: u8) -> Result<Pubkey> {
+    pub fn set_native_sale_token_decimals(&mut self, decimals: u8) -> Result<()> {
+        require!(
+            self.token_decimals >= decimals,
+            SaleError::InvalidTokenDecimals
+        );
+        self.native_token_decimals = decimals;
+        Ok(())
+    }
+
+    pub fn get_associated_accepted_address(
+        &self,
+        contributor: &Pubkey,
+        token_index: u8,
+    ) -> Result<Pubkey> {
         let idx = self.get_index(token_index)?;
-        Ok(associated_token::get_associated_token_address(
+        Ok(get_associated_token_address(
             contributor,
             &self.totals[idx].mint,
         ))
@@ -186,24 +205,56 @@ impl Sale {
         // check that the payload has at least the number of bytes
         // required to define the number of allocations
         require!(
-            payload.len() > INDEX_ALLOCATIONS_START,
+            payload.len() > INDEX_SALE_SEALED_ALLOCATIONS_START,
             SaleError::IncorrectVaaPayload
         );
-        require!(Sale::get_id(payload) == self.id, SaleError::IncorrectSale);
+
+        let totals = &mut self.totals;
+        let num_allocations = payload[INDEX_SALE_SEALED_ALLOCATIONS_START] as usize;
+        require!(
+            num_allocations == totals.len(),
+            SaleError::IncorrectVaaPayload
+        );
+
+        let grand_total_allocations: u64 = 0;
+        let decimal_difference = (self.token_decimals - self.native_token_decimals) as u32;
 
         // deserialize other things
+        for i in 0..num_allocations {
+            let start = INDEX_SALE_SEALED_ALLOCATIONS_START + 1 + ALLOCATION_NUM_BYTES * i;
 
-        // TODO: we should have an index of which allocations we care about. we check
-        // those and sum the allocations. These allocations are stored as uint256, so we
-        // need to normalize these to u64 (native size of Solana spl tokens)
-        let grand_total_allocations: u64 = 0;
+            // convert allocation to u64 based on decimal difference
+            // TODO: put in a separate method
+            let allocation = BigUint::from_bytes_be(
+                &payload[start + INDEX_ALLOCATIONS_AMOUNT..start + INDEX_ALLOCATIONS_EXCESS],
+            );
 
-        // TODO: when we deserialize, push to self.total_allocations and self.total_excess_contributions
+            let adjusted = allocation / BigUint::from(10u128).pow(decimal_difference);
+            require!(
+                adjusted < BigUint::from(u64::MAX),
+                SaleError::AmountTooLarge
+            );
 
-        // TODO: check balance of the sale token on the contract to make sure
-        // we have enough for claimants
+            // is there a better way to do this part?
+            let adjusted = &adjusted.to_bytes_be();
 
-        // TODO: need to bridge collateral over to recipient (total_collateral minus excess_collateral)
+            // take first 24 bytes and see if this is greater than zero
+            let excess_contributions = BigUint::from_bytes_be(
+                &payload[start + INDEX_ALLOCATIONS_AMOUNT..start + INDEX_ALLOCATIONS_EXCESS + 24],
+            );
+            require!(
+                excess_contributions > BigUint::from(0 as u128),
+                SaleError::AmountTooLarge
+            );
+
+            let total = &mut totals[i];
+            // now take last 8 bytes
+            total.excess_contributions = u64::from_be_bytes(
+                payload[start + INDEX_ALLOCATIONS_AMOUNT + 24..start + INDEX_ALLOCATIONS_EXCESS]
+                    .try_into()
+                    .unwrap(),
+            );
+        }
 
         // finally set the status to sealed
         self.status = SaleStatus::Sealed;
@@ -220,7 +271,6 @@ impl Sale {
             payload.len() == PAYLOAD_HEADER_LEN,
             SaleError::IncorrectVaaPayload
         );
-        require!(Sale::get_id(payload) == self.id, SaleError::IncorrectSale);
 
         // finally set the status to aborted
         self.status = SaleStatus::Aborted;

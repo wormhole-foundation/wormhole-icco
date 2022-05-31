@@ -1,5 +1,4 @@
 use anchor_lang::prelude::*;
-use anchor_spl::associated_token;
 
 mod constants;
 mod context;
@@ -23,7 +22,13 @@ pub mod anchor_contributor {
 
     pub fn init_sale(ctx: Context<InitializeSale>) -> Result<()> {
         let msg = verify_conductor_vaa(&ctx.accounts.core_bridge_vaa, PAYLOAD_SALE_INIT_SOLANA)?;
-        ctx.accounts.sale.parse_sale_init(&msg.payload)?;
+        let sale = &mut ctx.accounts.sale;
+        sale.parse_sale_init(&msg.payload)?;
+
+        // TODO: use associated sale token account to get decimals
+        // for now, hardcoding to 9
+        let sale_token_decimals = 9u8;
+        sale.set_native_sale_token_decimals(sale_token_decimals);
 
         Ok(())
     }
@@ -33,7 +38,8 @@ pub mod anchor_contributor {
         let sale = &mut ctx.accounts.sale;
 
         // TODO: need to do spl transfer from buyer's wallet to accepted token's ATA
-        let ata = sale.get_accepted_ata(&ctx.program_id, token_index)?;
+        let accepted_account_address =
+            sale.get_associated_accepted_address(&ctx.program_id, token_index)?;
 
         // leverage token index search from sale's accepted tokens to find index
         // on buyer's contributions
@@ -49,15 +55,33 @@ pub mod anchor_contributor {
 
         Ok(())
     }
-    /*
 
-    pub fn seal_sale(ctx: Context<SealSale>) -> Result<()> {
+    pub fn attest_contributions(ctx: Context<AttestContributions>) -> Result<()> {
+        // get accepted token index
         let sale = &mut ctx.accounts.sale;
 
-        let msg = get_message_data(&ctx.accounts.core_bridge_vaa)?;
-        sale.load_mut().unwrap().parse_sale_sealed(&msg.payload)
+        let clock = Clock::get()?;
+        let vaa_payload = sale.serialize_contributions(clock.unix_timestamp)?;
+
+        // TODO: send wormhole message
+
+        Ok(())
     }
-    */
+
+    pub fn seal_sale(ctx: Context<SealSale>) -> Result<()> {
+        let msg = verify_conductor_vaa(&ctx.accounts.core_bridge_vaa, PAYLOAD_SALE_SEALED)?;
+
+        let sale = &mut ctx.accounts.sale;
+        sale.parse_sale_sealed(&msg.payload)?;
+
+        // TODO: check balance of the sale token on the contract to make sure
+        // we have enough for claimants
+        let sale_token_account = sale.associated_sale_token_address;
+
+        // TODO: need to bridge collateral over to recipient (total_collateral minus excess_collateral)
+
+        Ok(())
+    }
 
     pub fn abort_sale(ctx: Context<AbortSale>) -> Result<()> {
         //let msg = get_message_data(&ctx.accounts.core_bridge_vaa)?;

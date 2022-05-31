@@ -7,7 +7,6 @@ import {
   nativeToHexString,
   getForeignAssetEth,
   getOriginalAssetEth,
-  hexToNativeString,
   uint8ArrayToNative,
 } from "@certusone/wormhole-sdk";
 import { parseUnits } from "ethers/lib/utils";

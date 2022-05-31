@@ -43,36 +43,36 @@ contract ContributorSetters is ContributorState, Context {
         _state.consistencyLevel = level;
     }
 
-    function setSale(uint saleId, ContributorStructs.Sale memory sale) internal {
+    function setSale(uint256 saleId, ContributorStructs.Sale memory sale) internal {
         _state.sales[saleId] = sale;
     }
 
-    function setSaleContribution(uint saleId, address contributor, uint tokenIndex, uint contribution) internal {
+    function setSaleContribution(uint256 saleId, address contributor, uint256 tokenIndex, uint256 contribution) internal {
         _state.contributions[saleId][tokenIndex][contributor] += contribution;
         _state.totalContributions[saleId][tokenIndex] += contribution;
     }
 
-    function setSaleSealed(uint saleId) internal {
+    function setSaleSealed(uint256 saleId) internal {
         _state.sales[saleId].isSealed = true;
     }
 
-    function setSaleAborted(uint saleId) internal {
+    function setSaleAborted(uint256 saleId) internal {
         _state.sales[saleId].isAborted = true;
     }
 
-    function setRefundClaimed(uint saleId, uint tokenIndex, address contributor) internal {
+    function setRefundClaimed(uint256 saleId, uint256 tokenIndex, address contributor) internal {
         _state.refundIsClaimed[saleId][tokenIndex][contributor] = true;
     }
 
-    function setAllocationClaimed(uint saleId, uint tokenIndex, address contributor) internal {
+    function setAllocationClaimed(uint256 saleId, uint256 tokenIndex, address contributor) internal {
         _state.allocationIsClaimed[saleId][tokenIndex][contributor] = true;
     }
 
-    function setSaleAllocation(uint saleId, uint tokenIndex, uint allocation) internal {
+    function setSaleAllocation(uint256 saleId, uint256 tokenIndex, uint256 allocation) internal {
         _state.sales[saleId].allocations[tokenIndex] = allocation;
     }
 
-    function setExcessContribution(uint saleId, uint tokenIndex, uint excessContribution) internal {
+    function setExcessContribution(uint256 saleId, uint256 tokenIndex, uint256 excessContribution) internal {
         _state.sales[saleId].excessContributions[tokenIndex] = excessContribution;
     }
 }

@@ -74,7 +74,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
          * on this Contributor chain.
          * - it checks that the token is a valid ERC20 token 
          */
-        for (uint i = 0; i < saleInit.acceptedTokens.length; i++) {
+        for (uint256 i = 0; i < saleInit.acceptedTokens.length; i++) {
             if (saleInit.acceptedTokens[i].tokenChain == chainId()) {
                 address tokenAddress = address(uint160(uint256(saleInit.acceptedTokens[i].tokenAddress)));
                 (, bytes memory queriedTotalSupply) = tokenAddress.staticcall(
@@ -132,7 +132,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
      * - it takes custody of contributed funds
      * - it stores information about the contribution and contributor 
      */  
-    function contribute(uint saleId, uint tokenIndex, uint amount, bytes memory sig) public nonReentrant { 
+    function contribute(uint256 saleId, uint256 tokenIndex, uint256 amount, bytes memory sig) public nonReentrant { 
         require(saleExists(saleId), "sale not initiated");
 
         {/// bypass stack too deep
@@ -141,7 +141,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
 
             require(!isAborted, "sale was aborted");
 
-            (uint start, uint end) = getSaleTimeframe(saleId);
+            (uint256 start, uint256 end) = getSaleTimeframe(saleId);
 
             require(block.timestamp >= start, "sale not yet started");
             require(block.timestamp <= end, "sale has ended");
@@ -200,7 +200,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
      * - it calculates the total contributions for each accepted token
      * - it disseminates a ContributionSealed struct via wormhole
      */ 
-    function attestContributions(uint saleId) public payable returns (uint wormholeSequence) {
+    function attestContributions(uint256 saleId) public payable returns (uint256 wormholeSequence) {
         require(saleExists(saleId), "sale not initiated");
 
         /// confirm that the sale period has ended
@@ -210,9 +210,9 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
         require(block.timestamp > sale.saleEnd, "sale has not yet ended");
 
         /// count accepted tokens for this contract to allocate memory in ContributionsSealed struct 
-        uint nativeTokens = 0;
-        uint chainId = chainId(); /// cache from storage
-        for (uint i = 0; i < sale.acceptedTokensAddresses.length; i++) {
+        uint256 nativeTokens = 0;
+        uint16 chainId = chainId(); /// cache from storage
+        for (uint256 i = 0; i < sale.acceptedTokensAddresses.length; i++) {
             if (sale.acceptedTokensChains[i] == chainId) {
                 nativeTokens++;
             }
@@ -226,8 +226,8 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
             contributions : new ICCOStructs.Contribution[](nativeTokens)
         });
 
-        uint ci = 0;
-        for (uint i = 0; i < sale.acceptedTokensAddresses.length; i++) {
+        uint256 ci = 0;
+        for (uint256 i = 0; i < sale.acceptedTokensAddresses.length; i++) {
             if (sale.acceptedTokensChains[i] == chainId) {
                 consSealed.contributions[ci].tokenIndex = uint8(i);
                 consSealed.contributions[ci].contributed = getSaleTotalContribution(saleId, i);
@@ -278,13 +278,13 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
             (, bytes memory queriedTokenBalance) = saleTokenAddress.staticcall(
                 abi.encodeWithSelector(IERC20.balanceOf.selector, address(this))
             );
-            uint tokenBalance = abi.decode(queriedTokenBalance, (uint256));
+            uint256 tokenBalance = abi.decode(queriedTokenBalance, (uint256));
 
             require(tokenBalance > 0, "sale token balance must be non-zero");
 
             /// store the allocated token amounts defined in the SaleSealed message
-            uint tokenAllocation;
-            for (uint i = 0; i < sealedSale.allocations.length; i++) {
+            uint256 tokenAllocation;
+            for (uint256 i = 0; i < sealedSale.allocations.length; i++) {
                 ICCOStructs.Allocation memory allo = sealedSale.allocations[i];
                 if (sale.acceptedTokensChains[allo.tokenIndex] == thisChainId) {
                     tokenAllocation += allo.allocation;
@@ -304,15 +304,15 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
          * are being sent to a recipient on a different chain.
          */
         ITokenBridge tknBridge = tokenBridge();
-        uint messageFee = wormhole().messageFee();
-        uint valueSent = msg.value;
+        uint256 messageFee = wormhole().messageFee();
+        uint256 valueSent = msg.value;
 
         /**
          * @dev Cache the conductorChainId from storage to save on gas.
          * We will check each accpetedToken to see if its from this chain.
          */
         uint16 conductorChainId = conductorChainId();
-        for (uint i = 0; i < sale.acceptedTokensAddresses.length; i++) {
+        for (uint256 i = 0; i < sale.acceptedTokensAddresses.length; i++) {
             if (sale.acceptedTokensChains[i] == thisChainId) {
                 /// compute the total contributions to send to the recipient
                 uint256 totalContributionsLessExcess = getSaleTotalContribution(sale.saleID, i) - getSaleExcessContribution(sale.saleID, i); 
@@ -396,7 +396,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
      * - it transfer any excessContributions to the contributors wallet
      * - it marks the allocation as claimed to prevent multiple claims for the same allocation
      */
-    function claimAllocation(uint saleId, uint tokenIndex) public {
+    function claimAllocation(uint256 saleId, uint256 tokenIndex) public {
         require(saleExists(saleId), "sale not initiated");
 
         /// make sure the sale is sealed and not aborted
@@ -457,7 +457,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
      * - it confirms that the sale was aborted
      * - it transfers the contributed funds back to the contributor's wallet
      */
-    function claimRefund(uint saleId, uint tokenIndex) public {
+    function claimRefund(uint256 saleId, uint256 tokenIndex) public {
         require(saleExists(saleId), "sale not initiated");
 
         (, bool isAborted) = getSaleStatus(saleId);
@@ -490,7 +490,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
     }
 
     /// @dev saleExists serves to check if a sale exists
-    function saleExists(uint saleId) public view returns (bool exists) {
+    function saleExists(uint256 saleId) public view returns (bool exists) {
         exists = (getSaleTokenAddress(saleId) != bytes32(0));
     }
 }

@@ -42,6 +42,7 @@ export interface ConductorSale extends Sale {
   localTokenDecimals: number;
   localTokenAddress: string;
   solanaTokenAccount: ethers.BytesLike;
+  solanaAcceptedTokensCount: number;
   contributions: ethers.BigNumberish[];
   contributionsCollected: boolean[];
   refundIsClaimed: boolean;

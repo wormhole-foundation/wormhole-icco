@@ -23,15 +23,6 @@ module.exports = async function(deployer, network) {
   // deploy contributor implementation
   await deployer.deploy(ContributorImplementation);
 
-  // deploy contributor setup
-  await deployer.deploy(ContributorSetup);
-
-  // encode initialisation data
-  const contributorSetup = new web3.eth.Contract(
-    ContributorSetup.abi,
-    ContributorSetup.address
-  );
-
   // figure out which conductor address to use
   let conductorAddr = undefined;
   if (network == "development") {
@@ -61,25 +52,36 @@ module.exports = async function(deployer, network) {
     throw Error("conductorAddr is undefined");
   }
 
-  const contributorInitData = contributorSetup.methods
-    .setup(
-      ContributorImplementation.address,
-      config.contributorChainId,
-      config.conductorChainId,
-      conductorAddr,
-      config.authority,
-      config.wormhole,
-      config.tokenBridge,
-      config.consistencyLevel
-    )
-    .encodeABI();
+  if (!config.deployImplementationOnly) {
+    // deploy contributor setup
+    await deployer.deploy(ContributorSetup);
 
-  // deploy conductor proxy
-  await deployer.deploy(
-    TokenSaleContributor,
-    ContributorSetup.address,
-    contributorInitData
-  );
+    // encode initialisation data
+    const contributorSetup = new web3.eth.Contract(
+      ContributorSetup.abi,
+      ContributorSetup.address
+    );
+
+    const contributorInitData = contributorSetup.methods
+      .setup(
+        ContributorImplementation.address,
+        config.contributorChainId,
+        config.conductorChainId,
+        conductorAddr,
+        config.authority,
+        config.wormhole,
+        config.tokenBridge,
+        config.consistencyLevel
+      )
+      .encodeABI();
+
+    // deploy conductor proxy
+    await deployer.deploy(
+      TokenSaleContributor,
+      ContributorSetup.address,
+      contributorInitData
+    );
+  }
 
   // cache address for registration purposes
   {
@@ -108,7 +110,14 @@ module.exports = async function(deployer, network) {
       if (network == "eth_devnet" || network == "eth_devnet2") {
         contents[addrName] = TokenSaleContributor.address;
       } else {
-        contents[network] = TokenSaleContributor.address;
+        if (!config.deployImplementationOnly) {
+          contents[network] = TokenSaleContributor.address;
+        } else {
+          const implementationString = network.concat(
+            "ContributorImplementation"
+          );
+          contents[implementationString] = ContributorImplementation.address;
+        }
       }
       fs.writeFileSync(fp, JSON.stringify(contents, null, 2), "utf8");
     }

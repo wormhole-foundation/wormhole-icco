@@ -28,7 +28,7 @@ contract ConductorStorage {
         mapping(uint16 => bytes32) contributorImplementations;
 
         /// mapping of Sales
-        mapping(uint => ConductorStructs.Sale) sales;
+        mapping(uint256 => ConductorStructs.Sale) sales;
 
         /// next sale id
         uint256 nextSaleId;

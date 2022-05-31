@@ -28,19 +28,19 @@ contract ContributorStorage {
         mapping(address => bool) initializedImplementations;
 
         /// mapping of Sales
-        mapping(uint => ContributorStructs.Sale) sales;
+        mapping(uint256 => ContributorStructs.Sale) sales;
 
         /// sale id > token id > contributor > contribution
-        mapping(uint => mapping(uint => mapping(address => uint))) contributions;
+        mapping(uint256 => mapping(uint256 => mapping(address => uint256))) contributions;
 
         /// sale id > token id > contribution
-        mapping(uint => mapping(uint => uint)) totalContributions;
+        mapping(uint256 => mapping(uint256 => uint256)) totalContributions;
 
         /// sale id > token id > contributor > isClaimed
-        mapping(uint => mapping(uint => mapping(address => bool))) allocationIsClaimed;
+        mapping(uint256 => mapping(uint256 => mapping(address => bool))) allocationIsClaimed;
 
         /// sale id > [token id > contributor > isClaimed
-        mapping(uint => mapping(uint => mapping(address => bool))) refundIsClaimed;
+        mapping(uint256 => mapping(uint256 => mapping(address => bool))) refundIsClaimed;
     }
 }
 

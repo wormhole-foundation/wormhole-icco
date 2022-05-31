@@ -35,28 +35,28 @@ contract ConductorSetters is ConductorState, Context {
         _state.consistencyLevel = level;
     }
 
-    function setSale(uint saleId, ConductorStructs.Sale memory sale) internal {
+    function setSale(uint256 saleId, ConductorStructs.Sale memory sale) internal {
         _state.sales[saleId] = sale;
     }
 
-    function setSaleContribution(uint saleId, uint tokenIndex, uint contribution) internal {
+    function setSaleContribution(uint256 saleId, uint256 tokenIndex, uint256 contribution) internal {
         _state.sales[saleId].contributions[tokenIndex] = contribution;
         _state.sales[saleId].contributionsCollected[tokenIndex] = true;
     }
 
-    function setSaleSealed(uint saleId) internal {
+    function setSaleSealed(uint256 saleId) internal {
         _state.sales[saleId].isSealed = true;
     }
 
-    function setSaleAborted(uint saleId) internal {
+    function setSaleAborted(uint256 saleId) internal {
         _state.sales[saleId].isAborted = true;
     }
 
-    function setRefundClaimed(uint saleId) internal {
+    function setRefundClaimed(uint256 saleId) internal {
         _state.sales[saleId].refundIsClaimed = true;
     }   
 
-    function setNextSaleId(uint nextSaleId) internal {
+    function setNextSaleId(uint256 nextSaleId) internal {
         _state.nextSaleId = nextSaleId;
     }
 }

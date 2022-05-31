@@ -32,6 +32,7 @@ export async function getSaleFromConductorOnEth(
     acceptedTokensChains: sale.acceptedTokensChains,
     acceptedTokensAddresses: sale.acceptedTokensAddresses,
     acceptedTokensConversionRates: sale.acceptedTokensConversionRates,
+    solanaAcceptedTokensCount: sale.solanaAcceptedTokensCount,
     contributions: sale.contributions,
     contributionsCollected: sale.contributionsCollected,
     isSealed: sale.isSealed,

@@ -12,6 +12,9 @@ export const CONTRIBUTOR_INFO = JSON.parse(
   fs.readFileSync(`${__dirname}/../cfg/contributors.json`, "utf8")
 );
 
+// VAA fetching params
+export const RETRY_TIMEOUT_SECONDS = 180;
+
 // deployment info for the sale
 export const CONDUCTOR_ADDRESS = TESTNET_ADDRESSES.conductorAddress;
 export const CONDUCTOR_CHAIN_ID = TESTNET_ADDRESSES.conductorChain;

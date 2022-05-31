@@ -2,8 +2,8 @@ import { importCoreWasm } from "@certusone/wormhole-sdk";
 import { BN, Program, web3 } from "@project-serum/anchor";
 import { AnchorContributor } from "../../target/types/anchor_contributor";
 
-import { findBuyerAccount, findTokenCustodianAccount, findSaleAccount, findSignedVaaAccount, KeyBump } from "./accounts";
-import { getBuyerState, getTokenCustodianState, getSaleState } from "./fetch";
+import { findBuyerAccount, findSaleAccount, findSignedVaaAccount, KeyBump } from "./accounts";
+import { getBuyerState,  getSaleState } from "./fetch";
 import { postVaa } from "./wormhole";
 
 export class IccoContributor {
@@ -12,24 +12,8 @@ export class IccoContributor {
 
   constructor(program: Program<AnchorContributor>) {
     this.program = program;
-    this.tokenCustodianAccount = findTokenCustodianAccount(this.program.programId);
   }
 
-  async createTokenCustodian(payer: web3.Keypair) {
-    const program = this.program;
-    await program.methods
-      .createTokenCustodian()
-      .accounts({
-        owner: payer.publicKey,
-        tokenCustodian: this.tokenCustodianAccount.key,
-        systemProgram: web3.SystemProgram.programId,
-      })
-      .rpc();
-  }
-
-  async getTokenCustodian() {
-    return getTokenCustodianState(this.program, this.tokenCustodianAccount);
-  }
 
   async initSale(payer: web3.Keypair, initSaleVaa: Buffer): Promise<string> {
     const program = this.program;
@@ -45,7 +29,6 @@ export class IccoContributor {
     return program.methods
       .initSale()
       .accounts({
-        tokenCustodian: this.tokenCustodianAccount.key,
         sale: saleAccount.key,
         coreBridgeVaa: signedVaaAccount.key,
         owner: payer.publicKey,
@@ -63,7 +46,6 @@ export class IccoContributor {
     return program.methods
       .contribute(tokenIndex, amount)
       .accounts({
-        tokenCustodian: this.tokenCustodianAccount.key,
         sale: saleAccount.key,
         buyer: buyerAccount.key,
         owner: payer.publicKey,
@@ -85,7 +67,6 @@ export class IccoContributor {
     return program.methods
       .abortSale()
       .accounts({
-        tokenCustodian: this.tokenCustodianAccount.key,
         sale: saleAccount.key,
         coreBridgeVaa: signedVaaAccount.key,
         owner: payer.publicKey,

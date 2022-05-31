@@ -5,6 +5,7 @@ use std::str::FromStr;
 
 use crate::{
     constants::*,
+    env::*,
     error::SaleError,
     wormhole::{get_message_data, MessageData},
 };
@@ -281,14 +282,22 @@ pub fn verify_conductor_vaa<'info>(
 ) -> Result<MessageData> {
     let msg = get_message_data(&vaa_account)?;
 
-    let conductor_address = hex::decode(CONDUCTOR_ADDRESS).unwrap();
-    let conductor_address: [u8; 32] = conductor_address.try_into().unwrap();
+    let conductor_chain: u16 = CONDUCTOR_CHAIN
+        .to_string()
+        .parse()
+        .expect("invalid conductor chain");
+
+    let conductor_address = hex::decode(CONDUCTOR_ADDRESS).expect("invalid conductor address");
+    let conductor_address: [u8; 32] = conductor_address
+        .try_into()
+        .expect("invalid conductor address");
+
     require!(
         vaa_account.to_account_info().owner == &Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap(),
         SaleError::InvalidVaaAction
     );
     require!(
-        msg.emitter_chain == CONDUCTOR_CHAIN,
+        msg.emitter_chain == conductor_chain,
         SaleError::InvalidConductor
     );
     require!(

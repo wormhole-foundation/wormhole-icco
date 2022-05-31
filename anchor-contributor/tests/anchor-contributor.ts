@@ -32,18 +32,6 @@ describe("anchor-contributor", () => {
   // our contributor
   const contributor = new IccoContributor(program);
 
-  describe("Token Custodian", () => {
-    it("Create Token Custodian", async () => {
-      await contributor.createTokenCustodian(owner);
-
-      // get the contributor state
-      const tokenCustodianState = await contributor.getTokenCustodian();
-
-      // verify
-      expect(tokenCustodianState.owner.toString()).to.equal(owner.publicKey.toString());
-    });
-  });
-
   describe("Sanity Checks", () => {
     it("Cannot Contribute to Non-Existent Sale", async () => {
       {

@@ -3,5 +3,6 @@
   "conductorAddress": "0xce121EA9c289390df7d812F83Ed6bE79A167DfE4",
   "conductorChain": 2,
   "goerli": "0xFee98e512e4Ab409294a080b3C2B19748Fd54A6d",
-  "fuji": "0x72df3672A0E889ca8875080d414056fD4f7Aa9fA"
+  "fuji": "0x72df3672A0E889ca8875080d414056fD4f7Aa9fA",
+  "solana_testnet": "8WCGVzrvGoLRrWY5V4L7iDCJym3wu6SiL3DCjGsSrP4k"
 }

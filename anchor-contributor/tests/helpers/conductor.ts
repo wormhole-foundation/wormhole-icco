@@ -1,11 +1,14 @@
+import { web3 } from "@project-serum/anchor";
 import { CHAIN_ID_ETH, CHAIN_ID_SOLANA, tryNativeToHexString } from "@certusone/wormhole-sdk";
+import { createMint, getOrCreateAssociatedTokenAccount, mintTo } from "@solana/spl-token";
 import { BigNumber } from "ethers";
+
 import { toBigNumberHex } from "./utils";
 import { CONDUCTOR_ADDRESS, CONDUCTOR_CHAIN } from "./consts";
 import { signAndEncodeVaa } from "./wormhole";
-import { web3 } from "@project-serum/anchor";
 
 // sale struct info
+export const MAX_ACCEPTED_TOKENS = 8;
 const NUM_BYTES_ACCEPTED_TOKEN = 33;
 const NUM_BYTES_ALLOCATION = 65;
 
@@ -18,6 +21,9 @@ export class DummyConductor {
 
   initSaleVaa: Buffer;
 
+  saleTokenOnSolana: string;
+  acceptedTokens: AcceptedToken[];
+
   constructor() {
     this.saleId = 0;
     this.wormholeSequence = 0;
@@ -26,30 +32,50 @@ export class DummyConductor {
     this.saleEnd = 0;
 
     this.acceptedTokens = [];
-    this.acceptedTokens.push(makeAcceptedToken(2, "So11111111111111111111111111111111111111112"));
+  }
+
+  async attestSaleToken(connection: web3.Connection, payer: web3.Keypair): Promise<void> {
+    const mint = await createMint(connection, payer, payer.publicKey, payer.publicKey, 9);
+    this.saleTokenOnSolana = mint.toBase58();
+    return;
+  }
+
+  getSaleTokenOnSolana(): web3.PublicKey {
+    return new web3.PublicKey(this.saleTokenOnSolana);
+  }
+
+  async createAcceptedTokens(connection: web3.Connection, payer: web3.Keypair): Promise<AcceptedToken[]> {
+    const tokenIndices = [2, 3, 5, 8, 13, 21, 34, 55];
+    for (let i = 0; i < MAX_ACCEPTED_TOKENS; ++i) {
+      // just make everything the same number of decimals (9)
+      const mint = await createMint(connection, payer, payer.publicKey, payer.publicKey, 9);
+      const acceptedToken = makeAcceptedToken(tokenIndices[i], mint.toBase58());
+      this.acceptedTokens.push(acceptedToken);
+    }
+    return this.acceptedTokens;
   }
 
   getSaleId(): Buffer {
     return Buffer.from(toBigNumberHex(this.saleId, 32), "hex");
   }
 
-  createSale(blockTime: number, duration: number, associatedTokenAddress: web3.PublicKey): Buffer {
+  createSale(startTime: number, duration: number, associatedSaleTokenAddress: web3.PublicKey): Buffer {
     // uptick saleId for every new sale
     ++this.saleId;
 
     // set up sale time based on block time
-    this.saleStart = blockTime + 5;
+    this.saleStart = startTime;
     this.saleEnd = this.saleStart + duration;
 
     this.initSaleVaa = signAndEncodeVaa(
-      blockTime,
+      startTime,
       this.nonce,
       CONDUCTOR_CHAIN,
       Buffer.from(CONDUCTOR_ADDRESS).toString("hex"),
       this.wormholeSequence,
       encodeSaleInit(
         this.saleId,
-        tryNativeToHexString(associatedTokenAddress.toString(), CHAIN_ID_SOLANA),
+        tryNativeToHexString(associatedSaleTokenAddress.toString(), CHAIN_ID_SOLANA),
         this.tokenChain,
         this.tokenDecimals,
         this.saleStart,
@@ -76,7 +102,6 @@ export class DummyConductor {
   //associatedTokenAddress = "00000000000000000000000083752ecafebf4707258dedffbd9c7443148169db";
   tokenChain = CHAIN_ID_ETH as number;
   tokenDecimals = 18;
-  acceptedTokens: AcceptedToken[];
   recipient = tryNativeToHexString("0x22d491bde2303f2f43325b2108d26f1eaba1e32b", CHAIN_ID_ETH);
 
   // wormhole nonce

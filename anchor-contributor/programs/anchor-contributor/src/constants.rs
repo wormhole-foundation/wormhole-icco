@@ -26,7 +26,10 @@ pub const INIT_INDEX_SALE_END: usize = 100;
 pub const INIT_INDEX_ACCEPTED_TOKENS_START: usize = 132;
 
 pub const ACCEPTED_TOKENS_N_BYTES: usize = 33;
-pub const ACCEPTED_TOKENS_MAX: usize = 10;
+pub const ACCEPTED_TOKENS_MAX: usize = 8;
+pub const ACCEPTED_TOKENS_INDEX_TOKEN_INDEX: usize = 0;
+pub const ACCEPTED_TOKENS_INDEX_TOKEN_ADDRESS: usize = 1;
+pub const ACCEPTED_TOKENS_INDEX_END: usize = 33;
 
 // for attest contributions
 pub const ATTEST_CONTRIBUTIONS_ELEMENT_LEN: usize = 33; // token index + amount

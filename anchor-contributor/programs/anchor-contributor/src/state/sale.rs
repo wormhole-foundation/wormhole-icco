@@ -65,10 +65,15 @@ impl AssetTotal {
     pub const MAXIMUM_SIZE: usize = 1 + 32 + 8 + 8 + 8;
 
     pub fn make_from_slice(bytes: &[u8]) -> Result<Self> {
-        require!(bytes.len() == 33, SaleError::InvalidAcceptedTokenPayload);
+        require!(
+            bytes.len() == ACCEPTED_TOKENS_INDEX_END,
+            SaleError::InvalidAcceptedTokenPayload
+        );
         Ok(AssetTotal {
-            token_index: bytes[0],
-            mint: Pubkey::new(&bytes[1..33]),
+            token_index: bytes[ACCEPTED_TOKENS_INDEX_TOKEN_INDEX],
+            mint: Pubkey::new(
+                &bytes[ACCEPTED_TOKENS_INDEX_TOKEN_ADDRESS..ACCEPTED_TOKENS_INDEX_END],
+            ),
             contributions: 0,
             allocations: 0,
             excess_contributions: 0,
@@ -83,6 +88,7 @@ impl Sale {
         + 1
         + (8 + 8)
         + 32
+        + 1
         + 1
         + (4 + AssetTotal::MAXIMUM_SIZE * ACCEPTED_TOKENS_MAX)
         + 1;

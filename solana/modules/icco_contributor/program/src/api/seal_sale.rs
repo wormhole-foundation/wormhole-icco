@@ -28,6 +28,7 @@ use solana_program::{
     program::{
         invoke_signed,
     },
+    program_option::COption,
 };
 
 use bridge::{
@@ -44,6 +45,9 @@ use token_bridge:: {
     },
     TransferNativeData,
     TransferWrappedData,
+    accounts:: {
+        MintSigner,
+    },
 };
 
 use wormhole_sdk::{
@@ -250,7 +254,13 @@ pub fn seal_icco_sale_transfer_custody(
         // This custody account was processed already.
         return Ok(());
     }
-    let is_native: bool = true;
+    // Determine if sale custody token is wrapped one
+    let mut is_native: bool = true;
+    if let COption::Some(mint_authority) = accs.sale_custody_mint.mint_authority {
+        if mint_authority == MintSigner::key(None, &accs.config.wormhole_token_bridge) {
+            is_native = false;
+        }
+    }
 
     let ix = if is_native {
         wh_transfer_native(

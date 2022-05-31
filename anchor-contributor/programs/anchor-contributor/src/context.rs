@@ -2,32 +2,12 @@ use anchor_lang::prelude::*;
 
 use crate::{
     constants::{SEED_PREFIX_BUYER, SEED_PREFIX_SALE},
-    state::{Buyer, Sale, TokenCustodian},
+    state::{Buyer, Sale},
     wormhole::get_message_data,
 };
 
 #[derive(Accounts)]
-pub struct CreateTokenCustodian<'info> {
-    #[account(
-        init,
-        payer = owner,
-        seeds = [
-            b"icco-token-custodian".as_ref(),
-        ],
-        bump,
-        space = 8 + TokenCustodian::MAXIMUM_SIZE,
-    )]
-    pub token_custodian: Account<'info, TokenCustodian>,
-
-    #[account(mut)]
-    pub owner: Signer<'info>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
 pub struct InitializeSale<'info> {
-    pub token_custodian: Account<'info, TokenCustodian>,
-
     #[account(
         init,
         seeds = [
@@ -40,11 +20,6 @@ pub struct InitializeSale<'info> {
     )]
     pub sale: Account<'info, Sale>,
 
-    /*
-    #[account(
-        constraint = verify_conductor_vaa(&core_bridge_vaa, &contributor, PAYLOAD_SALE_INIT_SOLANA)?,
-    )]
-    */
     /// CHECK: This account is owned by Core Bridge so we trust it
     pub core_bridge_vaa: AccountInfo<'info>,
 
@@ -56,8 +31,6 @@ pub struct InitializeSale<'info> {
 /// Contribute is used for buyers to contribute collateral
 #[derive(Accounts)]
 pub struct Contribute<'info> {
-    pub token_custodian: Account<'info, TokenCustodian>,
-
     #[account(
         mut,
         seeds = [
@@ -149,8 +122,6 @@ pub struct ClaimAllocation<'info> {
 /// AbortSale is used for aborting sale so users can claim refunds (min raise not met)
 #[derive(Accounts)]
 pub struct AbortSale<'info> {
-    pub token_custodian: Account<'info, TokenCustodian>,
-
     #[account(
         mut,
         seeds = [
@@ -177,7 +148,6 @@ pub struct AbortSale<'info> {
 /// ClaimRefund is used for buyers to collect their contributed collateral back
 #[derive(Accounts)]
 pub struct ClaimRefund<'info> {
-    //pub contributor: Account<'info, Contributor>,
     #[account(
         mut,
         seeds = [

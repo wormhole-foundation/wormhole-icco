@@ -3,6 +3,7 @@ use anchor_spl::associated_token;
 
 mod constants;
 mod context;
+mod env;
 mod error;
 mod state;
 mod wormhole;
@@ -20,13 +21,6 @@ pub mod anchor_contributor {
 
     use super::*;
 
-    pub fn create_token_custodian(ctx: Context<CreateTokenCustodian>) -> Result<()> {
-        let token_custodian = &mut ctx.accounts.token_custodian;
-        token_custodian.owner = ctx.accounts.owner.key();
-
-        Ok(())
-    }
-
     pub fn init_sale(ctx: Context<InitializeSale>) -> Result<()> {
         let msg = verify_conductor_vaa(&ctx.accounts.core_bridge_vaa, PAYLOAD_SALE_INIT_SOLANA)?;
         ctx.accounts.sale.parse_sale_init(&msg.payload)?;
@@ -39,7 +33,7 @@ pub mod anchor_contributor {
         let sale = &mut ctx.accounts.sale;
 
         // TODO: need to do spl transfer from buyer's wallet to accepted token's ATA
-        let ata = sale.get_accepted_ata(&ctx.accounts.token_custodian.key(), token_index)?;
+        let ata = sale.get_accepted_ata(&ctx.program_id, token_index)?;
 
         // leverage token index search from sale's accepted tokens to find index
         // on buyer's contributions

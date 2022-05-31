@@ -1,0 +1,10 @@
+#!/bin/bash
+
+set -euo pipefail
+
+export CONDUCTOR_CHAIN=2
+export CONDUCTOR_ADDRESS="0000000000000000000000005c49f34d92316a2ac68d10a1e2168e16610e84f9"
+
+BROWSER=""
+
+anchor test

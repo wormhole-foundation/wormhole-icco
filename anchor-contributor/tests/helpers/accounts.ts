@@ -2,7 +2,7 @@ import { web3 } from "@project-serum/anchor";
 import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey";
 import * as b from "byteify";
 
-import { CONDUCTOR_ADDRESS, CORE_BRIDGE_ADDRESS } from "./consts";
+import { CORE_BRIDGE_ADDRESS } from "./consts";
 import { hashVaaPayload } from "./wormhole";
 
 export type KeyBump = {
@@ -21,10 +21,6 @@ function findKeyBump(seeds: (Buffer | Uint8Array)[], program: web3.PublicKey): K
 export function findSignedVaaAccount(signedVaa: Buffer): KeyBump {
   const hash = hashVaaPayload(signedVaa);
   return findKeyBump([Buffer.from("PostedVAA"), hash], CORE_BRIDGE_ADDRESS);
-}
-
-export function findTokenCustodianAccount(programId: web3.PublicKey): KeyBump {
-  return findKeyBump([Buffer.from("icco-token-custodian")], programId);
 }
 
 export function findSaleAccount(programId: web3.PublicKey, saleId: Buffer): KeyBump {

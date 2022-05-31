@@ -31,8 +31,9 @@ contract ConductorStructs {
         uint16[] acceptedTokensChains;
         bytes32[] acceptedTokensAddresses;
         uint128[] acceptedTokensConversionRates;
+        uint8 solanaAcceptedTokensCount;
         /// contributions
-        uint[] contributions;
+        uint256[] contributions;
         bool[] contributionsCollected;
         /// sale initiator - can abort the sale before saleStart
         address initiator;

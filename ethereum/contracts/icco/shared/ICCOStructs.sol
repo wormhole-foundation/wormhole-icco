@@ -14,6 +14,11 @@ library ICCOStructs {
         uint128 conversionRate;
     }
 
+    struct SolanaToken {
+        uint8 tokenIndex;
+        bytes32 tokenAddress;
+    }
+
     struct Contribution {
         /// index in acceptedTokens array
         uint8 tokenIndex;
@@ -83,6 +88,27 @@ library ICCOStructs {
         bytes32 refundRecipient;
     }
 
+    struct SolanaSaleInit {
+        /// payloadID uint8 = 5
+        uint8 payloadID;
+        /// sale ID
+        uint256 saleID;
+        /// sale token ATA for solana
+        bytes32 solanaTokenAccount;
+        /// chain ID of the token
+        uint16 tokenChain;
+        /// token decimals 
+        uint8 tokenDecimals;
+        /// timestamp raise start
+        uint256 saleStart;
+        /// timestamp raise end
+        uint256 saleEnd;
+        /// accepted Tokens
+        SolanaToken[] acceptedTokens;  
+        /// recipient of proceeds
+        bytes32 recipient;
+    }
+
     struct ContributionsSealed {
         /// payloadID uint8 = 2
         uint8 payloadID;
@@ -143,8 +169,22 @@ library ICCOStructs {
         );
     }
 
+    function encodeSolanaSaleInit(SolanaSaleInit memory solanaSaleInit) public pure returns (bytes memory encoded) {
+        return abi.encodePacked(
+            uint8(5),
+            solanaSaleInit.saleID,
+            solanaSaleInit.solanaTokenAccount,
+            solanaSaleInit.tokenChain,
+            solanaSaleInit.tokenDecimals,
+            solanaSaleInit.saleStart,
+            solanaSaleInit.saleEnd,
+            encodeSolanaTokens(solanaSaleInit.acceptedTokens),
+            solanaSaleInit.recipient
+        );
+    }
+
     function parseSaleInit(bytes memory encoded) public pure returns (SaleInit memory saleInit) {
-        uint index = 0;
+        uint256 index = 0;
 
         saleInit.payloadID = encoded.toUint8(index);
         index += 1;
@@ -178,7 +218,7 @@ library ICCOStructs {
         saleInit.saleEnd = encoded.toUint256(index);
         index += 32;
 
-        uint len = 1 + 50 * uint256(uint8(encoded[index]));
+        uint256 len = 1 + 50 * uint256(uint8(encoded[index]));
         saleInit.acceptedTokens = parseTokens(encoded.slice(index, len));
         index += len;
 
@@ -196,12 +236,23 @@ library ICCOStructs {
 
     function encodeTokens(Token[] memory tokens) public pure returns (bytes memory encoded) {
         encoded = abi.encodePacked(uint8(tokens.length));
-        for (uint i = 0; i < tokens.length; i++) {
+        for (uint256 i = 0; i < tokens.length; i++) {
             encoded = abi.encodePacked(
                 encoded,
                 tokens[i].tokenAddress,
                 tokens[i].tokenChain,
                 tokens[i].conversionRate
+            );
+        }
+    }
+
+    function encodeSolanaTokens(SolanaToken[] memory tokens) public pure returns (bytes memory encoded) {
+        encoded = abi.encodePacked(uint8(tokens.length));
+        for (uint256 i = 0; i < tokens.length; i++) {
+            encoded = abi.encodePacked(
+                encoded,
+                tokens[i].tokenIndex,
+                tokens[i].tokenAddress
             );
         }
     }
@@ -213,7 +264,7 @@ library ICCOStructs {
 
         tokens = new Token[](len);
 
-        for (uint i = 0; i < len; i++) {
+        for (uint256 i = 0; i < len; i++) {
             tokens[i].tokenAddress   = encoded.toBytes32( 1 + i * 50);
             tokens[i].tokenChain     = encoded.toUint16( 33 + i * 50);
             tokens[i].conversionRate = encoded.toUint128(35 + i * 50);
@@ -230,7 +281,7 @@ library ICCOStructs {
     }
 
     function parseContributionsSealed(bytes memory encoded) public pure returns (ContributionsSealed memory consSealed) {
-        uint index = 0;
+        uint256 index = 0;
 
         consSealed.payloadID = encoded.toUint8(index);
         index += 1;
@@ -243,7 +294,7 @@ library ICCOStructs {
         consSealed.chainID = encoded.toUint16(index);
         index += 2;
 
-        uint len = 1 + 33 * uint256(uint8(encoded[index]));
+        uint256 len = 1 + 33 * uint256(uint8(encoded[index]));
         consSealed.contributions = parseContributions(encoded.slice(index, len));
         index += len;
 
@@ -252,7 +303,7 @@ library ICCOStructs {
 
     function encodeContributions(Contribution[] memory contributions) public pure returns (bytes memory encoded) {
         encoded = abi.encodePacked(uint8(contributions.length));
-        for (uint i = 0; i < contributions.length; i++) {
+        for (uint256 i = 0; i < contributions.length; i++) {
             encoded = abi.encodePacked(
                 encoded,
                 contributions[i].tokenIndex,
@@ -268,7 +319,7 @@ library ICCOStructs {
 
         cons = new Contribution[](len);
 
-        for (uint i = 0; i < len; i++) {
+        for (uint256 i = 0; i < len; i++) {
             cons[i].tokenIndex  = encoded.toUint8(1 + i * 33);
             cons[i].contributed = encoded.toUint256(2 + i * 33);
         }
@@ -283,7 +334,7 @@ library ICCOStructs {
     }
 
     function parseSaleSealed(bytes memory encoded) public pure returns (SaleSealed memory ss) {
-        uint index = 0;
+        uint256 index = 0;
         ss.payloadID = encoded.toUint8(index);
         index += 1;
 
@@ -292,7 +343,7 @@ library ICCOStructs {
         ss.saleID = encoded.toUint256(index);
         index += 32;
 
-        uint len = 1 + 65 * uint256(uint8(encoded[index]));
+        uint256 len = 1 + 65 * uint256(uint8(encoded[index]));
         ss.allocations = parseAllocations(encoded.slice(index, len));
         index += len;
 
@@ -301,7 +352,7 @@ library ICCOStructs {
 
     function encodeAllocations(Allocation[] memory allocations) public pure returns (bytes memory encoded) {
         encoded = abi.encodePacked(uint8(allocations.length));
-        for (uint i = 0; i < allocations.length; i++) {
+        for (uint256 i = 0; i < allocations.length; i++) {
             encoded = abi.encodePacked(
                 encoded,
                 allocations[i].tokenIndex,
@@ -318,7 +369,7 @@ library ICCOStructs {
 
         allos = new Allocation[](len);
 
-        for (uint i = 0; i < len; i++) {
+        for (uint256 i = 0; i < len; i++) {
             allos[i].tokenIndex = encoded.toUint8(1 + i * 65);
             allos[i].allocation = encoded.toUint256(2 + i * 65);
             allos[i].excessContribution = encoded.toUint256(34 + i * 65);
@@ -330,7 +381,7 @@ library ICCOStructs {
     }
 
     function parseSaleAborted(bytes memory encoded) public pure returns (SaleAborted memory sa) {
-        uint index = 0;
+        uint256 index = 0;
         sa.payloadID = encoded.toUint8(index);
         index += 1;
 

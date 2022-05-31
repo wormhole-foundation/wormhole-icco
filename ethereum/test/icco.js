@@ -44,6 +44,7 @@ const ContributorImplementationFullABI = jsonfile.readFileSync(
 ).abi;
 
 // global variables
+const SOLANA_CHAIN_ID = "1";
 const TEST_CHAIN_ID = "2";
 const GAS_LIMIT = "3000000";
 
@@ -61,7 +62,7 @@ contract("ICCO", function(accounts) {
 
   const WORMHOLE_FEE = 1000;
 
-  it("should set and enforce fees", async function() {
+  it("should set wormhole fee", async function() {
     console.log(
       "\n       -------------------------- Set Wormhole Messaging Fee --------------------------"
     );
@@ -808,6 +809,7 @@ contract("ICCO", function(accounts) {
     const acceptedTokenLength = 2;
     const payloadIdType1 = "01";
     const solanaChainId = "1";
+    const numAcceptedSolanaTokens = "0";
 
     const initialized = new web3.eth.Contract(
       ConductorImplementationFullABI,
@@ -1030,6 +1032,9 @@ contract("ICCO", function(accounts) {
     const sale = await initialized.methods.sales(SALE_ID).call();
 
     assert.equal(SOLD_TOKEN.address, sale.localTokenAddress);
+
+    // confirm that we are not accepting any solana tokens
+    assert.equal(sale.solanaAcceptedTokensCount, numAcceptedSolanaTokens);
   });
 
   let INIT_SALE_VM;
@@ -4804,6 +4809,528 @@ contract("ICCO", function(accounts) {
     assert.ok(isAllocationClaimedBuyerTwoAfter);
   });
 
+  // more global sale test variables
+  let SALE_5_START;
+  let SALE_5_END;
+  let SALE_5_ID;
+  let SOLANA_TOKEN_INDEX_ONE;
+  let SOLANA_TOKEN_INDEX_TWO;
+  let ETH_TOKEN_INDEX;
+
+  it("create a fifth sale correctly and attest over wormhole", async function() {
+    console.log(
+      "\n       -------------------------- Sale Test #5 (Sale With Solana Token) --------------------------"
+    );
+
+    // test variables
+    const current_block = await web3.eth.getBlock("latest");
+    SALE_5_START = current_block.timestamp + 5;
+    SALE_5_END = SALE_5_START + 8;
+
+    const saleTokenAmount = "10000000000000";
+    const minimumTokenRaise = "2000";
+    const maximumTokenRaise = "6000";
+    const tokenOneConversionRate = "1000000000000000000";
+    const tokenTwoConversionRate = "2000000000000000000";
+    const saleRecipient = accounts[0];
+    const refundRecipient = accounts[0];
+    const payloadIdType5 = "05";
+    const solanaAcceptedTokensLength = 2;
+    SOLANA_TOKEN_INDEX_ONE = "01";
+    SOLANA_TOKEN_INDEX_TWO = "02";
+    ETH_TOKEN_INDEX = "00";
+
+    // mint some more sale tokens
+    await SOLD_TOKEN.mint(SELLER, saleTokenAmount);
+    await SOLD_TOKEN.approve(TokenSaleConductor.address, saleTokenAmount);
+
+    const initialized = new web3.eth.Contract(
+      ConductorImplementationFullABI,
+      TokenSaleConductor.address
+    );
+
+    // need to register a contributor contract
+    const solanaContributorAddress = web3.eth.abi.encodeParameter(
+      "bytes32",
+      "0x000000000000000000000000" + TokenSaleContributor.address.substr(2)
+    );
+
+    await initialized.methods.registerChain(1, solanaContributorAddress).send({
+      value: 0,
+      from: accounts[0],
+      gasLimit: GAS_LIMIT,
+    });
+
+    // create array (struct) for sale params
+    const saleParams = [
+      SOLD_TOKEN_BYTES32_ADDRESS,
+      TEST_CHAIN_ID,
+      saleTokenAmount,
+      minimumTokenRaise,
+      maximumTokenRaise,
+      SALE_5_START,
+      SALE_5_END,
+      saleRecipient,
+      refundRecipient,
+      SOLD_TOKEN_BYTES32_ADDRESS,
+    ];
+
+    // make sure createSale fails when trying to pass more than 8 tokens
+    {
+      let testAcceptedTokens = [];
+
+      // add 7 more tokens
+      for (let i = 0; i < 9; i++) {
+        let defaultToken = [
+          SOLANA_CHAIN_ID,
+          "0x000000000000000000000000" + accounts[i].substr(2), // placeholder address
+          tokenOneConversionRate,
+        ];
+        testAcceptedTokens.push(defaultToken);
+      }
+
+      let failed = false;
+      try {
+        // attest contributions
+        await initialized.methods
+          .createSale(saleParams, testAcceptedTokens)
+          .send({
+            value: WORMHOLE_FEE * 2,
+            from: SELLER,
+            gasLimit: GAS_LIMIT,
+          });
+      } catch (e) {
+        assert.equal(
+          e.message,
+          "Returned error: VM Exception while processing transaction: revert too many solana tokens"
+        );
+        failed = true;
+      }
+      assert.ok(failed);
+    }
+
+    // create accepted tokens array
+    const acceptedTokens = [
+      [
+        TEST_CHAIN_ID,
+        "0x000000000000000000000000" + CONTRIBUTED_TOKEN_TWO.address.substr(2),
+        tokenTwoConversionRate,
+      ],
+      [
+        SOLANA_CHAIN_ID,
+        "0x000000000000000000000000" + CONTRIBUTED_TOKEN_ONE.address.substr(2), // placeholder address
+        tokenOneConversionRate,
+      ],
+      [
+        SOLANA_CHAIN_ID,
+        "0x000000000000000000000000" + CONTRIBUTED_TOKEN_TWO.address.substr(2), // placeholder address
+        tokenTwoConversionRate,
+      ],
+    ];
+
+    // create the sale
+    await initialized.methods.createSale(saleParams, acceptedTokens).send({
+      value: WORMHOLE_FEE * 2,
+      from: SELLER,
+      gasLimit: GAS_LIMIT,
+    });
+
+    // Verify Solana Payload sent to contributor
+    const log = (
+      await WORMHOLE.getPastEvents("LogMessagePublished", {
+        fromBlock: "latest",
+      })
+    )[1].returnValues;
+
+    // verify payload
+    assert.equal(log.sender, TokenSaleConductor.address);
+
+    // payload id
+    let index = 2;
+    assert.equal(log.payload.substr(index, 2), payloadIdType5);
+    index += 2;
+
+    // sale id
+    SALE_5_ID = SALE_4_ID + 1;
+    assert.equal(parseInt(log.payload.substr(index, 64), 16), SALE_5_ID);
+    index += 64;
+
+    // solana ATA for sale token
+    assert.equal(
+      log.payload.substr(index, 64),
+      web3.eth.abi.encodeParameter("address", SOLD_TOKEN.address).substring(2)
+    );
+    index += 64;
+
+    // token chain
+    assert.equal(
+      log.payload.substr(index, 4),
+      web3.eth.abi
+        .encodeParameter("uint16", TEST_CHAIN_ID)
+        .substring(2 + 64 - 4)
+    );
+    index += 4;
+
+    // token decimals
+    assert.equal(
+      parseInt(log.payload.substr(index, 2), 16),
+      SOLD_TOKEN_DECIMALS
+    );
+    index += 2;
+
+    // timestamp start
+    assert.equal(parseInt(log.payload.substr(index, 64), 16), SALE_5_START);
+    index += 64;
+
+    // timestamp end
+    assert.equal(parseInt(log.payload.substr(index, 64), 16), SALE_5_END);
+    index += 64;
+
+    // accepted tokens length
+    assert.equal(
+      parseInt(log.payload.substr(index, 2), 16),
+      solanaAcceptedTokensLength
+    );
+    index += 2;
+
+    // accepted token index
+    assert.equal(
+      parseInt(log.payload.substr(index, 2), 16),
+      SOLANA_TOKEN_INDEX_ONE
+    );
+    index += 2;
+
+    // token address
+    assert.equal(
+      log.payload.substr(index, 64),
+      web3.eth.abi
+        .encodeParameter("address", CONTRIBUTED_TOKEN_ONE.address)
+        .substring(2)
+    );
+    index += 64;
+
+    // accepted token index
+    assert.equal(
+      parseInt(log.payload.substr(index, 2), 16),
+      SOLANA_TOKEN_INDEX_TWO
+    );
+    index += 2;
+
+    // token address
+    assert.equal(
+      log.payload.substr(index, 64),
+      web3.eth.abi
+        .encodeParameter("address", CONTRIBUTED_TOKEN_TWO.address)
+        .substring(2)
+    );
+    index += 64;
+
+    // recipient of proceeds
+    assert.equal(
+      log.payload.substr(index, 64),
+      web3.eth.abi.encodeParameter("address", saleRecipient).substring(2)
+    );
+    index += 64;
+
+    assert.equal(log.payload.length, index);
+
+    // confirm that we are not accepting any solana tokens
+    const sale = await initialized.methods.sales(SALE_5_ID).call();
+
+    assert.equal(sale.solanaAcceptedTokensCount, solanaAcceptedTokensLength);
+  });
+
+  it("conductor should accept mock attestContribution VAAs from contributors", async function() {
+    // skip to end of the sale
+    await wait(20);
+
+    // test variables
+    const payloadIdType2 = "02";
+    const solanaTokenContribution = "2000";
+    const solanaTokenTwoContribution = "0";
+    const ethereumTokenContribution = "1000";
+    const acceptedTokensLengthSolana = 2;
+    const acceptedTokensLengthEthereum = 1;
+
+    const initialized = new web3.eth.Contract(
+      ConductorImplementationFullABI,
+      TokenSaleConductor.address
+    );
+
+    // construct contributions payload coming from Solana contributor
+    const solanaContributionsSealed = [
+      web3.eth.abi
+        .encodeParameter("uint8", payloadIdType2)
+        .substring(2 + (64 - 2)),
+      web3.eth.abi.encodeParameter("uint256", SALE_5_ID).substring(2),
+      web3.eth.abi
+        .encodeParameter("uint16", SOLANA_CHAIN_ID)
+        .substring(2 + (64 - 4)),
+      web3.eth.abi
+        .encodeParameter("uint8", acceptedTokensLengthSolana)
+        .substring(2 + (64 - 2)),
+      web3.eth.abi
+        .encodeParameter("uint8", SOLANA_TOKEN_INDEX_ONE)
+        .substring(2 + (64 - 2)),
+      web3.eth.abi
+        .encodeParameter("uint256", solanaTokenContribution)
+        .substring(2),
+      web3.eth.abi
+        .encodeParameter("uint8", SOLANA_TOKEN_INDEX_TWO)
+        .substring(2 + (64 - 2)),
+      web3.eth.abi
+        .encodeParameter("uint256", solanaTokenTwoContribution)
+        .substring(2),
+    ];
+
+    const vm = await signAndEncodeVM(
+      1,
+      1,
+      SOLANA_CHAIN_ID,
+      "0x000000000000000000000000" + TokenSaleContributor.address.substr(2),
+      0,
+      "0x" + solanaContributionsSealed.join(""),
+      [testSigner1PK],
+      0,
+      0
+    );
+
+    // collect contributions on the conductor
+    await initialized.methods.collectContribution("0x" + vm).send({
+      from: BUYER_ONE,
+      gasLimit: GAS_LIMIT,
+    });
+
+    // construct contributions payload coming from ethereum contributor
+    const ethereumContributionsSealed = [
+      web3.eth.abi
+        .encodeParameter("uint8", payloadIdType2)
+        .substring(2 + (64 - 2)),
+      web3.eth.abi.encodeParameter("uint256", SALE_5_ID).substring(2),
+      web3.eth.abi
+        .encodeParameter("uint16", TEST_CHAIN_ID)
+        .substring(2 + (64 - 4)),
+      web3.eth.abi
+        .encodeParameter("uint8", acceptedTokensLengthEthereum)
+        .substring(2 + (64 - 2)),
+      web3.eth.abi
+        .encodeParameter("uint8", ETH_TOKEN_INDEX)
+        .substring(2 + (64 - 2)),
+      web3.eth.abi
+        .encodeParameter("uint256", ethereumTokenContribution)
+        .substring(2),
+    ];
+
+    const vm2 = await signAndEncodeVM(
+      1,
+      1,
+      TEST_CHAIN_ID,
+      "0x000000000000000000000000" + TokenSaleContributor.address.substr(2),
+      0,
+      "0x" + ethereumContributionsSealed.join(""),
+      [testSigner1PK],
+      0,
+      0
+    );
+
+    // collect contributions on the conductor
+    await initialized.methods.collectContribution("0x" + vm2).send({
+      from: BUYER_ONE,
+      gasLimit: GAS_LIMIT,
+    });
+
+    // verify contributions with conductor getter
+    const contributions = await initialized.methods
+      .saleContributions(SALE_5_ID)
+      .call();
+
+    assert.equal(
+      solanaTokenContribution,
+      contributions[parseInt(SOLANA_TOKEN_INDEX_ONE)]
+    );
+    assert.equal(
+      solanaTokenTwoContribution,
+      contributions[parseInt(SOLANA_TOKEN_INDEX_TWO)]
+    );
+    assert.equal(
+      ethereumTokenContribution,
+      contributions[parseInt(ETH_TOKEN_INDEX)]
+    );
+  });
+
+  it("conductor sealSale should emit Solana specific VAA when accepting Solana tokens", async function() {
+    // test variables
+    const payloadIdType3 = "03";
+    const numTokensInSolanaPayload = 2;
+    const numTokensInEthereumPayload = 3;
+    const solanaTokenAllocation = "5000000000000";
+    const solanaTokenTwoAllocation = "0";
+    const ethereumTokenAllocation = "5000000000000";
+    const excessContribution = "0"; // same for all tokens - no excess contributions
+
+    const initialized = new web3.eth.Contract(
+      ConductorImplementationFullABI,
+      TokenSaleConductor.address
+    );
+
+    // seal the sale
+    await initialized.methods.sealSale(SALE_5_ID).send({
+      value: WORMHOLE_FEE * 3,
+      from: SELLER,
+      gasLimit: GAS_LIMIT,
+    });
+
+    const log = await WORMHOLE.getPastEvents("LogMessagePublished", {
+      fromBlock: "latest",
+    });
+
+    // grab payload from each of the emitted VAAs
+    const solanaTransferPayload = log[0].returnValues;
+    const ethereumSealedPayload = log[1].returnValues;
+    const solanaSealedPayload = log[2].returnValues;
+
+    // parse the solana and ethereum saleSealed payloads together
+    // payload id
+    let index = 2;
+    assert.equal(
+      ethereumSealedPayload.payload.substr(index, 2),
+      payloadIdType3
+    );
+    assert.equal(solanaSealedPayload.payload.substr(index, 2), payloadIdType3);
+    index += 2;
+
+    // sale id
+    assert.equal(
+      parseInt(ethereumSealedPayload.payload.substr(index, 64), 16),
+      SALE_5_ID
+    );
+    assert.equal(
+      parseInt(solanaSealedPayload.payload.substr(index, 64), 16),
+      SALE_5_ID
+    );
+    index += 64;
+
+    // allocations length
+    assert.equal(
+      ethereumSealedPayload.payload.substr(index, 2),
+      numTokensInEthereumPayload
+    );
+    assert.equal(
+      solanaSealedPayload.payload.substr(index, 2),
+      numTokensInSolanaPayload
+    );
+    index += 2;
+
+    // copy index
+    let solanaIndex = index;
+    let ethereumIndex = index;
+
+    // parse solana token allocations and excess contributions
+    assert.equal(
+      solanaSealedPayload.payload.substr(solanaIndex, 2),
+      SOLANA_TOKEN_INDEX_ONE
+    );
+    solanaIndex += 2;
+
+    // solana allocation
+    assert.equal(
+      parseInt(solanaSealedPayload.payload.substr(solanaIndex, 64), 16),
+      solanaTokenAllocation
+    );
+    solanaIndex += 64;
+
+    // solana excess contribution
+    assert.equal(
+      parseInt(solanaSealedPayload.payload.substr(solanaIndex, 64), 16),
+      excessContribution
+    );
+    solanaIndex += 64;
+
+    // second allocation for solana tokens
+    assert.equal(
+      solanaSealedPayload.payload.substr(solanaIndex, 2),
+      SOLANA_TOKEN_INDEX_TWO
+    );
+    solanaIndex += 2;
+
+    // solana allocation
+    assert.equal(
+      parseInt(solanaSealedPayload.payload.substr(solanaIndex, 64), 16),
+      solanaTokenTwoAllocation
+    );
+    solanaIndex += 64;
+
+    // solana excess contribution
+    assert.equal(
+      parseInt(solanaSealedPayload.payload.substr(solanaIndex, 64), 16),
+      excessContribution
+    );
+    solanaIndex += 64;
+
+    // ethereum saleSealed wormhole message
+    assert.equal(
+      ethereumSealedPayload.payload.substr(ethereumIndex, 2),
+      ETH_TOKEN_INDEX
+    );
+    ethereumIndex += 2;
+
+    // eth allocation
+    assert.equal(
+      parseInt(ethereumSealedPayload.payload.substr(ethereumIndex, 64), 16),
+      ethereumTokenAllocation
+    );
+    ethereumIndex += 64;
+
+    // eth excessContribution
+    assert.equal(
+      parseInt(ethereumSealedPayload.payload.substr(ethereumIndex, 64), 16),
+      excessContribution
+    );
+    ethereumIndex += 64;
+
+    // index of solana token one in ethereum message
+    assert.equal(
+      ethereumSealedPayload.payload.substr(ethereumIndex, 2),
+      SOLANA_TOKEN_INDEX_ONE
+    );
+    ethereumIndex += 2;
+
+    // allocation of solana token one in ethereum message
+    assert.equal(
+      parseInt(ethereumSealedPayload.payload.substr(ethereumIndex, 64), 16),
+      solanaTokenAllocation
+    );
+    ethereumIndex += 64;
+
+    // solana excess contribution for token one
+    assert.equal(
+      parseInt(ethereumSealedPayload.payload.substr(ethereumIndex, 64), 16),
+      excessContribution
+    );
+    ethereumIndex += 64;
+
+    // index of solana token two in ethereum message
+    assert.equal(
+      ethereumSealedPayload.payload.substr(ethereumIndex, 2),
+      SOLANA_TOKEN_INDEX_TWO
+    );
+    ethereumIndex += 2;
+
+    // allocation of solana token one in ethereum message
+    assert.equal(
+      parseInt(ethereumSealedPayload.payload.substr(ethereumIndex, 64), 16),
+      solanaTokenTwoAllocation
+    );
+    ethereumIndex += 64;
+
+    // solana excess contribution for token two
+    assert.equal(
+      parseInt(ethereumSealedPayload.payload.substr(ethereumIndex, 64), 16),
+      excessContribution
+    );
+    ethereumIndex += 64;
+  });
+
   it("conductor should not allow a sale to abort after the sale start time", async function() {
     console.log(
       "\n       -------------------------- Other Tests --------------------------"
@@ -4819,7 +5346,7 @@ contract("ICCO", function(accounts) {
     const tokenTwoConversionRate = "2000000000000000000";
     const saleRecipient = accounts[0];
     const refundRecipient = accounts[0];
-    const saleId5 = 4;
+    const saleId = 5;
 
     const initialized = new web3.eth.Contract(
       ConductorImplementationFullABI,
@@ -4869,7 +5396,7 @@ contract("ICCO", function(accounts) {
     let failed = false;
     try {
       // try to abort abort after the sale started
-      await initialized.methods.abortSaleBeforeStartTime(saleId5).send({
+      await initialized.methods.abortSaleBeforeStartTime(saleId).send({
         from: SELLER,
         gasLimit: GAS_LIMIT,
       });

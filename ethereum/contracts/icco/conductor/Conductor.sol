@@ -21,36 +21,25 @@ import "../shared/ICCOStructs.sol";
  * @notice This contract manages cross-chain token sales. It uses the wormhole 
  * core messaging layer to communicate token sale information to linked Contributor 
  * contracts. For successful sales, it uses the wormhole token bridge to 
- * send the sale token to contributor contracts in exchange for contributed funds. 
+ * send the sale token to Contributor contracts in exchange for contributed funds. 
  * For unsuccessful sales, this contract will return the sale tokens to a 
  * specified recipient address.
  */ 
 contract Conductor is ConductorGovernance, ReentrancyGuard {
-    /**
-     * @dev createSale serves to initialize a cross-chain token sale and disseminate 
-     * information about the sale to registered Contributor contracts.
-     * - it validates sale parameters passed in by the client
-     * - it saves a copy of the sale in contract storage
-     * - it encodes and disseminates sale information to contributor contracts via wormhole
-     */
-    function createSale(
-        ICCOStructs.Raise memory raise,
-        ICCOStructs.Token[] memory acceptedTokens   
-    ) public payable nonReentrant returns (
-        uint saleId,
-        uint wormholeSequence
-    ) {
-        /// validate sale parameters from client
-        require(block.timestamp < raise.saleStart, "sale start must be in the future");
-        require(raise.saleStart < raise.saleEnd, "sale end must be after sale start");
-        /// set timestamp cap for non-evm contributor contracts
-        require(raise.saleStart <= 2**63-1, "saleStart too far in the future");
-        require(raise.tokenAmount > 0, "amount must be > 0");
-        require(acceptedTokens.length > 0, "must accept at least one token");
-        require(acceptedTokens.length < 255, "too many tokens");
-        require(raise.maxRaise >= raise.minRaise, "maxRaise must be >= minRaise");
+    /// @dev create dynamic storage for accepted solana tokens
+    ICCOStructs.SolanaToken[] solanaAcceptedTokens;
 
-        /// grab the local token address (address of sale token on conductor chain)
+    /**
+     * @dev receiveSaleToken serves to take custody of the sale token and 
+     * returns information about the token on the Conductor chain.
+     * - it transfers the sale tokens to this contract
+     * - it finds the address of the token on the Conductor chain
+     * - it finds the ERC20 token decimals of the token on the Conductor chain
+     */
+    function receiveSaleToken(
+        ICCOStructs.Raise memory raise
+    ) internal returns (address, uint8) {
+        /// @dev grab the local token address (address of sale token on conductor chain)
         address localTokenAddress;
         if (raise.tokenChain == chainId()) {
             localTokenAddress = address(uint160(uint256(raise.token)));
@@ -60,42 +49,68 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
             require(localTokenAddress != address(0), "wrapped address not found on this chain"); 
         }
 
-        uint8 localTokenDecimals;  
-        { /// avoid stack too deep errors
-            /** 
-             * @dev Fetch the sale token decimals and place in the SaleInit struct.
-             * The contributors need to know this to scale allocations on non-evm chains.            
-             */
-            (,bytes memory queriedDecimals) = localTokenAddress.staticcall(
-                abi.encodeWithSignature("decimals()")
-            );
-            localTokenDecimals = abi.decode(queriedDecimals, (uint8));
+        /** 
+         * @dev Fetch the sale token decimals and place in the SaleInit struct.
+         * The Contributors need to know this to scale allocations on non-evm chains.            
+         */ 
+        (,bytes memory queriedDecimals) = localTokenAddress.staticcall(
+            abi.encodeWithSignature("decimals()")
+        );
+        uint8 localTokenDecimals = abi.decode(queriedDecimals, (uint8));
 
-            /// query own token balance before transfer
-            (,bytes memory queriedBalanceBefore) = localTokenAddress.staticcall(
-                abi.encodeWithSelector(IERC20.balanceOf.selector, 
-                address(this))
-            );
-            uint256 balanceBefore = abi.decode(queriedBalanceBefore, (uint256));
+        /// query own token balance before transfer
+        (,bytes memory queriedBalanceBefore) = localTokenAddress.staticcall(
+            abi.encodeWithSelector(IERC20.balanceOf.selector, 
+            address(this))
+        );
+        uint256 balanceBefore = abi.decode(queriedBalanceBefore, (uint256));
 
-            /// deposit sale tokens
-            SafeERC20.safeTransferFrom(
-                IERC20(localTokenAddress), 
-                msg.sender, 
-                address(this), 
-                raise.tokenAmount
-            );
+        /// deposit sale tokens
+        SafeERC20.safeTransferFrom(
+            IERC20(localTokenAddress), 
+            msg.sender, 
+            address(this), 
+            raise.tokenAmount
+        );
 
-            /// query own token balance after transfer
-            (,bytes memory queriedBalanceAfter) = localTokenAddress.staticcall(
-                abi.encodeWithSelector(IERC20.balanceOf.selector, 
-                address(this))
-            );
-            uint256 balanceAfter = abi.decode(queriedBalanceAfter, (uint256));
+        /// query own token balance after transfer
+        (,bytes memory queriedBalanceAfter) = localTokenAddress.staticcall(
+            abi.encodeWithSelector(IERC20.balanceOf.selector, 
+            address(this))
+        );
+        uint256 balanceAfter = abi.decode(queriedBalanceAfter, (uint256));
 
-            /// revert if token has fee
-            require(raise.tokenAmount == balanceAfter - balanceBefore, "fee-on-transfer tokens are not supported");
-        }
+        /// revert if token has fee
+        require(raise.tokenAmount == balanceAfter - balanceBefore, "fee-on-transfer tokens are not supported");
+
+        return (localTokenAddress, localTokenDecimals);
+    }
+
+    /**
+     * @dev createSale serves to initialize a cross-chain token sale and disseminate 
+     * information about the sale to registered Contributor contracts.
+     * - it validates sale parameters passed in by the client
+     * - it saves a copy of the sale in contract storage
+     * - it encodes and disseminates sale information to Contributor contracts via wormhole
+     */
+    function createSale(
+        ICCOStructs.Raise memory raise,
+        ICCOStructs.Token[] memory acceptedTokens   
+    ) public payable nonReentrant returns (
+        uint256 saleId
+    ) {
+        /// validate sale parameters from client
+        require(block.timestamp < raise.saleStart, "sale start must be in the future");
+        require(raise.saleStart < raise.saleEnd, "sale end must be after sale start");
+        /// set timestamp cap for non-evm Contributor contracts
+        require(raise.saleStart <= 2**63-1, "saleStart too far in the future");
+        require(raise.tokenAmount > 0, "amount must be > 0");
+        require(acceptedTokens.length > 0, "must accept at least one token");
+        require(acceptedTokens.length < 255, "too many tokens");
+        require(raise.maxRaise >= raise.minRaise, "maxRaise must be >= minRaise");
+
+        /// @dev take custody of sale token and fetch decimal/address info for the sale token
+        (address localTokenAddress, uint8 localTokenDecimals) = receiveSaleToken(raise);
         
         /// create Sale struct for Conductor's view of the sale
         saleId = useSaleId();
@@ -116,7 +131,8 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
             acceptedTokensChains : new uint16[](acceptedTokens.length),
             acceptedTokensAddresses : new bytes32[](acceptedTokens.length),
             acceptedTokensConversionRates : new uint128[](acceptedTokens.length),
-            contributions : new uint[](acceptedTokens.length),
+            solanaAcceptedTokensCount: 0,
+            contributions : new uint256[](acceptedTokens.length),
             contributionsCollected : new bool[](acceptedTokens.length),
             /// sale wallet management 
             initiator : msg.sender, 
@@ -128,18 +144,37 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
             refundIsClaimed : false
         });
 
-        /// populate the accpeted token arrays
-        for(uint i = 0; i < acceptedTokens.length; i++) {
+        /// populate the accepted token arrays
+        for (uint256 i = 0; i < acceptedTokens.length; i++) {
             require(acceptedTokens[i].conversionRate > 0, "conversion rate cannot be zero");
             sale.acceptedTokensChains[i] = acceptedTokens[i].tokenChain;
             sale.acceptedTokensAddresses[i] = acceptedTokens[i].tokenAddress;
             sale.acceptedTokensConversionRates[i] = acceptedTokens[i].conversionRate;
+
+            /// store the accepted tokens for the SolanaSaleInit VAA
+            if (acceptedTokens[i].tokenChain == 1) {
+                ICCOStructs.SolanaToken memory solanaToken = ICCOStructs.SolanaToken({
+                    tokenIndex: uint8(i),
+                    tokenAddress: acceptedTokens[i].tokenAddress
+                });
+                /// only allow 10 accepted tokens for the Solana Contributor
+                require(solanaAcceptedTokens.length < 8, "too many solana tokens");
+                /// save in contract storage
+                solanaAcceptedTokens.push(solanaToken);
+            }
         }
+
+        /// save number of accepted solana tokens in the sale
+        sale.solanaAcceptedTokensCount = uint8(solanaAcceptedTokens.length);
 
         /// store sale info
         setSale(saleId, sale);
 
-        /// create SaleInit struct to disseminate to contributors
+        /// cache wormhole instance
+        IWormhole wormhole = wormhole();
+        uint256 messageFee = wormhole.messageFee();
+
+        /// create SaleInit struct to disseminate to Contributors
         ICCOStructs.SaleInit memory saleInit = ICCOStructs.SaleInit({
             payloadID : 1,
             /// sale ID
@@ -168,15 +203,44 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
             recipient : bytes32(uint256(uint160(raise.recipient))),
             /// refund recipient in case the sale is aborted
             refundRecipient : bytes32(uint256(uint160(raise.refundRecipient)))
-        });
+        }); 
 
-        /**
-         * @dev send encoded SaleInit struct to contributors via wormhole.
-         * The msg.value is the fee collected by wormhole for messages.
-         */
-        wormholeSequence = wormhole().publishMessage{
-            value : msg.value
+        /// @dev send encoded SaleInit struct to Contributors via wormhole.        
+        wormhole.publishMessage{
+            value : messageFee
         }(0, ICCOStructs.encodeSaleInit(saleInit), consistencyLevel());
+
+        /// see if the sale accepts any Solana tokens
+        if (solanaAcceptedTokens.length > 0) {
+            /// create SolanaSaleInit struct to disseminate to the Solana Contributor
+            ICCOStructs.SolanaSaleInit memory solanaSaleInit = ICCOStructs.SolanaSaleInit({
+                payloadID : 5,
+                /// sale ID
+                saleID : saleId,
+                /// sale token ATA for solana 
+                solanaTokenAccount: raise.solanaTokenAccount,
+                /// chain ID of the token
+                tokenChain : raise.tokenChain,
+                /// token decimals
+                tokenDecimals: localTokenDecimals,
+                /// timestamp raise start
+                saleStart : raise.saleStart,
+                /// timestamp raise end
+                saleEnd : raise.saleEnd,
+                /// accepted Tokens
+                acceptedTokens : solanaAcceptedTokens,
+                /// recipient of proceeds
+                recipient : bytes32(uint256(uint160(raise.recipient)))
+            });
+
+            /// @dev send encoded SolanaSaleInit struct to the solana Contributor
+            wormhole.publishMessage{
+                value : messageFee
+            }(0, ICCOStructs.encodeSolanaSaleInit(solanaSaleInit), consistencyLevel());    
+
+            /// @dev garbage collection to save on gas fees
+            delete solanaAcceptedTokens;
+        }
     }
 
     /**
@@ -186,7 +250,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
      * - it only allows the sale initiator to invoke the method
      * - it encodes and disseminates a saleAborted message to the Contributor contracts
      */    
-    function abortSaleBeforeStartTime(uint saleId) public payable returns (uint wormholeSequence) {
+    function abortSaleBeforeStartTime(uint256 saleId) public payable returns (uint256 wormholeSequence) {
         require(saleExists(saleId), "sale not initiated");
 
         ConductorStructs.Sale memory sale = sales(saleId);
@@ -241,7 +305,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
         );
 
         /// save the total contribution amount for each accepted token 
-        for(uint i = 0; i < conSealed.contributions.length; i++) {
+        for (uint256 i = 0; i < conSealed.contributions.length; i++) {
             setSaleContribution(
                 conSealed.saleID,
                 conSealed.contributions[i].tokenIndex,
@@ -257,7 +321,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
      * - it calculates allocations and excess contributions for each accepted token
      * - it disseminates a saleSealed or saleAborted message to Contributors via wormhole
      */
-    function sealSale(uint saleId) public payable returns (uint wormholeSequence) {
+    function sealSale(uint256 saleId) public payable returns (uint256 wormholeSequence) {
         require(saleExists(saleId), "sale not initiated");
 
         ConductorStructs.Sale memory sale = sales(saleId);
@@ -267,7 +331,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
 
         ConductorStructs.InternalAccounting memory accounting;        
 
-        for (uint i = 0; i < sale.contributionsCollected.length; i++) {
+        for (uint256 i = 0; i < sale.contributionsCollected.length; i++) {
             require(saleContributionIsCollected(saleId, i), "missing contribution info");
             /**
              * @dev This calculates the total contribution for each accepted token.
@@ -284,7 +348,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
 
             /// set the messageFee and valueSent values 
             accounting.messageFee = wormhole.messageFee();
-            accounting.valueSent = msg.value;
+            accounting.valueSent = msg.value;    
 
             /**
              * @dev This determines if contributors qualify for refund payments.
@@ -304,9 +368,9 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
             });
 
             /// calculate allocations and excessContributions for each accepted token 
-            for(uint i = 0; i < sale.acceptedTokensAddresses.length; i++) {
-                uint allocation = sale.tokenAmount * (sale.contributions[i] * sale.acceptedTokensConversionRates[i] / 1e18) / accounting.totalContribution;
-                uint excessContribution = accounting.totalExcessContribution * sale.contributions[i] / accounting.totalContribution;
+            for (uint256 i = 0; i < sale.acceptedTokensAddresses.length; i++) {
+                uint256 allocation = sale.tokenAmount * (sale.contributions[i] * sale.acceptedTokensConversionRates[i] / 1e18) / accounting.totalContribution;
+                uint256 excessContribution = accounting.totalExcessContribution * sale.contributions[i] / accounting.totalContribution;
 
                 if (allocation > 0) {
                     /// send allocations to Contributor contracts
@@ -377,6 +441,30 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
             wormholeSequence = wormhole.publishMessage{
                 value : accounting.messageFee
             }(0, ICCOStructs.encodeSaleSealed(saleSealed), consistencyLevel());
+
+            { /// scope to make code more readable
+                /// @dev send separate SaleSealed VAA if accepting Solana tokens
+                if (sale.solanaAcceptedTokensCount > 0) {
+                    /// create new array to handle solana allocations 
+                    ICCOStructs.Allocation[] memory solanaAllocations = new ICCOStructs.Allocation[](sale.solanaAcceptedTokensCount);
+
+                    /// remove non-solana allocations in SaleSealed VAA
+                    uint8 solanaAllocationIndex;
+                    for (uint256 i = 0; i < sale.acceptedTokensAddresses.length; i++) {
+                        if (sale.acceptedTokensChains[i] == 1) {
+                            solanaAllocations[solanaAllocationIndex] = saleSealed.allocations[i];
+                            solanaAllocationIndex += 1;
+                        }
+                    }
+                    /// @dev replace allocations in the saleSealed struct with Solana only allocations
+                    saleSealed.allocations = solanaAllocations;
+
+                    /// @dev send encoded SaleSealed message to Solana Contributor
+                    wormholeSequence = wormhole.publishMessage{
+                        value : accounting.messageFee
+                    }(0, ICCOStructs.encodeSaleSealed(saleSealed), consistencyLevel());
+                }
+            } 
         } else {
             /// set saleAborted
             setSaleAborted(sale.saleID);
@@ -396,7 +484,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
      * - it confirms that the sale was aborted
      * - it transfers the sale tokens to the refundRecipient
      */
-    function claimRefund(uint saleId) public {
+    function claimRefund(uint256 saleId) public {
         require(saleExists(saleId), "sale not initiated");
 
         ConductorStructs.Sale memory sale = sales(saleId);
@@ -430,7 +518,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
     }
 
     /// @dev saleExists serves to check if a sale exists
-    function saleExists(uint saleId) public view returns (bool exists) {
+    function saleExists(uint256 saleId) public view returns (bool exists) {
         exists = (saleId < getNextSaleId());
     }
 }

@@ -25,6 +25,11 @@ filename = "./tests/bridge_config.json"
 address = "6MxkvoEwgB9EqQRLNhvYaPGhfcLtBtpBqdQugr3AZUgD"
 filename = "./tests/guardian_set.json"
 
+[[test.validator.account]]
+address = "GXBsgBD3LDn3vkRZF6TfY5RqgajVZ4W5bMAdiAaaUARs"
+filename = "./tests/fee_collector.json"
+
+
 [[test.genesis]]
 address = "B6RHG3mfcckmrYN1UhmJzyS1XX3fZKbkeUcpJe9Sy3FE"
 program = "./tests/token_bridge.so"

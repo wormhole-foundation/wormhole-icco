@@ -5,9 +5,10 @@ use crate::{constants::ACCEPTED_TOKENS_MAX, error::BuyerError, state::sale::Asse
 
 #[account]
 pub struct Buyer {
-    pub contributed: [u64; ACCEPTED_TOKENS_MAX], // 8 * ACCEPTED_TOKENS_MAX
-    pub status: BuyerStatus,                     // 1
-    pub initialized: bool,                       // 1 (not sure for 1 bit)
+    //pub contributed: [u64; ACCEPTED_TOKENS_MAX], // 8 * ACCEPTED_TOKENS_MAX
+    pub contributed: Vec<u64>, // 4 + 8 * ACCEPTED_TOKENS_MAX
+    pub status: BuyerStatus,   // 1
+    pub initialized: bool,     // 1 (not sure for 1 bit)
 
     pub bump: u8, // 1
 }
@@ -20,9 +21,10 @@ pub struct BuyerTotal {
 }
 
 impl Buyer {
-    pub const MAXIMUM_SIZE: usize = (8 * ACCEPTED_TOKENS_MAX) + 1 + 1 + 1;
+    pub const MAXIMUM_SIZE: usize = (4 + 8 * ACCEPTED_TOKENS_MAX) + 1 + 1 + 1;
 
     pub fn initialize(&mut self) -> () {
+        self.contributed = vec![0; ACCEPTED_TOKENS_MAX];
         self.initialized = true;
         self.status = BuyerStatus::Active;
     }

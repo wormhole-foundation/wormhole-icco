@@ -18,6 +18,10 @@ function findKeyBump(seeds: (Buffer | Uint8Array)[], program: web3.PublicKey): K
   };
 }
 
+export function findCustodianAccount(programId: web3.PublicKey): KeyBump {
+  return findKeyBump([Buffer.from("icco-custodian")], programId);
+}
+
 export function findSignedVaaAccount(signedVaa: Buffer): KeyBump {
   const hash = hashVaaPayload(signedVaa);
   return findKeyBump([Buffer.from("PostedVAA"), hash], CORE_BRIDGE_ADDRESS);

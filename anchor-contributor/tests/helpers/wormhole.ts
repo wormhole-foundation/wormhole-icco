@@ -5,6 +5,8 @@ import { postVaaSolanaWithRetry } from "@certusone/wormhole-sdk";
 
 import { CORE_BRIDGE_ADDRESS } from "./consts";
 
+const elliptic = require("elliptic");
+
 export async function postVaa(connection: web3.Connection, payer: web3.Keypair, signedVaa: Buffer): Promise<void> {
   await postVaaSolanaWithRetry(
     connection,
@@ -18,7 +20,6 @@ export async function postVaa(connection: web3.Connection, payer: web3.Keypair, 
     10
   );
 }
-const elliptic = require("elliptic");
 
 export function signAndEncodeVaa(
   timestamp: number,

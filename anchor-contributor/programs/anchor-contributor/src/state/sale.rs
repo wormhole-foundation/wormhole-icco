@@ -14,6 +14,7 @@ use crate::{
 #[account]
 #[derive(Debug)]
 pub struct Sale {
+    pub custodian: Pubkey,                     // 32
     pub id: [u8; 32],                          // 32
     pub associated_sale_token_address: Pubkey, // 32
     pub token_chain: u16,                      // 2
@@ -82,6 +83,7 @@ impl AssetTotal {
 impl Sale {
     pub const MAXIMUM_SIZE: usize = 32
         + 32
+        + 32
         + 2
         + 1
         + (8 + 8)
@@ -91,6 +93,10 @@ impl Sale {
         + (4 + AssetTotal::MAXIMUM_SIZE * ACCEPTED_TOKENS_MAX)
         + 1
         + 1;
+
+    pub fn set_custodian(&mut self, custodian: &Pubkey) {
+        self.custodian = custodian.clone();
+    }
 
     pub fn parse_sale_init(&mut self, payload: &[u8]) -> Result<()> {
         require!(!self.initialized, SaleError::SaleAlreadyInitialized);
@@ -150,16 +156,19 @@ impl Sale {
         Ok(())
     }
 
-    pub fn get_associated_accepted_address(
+    pub fn get_token_index(&self, mint: &Pubkey) -> Result<u8> {
+        let result = self.totals.iter().find(|item| item.mint == *mint);
+        require!(result != None, SaleError::InvalidTokenIndex);
+        Ok(result.unwrap().token_index)
+    }
+
+    pub fn get_associated_accepted_token_address(
         &self,
-        contributor: &Pubkey,
         token_index: u8,
+        owner: &Pubkey,
     ) -> Result<Pubkey> {
         let idx = self.get_index(token_index)?;
-        Ok(get_associated_token_address(
-            contributor,
-            &self.totals[idx].mint,
-        ))
+        Ok(get_associated_token_address(owner, &self.totals[idx].mint))
     }
 
     pub fn update_total_contributions(
@@ -332,28 +341,35 @@ pub fn verify_conductor_vaa<'info>(
 ) -> Result<MessageData> {
     let msg = get_message_data(&vaa_account)?;
 
-    let conductor_chain: u16 = CONDUCTOR_CHAIN
-        .to_string()
-        .parse()
-        .expect("invalid conductor chain");
-
-    let conductor_address = hex::decode(CONDUCTOR_ADDRESS).expect("invalid conductor address");
-    let conductor_address: [u8; 32] = conductor_address
-        .try_into()
-        .expect("invalid conductor address");
-
     require!(
         vaa_account.to_account_info().owner == &Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap(),
         SaleError::InvalidVaaAction
     );
     require!(
-        msg.emitter_chain == conductor_chain,
+        msg.emitter_chain == get_conductor_chain()?,
         SaleError::InvalidConductor
     );
     require!(
-        msg.emitter_address == conductor_address,
+        msg.emitter_address == get_conductor_address()?,
         SaleError::InvalidConductor
     );
     require!(msg.payload[0] == payload_type, SaleError::InvalidVaaAction);
     Ok(msg)
+}
+
+// TODO: set up cfg flag to just use constants instead of these getters
+pub fn get_conductor_chain() -> Result<u16> {
+    let conductor_chain: u16 = CONDUCTOR_CHAIN
+        .to_string()
+        .parse()
+        .expect("invalid conductor chain");
+    Ok(conductor_chain)
+}
+
+pub fn get_conductor_address() -> Result<[u8; 32]> {
+    let conductor_address = hex::decode(CONDUCTOR_ADDRESS).expect("invalid conductor address");
+    let conductor_address: [u8; 32] = conductor_address
+        .try_into()
+        .expect("invalid conductor address");
+    Ok(conductor_address)
 }

@@ -1,4 +1,9 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::instruction::Instruction;
+use anchor_lang::solana_program::program::invoke_signed;
+use anchor_lang::solana_program::system_instruction::transfer;
+use anchor_lang::solana_program::borsh::try_from_slice_unchecked;
+use anchor_spl::*;
 
 mod constants;
 mod context;
@@ -11,13 +16,12 @@ use constants::*;
 use context::*;
 use error::*;
 use state::sale::verify_conductor_vaa;
+use wormhole::*;
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
 #[program]
 pub mod anchor_contributor {
-    use anchor_spl::token;
-
     use super::*;
 
     pub fn init_sale(ctx: Context<InitializeSale>) -> Result<()> {
@@ -41,6 +45,19 @@ pub mod anchor_contributor {
         let accepted_account_address =
             sale.get_associated_accepted_address(&ctx.program_id, token_index)?;
 
+        /* 
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                token::Transfer { 
+                    from: ctx.accounts.buyer.to_account_info(),
+                    to: ctx.accounts.sale.to_account_info(),
+                    authority: ctx.accounts.sale.to_account_info()
+                },
+            ),
+            amount
+        );
+        */
         // leverage token index search from sale's accepted tokens to find index
         // on buyer's contributions
         let clock = Clock::get()?;
@@ -63,7 +80,67 @@ pub mod anchor_contributor {
         let clock = Clock::get()?;
         let vaa_payload = sale.serialize_contributions(clock.unix_timestamp)?;
 
-        // TODO: send wormhole message
+        // Send WH Message
+        let bridge_data:BridgeData = try_from_slice_unchecked(&ctx.accounts.wormhole_config.data.borrow_mut())?;
+        
+        //Send Fee
+        invoke_signed(
+            &transfer(
+                &ctx.accounts.payer.key(),
+                &ctx.accounts.wormhole_fee_collector.key(),
+                bridge_data.config.fee
+            ),
+            &[
+                ctx.accounts.payer.to_account_info(),
+                ctx.accounts.wormhole_fee_collector.to_account_info()
+            ],
+            &[]
+        )?;
+
+        //Send Post Msg Tx
+        let sendmsg_ix = Instruction {
+            program_id: ctx.accounts.core_bridge.key(),
+            accounts: vec![
+                AccountMeta::new(ctx.accounts.wormhole_config.key(), false),
+                AccountMeta::new(ctx.accounts.wormhole_message_key.key(), true),
+                AccountMeta::new_readonly(ctx.accounts.wormhole_derived_emitter.key(), true),
+                AccountMeta::new(ctx.accounts.wormhole_sequence.key(), false),
+                AccountMeta::new(ctx.accounts.payer.key(), true),
+                AccountMeta::new(ctx.accounts.wormhole_fee_collector.key(), false),
+                AccountMeta::new_readonly(ctx.accounts.clock.key(), false),
+                AccountMeta::new_readonly(ctx.accounts.rent.key(), false),
+                AccountMeta::new_readonly(ctx.accounts.system_program.key(), false),
+            ],
+            data: (
+                wormhole::Instruction::PostMessage,
+                PostMessageData {
+                    nonce: 0, //should only be emitted once, so no need for nonce
+                    payload: vaa_payload,
+                    consistency_level: wormhole::ConsistencyLevel::Confirmed,
+                },
+            ).try_to_vec()?,
+        };
+
+        invoke_signed(
+            &sendmsg_ix,
+            &[
+                ctx.accounts.wormhole_config.to_account_info(),
+                ctx.accounts.wormhole_message_key.to_account_info(),
+                ctx.accounts.wormhole_derived_emitter.to_account_info(),
+                ctx.accounts.wormhole_sequence.to_account_info(),
+                ctx.accounts.payer.to_account_info(),
+                ctx.accounts.wormhole_fee_collector.to_account_info(),
+                ctx.accounts.clock.to_account_info(),
+                ctx.accounts.rent.to_account_info(),
+                ctx.accounts.system_program.to_account_info(),
+            ],
+            &[
+                &[
+                    &b"emitter".as_ref(),
+                    &[*ctx.bumps.get("wormhole_derived_emitter").unwrap()]
+                ]
+            ]
+        )?;
 
         Ok(())
     }

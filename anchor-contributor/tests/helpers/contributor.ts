@@ -1,5 +1,6 @@
 import { importCoreWasm } from "@certusone/wormhole-sdk";
 import { BN, Program, web3 } from "@project-serum/anchor";
+import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey";
 import { AnchorContributor } from "../../target/types/anchor_contributor";
 
 import { findBuyerAccount, findSaleAccount, findSignedVaaAccount, KeyBump } from "./accounts";
@@ -50,6 +51,40 @@ export class IccoContributor {
         owner: payer.publicKey,
         systemProgram: web3.SystemProgram.programId,
       })
+      .rpc();
+  }
+
+  async attestContributions(payer: web3.Keypair, saleId:Buffer){
+    const program = this.program;
+
+    // Accounts
+    const saleAcc = findSaleAccount(program.programId, saleId).key
+    const whCoreBridge = new web3.PublicKey("Bridge1p5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o");
+    const whConfig = findProgramAddressSync([Buffer.from("Bridge")], whCoreBridge)[0];
+    const whFeeCollector = findProgramAddressSync([Buffer.from("fee_collector")], whCoreBridge)[0];
+    const whDerivedEmitter = findProgramAddressSync([Buffer.from("emitter")], program.programId)[0];
+    const whSequence = findProgramAddressSync([Buffer.from("Sequence"), whDerivedEmitter.toBytes()], whCoreBridge)[0];
+    const whMessageKey = web3.Keypair.generate();
+
+    return program.methods
+      .attestContributions()
+      .accounts({
+        sale: saleAcc,
+        owner: payer.publicKey,
+        systemProgram: web3.SystemProgram.programId,
+        coreBridge: whCoreBridge,
+        wormholeConfig: whConfig,
+        wormholeFeeCollector: whFeeCollector,
+        wormholeDerivedEmitter: whDerivedEmitter,
+        wormholeSequence: whSequence,
+        wormholeMessageKey: whMessageKey.publicKey,
+        clock: web3.SYSVAR_CLOCK_PUBKEY,
+        rent: web3.SYSVAR_RENT_PUBKEY,
+      })
+      .signers([
+        payer,
+        whMessageKey
+      ])
       .rpc();
   }
 

@@ -1,4 +1,8 @@
 use anchor_lang::prelude::*;
+use crate::constants::*;
+use std::str::FromStr;
+use anchor_lang::solana_program::sysvar::{rent, clock};
+use anchor_spl::{*, token::Token};
 
 use crate::{
     constants::{SEED_PREFIX_BUYER, SEED_PREFIX_SALE},
@@ -30,6 +34,7 @@ pub struct InitializeSale<'info> {
 
 /// Contribute is used for buyers to contribute collateral
 #[derive(Accounts)]
+#[instruction(token_index:u8, amount:u64)]
 pub struct Contribute<'info> {
     #[account(
         mut,
@@ -57,8 +62,29 @@ pub struct Contribute<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
     pub system_program: Program<'info, System>,
-}
 
+    #[account(
+        mut,
+        constraint = associated_token::get_associated_token_address(
+            &buyer.key(), 
+            &sale.totals[token_index as usize].mint
+        ) == sale_ata.key()
+    )]    
+    /// CHECK: *sigh*
+    pub buyer_ata: AccountInfo<'info>,
+
+    #[account(
+        mut,
+        constraint = associated_token::get_associated_token_address(
+            &sale.key(), 
+            &sale.totals[token_index as usize].mint
+        ) == sale_ata.key()
+    )]
+    /// CHECK: *sigh*
+    pub sale_ata: AccountInfo<'info>,
+
+    pub token_program: Program<'info, Token>
+}
 /// TODO: write something here
 #[derive(Accounts)]
 pub struct AttestContributions<'info> {
@@ -75,6 +101,66 @@ pub struct AttestContributions<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
     pub system_program: Program<'info, System>,
+
+    #[account(
+        constraint = core_bridge.key() == Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap()
+    )]
+    /// CHECK: If someone passes in the wrong account, Guardians won't read the message
+    pub core_bridge: AccountInfo<'info>,
+    #[account(
+        seeds = [
+            b"Bridge".as_ref()
+        ],
+        bump,
+        seeds::program = Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap(),
+        mut
+    )]
+    /// CHECK: If someone passes in the wrong account, Guardians won't read the message
+    pub wormhole_config: AccountInfo<'info>,
+    #[account(
+        seeds = [
+            b"fee_collector".as_ref()
+        ],
+        bump,
+        seeds::program = Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap(),
+        mut
+    )]
+    /// CHECK: If someone passes in the wrong account, Guardians won't read the message
+    pub wormhole_fee_collector: AccountInfo<'info>,
+    #[account(
+        seeds = [
+            b"emitter".as_ref(),
+        ],
+        bump,
+        mut
+    )]
+    /// CHECK: If someone passes in the wrong account, Guardians won't read the message
+    pub wormhole_derived_emitter: AccountInfo<'info>,
+    #[account(
+        seeds = [
+            b"Sequence".as_ref(),
+            wormhole_derived_emitter.key().to_bytes().as_ref()
+        ],
+        bump,
+        seeds::program = Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap(),
+        mut
+    )]
+    /// CHECK: If someone passes in the wrong account, Guardians won't read the message
+    pub wormhole_sequence: AccountInfo<'info>,
+    #[account(mut)]
+    pub wormhole_message_key: Signer<'info>,
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(
+        constraint = clock.key() == clock::id()
+    )]
+    /// CHECK: The account constraint will make sure it's the right clock var
+    pub clock: AccountInfo<'info>,
+    #[account(
+        constraint = rent.key() == rent::id()
+    )]
+    /// CHECK: The account constraint will make sure it's the right rent var
+    pub rent: AccountInfo<'info>,
 }
 
 /// SealSale is used to close sale so users can claim allocations (min raise met)

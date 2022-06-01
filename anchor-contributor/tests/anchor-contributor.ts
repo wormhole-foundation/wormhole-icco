@@ -287,12 +287,20 @@ describe("anchor-contributor", () => {
       // wait for sale to end here
       const blockTime = await getBlockTime(connection);
       const saleEnd = dummyConductor.saleEnd;
+      const saleId = dummyConductor.getSaleId();
       if (blockTime <= saleEnd) {
         await wait(saleEnd - blockTime + 1);
       }
+      
+      let caughtError = false;
+      try {
+        const tx = await contributor.attestContributions(orchestrator, saleId);
+      } catch (e) {
+        console.log(e);
+      }
 
       // now go about your business
-      expect(false).to.be.true;
+      expect(caughtError).to.be.false;
     });
 
     // TODO

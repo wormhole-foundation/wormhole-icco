@@ -69,7 +69,7 @@ describe("anchor-contributor", () => {
         const mint = new web3.PublicKey(tryHexToNativeString(token.address, CHAIN_ID_SOLANA));
 
         // create ata for buyer
-        const tokenAccount = await getOrCreateAssociatedTokenAccount(connection, orchestrator, mint, buyer.publicKey);
+        const tokenAccount = await getOrCreateAssociatedTokenAccount(connection, buyer, mint, buyer.publicKey);
 
         // now mint to buyer for testing
         await mintTo(
@@ -125,7 +125,6 @@ describe("anchor-contributor", () => {
       for (const token of dummyConductor.acceptedTokens) {
         const mint = new web3.PublicKey(tryHexToNativeString(token.address, CHAIN_ID_SOLANA));
 
-        /*
         const allowOwnerOffCurve = true;
         await getOrCreateAssociatedTokenAccount(
           connection,
@@ -134,7 +133,6 @@ describe("anchor-contributor", () => {
           contributor.custodianAccount.key,
           allowOwnerOffCurve
         );
-        */
       }
     });
   });

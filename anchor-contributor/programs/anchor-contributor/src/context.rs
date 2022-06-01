@@ -1,6 +1,7 @@
 use crate::constants::*;
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::sysvar::{clock, rent};
+use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use std::str::FromStr;
 
@@ -66,23 +67,12 @@ pub struct Contribute<'info> {
     pub custodian: Account<'info, Custodian>,
 
     #[account(
-        init,
-        payer = owner,
-        seeds=[SEED_PREFIX_CUSTODIAN.as_bytes(), accepted_mint.key().as_ref()],
-        bump,
-        token::mint=accepted_mint,
-        token::authority=custodian,
-    )]
-    pub custodian_ata: Account<'info, TokenAccount>,
-
-    #[account(
         mut,
         seeds = [
             SEED_PREFIX_SALE.as_bytes(),
             &sale.id,
         ],
         bump,
-        constraint = sale.custodian == custodian.key()
     )]
     pub sale: Account<'info, Sale>,
 
@@ -91,8 +81,7 @@ pub struct Contribute<'info> {
         seeds = [
             SEED_PREFIX_BUYER.as_bytes(),
             &sale.id,
-            //&owner.key().as_ref(),
-            owner.key().as_ref(),
+            &owner.key().as_ref(),
         ],
         payer = owner,
         bump,
@@ -105,13 +94,11 @@ pub struct Contribute<'info> {
     pub system_program: Program<'info, System>,
 
     /// CHECK: Buyer Associated Token Account
-    //pub buyer_ata: AccountInfo<'info>,
-    pub accepted_mint: Account<'info, Mint>,
-    #[account(
-        mut,
-        constraint=buyer_ata.owner == owner.key(),
-        constraint=buyer_ata.mint == accepted_mint.key()
-    )]
+    #[account(mut)]
+    pub custodian_ata: AccountInfo<'info>,
+
+    /// CHECK: Buyer Associated Token Account
+    #[account(mut)]
     pub buyer_ata: Account<'info, TokenAccount>,
 
     /// CHECK: Custodian Associated Token Account

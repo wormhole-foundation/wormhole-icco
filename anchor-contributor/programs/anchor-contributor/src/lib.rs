@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::borsh::try_from_slice_unchecked;
 use anchor_lang::solana_program::instruction::Instruction;
-use anchor_lang::solana_program::program::invoke_signed;
+use anchor_lang::solana_program::program::{invoke, invoke_signed};
 use anchor_lang::solana_program::system_instruction::transfer;
 
 mod constants;
@@ -23,7 +23,7 @@ declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 pub mod anchor_contributor {
     use super::*;
 
-    use anchor_spl::token;
+    use anchor_spl::*;
 
     pub fn create_custodian(ctx: Context<CreateCustodian>) -> Result<()> {
         let custodian = &mut ctx.accounts.custodian;
@@ -55,49 +55,78 @@ pub mod anchor_contributor {
         let sale = &mut ctx.accounts.sale;
 
         // find token_index
-        //let mint = token::accessor::mint(&ctx.accounts.buyer_ata.to_account_info())?;
-        let mint = &ctx.accounts.accepted_mint.key();
-        let token_index = sale.get_token_index(mint)?;
+        let mint = token::accessor::mint(&ctx.accounts.buyer_ata.to_account_info())?;
+        let token_index = sale.get_token_index(&mint)?;
 
         msg!(
             "mint: {:?}, token_index: {:?}, custodian_ata: {:?}, buyer_ata: {:?}",
             mint,
             token_index,
-            ctx.accounts.custodian_ata.key(),
-            ctx.accounts.buyer_ata.key()
+            &ctx.accounts.custodian_ata.key(),
+            &ctx.accounts.buyer_ata.key()
         );
 
-        let transfer_instruction = token::Transfer {
-            from: ctx.accounts.buyer_ata.to_account_info(),
-            to: ctx.accounts.custodian_ata.to_account_info(),
-            authority: ctx.accounts.owner.to_account_info(),
-        };
+        let owner = &ctx.accounts.owner;
 
-        let inner = vec![SEED_PREFIX_CUSTODIAN.as_bytes(), mint.as_ref()];
-        let outer = vec![inner.as_slice()];
-
-        let cpi_ctx = CpiContext::new_with_signer(
-            ctx.accounts.token_program.to_account_info(),
-            transfer_instruction,
-            outer.as_slice(),
+        //let ata_seeds: &'a [&[u8]] = &[&owner.key().as_ref(), &token::ID.as_ref(), &mint.as_ref()];
+        let (ata, bump) = Pubkey::find_program_address(
+            &[&owner.key().as_ref(), &token::ID.as_ref(), &mint.as_ref()],
+            &associated_token::AssociatedToken::id(),
         );
+        msg!("ata: {:?}, bump: {:?}", ata, bump);
 
-        token::transfer(cpi_ctx, amount)?;
         // spl transfer contribution
         /*
+        let ix = spl_token::instruction::transfer(
+            &token::ID,
+            &ctx.accounts.buyer_ata.key(),
+            &ctx.accounts.custodian_ata.key(),
+            &ctx.accounts.owner.key(),
+            &[&ctx.accounts.owner.key()],
+            amount,
+        )?;
+
+        invoke(
+            &ix,
+            &[
+                ctx.accounts.buyer_ata.to_account_info(),
+                ctx.accounts.custodian_ata.to_account_info(),
+                ctx.accounts.owner.to_account_info(),
+                ctx.accounts.token_program.to_account_info(),
+            ],
+        )?;
+        */
+
+        //let signer: &[&[u8]] = &[ctx.accounts.owner.key().as_ref()];
         token::transfer(
-            CpiContext::new(
+            CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
                 token::Transfer {
                     from: ctx.accounts.buyer_ata.to_account_info(),
                     to: ctx.accounts.custodian_ata.to_account_info(),
                     authority: ctx.accounts.owner.to_account_info(),
                 },
+                &[&[ctx.accounts.owner.key().as_ref()]],
             ),
             amount,
-        );
-        */
+        )?;
         msg!("after transfer");
+
+        let custodian_bump = ctx.bumps["custodian"];
+
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                token::Transfer {
+                    to: ctx.accounts.buyer_ata.to_account_info(),
+                    from: ctx.accounts.custodian_ata.to_account_info(),
+                    authority: ctx.accounts.custodian.to_account_info(),
+                },
+                &[&[SEED_PREFIX_CUSTODIAN.as_bytes(), &[custodian_bump]]],
+            ),
+            amount,
+        )?;
+        msg!("after another transfer");
 
         // leverage token index search from sale's accepted tokens to find index
         // on buyer's contributions

@@ -69,17 +69,22 @@ export class IccoContributor {
     const buyerAccount = findBuyerAccount(program.programId, saleId, payer.publicKey);
     const saleAccount = findSaleAccount(program.programId, saleId);
     const buyerAta = await getAssociatedTokenAddress(mint, payer.publicKey);
-    //const custodianAta = await getPdaAssociatedTokenAddress(mint, custodian);
-    const [custodianAta, _] = await web3.PublicKey.findProgramAddress(
-      [Buffer.from("icco-custodian"), mint.toBuffer()],
-      program.programId
-    );
+    const custodianAta = await getPdaAssociatedTokenAddress(mint, custodian);
+    //const [custodianAta, _] = await web3.PublicKey.findProgramAddress(
+    //  [Buffer.from("icco-custodian"), mint.toBuffer()],
+    //  program.programId
+    //);
 
     const connection = program.provider.connection;
     //console.log("buyer", await getAccount(connection, buyerAccount.key));
     //console.log("sale", await getAccount(connection, saleAccount.key));
     //console.log("buyerAta", await getAccount(connection, buyerAta));
     //console.log("custodianAta", await getAccount(connection, custodianAta));
+
+    console.log("buyer", buyerAccount.key.toString());
+    console.log("sale", saleAccount.key.toString());
+    console.log("buyerAta", buyerAta.toString());
+    console.log("custodianAta", custodianAta.toString());
 
     return program.methods
       .contribute(amount)
@@ -91,9 +96,7 @@ export class IccoContributor {
         systemProgram: web3.SystemProgram.programId,
         buyerAta,
         custodianAta,
-        acceptedMint: mint,
         tokenProgram: TOKEN_PROGRAM_ID,
-        rent: web3.SYSVAR_RENT_PUBKEY,
       })
       .signers([payer])
       .rpc({ skipPreflight: true });

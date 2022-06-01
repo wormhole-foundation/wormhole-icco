@@ -45,19 +45,19 @@ pub mod anchor_contributor {
         let accepted_account_address =
             sale.get_associated_accepted_address(&ctx.program_id, token_index)?;
 
-        /*
+        
         token::transfer(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
                 token::Transfer {
-                    from: ctx.accounts.buyer.to_account_info(),
-                    to: ctx.accounts.sale.to_account_info(),
-                    authority: ctx.accounts.sale.to_account_info()
+                    from: ctx.accounts.buyer_ata.to_account_info(),
+                    to: ctx.accounts.sale_ata.to_account_info(),
+                    authority: ctx.accounts.owner.to_account_info()
                 },
             ),
             amount
         );
-        */
+        
         // leverage token index search from sale's accepted tokens to find index
         // on buyer's contributions
         let clock = Clock::get()?;

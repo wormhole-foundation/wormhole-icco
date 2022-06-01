@@ -82,10 +82,10 @@ describe("anchor-contributor", () => {
         const saleId = dummyConductor.getSaleId();
         const tokenIndex = 69;
         const amount = new BN("420"); // 420 lamports
-
+        const mint = dummyConductor.acceptedTokens[tokenIndex].address;
         let caughtError = false;
         try {
-          const tx = await contributor.contribute(orchestrator, saleId, tokenIndex, amount);
+          const tx = await contributor.contribute(orchestrator, saleId, tokenIndex, mint, amount);
         } catch (e) {
           caughtError = e.error.errorCode.code == "AccountNotInitialized";
         }
@@ -177,10 +177,11 @@ describe("anchor-contributor", () => {
       const saleId = dummyConductor.getSaleId();
       const tokenIndex = 2;
       const amount = new BN("1000000000"); // 1,000,000,000 lamports
+      const mint = dummyConductor.acceptedTokens[tokenIndex].address;
 
       let caughtError = false;
       try {
-        const tx = await contributor.contribute(orchestrator, saleId, tokenIndex, amount);
+        const tx = await contributor.contribute(orchestrator, saleId, tokenIndex, mint, amount);
       } catch (e) {
         caughtError = e.error.errorCode.code == "ContributionTooEarly";
       }
@@ -213,7 +214,8 @@ describe("anchor-contributor", () => {
       const saleId = dummyConductor.getSaleId();
       for (const [tokenIndex, contributionAmounts] of contributions) {
         for (const amount of contributionAmounts) {
-          const tx = await contributor.contribute(orchestrator, saleId, tokenIndex, new BN(amount));
+          const mint = dummyConductor.acceptedTokens[tokenIndex].address;
+          const tx = await contributor.contribute(orchestrator, saleId, tokenIndex, mint, new BN(amount));
         }
       }
 
@@ -264,10 +266,11 @@ describe("anchor-contributor", () => {
       const saleId = dummyConductor.getSaleId();
       const tokenIndex = 1;
       const amount = new BN("1000000000"); // 1,000,000,000 lamports
+      const mint = dummyConductor.acceptedTokens[tokenIndex].address;
 
       let caughtError = false;
       try {
-        const tx = await contributor.contribute(orchestrator, saleId, tokenIndex, amount);
+        const tx = await contributor.contribute(orchestrator, saleId, tokenIndex, mint, amount);
       } catch (e) {
         caughtError = e.error.errorCode.code == "InvalidTokenIndex";
       }
@@ -312,10 +315,11 @@ describe("anchor-contributor", () => {
       const saleId = dummyConductor.getSaleId();
       const tokenIndex = 2;
       const amount = new BN("1000000000"); // 1,000,000,000 lamports
+      const mint = dummyConductor.acceptedTokens[tokenIndex].address;
 
       let caughtError = false;
       try {
-        const tx = await contributor.contribute(orchestrator, saleId, tokenIndex, amount);
+        const tx = await contributor.contribute(orchestrator, saleId, tokenIndex, mint, amount);
       } catch (e) {
         caughtError = e.error.errorCode.code == "SaleEnded";
       }
@@ -453,7 +457,8 @@ describe("anchor-contributor", () => {
       const saleId = dummyConductor.getSaleId();
       for (const [tokenIndex, contributionAmounts] of contributions) {
         for (const amount of contributionAmounts) {
-          const tx = await contributor.contribute(orchestrator, saleId, tokenIndex, new BN(amount));
+          const mint = dummyConductor.acceptedTokens[tokenIndex].address;
+          const tx = await contributor.contribute(orchestrator, saleId, tokenIndex, mint, new BN(amount));
         }
       }
     });

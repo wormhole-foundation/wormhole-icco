@@ -1,8 +1,8 @@
-import { importCoreWasm } from "@certusone/wormhole-sdk";
+import { CHAIN_ID_SOLANA, importCoreWasm, tryHexToNativeAssetString } from "@certusone/wormhole-sdk";
 import { BN, Program, web3 } from "@project-serum/anchor";
 import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey";
 import { AnchorContributor } from "../../target/types/anchor_contributor";
-
+import { getAssociatedTokenAddress } from "@solana/spl-token";
 import { findBuyerAccount, findSaleAccount, findSignedVaaAccount, KeyBump } from "./accounts";
 import { getBuyerState, getSaleState } from "./fetch";
 import { postVaa } from "./wormhole";
@@ -37,11 +37,14 @@ export class IccoContributor {
       .rpc();
   }
 
-  async contribute(payer: web3.Keypair, saleId: Buffer, tokenIndex: number, amount: BN): Promise<string> {
+  async contribute(payer: web3.Keypair, saleId: Buffer, tokenIndex: number, tokenMint: string, amount: BN): Promise<string> {
     const program = this.program;
 
     const buyerAccount = findBuyerAccount(program.programId, saleId, payer.publicKey);
     const saleAccount = findSaleAccount(program.programId, saleId);
+    const mint = new web3.PublicKey(tryHexToNativeAssetString(tokenMint, CHAIN_ID_SOLANA));
+    const buyerAta = await getAssociatedTokenAddress(mint, payer.publicKey);
+    const saleAta = await getAssociatedTokenAddress(mint, saleAccount.key);
 
     return program.methods
       .contribute(tokenIndex, amount)
@@ -50,6 +53,8 @@ export class IccoContributor {
         buyer: buyerAccount.key,
         owner: payer.publicKey,
         systemProgram: web3.SystemProgram.programId,
+        buyerAta: buyerAta,
+        saleAta: saleAta
       })
       .rpc();
   }

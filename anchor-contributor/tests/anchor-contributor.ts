@@ -44,7 +44,7 @@ describe("anchor-contributor", () => {
   const contributor = new IccoContributor(program);
 
   before("Airdrop SOL", async () => {
-    await connection.requestAirdrop(buyer.publicKey, 5e9);
+    await connection.requestAirdrop(buyer.publicKey, 8000000000); // 8,000,000,000 lamports
 
     // TODO: consider taking this out?
     await wait(5);
@@ -67,12 +67,11 @@ describe("anchor-contributor", () => {
 
       for (const token of acceptedTokens) {
         const mint = new web3.PublicKey(tryHexToNativeString(token.address, CHAIN_ID_SOLANA));
-        // create ata for program
-        await getOrCreateAssociatedTokenAccount(connection, orchestrator, mint, program.programId);
 
         // create ata for buyer
         const tokenAccount = await getOrCreateAssociatedTokenAccount(connection, orchestrator, mint, buyer.publicKey);
-        console.log("at Mint Accepted SPL...", token.index, mint.toString(), tokenAccount.address.toString());
+
+        // now mint to buyer for testing
         await mintTo(
           connection,
           orchestrator,
@@ -89,6 +88,7 @@ describe("anchor-contributor", () => {
   });
 
   describe("Sanity Checks", () => {
+    /*
     it("Cannot Contribute to Non-Existent Sale", async () => {
       {
         const saleId = dummyConductor.getSaleId();
@@ -107,32 +107,47 @@ describe("anchor-contributor", () => {
         }
       }
     });
+    */
+  });
+
+  describe("Custodian Setup", () => {
+    it("Create Custodian", async () => {
+      const tx = await contributor.createCustodian(orchestrator);
+
+      // get the custodian state
+      const custodianState = await contributor.getCustodian();
+
+      // verify
+      expect(custodianState.owner.toString()).to.equal(orchestrator.publicKey.toString());
+    });
+
+    it("Create ATAs for Custodian", async () => {
+      for (const token of dummyConductor.acceptedTokens) {
+        const mint = new web3.PublicKey(tryHexToNativeString(token.address, CHAIN_ID_SOLANA));
+
+        /*
+        const allowOwnerOffCurve = true;
+        await getOrCreateAssociatedTokenAccount(
+          connection,
+          orchestrator,
+          mint,
+          contributor.custodianAccount.key,
+          allowOwnerOffCurve
+        );
+        */
+      }
+    });
   });
 
   describe("Conduct Successful Sale", () => {
-    // contributor info
-    const contributions = new Map<number, string[]>();
-    contributions.set(2, ["1200000000", "3400000000"]);
-    contributions.set(8, ["5600000000", "7800000000"]);
-
+    // global contributions for test
+    const contributions = new Map<web3.PublicKey, string[]>();
     const totalContributions: BN[] = [];
-    contributions.forEach((amounts) => {
-      totalContributions.push(amounts.map((x) => new BN(x)).reduce((prev, curr) => prev.add(curr)));
-    });
 
     // squirrel away associated sale token account
     let saleTokenAccount: AssociatedTokenAccount;
 
     it("Create ATA for Sale Token if Non-Existent", async () => {
-      saleTokenAccount = await getOrCreateAssociatedTokenAccount(
-        connection,
-        orchestrator,
-        dummyConductor.getSaleTokenOnSolana(),
-        program.programId
-      );
-    });
-
-    it("Create ATA for Accepted Tokens if Non-Existent", async () => {
       saleTokenAccount = await getOrCreateAssociatedTokenAccount(
         connection,
         orchestrator,
@@ -194,6 +209,8 @@ describe("anchor-contributor", () => {
       }
     });
 
+    /*
+
     it("User Cannot Contribute Too Early", async () => {
       const saleId = dummyConductor.getSaleId();
       const tokenIndex = 2;
@@ -211,16 +228,28 @@ describe("anchor-contributor", () => {
         throw Error("did not catch expected error");
       }
     });
+    */
 
     it("User Contributes to Sale", async () => {
       // wait for sale to start here
       const blockTime = await getBlockTime(connection);
       const saleStart = dummyConductor.saleStart;
       if (blockTime <= saleStart) {
+        console.log("waiting", saleStart - blockTime + 1, "seconds");
         await wait(saleStart - blockTime + 1);
       }
 
+      // prep contributions info
       const acceptedTokens = dummyConductor.acceptedTokens;
+      contributions.set(hexToPublicKey(acceptedTokens[0].address), ["1200000000", "3400000000"]);
+      contributions.set(hexToPublicKey(acceptedTokens[3].address), ["5600000000", "7800000000"]);
+
+      console.log("contributions", contributions);
+
+      contributions.forEach((amounts) => {
+        totalContributions.push(amounts.map((x) => new BN(x)).reduce((prev, curr) => prev.add(curr)));
+      });
+
       const startingBalanceBuyer = await acceptedTokens.map(async (token) => {
         const mint = hexToPublicKey(token.address);
         return getSplBalance(connection, mint, buyer.publicKey);
@@ -233,26 +262,24 @@ describe("anchor-contributor", () => {
       // now go about your business
       // contribute multiple times
       const saleId = dummyConductor.getSaleId();
-      for (const [tokenIndex, contributionAmounts] of contributions) {
+      for (const [mint, contributionAmounts] of contributions) {
         for (const amount of contributionAmounts) {
-          const mint = dummyConductor.acceptedTokens[tokenIndex].address;
-          console.log("mint hexlified", mint);
-          const tx = await contributor.contribute(buyer, saleId, tokenIndex, mint, new BN(amount));
+          //const mint = dummyConductor.getAcceptedToken(tokenIndex).address;
+          const tx = await contributor.contribute(buyer, saleId, mint, new BN(amount));
         }
       }
 
-      {
-        const saleId = dummyConductor.getSaleId();
-        const expectedContributedValues = [
-          totalContributions[0],
-          new BN(0),
-          new BN(0),
-          totalContributions[1],
-          new BN(0),
-          new BN(0),
-          new BN(0),
-          new BN(0),
-        ];
+      const expectedContributedValues = [
+        totalContributions[0],
+        new BN(0),
+        new BN(0),
+        totalContributions[1],
+        new BN(0),
+        new BN(0),
+        new BN(0),
+        new BN(0),
+      ];
+      /*
 
         // check buyer state
         {
@@ -279,7 +306,7 @@ describe("anchor-contributor", () => {
             expect(total.excessContributions.toString()).to.equal("0");
           }
         }
-      }
+      */
 
       // TODO: check balances on contract and buyer
     });

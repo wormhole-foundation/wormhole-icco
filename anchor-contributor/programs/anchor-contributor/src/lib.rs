@@ -3,7 +3,6 @@ use anchor_lang::solana_program::borsh::try_from_slice_unchecked;
 use anchor_lang::solana_program::instruction::Instruction;
 use anchor_lang::solana_program::program::invoke_signed;
 use anchor_lang::solana_program::system_instruction::transfer;
-use anchor_spl::*;
 
 mod constants;
 mod context;
@@ -24,9 +23,23 @@ declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 pub mod anchor_contributor {
     use super::*;
 
+    use anchor_spl::token;
+
+    pub fn create_custodian(ctx: Context<CreateCustodian>) -> Result<()> {
+        let custodian = &mut ctx.accounts.custodian;
+        custodian.owner = ctx.accounts.owner.key();
+
+        Ok(())
+    }
+
     pub fn init_sale(ctx: Context<InitializeSale>) -> Result<()> {
         let msg = verify_conductor_vaa(&ctx.accounts.core_bridge_vaa, PAYLOAD_SALE_INIT_SOLANA)?;
         let sale = &mut ctx.accounts.sale;
+
+        // set token custodian to check for future sale updates
+        sale.set_custodian(&ctx.accounts.custodian.key());
+
+        // now parse vaa
         sale.parse_sale_init(&msg.payload)?;
 
         // TODO: use associated sale token account to get decimals
@@ -37,33 +50,55 @@ pub mod anchor_contributor {
         Ok(())
     }
 
-    pub fn contribute(ctx: Context<Contribute>, token_index: u8, amount: u64) -> Result<()> {
+    pub fn contribute(ctx: Context<Contribute>, amount: u64) -> Result<()> {
         // get accepted token index
         let sale = &mut ctx.accounts.sale;
 
-        /*
-        let ata = associated_token::get_associated_token_address(
-            &owner.key(),
-            &sale.totals[token_index as usize].mint
+        // find token_index
+        //let mint = token::accessor::mint(&ctx.accounts.buyer_ata.to_account_info())?;
+        let mint = &ctx.accounts.accepted_mint.key();
+        let token_index = sale.get_token_index(mint)?;
+
+        msg!(
+            "mint: {:?}, token_index: {:?}, custodian_ata: {:?}, buyer_ata: {:?}",
+            mint,
+            token_index,
+            ctx.accounts.custodian_ata.key(),
+            ctx.accounts.buyer_ata.key()
         );
-        msg!("computed ata: {}, buyer_ata: {}", ata, buyer_ata.key());
-        */
 
-        // TODO: need to do spl transfer from buyer's wallet to accepted token's ATA
-        let accepted_account_address =
-            sale.get_associated_accepted_address(&ctx.program_id, token_index)?;
+        let transfer_instruction = token::Transfer {
+            from: ctx.accounts.buyer_ata.to_account_info(),
+            to: ctx.accounts.custodian_ata.to_account_info(),
+            authority: ctx.accounts.owner.to_account_info(),
+        };
 
+        let inner = vec![SEED_PREFIX_CUSTODIAN.as_bytes(), mint.as_ref()];
+        let outer = vec![inner.as_slice()];
+
+        let cpi_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            transfer_instruction,
+            outer.as_slice(),
+        );
+
+        token::transfer(cpi_ctx, amount)?;
+        // spl transfer contribution
+        /*
         token::transfer(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
                 token::Transfer {
                     from: ctx.accounts.buyer_ata.to_account_info(),
-                    to: ctx.accounts.sale_ata.to_account_info(),
+                    to: ctx.accounts.custodian_ata.to_account_info(),
                     authority: ctx.accounts.owner.to_account_info(),
                 },
             ),
             amount,
         );
+        */
+        msg!("after transfer");
+
         // leverage token index search from sale's accepted tokens to find index
         // on buyer's contributions
         let clock = Clock::get()?;

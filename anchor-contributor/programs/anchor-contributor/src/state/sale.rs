@@ -14,6 +14,7 @@ use crate::{
 #[account]
 #[derive(Debug)]
 pub struct Sale {
+    pub custodian: Pubkey,                     // 32
     pub id: [u8; 32],                          // 32
     pub associated_sale_token_address: Pubkey, // 32
     pub token_chain: u16,                      // 2
@@ -82,6 +83,7 @@ impl AssetTotal {
 impl Sale {
     pub const MAXIMUM_SIZE: usize = 32
         + 32
+        + 32
         + 2
         + 1
         + (8 + 8)
@@ -91,6 +93,10 @@ impl Sale {
         + (4 + AssetTotal::MAXIMUM_SIZE * ACCEPTED_TOKENS_MAX)
         + 1
         + 1;
+
+    pub fn set_custodian(&mut self, custodian: &Pubkey) {
+        self.custodian = custodian.clone();
+    }
 
     pub fn parse_sale_init(&mut self, payload: &[u8]) -> Result<()> {
         require!(!self.initialized, SaleError::SaleAlreadyInitialized);
@@ -150,16 +156,19 @@ impl Sale {
         Ok(())
     }
 
-    pub fn get_associated_accepted_address(
+    pub fn get_token_index(&self, mint: &Pubkey) -> Result<u8> {
+        let result = self.totals.iter().find(|item| item.mint == *mint);
+        require!(result != None, SaleError::InvalidTokenIndex);
+        Ok(result.unwrap().token_index)
+    }
+
+    pub fn get_associated_accepted_token_address(
         &self,
-        contributor: &Pubkey,
         token_index: u8,
+        owner: &Pubkey,
     ) -> Result<Pubkey> {
         let idx = self.get_index(token_index)?;
-        Ok(get_associated_token_address(
-            contributor,
-            &self.totals[idx].mint,
-        ))
+        Ok(get_associated_token_address(owner, &self.totals[idx].mint))
     }
 
     pub fn update_total_contributions(

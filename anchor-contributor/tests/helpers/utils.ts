@@ -28,3 +28,7 @@ export async function getSplBalance(connection: web3.Connection, mint: web3.Publ
 export function hexToPublicKey(hexlified: string): web3.PublicKey {
   return new web3.PublicKey(tryHexToNativeString(hexlified, CHAIN_ID_SOLANA));
 }
+
+export async function getPdaAssociatedTokenAddress(mint: web3.PublicKey, pda: web3.PublicKey): Promise<web3.PublicKey> {
+  return getAssociatedTokenAddress(mint, pda, true);
+}

@@ -7,17 +7,35 @@ import {
 import { BN, Program, web3 } from "@project-serum/anchor";
 import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey";
 import { AnchorContributor } from "../../target/types/anchor_contributor";
-import { getAccount, getAssociatedTokenAddress } from "@solana/spl-token";
-import { findBuyerAccount, findSaleAccount, findSignedVaaAccount, KeyBump } from "./accounts";
-import { getBuyerState, getSaleState } from "./fetch";
+import { getAccount, getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { findBuyerAccount, findCustodianAccount, findSaleAccount, findSignedVaaAccount, KeyBump } from "./accounts";
+import { getBuyerState, getCustodianState, getSaleState } from "./fetch";
 import { postVaa } from "./wormhole";
+import { getPdaAssociatedTokenAddress } from "./utils";
 
 export class IccoContributor {
   program: Program<AnchorContributor>;
-  tokenCustodianAccount: KeyBump;
+  custodianAccount: KeyBump;
 
   constructor(program: Program<AnchorContributor>) {
     this.program = program;
+    this.custodianAccount = findCustodianAccount(this.program.programId);
+  }
+
+  async createCustodian(payer: web3.Keypair) {
+    const program = this.program;
+    await program.methods
+      .createCustodian()
+      .accounts({
+        owner: payer.publicKey,
+        custodian: this.custodianAccount.key,
+        systemProgram: web3.SystemProgram.programId,
+      })
+      .rpc();
+  }
+
+  async getCustodian() {
+    return getCustodianState(this.program, this.custodianAccount);
   }
 
   async initSale(payer: web3.Keypair, initSaleVaa: Buffer): Promise<string> {
@@ -34,6 +52,7 @@ export class IccoContributor {
     return program.methods
       .initSale()
       .accounts({
+        custodian: this.custodianAccount.key,
         sale: saleAccount.key,
         coreBridgeVaa: signedVaaAccount.key,
         owner: payer.publicKey,
@@ -42,36 +61,39 @@ export class IccoContributor {
       .rpc();
   }
 
-  async contribute(
-    payer: web3.Keypair,
-    saleId: Buffer,
-    tokenIndex: number,
-    tokenMint: string,
-    amount: BN
-  ): Promise<string> {
+  async contribute(payer: web3.Keypair, saleId: Buffer, mint: web3.PublicKey, amount: BN): Promise<string> {
     const program = this.program;
+
+    const custodian = this.custodianAccount.key;
 
     const buyerAccount = findBuyerAccount(program.programId, saleId, payer.publicKey);
     const saleAccount = findSaleAccount(program.programId, saleId);
-    console.log("verify hexlified mint", tokenMint);
-    const mint = new web3.PublicKey(tryHexToNativeString(tokenMint, CHAIN_ID_SOLANA));
-    console.log("mint pubkey", tokenIndex, mint.toString());
     const buyerAta = await getAssociatedTokenAddress(mint, payer.publicKey);
-    console.log("buyerAta", buyerAta.toString());
+    //const custodianAta = await getPdaAssociatedTokenAddress(mint, custodian);
+    const [custodianAta, _] = await web3.PublicKey.findProgramAddress(
+      [Buffer.from("icco-custodian"), mint.toBuffer()],
+      program.programId
+    );
 
-    const checkBuyerAta = await getAccount(program.provider.connection, buyerAta);
-    console.log("checkBuyerAta", checkBuyerAta);
-    const saleAta = await getAssociatedTokenAddress(mint, program.programId);
+    const connection = program.provider.connection;
+    //console.log("buyer", await getAccount(connection, buyerAccount.key));
+    //console.log("sale", await getAccount(connection, saleAccount.key));
+    //console.log("buyerAta", await getAccount(connection, buyerAta));
+    //console.log("custodianAta", await getAccount(connection, custodianAta));
 
     return program.methods
-      .contribute(tokenIndex, amount)
+      .contribute(amount)
       .accounts({
+        custodian,
         sale: saleAccount.key,
         buyer: buyerAccount.key,
         owner: payer.publicKey,
         systemProgram: web3.SystemProgram.programId,
-        buyerAta: buyerAta,
-        saleAta: saleAta,
+        buyerAta,
+        custodianAta,
+        acceptedMint: mint,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        rent: web3.SYSVAR_RENT_PUBKEY,
       })
       .signers([payer])
       .rpc({ skipPreflight: true });

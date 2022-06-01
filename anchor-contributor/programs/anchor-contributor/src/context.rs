@@ -1,17 +1,37 @@
-use anchor_lang::prelude::*;
 use crate::constants::*;
+use anchor_lang::prelude::*;
+use anchor_lang::solana_program::sysvar::{clock, rent};
+use anchor_spl::token::{Mint, Token, TokenAccount};
 use std::str::FromStr;
-use anchor_lang::solana_program::sysvar::{rent, clock};
-use anchor_spl::{*, token::Token};
 
 use crate::{
-    constants::{SEED_PREFIX_BUYER, SEED_PREFIX_SALE},
-    state::{Buyer, Sale},
+    constants::{SEED_PREFIX_BUYER, SEED_PREFIX_CUSTODIAN, SEED_PREFIX_SALE},
+    state::{Buyer, Custodian, Sale},
     wormhole::get_message_data,
 };
 
 #[derive(Accounts)]
+pub struct CreateCustodian<'info> {
+    #[account(
+        init,
+        payer = owner,
+        seeds = [
+            SEED_PREFIX_CUSTODIAN.as_bytes(),
+        ],
+        bump,
+        space = 8 + Custodian::MAXIMUM_SIZE,
+    )]
+    pub custodian: Account<'info, Custodian>,
+
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
 pub struct InitializeSale<'info> {
+    pub custodian: Account<'info, Custodian>,
+
     #[account(
         init,
         seeds = [
@@ -34,8 +54,27 @@ pub struct InitializeSale<'info> {
 
 /// Contribute is used for buyers to contribute collateral
 #[derive(Accounts)]
-#[instruction(token_index:u8, amount:u64)]
+#[instruction(amount:u64)]
 pub struct Contribute<'info> {
+    #[account(
+        mut,
+        seeds = [
+            SEED_PREFIX_CUSTODIAN.as_bytes(),
+        ],
+        bump,
+    )]
+    pub custodian: Account<'info, Custodian>,
+
+    #[account(
+        init,
+        payer = owner,
+        seeds=[SEED_PREFIX_CUSTODIAN.as_bytes(), accepted_mint.key().as_ref()],
+        bump,
+        token::mint=accepted_mint,
+        token::authority=custodian,
+    )]
+    pub custodian_ata: Account<'info, TokenAccount>,
+
     #[account(
         mut,
         seeds = [
@@ -43,6 +82,7 @@ pub struct Contribute<'info> {
             &sale.id,
         ],
         bump,
+        constraint = sale.custodian == custodian.key()
     )]
     pub sale: Account<'info, Sale>,
 
@@ -51,7 +91,8 @@ pub struct Contribute<'info> {
         seeds = [
             SEED_PREFIX_BUYER.as_bytes(),
             &sale.id,
-            &owner.key().as_ref(),
+            //&owner.key().as_ref(),
+            owner.key().as_ref(),
         ],
         payer = owner,
         bump,
@@ -63,28 +104,23 @@ pub struct Contribute<'info> {
     pub owner: Signer<'info>,
     pub system_program: Program<'info, System>,
 
+    /// CHECK: Buyer Associated Token Account
+    //pub buyer_ata: AccountInfo<'info>,
+    pub accepted_mint: Account<'info, Mint>,
     #[account(
         mut,
-        constraint = associated_token::get_associated_token_address(
-            &owner.key(),
-            &sale.totals[token_index as usize].mint
-        ) == buyer_ata.key()
-    )]  
-    /// CHECK: *sigh*
-    pub buyer_ata: AccountInfo<'info>,
-
-    #[account(
-        mut,
-        constraint = associated_token::get_associated_token_address(
-            &program_id, 
-            &sale.totals[token_index as usize].mint
-        ) == sale_ata.key()
+        constraint=buyer_ata.owner == owner.key(),
+        constraint=buyer_ata.mint == accepted_mint.key()
     )]
-    /// CHECK: *sigh*
-    pub sale_ata: AccountInfo<'info>,
+    pub buyer_ata: Account<'info, TokenAccount>,
 
-    pub token_program: Program<'info, Token>
+    /// CHECK: Custodian Associated Token Account
+    //pub custodian_ata: AccountInfo<'info>,
+    pub token_program: Program<'info, Token>,
+
+    rent: Sysvar<'info, Rent>,
 }
+
 /// TODO: write something here
 #[derive(Accounts)]
 pub struct AttestContributions<'info> {
@@ -169,6 +205,15 @@ pub struct SealSale<'info> {
     #[account(
         mut,
         seeds = [
+            SEED_PREFIX_CUSTODIAN.as_bytes(),
+        ],
+        bump,
+    )]
+    pub custodian: Account<'info, Custodian>,
+
+    #[account(
+        mut,
+        seeds = [
             SEED_PREFIX_SALE.as_bytes(),
             &get_sale_id(&core_bridge_vaa)?,
         ],
@@ -247,6 +292,15 @@ pub struct AbortSale<'info> {
 /// ClaimRefund is used for buyers to collect their contributed collateral back
 #[derive(Accounts)]
 pub struct ClaimRefund<'info> {
+    #[account(
+        mut,
+        seeds = [
+            SEED_PREFIX_CUSTODIAN.as_bytes(),
+        ],
+        bump,
+    )]
+    pub custodian: Account<'info, Custodian>,
+
     #[account(
         mut,
         seeds = [

@@ -41,23 +41,29 @@ pub mod anchor_contributor {
         // get accepted token index
         let sale = &mut ctx.accounts.sale;
 
+        /*
+        let ata = associated_token::get_associated_token_address(
+            &owner.key(),
+            &sale.totals[token_index as usize].mint
+        );
+        msg!("computed ata: {}, buyer_ata: {}", ata, buyer_ata.key());
+        */
+
         // TODO: need to do spl transfer from buyer's wallet to accepted token's ATA
         let accepted_account_address =
             sale.get_associated_accepted_address(&ctx.program_id, token_index)?;
 
-        
         token::transfer(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
                 token::Transfer {
                     from: ctx.accounts.buyer_ata.to_account_info(),
                     to: ctx.accounts.sale_ata.to_account_info(),
-                    authority: ctx.accounts.owner.to_account_info()
+                    authority: ctx.accounts.owner.to_account_info(),
                 },
             ),
-            amount
+            amount,
         );
-        
         // leverage token index search from sale's accepted tokens to find index
         // on buyer's contributions
         let clock = Clock::get()?;
@@ -70,6 +76,7 @@ pub mod anchor_contributor {
         }
         buyer.contribute(idx, amount)?;
 
+        msg!("finished");
         Ok(())
     }
 
@@ -160,8 +167,10 @@ pub mod anchor_contributor {
         let conductor_address = get_conductor_address()?;
 
         for total in &sale.totals {
+            let mint = total.mint;
             let amount = total.contributions;
-            // token bridge transfer this amount over to conductor_address on conductor_chain
+            let recipient = sale.recipient;
+            // token bridge transfer this amount over to conductor_address on conductor_chain to recipient
         }
 
         Ok(())

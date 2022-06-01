@@ -66,17 +66,17 @@ pub struct Contribute<'info> {
     #[account(
         mut,
         constraint = associated_token::get_associated_token_address(
-            &buyer.key(), 
+            &owner.key(),
             &sale.totals[token_index as usize].mint
-        ) == sale_ata.key()
-    )]    
+        ) == buyer_ata.key()
+    )]  
     /// CHECK: *sigh*
     pub buyer_ata: AccountInfo<'info>,
 
     #[account(
         mut,
         constraint = associated_token::get_associated_token_address(
-            &sale.key(), 
+            &program_id, 
             &sale.totals[token_index as usize].mint
         ) == sale_ata.key()
     )]

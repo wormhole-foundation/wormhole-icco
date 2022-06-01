@@ -1,8 +1,13 @@
-import { CHAIN_ID_SOLANA, importCoreWasm, tryHexToNativeAssetString } from "@certusone/wormhole-sdk";
+import {
+  CHAIN_ID_SOLANA,
+  importCoreWasm,
+  tryHexToNativeAssetString,
+  tryHexToNativeString,
+} from "@certusone/wormhole-sdk";
 import { BN, Program, web3 } from "@project-serum/anchor";
 import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey";
 import { AnchorContributor } from "../../target/types/anchor_contributor";
-import { getAssociatedTokenAddress } from "@solana/spl-token";
+import { getAccount, getAssociatedTokenAddress } from "@solana/spl-token";
 import { findBuyerAccount, findSaleAccount, findSignedVaaAccount, KeyBump } from "./accounts";
 import { getBuyerState, getSaleState } from "./fetch";
 import { postVaa } from "./wormhole";
@@ -37,14 +42,26 @@ export class IccoContributor {
       .rpc();
   }
 
-  async contribute(payer: web3.Keypair, saleId: Buffer, tokenIndex: number, tokenMint: string, amount: BN): Promise<string> {
+  async contribute(
+    payer: web3.Keypair,
+    saleId: Buffer,
+    tokenIndex: number,
+    tokenMint: string,
+    amount: BN
+  ): Promise<string> {
     const program = this.program;
 
     const buyerAccount = findBuyerAccount(program.programId, saleId, payer.publicKey);
     const saleAccount = findSaleAccount(program.programId, saleId);
-    const mint = new web3.PublicKey(tryHexToNativeAssetString(tokenMint, CHAIN_ID_SOLANA));
+    console.log("verify hexlified mint", tokenMint);
+    const mint = new web3.PublicKey(tryHexToNativeString(tokenMint, CHAIN_ID_SOLANA));
+    console.log("mint pubkey", tokenIndex, mint.toString());
     const buyerAta = await getAssociatedTokenAddress(mint, payer.publicKey);
-    const saleAta = await getAssociatedTokenAddress(mint, saleAccount.key);
+    console.log("buyerAta", buyerAta.toString());
+
+    const checkBuyerAta = await getAccount(program.provider.connection, buyerAta);
+    console.log("checkBuyerAta", checkBuyerAta);
+    const saleAta = await getAssociatedTokenAddress(mint, program.programId);
 
     return program.methods
       .contribute(tokenIndex, amount)
@@ -54,16 +71,17 @@ export class IccoContributor {
         owner: payer.publicKey,
         systemProgram: web3.SystemProgram.programId,
         buyerAta: buyerAta,
-        saleAta: saleAta
+        saleAta: saleAta,
       })
-      .rpc();
+      .signers([payer])
+      .rpc({ skipPreflight: true });
   }
 
-  async attestContributions(payer: web3.Keypair, saleId:Buffer){
+  async attestContributions(payer: web3.Keypair, saleId: Buffer) {
     const program = this.program;
 
     // Accounts
-    const saleAcc = findSaleAccount(program.programId, saleId).key
+    const saleAcc = findSaleAccount(program.programId, saleId).key;
     const whCoreBridge = new web3.PublicKey("Bridge1p5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o");
     const whConfig = findProgramAddressSync([Buffer.from("Bridge")], whCoreBridge)[0];
     const whFeeCollector = findProgramAddressSync([Buffer.from("fee_collector")], whCoreBridge)[0];
@@ -86,10 +104,7 @@ export class IccoContributor {
         clock: web3.SYSVAR_CLOCK_PUBKEY,
         rent: web3.SYSVAR_RENT_PUBKEY,
       })
-      .signers([
-        payer,
-        whMessageKey
-      ])
+      .signers([payer, whMessageKey])
       .rpc();
   }
 

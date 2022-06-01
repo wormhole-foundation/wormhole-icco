@@ -5,19 +5,14 @@ import { readFileSync } from "fs";
 import { CHAIN_ID_SOLANA, setDefaultWasm, tryHexToNativeString, tryNativeToHexString } from "@certusone/wormhole-sdk";
 import {
   getOrCreateAssociatedTokenAccount,
-  getAssociatedTokenAddress,
-  createAssociatedTokenAccountInstruction,
-  createSyncNativeInstruction,
-  getAccount,
   createMint,
-  getMint,
   mintTo,
   Account as AssociatedTokenAccount,
 } from "@solana/spl-token";
 
 import { DummyConductor, MAX_ACCEPTED_TOKENS } from "./helpers/conductor";
 import { IccoContributor } from "./helpers/contributor";
-import { getBlockTime, getSplBalance, hexToPublicKey, wait } from "./helpers/utils";
+import { getBlockTime, getPdaSplBalance, getSplBalance, hexToPublicKey, wait } from "./helpers/utils";
 
 setDefaultWasm("node");
 
@@ -72,32 +67,33 @@ describe("anchor-contributor", () => {
         const tokenAccount = await getOrCreateAssociatedTokenAccount(connection, buyer, mint, buyer.publicKey);
 
         // now mint to buyer for testing
+        let amount = new BN("20000000000");
         await mintTo(
           connection,
           orchestrator,
           mint,
           tokenAccount.address,
           orchestrator,
-          20000000000n // 20,000,000,000 lamports
+          BigInt(amount.toString()) // 20,000,000,000 lamports
         );
 
         const balance = await getSplBalance(connection, mint, buyer.publicKey);
-        expect(balance).to.equal(20000000000n);
+        expect(balance.toString()).to.equal(amount.toString());
       }
     });
   });
 
+  /*
   describe("Sanity Checks", () => {
-    /*
     it("Cannot Contribute to Non-Existent Sale", async () => {
       {
         const saleId = dummyConductor.getSaleId();
         const tokenIndex = 69;
         const amount = new BN("420"); // 420 lamports
-        const mint = dummyConductor.acceptedTokens[tokenIndex].address;
         let caughtError = false;
         try {
-          const tx = await contributor.contribute(orchestrator, saleId, tokenIndex, mint, amount);
+        const mint = hexToPublicKey(dummyConductor.acceptedTokens[0].address);
+        const tx = await contributor.contribute(buyer, saleId, mint, new BN(amount));
         } catch (e) {
           caughtError = e.error.errorCode.code == "AccountNotInitialized";
         }
@@ -107,8 +103,8 @@ describe("anchor-contributor", () => {
         }
       }
     });
-    */
   });
+  */
 
   describe("Custodian Setup", () => {
     it("Create Custodian", async () => {
@@ -155,7 +151,7 @@ describe("anchor-contributor", () => {
     });
 
     it("Orchestrator Initialize Sale with Signed VAA", async () => {
-      const startTime = 10 + (await getBlockTime(connection));
+      const startTime = 5 + (await getBlockTime(connection));
       const duration = 5; // seconds
       const initSaleVaa = dummyConductor.createSale(startTime, duration, saleTokenAccount.address);
       const tx = await contributor.initSale(orchestrator, initSaleVaa);
@@ -207,8 +203,6 @@ describe("anchor-contributor", () => {
       }
     });
 
-    /*
-
     it("User Cannot Contribute Too Early", async () => {
       const saleId = dummyConductor.getSaleId();
       const tokenIndex = 2;
@@ -217,55 +211,72 @@ describe("anchor-contributor", () => {
 
       let caughtError = false;
       try {
-        const tx = await contributor.contribute(buyer, saleId, tokenIndex, mint, amount);
+        const mint = hexToPublicKey(dummyConductor.acceptedTokens[0].address);
+        const tx = await contributor.contribute(buyer, saleId, mint, new BN(amount));
       } catch (e) {
-        caughtError = e.error.errorCode.code == "ContributionTooEarly";
+        console.log("too early", e);
+        caughtError = e.msg == "ContributionTooEarly";
       }
 
       if (!caughtError) {
         throw Error("did not catch expected error");
       }
     });
-    */
 
     it("User Contributes to Sale", async () => {
       // wait for sale to start here
       const blockTime = await getBlockTime(connection);
       const saleStart = dummyConductor.saleStart;
       if (blockTime <= saleStart) {
-        console.log("waiting", saleStart - blockTime + 1, "seconds");
+        //console.log("waiting", saleStart - blockTime + 1, "seconds");
         await wait(saleStart - blockTime + 1);
       }
 
       // prep contributions info
       const acceptedTokens = dummyConductor.acceptedTokens;
-      contributions.set(hexToPublicKey(acceptedTokens[0].address), ["1200000000", "3400000000"]);
-      contributions.set(hexToPublicKey(acceptedTokens[3].address), ["5600000000", "7800000000"]);
+      const contributedTokens = [hexToPublicKey(acceptedTokens[0].address), hexToPublicKey(acceptedTokens[3].address)];
+      contributions.set(contributedTokens[0], ["1200000000", "3400000000"]);
+      contributions.set(contributedTokens[1], ["5600000000", "7800000000"]);
 
-      console.log("contributions", contributions);
-
-      contributions.forEach((amounts) => {
+      contributedTokens.forEach((mint) => {
+        const amounts = contributions.get(mint);
         totalContributions.push(amounts.map((x) => new BN(x)).reduce((prev, curr) => prev.add(curr)));
       });
 
-      const startingBalanceBuyer = await acceptedTokens.map(async (token) => {
-        const mint = hexToPublicKey(token.address);
-        return getSplBalance(connection, mint, buyer.publicKey);
-      });
-      const startingBalanceContributor = await acceptedTokens.map(async (token) => {
-        const mint = hexToPublicKey(token.address);
-        return getSplBalance(connection, mint, program.programId);
-      });
+      const startingBalanceBuyer = await Promise.all(
+        acceptedTokens.map(async (token) => {
+          const mint = hexToPublicKey(token.address);
+          return getSplBalance(connection, mint, buyer.publicKey);
+        })
+      );
+      const startingBalanceCustodian = await Promise.all(
+        acceptedTokens.map(async (token) => {
+          const mint = hexToPublicKey(token.address);
+          return getPdaSplBalance(connection, mint, contributor.custodianAccount.key);
+        })
+      );
 
       // now go about your business
       // contribute multiple times
       const saleId = dummyConductor.getSaleId();
-      for (const [mint, contributionAmounts] of contributions) {
-        for (const amount of contributionAmounts) {
-          //const mint = dummyConductor.getAcceptedToken(tokenIndex).address;
+      for (const mint of contributedTokens) {
+        for (const amount of contributions.get(mint)) {
           const tx = await contributor.contribute(buyer, saleId, mint, new BN(amount));
         }
       }
+
+      const endingBalanceBuyer = await Promise.all(
+        acceptedTokens.map(async (token) => {
+          const mint = hexToPublicKey(token.address);
+          return getSplBalance(connection, mint, buyer.publicKey);
+        })
+      );
+      const endingBalanceCustodian = await Promise.all(
+        acceptedTokens.map(async (token) => {
+          const mint = hexToPublicKey(token.address);
+          return getPdaSplBalance(connection, mint, contributor.custodianAccount.key);
+        })
+      );
 
       const expectedContributedValues = [
         totalContributions[0],
@@ -277,60 +288,52 @@ describe("anchor-contributor", () => {
         new BN(0),
         new BN(0),
       ];
-      /*
+      const numExpected = expectedContributedValues.length;
 
-        // check buyer state
-        {
-          const buyerState = await contributor.getBuyer(saleId, orchestrator.publicKey);
-          expect(buyerState.status).has.key("active");
-
-          const contributed = buyerState.contributed;
-          for (let i = 0; i < expectedContributedValues.length; ++i) {
-            expect(contributed[i].toString()).to.equal(expectedContributedValues[i].toString());
-          }
-        }
-
-        // check sale state
-        {
-          const saleState = await contributor.getSale(saleId);
-
-          // check totals
-          const totals: any = saleState.totals;
-
-          for (let i = 0; i < expectedContributedValues.length; ++i) {
-            const total = totals[i];
-            expect(total.contributions.toString()).to.equal(expectedContributedValues[i].toString());
-            expect(total.allocations.toString()).to.equal("0");
-            expect(total.excessContributions.toString()).to.equal("0");
-          }
-        }
-      */
-
-      // TODO: check balances on contract and buyer
-    });
-    /*
-
-    it("User Cannot Contribute to Non-Existent Token Index", async () => {
-      const saleId = dummyConductor.getSaleId();
-      const tokenIndex = 1;
-      const amount = new BN("1000000000"); // 1,000,000,000 lamports
-      const mint = dummyConductor.acceptedTokens[tokenIndex].address;
-
-      let caughtError = false;
-      try {
-        const tx = await contributor.contribute(orchestrator, saleId, tokenIndex, mint, amount);
-      } catch (e) {
-        caughtError = e.error.errorCode.code == "InvalidTokenIndex";
+      // check balance changes
+      for (let i = 0; i < numExpected; ++i) {
+        let contribution = expectedContributedValues[i];
+        expect(startingBalanceBuyer[i].sub(contribution).toString()).to.equal(endingBalanceBuyer[i].toString());
+        expect(startingBalanceCustodian[i].add(contribution).toString()).to.equal(endingBalanceCustodian[i].toString());
       }
 
-      if (!caughtError) {
-        throw Error("did not catch expected error");
+      // check buyer state
+      {
+        const buyerState = await contributor.getBuyer(saleId, buyer.publicKey);
+        expect(buyerState.status).has.key("active");
+
+        const contributed = buyerState.contributed;
+        for (let i = 0; i < expectedContributedValues.length; ++i) {
+          expect(contributed[i].toString()).to.equal(expectedContributedValues[i].toString());
+        }
+      }
+
+      // check sale state
+      {
+        const saleState = await contributor.getSale(saleId);
+        const totals: any = saleState.totals;
+
+        for (let i = 0; i < expectedContributedValues.length; ++i) {
+          const total = totals[i];
+          expect(total.contributions.toString()).to.equal(expectedContributedValues[i].toString());
+          expect(total.allocations.toString()).to.equal("0");
+          expect(total.excessContributions.toString()).to.equal("0");
+        }
       }
     });
 
     // TODO
     it("Orchestrator Cannot Attest Contributions Too Early", async () => {
-      expect(false).to.be.true;
+      const saleId = dummyConductor.getSaleId();
+
+      let caughtError = false;
+      try {
+        const tx = await contributor.attestContributions(orchestrator, saleId);
+        console.log(tx);
+      } catch (e) {
+        console.log(e.error.errorCode.code);
+        caughtError = e.error.errorCode.code == "ContributionTooEarly";
+      }
     });
 
     // TODO
@@ -342,16 +345,11 @@ describe("anchor-contributor", () => {
       if (blockTime <= saleEnd) {
         await wait(saleEnd - blockTime + 1);
       }
-      
-      let caughtError = false;
-      try {
-        const tx = await contributor.attestContributions(orchestrator, saleId);
-      } catch (e) {
-        console.log(e);
-      }
+
+      const tx = await contributor.attestContributions(orchestrator, saleId);
 
       // now go about your business
-      expect(caughtError).to.be.false;
+      //expect(caughtError).to.be.false;
     });
 
     // TODO
@@ -361,15 +359,14 @@ describe("anchor-contributor", () => {
 
     it("User Cannot Contribute After Sale Ended", async () => {
       const saleId = dummyConductor.getSaleId();
-      const tokenIndex = 2;
       const amount = new BN("1000000000"); // 1,000,000,000 lamports
-      const mint = dummyConductor.acceptedTokens[tokenIndex].address;
 
       let caughtError = false;
       try {
-        const tx = await contributor.contribute(orchestrator, saleId, tokenIndex, mint, amount);
+        const mint = hexToPublicKey(dummyConductor.acceptedTokens[0].address);
+        const tx = await contributor.contribute(buyer, saleId, mint, amount);
       } catch (e) {
-        caughtError = e.error.errorCode.code == "SaleEnded";
+        caughtError = e.msg == "SaleEnded";
       }
 
       if (!caughtError) {
@@ -397,7 +394,6 @@ describe("anchor-contributor", () => {
 
     // TODO
     it("Orchestrator Cannot Seal Sale Again with Signed VAA", async () => {
-      
       const saleSealedVaa = dummyConductor.sealSale(await getBlockTime(connection));
 
       let caughtError = false;
@@ -411,7 +407,7 @@ describe("anchor-contributor", () => {
       if (!caughtError) {
         throw Error("did not catch expected error");
       }
-    
+
       expect(false).to.be.true;
     });
 
@@ -429,7 +425,6 @@ describe("anchor-contributor", () => {
     it("User Cannot Claim Allocations Again", async () => {
       expect(false).to.be.true;
     });
-    */
   });
 
   /*

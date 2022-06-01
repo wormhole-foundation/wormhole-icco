@@ -1,4 +1,4 @@
-import { web3 } from "@project-serum/anchor";
+import { web3, BN } from "@project-serum/anchor";
 import { getAssociatedTokenAddress, getAccount } from "@solana/spl-token";
 import { tryHexToNativeString, CHAIN_ID_SOLANA } from "@certusone/wormhole-sdk";
 import { BigNumber, BigNumberish } from "ethers";
@@ -22,7 +22,13 @@ export async function getBlockTime(connection: web3.Connection): Promise<number>
 export async function getSplBalance(connection: web3.Connection, mint: web3.PublicKey, owner: web3.PublicKey) {
   const tokenAccount = await getAssociatedTokenAddress(mint, owner);
   const account = await getAccount(connection, tokenAccount);
-  return account.amount;
+  return new BN(account.amount.toString());
+}
+
+export async function getPdaSplBalance(connection: web3.Connection, mint: web3.PublicKey, owner: web3.PublicKey) {
+  const tokenAccount = await getPdaAssociatedTokenAddress(mint, owner);
+  const account = await getAccount(connection, tokenAccount);
+  return new BN(account.amount.toString());
 }
 
 export function hexToPublicKey(hexlified: string): web3.PublicKey {

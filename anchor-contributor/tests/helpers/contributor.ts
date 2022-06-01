@@ -12,6 +12,7 @@ import { findBuyerAccount, findCustodianAccount, findSaleAccount, findSignedVaaA
 import { getBuyerState, getCustodianState, getSaleState } from "./fetch";
 import { postVaa } from "./wormhole";
 import { getPdaAssociatedTokenAddress } from "./utils";
+import { ASSOCIATED_PROGRAM_ID } from "@project-serum/anchor/dist/cjs/utils/token";
 
 export class IccoContributor {
   program: Program<AnchorContributor>;
@@ -70,21 +71,6 @@ export class IccoContributor {
     const saleAccount = findSaleAccount(program.programId, saleId);
     const buyerAta = await getAssociatedTokenAddress(mint, payer.publicKey);
     const custodianAta = await getPdaAssociatedTokenAddress(mint, custodian);
-    //const [custodianAta, _] = await web3.PublicKey.findProgramAddress(
-    //  [Buffer.from("icco-custodian"), mint.toBuffer()],
-    //  program.programId
-    //);
-
-    const connection = program.provider.connection;
-    //console.log("buyer", await getAccount(connection, buyerAccount.key));
-    //console.log("sale", await getAccount(connection, saleAccount.key));
-    //console.log("buyerAta", await getAccount(connection, buyerAta));
-    //console.log("custodianAta", await getAccount(connection, custodianAta));
-
-    console.log("buyer", buyerAccount.key.toString());
-    console.log("sale", saleAccount.key.toString());
-    console.log("buyerAta", buyerAta.toString());
-    console.log("custodianAta", custodianAta.toString());
 
     return program.methods
       .contribute(amount)
@@ -96,7 +82,8 @@ export class IccoContributor {
         systemProgram: web3.SystemProgram.programId,
         buyerAta,
         custodianAta,
-        tokenProgram: TOKEN_PROGRAM_ID,
+        //tokenProgram: TOKEN_PROGRAM_ID,
+        //associatedTokenProgram: ASSOCIATED_PROGRAM_ID,
       })
       .signers([payer])
       .rpc({ skipPreflight: true });
@@ -136,6 +123,8 @@ export class IccoContributor {
   async sealSale(payer: web3.Keypair, saleSealedVaa: Buffer): Promise<string> {
     const program = this.program;
 
+    const custodian = this.custodianAccount.key;
+
     // first post signed vaa to wormhole
     await postVaa(program.provider.connection, payer, saleSealedVaa);
     const signedVaaAccount = findSignedVaaAccount(saleSealedVaa);
@@ -146,6 +135,7 @@ export class IccoContributor {
     return program.methods
       .sealSale()
       .accounts({
+        custodian,
         sale: saleAccount.key,
         coreBridgeVaa: signedVaaAccount.key,
         owner: payer.publicKey,

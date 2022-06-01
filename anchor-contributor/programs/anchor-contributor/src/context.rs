@@ -100,12 +100,21 @@ pub struct Contribute<'info> {
     /// CHECK: Buyer Associated Token Account
     #[account(mut)]
     pub buyer_ata: Account<'info, TokenAccount>,
+    /*
+    pub accepted_mint: Account<'info, Mint>,
 
+    #[account(
+        init_if_needed,
+        payer = owner,
+        associated_token::mint = accepted_mint,
+        associated_token::authority = owner,
+    )]
+    pub buyer_ata: Account<'info, TokenAccount>,
+    */
     /// CHECK: Custodian Associated Token Account
     //pub custodian_ata: AccountInfo<'info>,
     pub token_program: Program<'info, Token>,
-
-    rent: Sysvar<'info, Rent>,
+    //pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
 /// TODO: write something here

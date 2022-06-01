@@ -45,7 +45,7 @@ pub mod anchor_contributor {
         // TODO: use associated sale token account to get decimals
         // for now, hardcoding to 9
         let sale_token_decimals = 9u8;
-        sale.set_native_sale_token_decimals(sale_token_decimals);
+        sale.set_native_sale_token_decimals(sale_token_decimals)?;
 
         Ok(())
     }
@@ -97,7 +97,6 @@ pub mod anchor_contributor {
         )?;
         */
 
-        //let signer: &[&[u8]] = &[ctx.accounts.owner.key().as_ref()];
         token::transfer(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
@@ -110,10 +109,9 @@ pub mod anchor_contributor {
             ),
             amount,
         )?;
-        msg!("after transfer");
 
+        /*
         let custodian_bump = ctx.bumps["custodian"];
-
         token::transfer(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
@@ -126,7 +124,7 @@ pub mod anchor_contributor {
             ),
             amount,
         )?;
-        msg!("after another transfer");
+        */
 
         // leverage token index search from sale's accepted tokens to find index
         // on buyer's contributions

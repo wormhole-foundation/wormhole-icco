@@ -332,28 +332,35 @@ pub fn verify_conductor_vaa<'info>(
 ) -> Result<MessageData> {
     let msg = get_message_data(&vaa_account)?;
 
-    let conductor_chain: u16 = CONDUCTOR_CHAIN
-        .to_string()
-        .parse()
-        .expect("invalid conductor chain");
-
-    let conductor_address = hex::decode(CONDUCTOR_ADDRESS).expect("invalid conductor address");
-    let conductor_address: [u8; 32] = conductor_address
-        .try_into()
-        .expect("invalid conductor address");
-
     require!(
         vaa_account.to_account_info().owner == &Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap(),
         SaleError::InvalidVaaAction
     );
     require!(
-        msg.emitter_chain == conductor_chain,
+        msg.emitter_chain == get_conductor_chain()?,
         SaleError::InvalidConductor
     );
     require!(
-        msg.emitter_address == conductor_address,
+        msg.emitter_address == get_conductor_address()?,
         SaleError::InvalidConductor
     );
     require!(msg.payload[0] == payload_type, SaleError::InvalidVaaAction);
     Ok(msg)
+}
+
+// TODO: set up cfg flag to just use constants instead of these getters
+pub fn get_conductor_chain() -> Result<u16> {
+    let conductor_chain: u16 = CONDUCTOR_CHAIN
+        .to_string()
+        .parse()
+        .expect("invalid conductor chain");
+    Ok(conductor_chain)
+}
+
+pub fn get_conductor_address() -> Result<[u8; 32]> {
+    let conductor_address = hex::decode(CONDUCTOR_ADDRESS).expect("invalid conductor address");
+    let conductor_address: [u8; 32] = conductor_address
+        .try_into()
+        .expect("invalid conductor address");
+    Ok(conductor_address)
 }

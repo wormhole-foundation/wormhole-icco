@@ -1,8 +1,8 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::borsh::try_from_slice_unchecked;
 use anchor_lang::solana_program::instruction::Instruction;
 use anchor_lang::solana_program::program::invoke_signed;
 use anchor_lang::solana_program::system_instruction::transfer;
-use anchor_lang::solana_program::borsh::try_from_slice_unchecked;
 use anchor_spl::*;
 
 mod constants;
@@ -15,7 +15,7 @@ mod wormhole;
 use constants::*;
 use context::*;
 use error::*;
-use state::sale::verify_conductor_vaa;
+use state::sale::{get_conductor_address, get_conductor_chain, verify_conductor_vaa};
 use wormhole::*;
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
@@ -45,11 +45,11 @@ pub mod anchor_contributor {
         let accepted_account_address =
             sale.get_associated_accepted_address(&ctx.program_id, token_index)?;
 
-        /* 
+        /*
         token::transfer(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
-                token::Transfer { 
+                token::Transfer {
                     from: ctx.accounts.buyer.to_account_info(),
                     to: ctx.accounts.sale.to_account_info(),
                     authority: ctx.accounts.sale.to_account_info()
@@ -81,20 +81,20 @@ pub mod anchor_contributor {
         let vaa_payload = sale.serialize_contributions(clock.unix_timestamp)?;
 
         // Send WH Message
-        let bridge_data:BridgeData = try_from_slice_unchecked(&ctx.accounts.wormhole_config.data.borrow_mut())?;
-        
+        let bridge_data: BridgeData =
+            try_from_slice_unchecked(&ctx.accounts.wormhole_config.data.borrow_mut())?;
         //Send Fee
         invoke_signed(
             &transfer(
                 &ctx.accounts.payer.key(),
                 &ctx.accounts.wormhole_fee_collector.key(),
-                bridge_data.config.fee
+                bridge_data.config.fee,
             ),
             &[
                 ctx.accounts.payer.to_account_info(),
-                ctx.accounts.wormhole_fee_collector.to_account_info()
+                ctx.accounts.wormhole_fee_collector.to_account_info(),
             ],
-            &[]
+            &[],
         )?;
 
         //Send Post Msg Tx
@@ -118,7 +118,8 @@ pub mod anchor_contributor {
                     payload: vaa_payload,
                     consistency_level: wormhole::ConsistencyLevel::Confirmed,
                 },
-            ).try_to_vec()?,
+            )
+                .try_to_vec()?,
         };
 
         invoke_signed(
@@ -134,12 +135,10 @@ pub mod anchor_contributor {
                 ctx.accounts.rent.to_account_info(),
                 ctx.accounts.system_program.to_account_info(),
             ],
-            &[
-                &[
-                    &b"emitter".as_ref(),
-                    &[*ctx.bumps.get("wormhole_derived_emitter").unwrap()]
-                ]
-            ]
+            &[&[
+                &b"emitter".as_ref(),
+                &[*ctx.bumps.get("wormhole_derived_emitter").unwrap()],
+            ]],
         )?;
 
         Ok(())
@@ -156,6 +155,14 @@ pub mod anchor_contributor {
         let sale_token_account = sale.associated_sale_token_address;
 
         // TODO: need to bridge collateral over to recipient (total_collateral minus excess_collateral)
+        // TODO: set up cfg flag to just use constants instead of these getters
+        let conductor_chain = get_conductor_chain()?;
+        let conductor_address = get_conductor_address()?;
+
+        for total in &sale.totals {
+            let amount = total.contributions;
+            // token bridge transfer this amount over to conductor_address on conductor_chain
+        }
 
         Ok(())
     }

@@ -1,7 +1,8 @@
 use crate::constants::*;
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::sysvar::{clock, rent};
-use anchor_spl::token::{Token, TokenAccount};
+use anchor_spl::token::{Token, TokenAccount, ID};
+use anchor_spl::associated_token::*;
 use std::str::FromStr;
 
 use crate::{
@@ -44,6 +45,9 @@ pub struct InitializeSale<'info> {
     )]
     pub sale: Account<'info, Sale>,
 
+    #[account(
+        constraint = core_bridge_vaa.owner == &Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap()
+    )]
     /// CHECK: This account is owned by Core Bridge so we trust it
     pub core_bridge_vaa: AccountInfo<'info>,
 
@@ -195,7 +199,7 @@ pub struct AttestContributions<'info> {
 }
 
 #[derive(Accounts)]
-pub struct SealSale<'info> {
+pub struct SendContributions<'info> {
     #[account(
         mut,
         seeds = [
@@ -215,8 +219,27 @@ pub struct SealSale<'info> {
     )]
     pub sale: Account<'info, Sale>,
 
+    #[account(
+        constraint = core_bridge_vaa.owner == &core_bridge.key()
+    )]
     /// CHECK: This account is owned by Core Bridge so we trust it
     pub core_bridge_vaa: AccountInfo<'info>,
+
+    #[account(
+        constraint = custody_ata.owner == &AssociatedToken::id()
+    )]
+    /// CHECK: Check if owned by ATA Program
+    pub custody_ata: AccountInfo<'info>,
+
+    #[account(
+        constraint = mint_token_account.owner == &ID
+    )]
+    /// CHECK: Check if owned by SPL Account
+    pub mint_token_account: AccountInfo<'info>,
+
+    /// CHECK: Nullable account
+    pub wrapped_meta_key: AccountInfo<'info>,
+
 
     #[account(mut)]
     pub owner: Signer<'info>,
@@ -227,7 +250,21 @@ pub struct SealSale<'info> {
     )]
     /// CHECK: Checked in account constraints
     pub token_bridge: AccountInfo<'info>,
-    
+    #[account(
+        seeds=[b"mint_signer"],
+        bump,
+        seeds::program = token_bridge.key()
+    )]
+    pub token_mint_signer: AccountInfo<'info>,
+
+    #[account(
+        seeds=[b"authority_signer"],
+        bump,
+        seeds::program = token_bridge.key()
+    )]
+    pub token_bridge_authority_signer: AccountInfo<'info>,
+
+
     #[account(
         seeds = [
             b"config".as_ref()
@@ -298,6 +335,8 @@ pub struct SealSale<'info> {
     )]
     /// CHECK: The account constraint will make sure it's the right rent var
     pub rent: AccountInfo<'info>,
+
+    pub token_program: Program<'info, Token>
 }
 
 /*
@@ -352,6 +391,9 @@ pub struct AbortSale<'info> {
         constraint = verify_conductor_vaa(&core_bridge_vaa, &contributor, PAYLOAD_SALE_ABORTED)?,
     )]
     */
+    #[account(
+        constraint = core_bridge_vaa.owner == &Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap()
+    )]
     /// CHECK: This account is owned by Core Bridge so we trust it
     pub core_bridge_vaa: AccountInfo<'info>,
 

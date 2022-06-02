@@ -1,8 +1,11 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::borsh::try_from_slice_unchecked;
 use anchor_lang::solana_program::instruction::Instruction;
-use anchor_lang::solana_program::program::{invoke, invoke_signed};
+use anchor_lang::solana_program::program::{invoke_signed};
 use anchor_lang::solana_program::system_instruction::transfer;
+use anchor_lang::solana_program::sysvar::*;
+use spl_token::*;
+use anchor_spl::*;
 
 mod constants;
 mod context;
@@ -10,21 +13,23 @@ mod env;
 mod error;
 mod state;
 mod wormhole;
+mod token_bridge;
 
 use constants::*;
 use context::*;
 use error::*;
 use state::sale::{get_conductor_address, get_conductor_chain, verify_conductor_vaa};
 use wormhole::*;
+use token_bridge::*;
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
 #[program]
 pub mod anchor_contributor {
+
+    use crate::state::AssetTotal;
+
     use super::*;
-
-    use anchor_spl::{*, token::TokenAccount};
-
     pub fn create_custodian(ctx: Context<CreateCustodian>) -> Result<()> {
         let custodian = &mut ctx.accounts.custodian;
         custodian.owner = ctx.accounts.owner.key();
@@ -213,9 +218,7 @@ pub mod anchor_contributor {
         Ok(())
     }
 
-    /**
-     *
-     */
+    /*
     pub fn seal_sale(ctx: Context<SealSale>) -> Result<()> {
         let msg = verify_conductor_vaa(&ctx.accounts.core_bridge_vaa, PAYLOAD_SALE_SEALED)?;
 
@@ -229,16 +232,159 @@ pub mod anchor_contributor {
         // TODO: need to bridge collateral over to recipient (total_collateral minus excess_collateral)
         // TODO: set up cfg flag to just use constants instead of these getters
         let conductor_chain = get_conductor_chain()?;
-        let conductor_address = get_conductor_address()?;
+
+        let (token_bridge_mint_key, _) = Pubkey::find_program_address(&["mint_signer".as_ref()], &ctx.accounts.token_bridge.key());
 
         for (i, total) in sale.totals.iter().enumerate() {
             let mint = total.mint;
             let amount = total.contributions;
             let recipient = sale.recipient;
             // token bridge transfer this amount over to conductor_address on conductor_chain to recipient
-            let custody_ata = ctx.remaining_accounts[2*i];
-            let token_acc = ctx.remaining_accounts[(2*i)+1];
+            let custody_ata = ctx.remaining_accounts[4*i];
+            let mut token_account_data:&[u8] = &ctx.remaining_accounts[(4*i)+1].data.borrow_mut();
+            let token_acc:token::TokenAccount = token::TokenAccount::try_deserialize(&mut token_account_data)?;
+            let wrapped_mint_key = ctx.remaining_accounts[(4*i)+3];
+            let wrapped_meta_key: 
+
+            let mut is_native = true;
+            if token_acc.mint == token_bridge_mint_key {
+                // Wrapped Portal Token
+                let send_wrapped_ix = Instruction {
+                    program_id: ctx.accounts.token_bridge.key(),
+                    accounts: vec![
+                        AccountMeta::new(ctx.accounts.owner.key(), true),
+                        AccountMeta::new_readonly(ctx.accounts.token_config.key(), false),
+                        AccountMeta::new(custody_ata.key(), false),
+                        AccountMeta::new_readonly(ctx.accounts.custodian.key(), true),
+                        AccountMeta::new(token_acc.mint, false),
+                        AccountMeta::new_readonly(wrapped_meta_key, false),
+                        AccountMeta::new_readonly(authority_signer, false),
+                        AccountMeta::new(bridge_config, false),
+                        AccountMeta::new(message_key, true),
+                        AccountMeta::new_readonly(emitter_key, false),
+                        AccountMeta::new(sequence_key, false),
+                        AccountMeta::new(fee_collector_key, false),
+                        AccountMeta::new_readonly(solana_program::sysvar::clock::id(), false),
+                        // Dependencies
+                        AccountMeta::new_readonly(solana_program::sysvar::rent::id(), false),
+                        AccountMeta::new_readonly(solana_program::system_program::id(), false),
+                        // Program
+                        AccountMeta::new_readonly(bridge_id, false),
+                        AccountMeta::new_readonly(spl_token::id(), false),
+                    ],
+                    data: (
+                        TRANSFER_WRAPPED_INSTRUCTION, 
+                        TransferData {
+                            nonce: ctx.accounts.custodian.nonce,
+                            amount: amount,
+                            fee: 0_u64,
+                            target_address: Pubkey::new(&recipient),
+                            target_chain: sale.token_chain,
+                        }    
+                    ).try_to_vec()?
+                };
+            } else {
+                //Native Token
+            }
+
+            ctx.accounts.custodian.nonce += 1;
         }
+        Ok(())
+    }
+    */
+
+    pub fn send_contributions(ctx:Context<SendContributions>, token_idx:u8) -> Result<()> {
+        let msg = verify_conductor_vaa(&ctx.accounts.core_bridge_vaa, PAYLOAD_SALE_SEALED)?;
+
+        let sale = &mut ctx.accounts.sale;
+        sale.parse_sale_sealed(&msg.payload)?;
+
+        // TODO: check balance of the sale token on the contract to make sure
+        // we have enough for claimants
+        let sale_token_account = sale.associated_sale_token_address;
+
+        let conductor_chain = get_conductor_chain()?;
+        let conductor_address = get_conductor_address()?;
+
+        let asset:AssetTotal = *sale.totals.get(token_idx as usize).unwrap();
+        let mint = asset.mint;
+        let amount = asset.contributions;
+        let recipient = sale.recipient;
+        // token bridge transfer this amount over to conductor_address on conductor_chain to recipient
+        let custody_ata = ctx.accounts.custody_ata;
+        let mut token_account_data:&[u8] = &ctx.accounts.mint_token_account.data.borrow();
+        let token_acc:token::TokenAccount = token::TokenAccount::try_deserialize(&mut token_account_data)?;
+        let wrapped_meta_key = ctx.accounts.wrapped_meta_key;
+
+        if token_acc.mint == ctx.accounts.token_mint_signer.key() {
+            //Wrapped Token
+            let send_wrapped_ix = Instruction {
+                program_id: ctx.accounts.token_bridge.key(),
+                accounts: vec![
+                    AccountMeta::new(ctx.accounts.owner.key(), true),
+                    AccountMeta::new_readonly(ctx.accounts.token_config.key(), false),
+                    AccountMeta::new(custody_ata.key(), false),
+                    AccountMeta::new_readonly(ctx.accounts.custodian.key(), true),
+                    AccountMeta::new(token_acc.mint, false),
+                    AccountMeta::new_readonly(wrapped_meta_key.key(), false), // Wrapped Meta Key
+                    AccountMeta::new_readonly(ctx.accounts.token_bridge_authority_signer.key(), false),
+                    AccountMeta::new(ctx.accounts.wormhole_config.key(), false),
+                    AccountMeta::new(ctx.accounts.wormhole_message_key.key(), true),
+                    AccountMeta::new_readonly(ctx.accounts.wormhole_derived_emitter.key(), false),
+                    AccountMeta::new(ctx.accounts.wormhole_sequence.key(), false),
+                    AccountMeta::new(ctx.accounts.wormhole_fee_collector.key(), false),
+                    AccountMeta::new_readonly(clock::id(), false),
+                    // Dependencies
+                    AccountMeta::new_readonly(rent::id(), false),
+                    AccountMeta::new_readonly(ctx.accounts.system_program.key(), false),
+                    // Program
+                    AccountMeta::new_readonly(ctx.accounts.core_bridge.key(), false),
+                    AccountMeta::new_readonly(spl_token::id(), false),
+                ],
+                data: (
+                    TRANSFER_WRAPPED_INSTRUCTION, 
+                    TransferData {
+                        nonce: ctx.accounts.custodian.nonce,
+                        amount: amount,
+                        fee: 0_u64,
+                        target_address: Pubkey::new(&recipient),
+                        target_chain: sale.token_chain,
+                    }    
+                ).try_to_vec()?
+            };
+
+            invoke_signed(
+                &send_wrapped_ix,
+                &[
+                    ctx.accounts.owner.to_account_info(),
+                    ctx.accounts.token_config.to_account_info(),
+                    custody_ata.to_account_info(),
+                    ctx.accounts.custodian.to_account_info(),
+                    ctx.accounts.mint_token_account.to_account_info(),
+                    wrapped_meta_key.to_account_info(),
+                    ctx.accounts.token_bridge_authority_signer.to_account_info(),
+                    ctx.accounts.wormhole_config.to_account_info(),
+                    ctx.accounts.wormhole_message_key.to_account_info(),
+                    ctx.accounts.wormhole_derived_emitter.to_account_info(),
+                    ctx.accounts.wormhole_sequence.to_account_info(),
+                    ctx.accounts.wormhole_fee_collector.to_account_info(),
+                    ctx.accounts.clock.to_account_info(),
+                    ctx.accounts.rent.to_account_info(),
+                    ctx.accounts.system_program.to_account_info(),
+                    ctx.accounts.core_bridge.to_account_info(),
+                    ctx.accounts.token_program.to_account_info()
+                ],
+                &[&[
+                    SEED_PREFIX_CUSTODIAN.as_ref(),
+                    &[*ctx.bumps.get("custodian").unwrap()]
+                ]]
+            )?;
+
+        } else {
+            //Native Token
+        }
+
+
         Ok(())
     }
 

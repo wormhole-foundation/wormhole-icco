@@ -251,13 +251,13 @@ pub mod anchor_contributor {
 
     pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
         let sale = &mut ctx.accounts.sale;
-        require!(sale.is_aborted(), SaleError::SaleNotAborted);
+        require!(sale.is_aborted(), ContributorError::SaleNotAborted);
 
         let refunds = ctx.accounts.buyer.claim_refunds(&sale.totals)?;
         let atas = &ctx.remaining_accounts;
         require!(
             atas.len() == 2 * sale.totals.len(),
-            SaleError::InvalidRemainingAccounts
+            ContributorError::InvalidRemainingAccounts
         );
 
         let owner = &ctx.accounts.owner.key();
@@ -272,10 +272,13 @@ pub mod anchor_contributor {
                 let mint = token::accessor::mint(&buyer_ata)?;
                 require!(
                     sale.get_token_index(&mint).is_ok(),
-                    SaleError::InvalidRemainingAccounts
+                    ContributorError::InvalidRemainingAccounts
                 );
                 let authority = token::accessor::authority(&buyer_ata)?;
-                require!(authority == *owner, SaleError::InvalidRemainingAccounts);
+                require!(
+                    authority == *owner,
+                    ContributorError::InvalidRemainingAccounts
+                );
             }
 
             let custodian_index = buyer_index + 1;
@@ -284,10 +287,13 @@ pub mod anchor_contributor {
                 let mint = token::accessor::mint(&custodian_ata)?;
                 require!(
                     sale.get_token_index(&mint).is_ok(),
-                    SaleError::InvalidRemainingAccounts
+                    ContributorError::InvalidRemainingAccounts
                 );
                 let authority = token::accessor::authority(&custodian_ata)?;
-                require!(authority == *custodian, SaleError::InvalidRemainingAccounts);
+                require!(
+                    authority == *custodian,
+                    ContributorError::InvalidRemainingAccounts
+                );
             }
 
             // TODO: transfer back to owner

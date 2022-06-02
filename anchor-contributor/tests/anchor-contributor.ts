@@ -67,7 +67,7 @@ describe("anchor-contributor", () => {
         const tokenAccount = await getOrCreateAssociatedTokenAccount(connection, buyer, mint, buyer.publicKey);
 
         // now mint to buyer for testing
-        let amount = new BN("20000000000");
+        let amount = new BN("200000000000");
         await mintTo(
           connection,
           orchestrator,
@@ -193,7 +193,7 @@ describe("anchor-contributor", () => {
       let caughtError = false;
       try {
         const tx = await contributor.initSale(orchestrator, dummyConductor.initSaleVaa);
-        console.log("should not happen", tx);
+        throw Error(`should not happen: ${tx}`);
       } catch (e) {
         // pda init should fail
         caughtError = "programErrorStack" in e;
@@ -212,7 +212,7 @@ describe("anchor-contributor", () => {
       try {
         const mint = hexToPublicKey(dummyConductor.acceptedTokens[0].address);
         const tx = await contributor.contribute(buyer, saleId, mint, new BN(amount));
-        console.log("should not happen", tx);
+        throw Error(`should not happen: ${tx}`);
       } catch (e) {
         caughtError = verifyErrorMsg(e, "ContributionTooEarly");
       }
@@ -328,7 +328,7 @@ describe("anchor-contributor", () => {
       let caughtError = false;
       try {
         const tx = await contributor.attestContributions(orchestrator, saleId);
-        console.log("should not happen", tx);
+        throw Error(`should not happen: ${tx}`);
       } catch (e) {
         caughtError = verifyErrorMsg(e, "SaleNotAttestable");
       }
@@ -354,23 +354,6 @@ describe("anchor-contributor", () => {
       //expect(caughtError).to.be.false;
     });
 
-    // TODO
-    it("Orchestrator Cannot Attest Contributions Again", async () => {
-      const saleId = dummyConductor.getSaleId();
-
-      let caughtError = false;
-      try {
-        const tx = await contributor.attestContributions(orchestrator, saleId);
-        console.log("should not happen", tx);
-      } catch (e) {
-        caughtError = verifyErrorMsg(e, "SaleNotAttestable");
-      }
-
-      if (!caughtError) {
-        throw Error("did not catch expected error");
-      }
-    });
-
     it("User Cannot Contribute After Sale Ended", async () => {
       const saleId = dummyConductor.getSaleId();
       const amount = new BN("1000000000"); // 1,000,000,000 lamports
@@ -379,7 +362,7 @@ describe("anchor-contributor", () => {
       try {
         const mint = hexToPublicKey(dummyConductor.acceptedTokens[0].address);
         const tx = await contributor.contribute(buyer, saleId, mint, amount);
-        console.log("should not happen", tx);
+        throw Error(`should not happen: ${tx}`);
       } catch (e) {
         caughtError = verifyErrorMsg(e, "SaleEnded");
       }
@@ -414,7 +397,7 @@ describe("anchor-contributor", () => {
       let caughtError = false;
       try {
         const tx = await contributor.sealSale(orchestrator, saleSealedVaa);
-        console.log("should not happen", tx);
+        throw Error(`should not happen: ${tx}`);
       } catch (e) {
         caughtError = verifyErrorMsg(e, "SaleEnded");
       }
@@ -422,13 +405,6 @@ describe("anchor-contributor", () => {
       if (!caughtError) {
         throw Error("did not catch expected error");
       }
-
-      expect(false).to.be.true;
-    });
-
-    // TODO
-    it("User Cannot Claim Allocations with Incorrect Token Index", async () => {
-      expect(false).to.be.true;
     });
 
     // TODO
@@ -546,7 +522,7 @@ describe("anchor-contributor", () => {
       let caughtError = false;
       try {
         const tx = await contributor.abortSale(orchestrator, saleAbortedVaa);
-        console.log("should not happen", tx);
+        throw Error(`should not happen: ${tx}`);
       } catch (e) {
         caughtError = verifyErrorMsg(e, "SaleEnded");
       }
@@ -563,7 +539,9 @@ describe("anchor-contributor", () => {
         return hexToPublicKey(token.address);
       });
 
-      //const tx = await contributor.claimRefund(buyer, saleId, acceptedMints);
+      const tx = await contributor.claimRefund(buyer, saleId, acceptedMints);
+
+      // get buyer state and verify inactive
     });
 
     // TODO
@@ -575,8 +553,8 @@ describe("anchor-contributor", () => {
 
       let caughtError = false;
       try {
-        //const tx = await contributor.claimRefund(saleId, buyer, acceptedMints);
-        //console.log("should not happen", tx);
+        const tx = await contributor.claimRefund(buyer, saleId, acceptedMints);
+        throw Error(`should not happen: ${tx}`);
       } catch (e) {
         caughtError = verifyErrorMsg(e, "BuyerInactive");
       }
@@ -595,7 +573,7 @@ function verifyErrorMsg(e: any, msg: string): boolean {
       console.error(e);
     }
     return result;
-  } else if (e.error.errorMessage) {
+  } else if (e.error) {
     const result = e.error.errorMessage == msg;
     if (!result) {
       console.error(e);

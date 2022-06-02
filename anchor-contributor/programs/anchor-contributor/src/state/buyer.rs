@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use num_derive::*;
 
-use crate::{constants::ACCEPTED_TOKENS_MAX, error::BuyerError, state::sale::AssetTotal};
+use crate::{constants::ACCEPTED_TOKENS_MAX, error::ContributorError, state::sale::AssetTotal};
 
 #[account]
 pub struct Buyer {
@@ -30,8 +30,11 @@ impl Buyer {
     }
 
     pub fn contribute(&mut self, idx: usize, amount: u64) -> Result<()> {
-        require!(self.is_active(), BuyerError::BuyerInactive);
-        require!(idx < ACCEPTED_TOKENS_MAX, BuyerError::InvalidTokenIndex);
+        require!(self.is_active(), ContributorError::BuyerInactive);
+        require!(
+            idx < ACCEPTED_TOKENS_MAX,
+            ContributorError::InvalidTokenIndex
+        );
         self.contributed[idx] += amount;
         Ok(())
     }
@@ -40,7 +43,7 @@ impl Buyer {
     // total allocations and excess contributions for each
     // token index
     pub fn claim_allocations(&mut self, totals: &Vec<AssetTotal>) -> Result<Vec<BuyerTotal>> {
-        require!(self.is_active(), BuyerError::BuyerInactive);
+        require!(self.is_active(), ContributorError::BuyerInactive);
 
         let mut buyer_totals: Vec<BuyerTotal> = Vec::with_capacity(totals.len());
         for (i, asset) in totals.iter().enumerate() {
@@ -64,7 +67,7 @@ impl Buyer {
     }
 
     pub fn claim_refunds(&mut self, totals: &Vec<AssetTotal>) -> Result<Vec<BuyerTotal>> {
-        require!(self.is_active(), BuyerError::BuyerInactive);
+        require!(self.is_active(), ContributorError::BuyerInactive);
 
         let mut refunds: Vec<BuyerTotal> = Vec::with_capacity(totals.len());
         for (i, asset) in totals.iter().enumerate() {

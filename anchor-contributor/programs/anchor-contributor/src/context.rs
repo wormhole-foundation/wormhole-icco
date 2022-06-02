@@ -312,7 +312,7 @@ pub struct ClaimRefund<'info> {
         seeds = [
             SEED_PREFIX_BUYER.as_bytes(),
             &sale.id,
-            owner.key().as_ref(),
+            &owner.key().as_ref(),
         ],
         bump,
     )]
@@ -321,6 +321,21 @@ pub struct ClaimRefund<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
     pub system_program: Program<'info, System>,
+
+    /// CHECK: Buyer Associated Token Account
+    #[account(
+        mut,
+        //constraint = buyer_ata.owner == owner.key(),
+    )]
+    pub buyer_ata: Account<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        //constraint = custodian_ata.owner == custodian.key(),
+    )]
+    pub custodian_ata: Account<'info, TokenAccount>,
+
+    pub token_program: Program<'info, Token>,
 }
 
 fn get_sale_id<'info>(vaa_account: &AccountInfo<'info>) -> Result<Vec<u8>> {

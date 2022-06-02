@@ -67,7 +67,7 @@ describe("anchor-contributor", () => {
         const tokenAccount = await getOrCreateAssociatedTokenAccount(connection, buyer, mint, buyer.publicKey);
 
         // now mint to buyer for testing
-        let amount = new BN("20000000000");
+        let amount = new BN("200000000000");
         await mintTo(
           connection,
           orchestrator,
@@ -132,6 +132,7 @@ describe("anchor-contributor", () => {
       }
     });
   });
+  /*
 
   describe("Conduct Successful Sale", () => {
     // global contributions for test
@@ -193,7 +194,7 @@ describe("anchor-contributor", () => {
       let caughtError = false;
       try {
         const tx = await contributor.initSale(orchestrator, dummyConductor.initSaleVaa);
-        console.log("should not happen", tx);
+        throw Error(`should not happen: ${tx}`);
       } catch (e) {
         // pda init should fail
         caughtError = "programErrorStack" in e;
@@ -212,7 +213,7 @@ describe("anchor-contributor", () => {
       try {
         const mint = hexToPublicKey(dummyConductor.acceptedTokens[0].address);
         const tx = await contributor.contribute(buyer, saleId, mint, new BN(amount));
-        console.log("should not happen", tx);
+        throw Error(`should not happen: ${tx}`);
       } catch (e) {
         caughtError = verifyErrorMsg(e, "ContributionTooEarly");
       }
@@ -226,10 +227,11 @@ describe("anchor-contributor", () => {
       // wait for sale to start here
       const blockTime = await getBlockTime(connection);
       const saleStart = dummyConductor.saleStart;
-      if (blockTime <= saleStart) {
-        //console.log("waiting", saleStart - blockTime + 1, "seconds");
-        await wait(saleStart - blockTime + 1);
-      }
+      await waitUntilBlock (connection, saleStart);
+      // if (blockTime <= saleStart) {
+      //   //console.log("waiting", saleStart - blockTime + 1, "seconds");
+      //   await wait(saleStart - blockTime + 1);
+      // }
 
       // prep contributions info
       const acceptedTokens = dummyConductor.acceptedTokens;
@@ -328,7 +330,7 @@ describe("anchor-contributor", () => {
       let caughtError = false;
       try {
         const tx = await contributor.attestContributions(orchestrator, saleId);
-        console.log("should not happen", tx);
+        throw Error(`should not happen: ${tx}`);
       } catch (e) {
         caughtError = verifyErrorMsg(e, "SaleNotAttestable");
       }
@@ -341,34 +343,13 @@ describe("anchor-contributor", () => {
     // TODO
     it("Orchestrator Attests Contributions", async () => {
       // wait for sale to end here
-      const blockTime = await getBlockTime(connection);
       const saleEnd = dummyConductor.saleEnd;
       const saleId = dummyConductor.getSaleId();
-      if (blockTime <= saleEnd) {
-        await wait(saleEnd - blockTime + 1);
-      }
-
+      await waitUntilBlock(connection, saleEnd);
       const tx = await contributor.attestContributions(orchestrator, saleId);
 
       // now go about your business
       //expect(caughtError).to.be.false;
-    });
-
-    // TODO
-    it("Orchestrator Cannot Attest Contributions Again", async () => {
-      const saleId = dummyConductor.getSaleId();
-
-      let caughtError = false;
-      try {
-        const tx = await contributor.attestContributions(orchestrator, saleId);
-        console.log("should not happen", tx);
-      } catch (e) {
-        caughtError = verifyErrorMsg(e, "SaleNotAttestable");
-      }
-
-      if (!caughtError) {
-        throw Error("did not catch expected error");
-      }
     });
 
     it("User Cannot Contribute After Sale Ended", async () => {
@@ -379,7 +360,7 @@ describe("anchor-contributor", () => {
       try {
         const mint = hexToPublicKey(dummyConductor.acceptedTokens[0].address);
         const tx = await contributor.contribute(buyer, saleId, mint, amount);
-        console.log("should not happen", tx);
+        throw Error(`should not happen: ${tx}`);
       } catch (e) {
         caughtError = verifyErrorMsg(e, "SaleEnded");
       }
@@ -414,7 +395,7 @@ describe("anchor-contributor", () => {
       let caughtError = false;
       try {
         const tx = await contributor.sealSale(orchestrator, saleSealedVaa);
-        console.log("should not happen", tx);
+        throw Error(`should not happen: ${tx}`);
       } catch (e) {
         caughtError = verifyErrorMsg(e, "SaleEnded");
       }
@@ -422,13 +403,6 @@ describe("anchor-contributor", () => {
       if (!caughtError) {
         throw Error("did not catch expected error");
       }
-
-      expect(false).to.be.true;
-    });
-
-    // TODO
-    it("User Cannot Claim Allocations with Incorrect Token Index", async () => {
-      expect(false).to.be.true;
     });
 
     // TODO
@@ -441,6 +415,7 @@ describe("anchor-contributor", () => {
       expect(false).to.be.true;
     });
   });
+  */
 
   describe("Conduct Aborted Sale", () => {
     // global contributions for test
@@ -501,10 +476,11 @@ describe("anchor-contributor", () => {
       // wait for sale to start here
       const blockTime = await getBlockTime(connection);
       const saleStart = dummyConductor.saleStart;
-      if (blockTime <= saleStart) {
-        //console.log("waiting", saleStart - blockTime + 1, "seconds");
-        await wait(saleStart - blockTime + 1);
-      }
+      await waitUntilBlock(connection, saleStart);
+      // if (blockTime <= saleStart) {
+      //   //console.log("waiting", saleStart - blockTime + 1, "seconds");
+      //   await wait(saleStart - blockTime + 1);
+      // }
 
       // prep contributions info
       const acceptedTokens = dummyConductor.acceptedTokens;
@@ -546,7 +522,7 @@ describe("anchor-contributor", () => {
       let caughtError = false;
       try {
         const tx = await contributor.abortSale(orchestrator, saleAbortedVaa);
-        console.log("should not happen", tx);
+        throw Error(`should not happen: ${tx}`);
       } catch (e) {
         caughtError = verifyErrorMsg(e, "SaleEnded");
       }
@@ -559,34 +535,104 @@ describe("anchor-contributor", () => {
     // TODO
     it("User Claims Refund From Sale", async () => {
       const saleId = dummyConductor.getSaleId();
-      const acceptedMints = dummyConductor.acceptedTokens.map((token) => {
+      const acceptedTokens = dummyConductor.acceptedTokens;
+      const acceptedMints = acceptedTokens.map((token) => {
         return hexToPublicKey(token.address);
       });
 
-      //const tx = await contributor.claimRefund(buyer, saleId, acceptedMints);
+      const startingBalanceBuyer = await Promise.all(
+        acceptedTokens.map(async (token) => {
+          const mint = hexToPublicKey(token.address);
+          return getSplBalance(connection, mint, buyer.publicKey);
+        })
+      );
+      const startingBalanceCustodian = await Promise.all(
+        acceptedTokens.map(async (token) => {
+          const mint = hexToPublicKey(token.address);
+          return getPdaSplBalance(connection, mint, contributor.custodianAccount.key);
+        })
+      );
+
+      const validClaimIndices = [0, 3];
+      for (let i = 0; i < acceptedMints.length; ++i) {
+        let valid = validClaimIndices.indexOf(i) >= 0;
+        let mint = acceptedMints[i];
+
+        // if we have something to claim, we should get a successful transaction.
+        // if not, we will get an error saying there is nothing to claim
+        if (valid) {
+          const tx = await contributor.claimRefund(buyer, saleId, mint);
+        } else {
+          let caughtError = false;
+          try {
+            const tx = await contributor.claimRefund(buyer, saleId, mint);
+            throw Error(`should not happen: ${i}, ${tx}`);
+          } catch (e) {
+            caughtError = verifyErrorMsg(e, "NothingToClaim");
+          }
+
+          if (!caughtError) {
+            throw Error("did not catch expected error");
+          }
+        }
+      }
+
+      const endingBalanceBuyer = await Promise.all(
+        acceptedTokens.map(async (token) => {
+          const mint = hexToPublicKey(token.address);
+          return getSplBalance(connection, mint, buyer.publicKey);
+        })
+      );
+      const endingBalanceCustodian = await Promise.all(
+        acceptedTokens.map(async (token) => {
+          const mint = hexToPublicKey(token.address);
+          return getPdaSplBalance(connection, mint, contributor.custodianAccount.key);
+        })
+      );
+
+      const expectedRefundValues = [
+        totalContributions[0],
+        new BN(0),
+        new BN(0),
+        totalContributions[1],
+        new BN(0),
+        new BN(0),
+        new BN(0),
+        new BN(0),
+      ];
+      const numExpected = expectedRefundValues.length;
+
+      // get state
+      const buyerState = await contributor.getBuyer(saleId, buyer.publicKey);
+      const totals: any = buyerState.totals;
+
+      // check balance changes and state
+      for (let i = 0; i < numExpected; ++i) {
+        let refund = expectedRefundValues[i];
+
+        expect(startingBalanceBuyer[i].add(refund).toString()).to.equal(endingBalanceBuyer[i].toString());
+        expect(startingBalanceCustodian[i].sub(refund).toString()).to.equal(endingBalanceCustodian[i].toString());
+
+        const total = totals[i];
+        const expectedState = refund.eq(new BN("0")) ? "inactive" : "refundIsClaimed";
+        expect(total.status).has.key(expectedState);
+        expect(total.excessContributions.toString()).to.equal(refund.toString());
+      }
     });
 
-    // TODO
     it("User Cannot Claim Refund Again", async () => {
-      const saleId = dummyConductor.getSaleId();
-      const acceptedMints = dummyConductor.acceptedTokens.map((token) => {
-        return hexToPublicKey(token.address);
-      });
-
-      let caughtError = false;
-      try {
-        //const tx = await contributor.claimRefund(saleId, buyer, acceptedMints);
-        //console.log("should not happen", tx);
-      } catch (e) {
-        caughtError = verifyErrorMsg(e, "BuyerInactive");
-      }
-
-      if (!caughtError) {
-        throw Error("did not catch expected error");
-      }
+      // TODO
     });
   });
 });
+
+async function waitUntilBlock(connection: web3.Connection, saleEnd: number) {
+  let blockTime = await getBlockTime(connection);
+  while (blockTime <= saleEnd) {
+    await wait(1);
+    blockTime = await getBlockTime(connection);
+  }
+}
 
 function verifyErrorMsg(e: any, msg: string): boolean {
   if (e.msg) {
@@ -595,7 +641,7 @@ function verifyErrorMsg(e: any, msg: string): boolean {
       console.error(e);
     }
     return result;
-  } else if (e.error.errorMessage) {
+  } else if (e.error) {
     const result = e.error.errorMessage == msg;
     if (!result) {
       console.error(e);

@@ -137,7 +137,7 @@ pub mod anchor_contributor {
         // now update buyer's contributions
         let buyer = &mut ctx.accounts.buyer;
         if !buyer.initialized {
-            buyer.initialize();
+            buyer.initialize(sale.totals.len());
         }
         buyer.contribute(idx, amount)?;
 
@@ -250,48 +250,108 @@ pub mod anchor_contributor {
     }
 
     pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
+        let sale = &ctx.accounts.sale;
+        require!(sale.is_aborted(), ContributorError::SaleNotAborted);
+
+        let to_account = &ctx.accounts.buyer_ata;
+        let mint = token::accessor::mint(&to_account.to_account_info())?;
+        let (idx, _) = sale.get_total_info(&mint)?;
+        let refund = ctx.accounts.buyer.claim_refund(idx)?;
+        require!(refund > 0, ContributorError::NothingToClaim);
+
+        let from_account = &ctx.accounts.custodian_ata;
+        let custodian = &ctx.accounts.custodian;
+
+        // spl transfer refund
+        invoke_signed(
+            &spl_token::instruction::transfer(
+                &token::ID,
+                &from_account.key(),
+                &to_account.key(),
+                &custodian.key(),
+                &[&custodian.key()],
+                refund,
+            )?,
+            &ctx.accounts.to_account_infos(),
+            &[&[&SEED_PREFIX_CUSTODIAN.as_bytes(), &[ctx.bumps["custodian"]]]],
+        )?;
+        Ok(())
+    }
+
+    /*
+    pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
         let sale = &mut ctx.accounts.sale;
-        require!(sale.is_aborted(), SaleError::SaleNotAborted);
+        require!(sale.is_aborted(), ContributorError::SaleNotAborted);
 
         let refunds = ctx.accounts.buyer.claim_refunds(&sale.totals)?;
-        let atas = &ctx.remaining_accounts;
         require!(
-            atas.len() == 2 * sale.totals.len(),
-            SaleError::InvalidRemainingAccounts
+            ctx.remaining_accounts.len() == 2 * sale.totals.len(),
+            ContributorError::InvalidRemainingAccounts
         );
 
-        let owner = &ctx.accounts.owner.key();
+        let owner = &ctx.accounts.owner;
         let custodian = &ctx.accounts.custodian.key();
+        //let custodian_bump = ctx.bumps["custodian"];
 
         // iterate over refunds and reference remaining accounts by index
-        for (i, refund) in refunds.iter().enumerate() {
+        for (i, buyer_total) in refunds.iter().enumerate() {
             let buyer_index = 2 * i;
 
-            let buyer_ata = atas[buyer_index].to_account_info();
+            //let buyer_ata = &atas[buyer_index]; //.to_account_info();
             {
-                let mint = token::accessor::mint(&buyer_ata)?;
+                let mint = token::accessor::mint(&ctx.remaining_accounts[buyer_index])?;
                 require!(
                     sale.get_token_index(&mint).is_ok(),
-                    SaleError::InvalidRemainingAccounts
+                    ContributorError::InvalidRemainingAccounts
                 );
-                let authority = token::accessor::authority(&buyer_ata)?;
-                require!(authority == *owner, SaleError::InvalidRemainingAccounts);
+                let authority = token::accessor::authority(&ctx.remaining_accounts[buyer_index])?;
+                require!(
+                    authority == owner.key(),
+                    ContributorError::InvalidRemainingAccounts
+                );
             }
 
             let custodian_index = buyer_index + 1;
-            let custodian_ata = atas[custodian_index].to_account_info();
+            //let custodian_ata = &atas[custodian_index]; //.to_account_info();
             {
-                let mint = token::accessor::mint(&custodian_ata)?;
+                let mint = token::accessor::mint(&ctx.remaining_accounts[custodian_index])?;
                 require!(
                     sale.get_token_index(&mint).is_ok(),
-                    SaleError::InvalidRemainingAccounts
+                    ContributorError::InvalidRemainingAccounts
                 );
-                let authority = token::accessor::authority(&custodian_ata)?;
-                require!(authority == *custodian, SaleError::InvalidRemainingAccounts);
+                let authority =
+                    token::accessor::authority(&ctx.remaining_accounts[custodian_index])?;
+                require!(
+                    authority == *custodian,
+                    ContributorError::InvalidRemainingAccounts
+                );
+            }
+
+            let refund = buyer_total.excess_contributions;
+            if refund == 0 {
+                continue;
             }
 
             // TODO: transfer back to owner
+            let ix = spl_token::instruction::transfer(
+                &token::ID,
+                &ctx.remaining_accounts[custodian_index].key(),
+                &ctx.remaining_accounts[buyer_index].key(),
+                &owner.key(),
+                &[&ctx.accounts.custodian.key()],
+                refund,
+            )?;
+            invoke(
+                &ix,
+                &[
+                    ctx.remaining_accounts[custodian_index].to_account_info(),
+                    ctx.remaining_accounts[buyer_index].to_account_info(),
+                    owner.to_account_info(),
+                    ctx.accounts.token_program.to_account_info(),
+                ],
+            )?;
         }
         Ok(())
     }
+    */
 }

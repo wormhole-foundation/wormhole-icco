@@ -1,9 +1,15 @@
 use anchor_lang::prelude::*;
 
 #[error_code]
-pub enum SaleError {
+pub enum ContributorError {
     #[msg("AmountTooLarge")]
     AmountTooLarge,
+
+    #[msg("BuyerDeactivated")]
+    BuyerDeactivated,
+
+    #[msg("BuyerInactive")]
+    BuyerInactive,
 
     #[msg("ContributionTooEarly")]
     ContributionTooEarly,
@@ -35,30 +41,30 @@ pub enum SaleError {
     #[msg("InvalidTokensAccepted")]
     InvalidAcceptedTokens,
 
+    #[msg("NothingToClaim")]
+    NothingToClaim,
+
     #[msg("SaleAlreadyInitialized")]
     SaleAlreadyInitialized,
 
     #[msg("SaleEnded")]
     SaleEnded,
 
-    #[msg("SaleNotFinished")]
-    SaleNotFinished,
-
     #[msg("SaleNotAborted")]
     SaleNotAborted,
+
+    #[msg("SaleNotAttestable")]
+    SaleNotAttestable,
+
+    #[msg("SaleNotFinished")]
+    SaleNotFinished,
 
     #[msg("SaleNotSealed")]
     SaleNotSealed,
 
     #[msg("TooManyAcceptedTokens")]
     TooManyAcceptedTokens,
-}
 
-#[error_code]
-pub enum BuyerError {
-    #[msg("BuyerInactive")]
-    BuyerInactive,
-
-    #[msg("InvalidTokenIndex")]
-    InvalidTokenIndex,
+    #[msg("WrongAuthority")]
+    WrongAuthority,
 }

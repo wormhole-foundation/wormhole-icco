@@ -7,7 +7,7 @@ use std::{str::FromStr, u64};
 use crate::{
     constants::*,
     env::*,
-    error::SaleError,
+    error::ContributorError,
     wormhole::{get_message_data, MessageData},
 };
 
@@ -26,8 +26,6 @@ pub struct Sale {
 
     pub totals: Vec<AssetTotal>, // 4 + AssetTotal::MAXIMUM_SIZE * ACCEPTED_TOKENS_MAX
     pub native_token_decimals: u8, // 1
-
-    pub bump: u8, // 1
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq, Debug)]
@@ -68,7 +66,7 @@ impl AssetTotal {
     pub fn make_from_slice(bytes: &[u8]) -> Result<Self> {
         require!(
             bytes.len() == INDEX_ACCEPTED_TOKEN_END,
-            SaleError::InvalidAcceptedTokenPayload
+            ContributorError::InvalidAcceptedTokenPayload
         );
         Ok(AssetTotal {
             token_index: bytes[INDEX_ACCEPTED_TOKEN_INDEX],
@@ -91,7 +89,6 @@ impl Sale {
         + 1
         + 1
         + (4 + AssetTotal::MAXIMUM_SIZE * ACCEPTED_TOKENS_MAX)
-        + 1
         + 1;
 
     pub fn set_custodian(&mut self, custodian: &Pubkey) {
@@ -99,20 +96,20 @@ impl Sale {
     }
 
     pub fn parse_sale_init(&mut self, payload: &[u8]) -> Result<()> {
-        require!(!self.initialized, SaleError::SaleAlreadyInitialized);
+        require!(!self.initialized, ContributorError::SaleAlreadyInitialized);
         self.initialized = true;
 
         // check that the payload has at least the number of bytes
         // required to define the number of accepted tokens
         require!(
             payload.len() > INDEX_SALE_INIT_ACCEPTED_TOKENS_START,
-            SaleError::IncorrectVaaPayload
+            ContributorError::IncorrectVaaPayload
         );
 
         let num_accepted = payload[INDEX_SALE_INIT_ACCEPTED_TOKENS_START] as usize;
         require!(
             num_accepted <= ACCEPTED_TOKENS_MAX,
-            SaleError::TooManyAcceptedTokens
+            ContributorError::TooManyAcceptedTokens
         );
 
         self.totals = Vec::with_capacity(ACCEPTED_TOKENS_MAX);
@@ -150,7 +147,7 @@ impl Sale {
     pub fn set_native_sale_token_decimals(&mut self, decimals: u8) -> Result<()> {
         require!(
             self.token_decimals >= decimals,
-            SaleError::InvalidTokenDecimals
+            ContributorError::InvalidTokenDecimals
         );
         self.native_token_decimals = decimals;
         Ok(())
@@ -158,8 +155,15 @@ impl Sale {
 
     pub fn get_token_index(&self, mint: &Pubkey) -> Result<u8> {
         let result = self.totals.iter().find(|item| item.mint == *mint);
-        require!(result != None, SaleError::InvalidTokenIndex);
+        require!(result != None, ContributorError::InvalidTokenIndex);
         Ok(result.unwrap().token_index)
+    }
+
+    pub fn get_total_info(&self, mint: &Pubkey) -> Result<(usize, &AssetTotal)> {
+        let result = self.totals.iter().position(|item| item.mint == *mint);
+        require!(result != None, ContributorError::InvalidTokenIndex);
+        let idx = result.unwrap();
+        Ok((idx, &self.totals[idx]))
     }
 
     pub fn get_associated_accepted_token_address(
@@ -177,12 +181,12 @@ impl Sale {
         token_index: u8,
         contributed: u64,
     ) -> Result<usize> {
-        require!(self.is_active(block_time), SaleError::SaleEnded);
+        require!(self.is_active(block_time), ContributorError::SaleEnded);
 
         let block_time = block_time as u64;
         require!(
             block_time >= self.times.start,
-            SaleError::ContributionTooEarly
+            ContributorError::ContributionTooEarly
         );
         let idx = self.get_index(token_index)?;
         self.totals[idx].contributions += contributed;
@@ -191,7 +195,10 @@ impl Sale {
     }
 
     pub fn serialize_contributions(&self, block_time: i64) -> Result<Vec<u8>> {
-        require!(self.is_attestable(block_time), SaleError::SaleNotFinished);
+        require!(
+            self.is_attestable(block_time),
+            ContributorError::SaleNotAttestable
+        );
 
         let totals = &self.totals;
         let mut attested: Vec<u8> = Vec::with_capacity(
@@ -211,18 +218,19 @@ impl Sale {
     }
 
     pub fn parse_sale_sealed(&mut self, payload: &[u8]) -> Result<()> {
+        require!(!self.has_ended(), ContributorError::SaleEnded);
         // check that the payload has at least the number of bytes
         // required to define the number of allocations
         require!(
             payload.len() > INDEX_SALE_SEALED_ALLOCATIONS_START,
-            SaleError::IncorrectVaaPayload
+            ContributorError::IncorrectVaaPayload
         );
 
         let totals = &mut self.totals;
         let num_allocations = payload[INDEX_SALE_SEALED_ALLOCATIONS_START] as usize;
         require!(
             num_allocations == totals.len(),
-            SaleError::IncorrectVaaPayload
+            ContributorError::IncorrectVaaPayload
         );
 
         let grand_total_allocations: u64 = 0;
@@ -241,7 +249,7 @@ impl Sale {
             let adjusted = allocation / BigUint::from(10u128).pow(decimal_difference);
             require!(
                 adjusted < BigUint::from(u64::MAX),
-                SaleError::AmountTooLarge
+                ContributorError::AmountTooLarge
             );
 
             // is there a better way to do this part?
@@ -253,7 +261,7 @@ impl Sale {
             );
             require!(
                 excess_contributions > BigUint::from(0 as u128),
-                SaleError::AmountTooLarge
+                ContributorError::AmountTooLarge
             );
 
             let total = &mut totals[i];
@@ -272,13 +280,13 @@ impl Sale {
     }
 
     pub fn parse_sale_aborted(&mut self, payload: &[u8]) -> Result<()> {
-        require!(!self.has_ended(), SaleError::SaleEnded);
+        require!(!self.has_ended(), ContributorError::SaleEnded);
 
         // check that the payload has the correct size
         // payload type + sale id
         require!(
             payload.len() == PAYLOAD_HEADER_LEN,
-            SaleError::IncorrectVaaPayload
+            ContributorError::IncorrectVaaPayload
         );
 
         // finally set the status to aborted
@@ -296,8 +304,7 @@ impl Sale {
     }
 
     pub fn has_ended(&self) -> bool {
-        return self.initialized && self.status == SaleStatus::Sealed
-            || self.status == SaleStatus::Aborted;
+        return self.initialized && self.status != SaleStatus::Active;
     }
 
     pub fn is_sealed(&self) -> bool {
@@ -313,7 +320,7 @@ impl Sale {
             .totals
             .iter()
             .position(|item| item.token_index == token_index);
-        require!(result != None, SaleError::InvalidTokenIndex);
+        require!(result != None, ContributorError::InvalidTokenIndex);
         Ok(result.unwrap())
     }
 
@@ -343,17 +350,20 @@ pub fn verify_conductor_vaa<'info>(
 
     require!(
         vaa_account.to_account_info().owner == &Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap(),
-        SaleError::InvalidVaaAction
+        ContributorError::InvalidVaaAction
     );
     require!(
         msg.emitter_chain == get_conductor_chain()?,
-        SaleError::InvalidConductor
+        ContributorError::InvalidConductor
     );
     require!(
         msg.emitter_address == get_conductor_address()?,
-        SaleError::InvalidConductor
+        ContributorError::InvalidConductor
     );
-    require!(msg.payload[0] == payload_type, SaleError::InvalidVaaAction);
+    require!(
+        msg.payload[0] == payload_type,
+        ContributorError::InvalidVaaAction
+    );
     Ok(msg)
 }
 

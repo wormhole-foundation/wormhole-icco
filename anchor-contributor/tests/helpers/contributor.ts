@@ -1,9 +1,4 @@
-import {
-  CHAIN_ID_SOLANA,
-  importCoreWasm,
-  tryHexToNativeAssetString,
-  tryHexToNativeString,
-} from "@certusone/wormhole-sdk";
+import { importCoreWasm } from "@certusone/wormhole-sdk";
 import { BN, Program, web3 } from "@project-serum/anchor";
 import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey";
 import { AnchorContributor } from "../../target/types/anchor_contributor";
@@ -12,7 +7,6 @@ import { findBuyerAccount, findCustodianAccount, findSaleAccount, findSignedVaaA
 import { getBuyerState, getCustodianState, getSaleState } from "./fetch";
 import { postVaa } from "./wormhole";
 import { getPdaAssociatedTokenAddress } from "./utils";
-import { ASSOCIATED_PROGRAM_ID } from "@project-serum/anchor/dist/cjs/utils/token";
 
 export class IccoContributor {
   program: Program<AnchorContributor>;
@@ -39,7 +33,7 @@ export class IccoContributor {
     return getCustodianState(this.program, this.custodianAccount);
   }
 
-  async initSale(payer: web3.Keypair, initSaleVaa: Buffer): Promise<string> {
+  async initSale(payer: web3.Keypair, initSaleVaa: Buffer, saleTokenMint: web3.PublicKey): Promise<string> {
     const program = this.program;
 
     // first post signed vaa to wormhole
@@ -56,6 +50,7 @@ export class IccoContributor {
         custodian: this.custodianAccount.key,
         sale: saleAccount.key,
         coreBridgeVaa: signedVaaAccount.key,
+        saleTokenMint: saleTokenMint,
         owner: payer.publicKey,
         systemProgram: web3.SystemProgram.programId,
       })
@@ -82,8 +77,6 @@ export class IccoContributor {
         systemProgram: web3.SystemProgram.programId,
         buyerAta,
         custodianAta,
-        //tokenProgram: TOKEN_PROGRAM_ID,
-        //associatedTokenProgram: ASSOCIATED_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -165,19 +158,15 @@ export class IccoContributor {
       .rpc();
   }
 
-  async claimRefund(payer: web3.Keypair, saleId: Buffer, acceptedMints: web3.PublicKey[]): Promise<string> {
+  async claimRefund(payer: web3.Keypair, saleId: Buffer, mint: web3.PublicKey): Promise<string> {
     const program = this.program;
 
     const custodian = this.custodianAccount.key;
 
     const buyerAccount = findBuyerAccount(program.programId, saleId, payer.publicKey);
     const saleAccount = findSaleAccount(program.programId, saleId);
-
-    const remainingAccounts = [];
-    for (const mint of acceptedMints) {
-      remainingAccounts.push(await getAssociatedTokenAddress(mint, payer.publicKey));
-      remainingAccounts.push(await getPdaAssociatedTokenAddress(mint, custodian));
-    }
+    const buyerAta = await getAssociatedTokenAddress(mint, payer.publicKey);
+    const custodianAta = await getPdaAssociatedTokenAddress(mint, custodian);
 
     return program.methods
       .claimRefund()
@@ -187,10 +176,12 @@ export class IccoContributor {
         buyer: buyerAccount.key,
         owner: payer.publicKey,
         systemProgram: web3.SystemProgram.programId,
+        buyerAta,
+        custodianAta,
       })
-      .remainingAccounts(remainingAccounts)
       .signers([payer])
       .rpc({ skipPreflight: true });
+    //.rpc()
   }
 
   async getSale(saleId: Buffer) {

@@ -37,7 +37,7 @@ export class DummyConductor {
   }
 
   async attestSaleToken(connection: web3.Connection, payer: web3.Keypair): Promise<void> {
-    const mint = await createMint(connection, payer, payer.publicKey, payer.publicKey, 9);
+    const mint = await createMint(connection, payer, payer.publicKey, payer.publicKey, this.nativeTokenDecimals);
     this.saleTokenOnSolana = mint.toBase58();
     return;
   }
@@ -131,6 +131,7 @@ export class DummyConductor {
   //associatedTokenAddress = "00000000000000000000000083752ecafebf4707258dedffbd9c7443148169db";
   tokenChain = CHAIN_ID_ETH as number;
   tokenDecimals = 18;
+  nativeTokenDecimals = 7;
   recipient = tryNativeToHexString("0x22d491bde2303f2f43325b2108d26f1eaba1e32b", CHAIN_ID_ETH);
 
   // wormhole nonce

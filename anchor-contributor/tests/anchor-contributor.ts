@@ -47,9 +47,6 @@ describe("anchor-contributor", () => {
 
   describe("Test Preparation", () => {
     it("Create Dummy Sale Token", async () => {
-      // mint 8 unique tokens
-      const mint = await createMint(connection, orchestrator, orchestrator.publicKey, orchestrator.publicKey, 9);
-
       // we need to simulate attesting the sale token on Solana.
       // this allows us to "redeem" the sale token prior to sealing the sale
       // (which in the case of this test means minting it on the contributor program's ATA)
@@ -67,7 +64,7 @@ describe("anchor-contributor", () => {
         const tokenAccount = await getOrCreateAssociatedTokenAccount(connection, buyer, mint, buyer.publicKey);
 
         // now mint to buyer for testing
-        let amount = new BN("20000000000");
+        let amount = new BN("200000000000");
         await mintTo(
           connection,
           orchestrator,
@@ -133,7 +130,7 @@ describe("anchor-contributor", () => {
     });
   });
 
-  /*
+
   describe("Conduct Successful Sale", () => {
     // global contributions for test
     const contributions = new Map<web3.PublicKey, string[]>();
@@ -155,7 +152,7 @@ describe("anchor-contributor", () => {
       const startTime = 8 + (await getBlockTime(connection));
       const duration = 8; // seconds
       const initSaleVaa = dummyConductor.createSale(startTime, duration, saleTokenAccount.address);
-      const tx = await contributor.initSale(orchestrator, initSaleVaa);
+      const tx = await contributor.initSale(orchestrator, initSaleVaa, dummyConductor.getSaleTokenOnSolana());
 
       {
         // get the first sale state
@@ -193,7 +190,8 @@ describe("anchor-contributor", () => {
     it("Orchestrator Cannot Initialize Sale Again with Signed VAA", async () => {
       let caughtError = false;
       try {
-        const tx = await contributor.initSale(orchestrator, dummyConductor.initSaleVaa);
+        const tx = await contributor.initSale(orchestrator, dummyConductor.initSaleVaa, dummyConductor.getSaleTokenOnSolana());
+        throw Error(`should not happen: ${tx}`);
       } catch (e) {
         // pda init should fail
         caughtError = "programErrorStack" in e;
@@ -212,9 +210,9 @@ describe("anchor-contributor", () => {
       try {
         const mint = hexToPublicKey(dummyConductor.acceptedTokens[0].address);
         const tx = await contributor.contribute(buyer, saleId, mint, new BN(amount));
+        throw Error(`should not happen: ${tx}`);
       } catch (e) {
-        //console.log("too early", e);
-        caughtError = e.msg == "ContributionTooEarly";
+        caughtError = verifyErrorMsg(e, "ContributionTooEarly");
       }
 
       if (!caughtError) {
@@ -226,10 +224,11 @@ describe("anchor-contributor", () => {
       // wait for sale to start here
       const blockTime = await getBlockTime(connection);
       const saleStart = dummyConductor.saleStart;
-      if (blockTime <= saleStart) {
-        //console.log("waiting", saleStart - blockTime + 1, "seconds");
-        await wait(saleStart - blockTime + 1);
-      }
+      await waitUntilBlock (connection, saleStart);
+      // if (blockTime <= saleStart) {
+      //   //console.log("waiting", saleStart - blockTime + 1, "seconds");
+      //   await wait(saleStart - blockTime + 1);
+      // }
 
       // prep contributions info
       const acceptedTokens = dummyConductor.acceptedTokens;
@@ -328,32 +327,26 @@ describe("anchor-contributor", () => {
       let caughtError = false;
       try {
         const tx = await contributor.attestContributions(orchestrator, saleId);
-        console.log(tx);
+        throw Error(`should not happen: ${tx}`);
       } catch (e) {
-        console.log(e.error.errorCode.code);
-        caughtError = e.error.errorCode.code == "ContributionTooEarly";
+        caughtError = verifyErrorMsg(e, "SaleNotAttestable");
+      }
+
+      if (!caughtError) {
+        throw Error("did not catch expected error");
       }
     });
 
     // TODO
     it("Orchestrator Attests Contributions", async () => {
       // wait for sale to end here
-      const blockTime = await getBlockTime(connection);
       const saleEnd = dummyConductor.saleEnd;
       const saleId = dummyConductor.getSaleId();
-      if (blockTime <= saleEnd) {
-        await wait(saleEnd - blockTime + 1);
-      }
-
+      await waitUntilBlock(connection, saleEnd);
       const tx = await contributor.attestContributions(orchestrator, saleId);
 
       // now go about your business
       //expect(caughtError).to.be.false;
-    });
-
-    // TODO
-    it("Orchestrator Cannot Attest Contributions Again", async () => {
-      expect(false).to.be.true;
     });
 
     it("User Cannot Contribute After Sale Ended", async () => {
@@ -364,8 +357,9 @@ describe("anchor-contributor", () => {
       try {
         const mint = hexToPublicKey(dummyConductor.acceptedTokens[0].address);
         const tx = await contributor.contribute(buyer, saleId, mint, amount);
+        throw Error(`should not happen: ${tx}`);
       } catch (e) {
-        caughtError = e.msg == "SaleEnded";
+        caughtError = verifyErrorMsg(e, "SaleEnded");
       }
 
       if (!caughtError) {
@@ -398,21 +392,14 @@ describe("anchor-contributor", () => {
       let caughtError = false;
       try {
         const tx = await contributor.sealSale(orchestrator, saleSealedVaa);
+        throw Error(`should not happen: ${tx}`);
       } catch (e) {
-        //caughtError = e.error.errorCode.code == "SaleEnded";
-        console.log(e.error.errorCode.code);
+        caughtError = verifyErrorMsg(e, "SaleEnded");
       }
 
       if (!caughtError) {
         throw Error("did not catch expected error");
       }
-
-      expect(false).to.be.true;
-    });
-
-    // TODO
-    it("User Cannot Claim Allocations with Incorrect Token Index", async () => {
-      expect(false).to.be.true;
     });
 
     // TODO
@@ -425,7 +412,8 @@ describe("anchor-contributor", () => {
       expect(false).to.be.true;
     });
   });
-  */
+
+
   describe("Conduct Aborted Sale", () => {
     // global contributions for test
     const contributions = new Map<web3.PublicKey, string[]>();
@@ -447,7 +435,7 @@ describe("anchor-contributor", () => {
       const startTime = 8 + (await getBlockTime(connection));
       const duration = 8; // seconds
       const initSaleVaa = dummyConductor.createSale(startTime, duration, saleTokenAccount.address);
-      const tx = await contributor.initSale(orchestrator, initSaleVaa);
+      const tx = await contributor.initSale(orchestrator, initSaleVaa, dummyConductor.getSaleTokenOnSolana());
 
       {
         const saleId = dummyConductor.getSaleId();
@@ -458,6 +446,7 @@ describe("anchor-contributor", () => {
         //expect(Uint8Array.from(saleState.tokenAddress)).to.deep.equal(Buffer.from(dummyConductor.tokenAddress, "hex"));
         expect(saleState.tokenChain).to.equal(dummyConductor.tokenChain);
         expect(saleState.tokenDecimals).to.equal(dummyConductor.tokenDecimals);
+        expect(saleState.nativeTokenDecimals).to.equal(dummyConductor.nativeTokenDecimals);
         expect(saleState.times.start.toString()).to.equal(dummyConductor.saleStart.toString());
         expect(saleState.times.end.toString()).to.equal(dummyConductor.saleEnd.toString());
         expect(Uint8Array.from(saleState.recipient)).to.deep.equal(Buffer.from(dummyConductor.recipient, "hex"));
@@ -485,10 +474,11 @@ describe("anchor-contributor", () => {
       // wait for sale to start here
       const blockTime = await getBlockTime(connection);
       const saleStart = dummyConductor.saleStart;
-      if (blockTime <= saleStart) {
-        //console.log("waiting", saleStart - blockTime + 1, "seconds");
-        await wait(saleStart - blockTime + 1);
-      }
+      await waitUntilBlock(connection, saleStart);
+      // if (blockTime <= saleStart) {
+      //   //console.log("waiting", saleStart - blockTime + 1, "seconds");
+      //   await wait(saleStart - blockTime + 1);
+      // }
 
       // prep contributions info
       const acceptedTokens = dummyConductor.acceptedTokens;
@@ -530,8 +520,9 @@ describe("anchor-contributor", () => {
       let caughtError = false;
       try {
         const tx = await contributor.abortSale(orchestrator, saleAbortedVaa);
+        throw Error(`should not happen: ${tx}`);
       } catch (e) {
-        caughtError = e.error.errorCode.code == "SaleEnded";
+        caughtError = verifyErrorMsg(e, "SaleEnded");
       }
 
       if (!caughtError) {
@@ -542,31 +533,120 @@ describe("anchor-contributor", () => {
     // TODO
     it("User Claims Refund From Sale", async () => {
       const saleId = dummyConductor.getSaleId();
-      const acceptedMints = dummyConductor.acceptedTokens.map((token) => {
+      const acceptedTokens = dummyConductor.acceptedTokens;
+      const acceptedMints = acceptedTokens.map((token) => {
         return hexToPublicKey(token.address);
       });
 
-      //const tx = await contributor.claimRefund(buyer, saleId, acceptedMints);
+      const startingBalanceBuyer = await Promise.all(
+        acceptedTokens.map(async (token) => {
+          const mint = hexToPublicKey(token.address);
+          return getSplBalance(connection, mint, buyer.publicKey);
+        })
+      );
+      const startingBalanceCustodian = await Promise.all(
+        acceptedTokens.map(async (token) => {
+          const mint = hexToPublicKey(token.address);
+          return getPdaSplBalance(connection, mint, contributor.custodianAccount.key);
+        })
+      );
+
+      const validClaimIndices = [0, 3];
+      for (let i = 0; i < acceptedMints.length; ++i) {
+        let valid = validClaimIndices.indexOf(i) >= 0;
+        let mint = acceptedMints[i];
+
+        // if we have something to claim, we should get a successful transaction.
+        // if not, we will get an error saying there is nothing to claim
+        if (valid) {
+          const tx = await contributor.claimRefund(buyer, saleId, mint);
+        } else {
+          let caughtError = false;
+          try {
+            const tx = await contributor.claimRefund(buyer, saleId, mint);
+            throw Error(`should not happen: ${i}, ${tx}`);
+          } catch (e) {
+            caughtError = verifyErrorMsg(e, "NothingToClaim");
+          }
+
+          if (!caughtError) {
+            throw Error("did not catch expected error");
+          }
+        }
+      }
+
+      const endingBalanceBuyer = await Promise.all(
+        acceptedTokens.map(async (token) => {
+          const mint = hexToPublicKey(token.address);
+          return getSplBalance(connection, mint, buyer.publicKey);
+        })
+      );
+      const endingBalanceCustodian = await Promise.all(
+        acceptedTokens.map(async (token) => {
+          const mint = hexToPublicKey(token.address);
+          return getPdaSplBalance(connection, mint, contributor.custodianAccount.key);
+        })
+      );
+
+      const expectedRefundValues = [
+        totalContributions[0],
+        new BN(0),
+        new BN(0),
+        totalContributions[1],
+        new BN(0),
+        new BN(0),
+        new BN(0),
+        new BN(0),
+      ];
+      const numExpected = expectedRefundValues.length;
+
+      // get state
+      const buyerState = await contributor.getBuyer(saleId, buyer.publicKey);
+      const totals: any = buyerState.totals;
+
+      // check balance changes and state
+      for (let i = 0; i < numExpected; ++i) {
+        let refund = expectedRefundValues[i];
+
+        expect(startingBalanceBuyer[i].add(refund).toString()).to.equal(endingBalanceBuyer[i].toString());
+        expect(startingBalanceCustodian[i].sub(refund).toString()).to.equal(endingBalanceCustodian[i].toString());
+
+        const total = totals[i];
+        const expectedState = refund.eq(new BN("0")) ? "inactive" : "refundIsClaimed";
+        expect(total.status).has.key(expectedState);
+        expect(total.excessContributions.toString()).to.equal(refund.toString());
+      }
     });
 
-    // TODO
     it("User Cannot Claim Refund Again", async () => {
-      const saleId = dummyConductor.getSaleId();
-      const acceptedMints = dummyConductor.acceptedTokens.map((token) => {
-        return hexToPublicKey(token.address);
-      });
-
-      let caughtError = false;
-      try {
-        //const tx = await contributor.claimRefund(saleId, buyer, acceptedMints);
-      } catch (e) {
-        console.log(e);
-        caughtError = e.error.errorCode.code == "SaleEnded";
-      }
-
-      if (!caughtError) {
-        throw Error("did not catch expected error");
-      }
+      // TODO
     });
   });
 });
+
+async function waitUntilBlock(connection: web3.Connection, saleEnd: number) {
+  let blockTime = await getBlockTime(connection);
+  while (blockTime <= saleEnd) {
+    await wait(1);
+    blockTime = await getBlockTime(connection);
+  }
+}
+
+function verifyErrorMsg(e: any, msg: string): boolean {
+  if (e.msg) {
+    const result = e.msg == msg;
+    if (!result) {
+      console.error(e);
+    }
+    return result;
+  } else if (e.error) {
+    const result = e.error.errorMessage == msg;
+    if (!result) {
+      console.error(e);
+    }
+    return result;
+  }
+
+  console.error(e);
+  throw Error("unknown error");
+}

@@ -47,9 +47,6 @@ describe("anchor-contributor", () => {
 
   describe("Test Preparation", () => {
     it("Create Dummy Sale Token", async () => {
-      // mint 8 unique tokens
-      const mint = await createMint(connection, orchestrator, orchestrator.publicKey, orchestrator.publicKey, 9);
-
       // we need to simulate attesting the sale token on Solana.
       // this allows us to "redeem" the sale token prior to sealing the sale
       // (which in the case of this test means minting it on the contributor program's ATA)

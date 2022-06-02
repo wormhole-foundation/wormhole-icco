@@ -226,10 +226,11 @@ describe("anchor-contributor", () => {
       // wait for sale to start here
       const blockTime = await getBlockTime(connection);
       const saleStart = dummyConductor.saleStart;
-      if (blockTime <= saleStart) {
-        //console.log("waiting", saleStart - blockTime + 1, "seconds");
-        await wait(saleStart - blockTime + 1);
-      }
+      await waitUntilBlock (connection, saleStart);
+      // if (blockTime <= saleStart) {
+      //   //console.log("waiting", saleStart - blockTime + 1, "seconds");
+      //   await wait(saleStart - blockTime + 1);
+      // }
 
       // prep contributions info
       const acceptedTokens = dummyConductor.acceptedTokens;
@@ -341,13 +342,9 @@ describe("anchor-contributor", () => {
     // TODO
     it("Orchestrator Attests Contributions", async () => {
       // wait for sale to end here
-      const blockTime = await getBlockTime(connection);
       const saleEnd = dummyConductor.saleEnd;
       const saleId = dummyConductor.getSaleId();
-      if (blockTime <= saleEnd) {
-        await wait(saleEnd - blockTime + 1);
-      }
-
+      await waitUntilBlock(connection, saleEnd);
       const tx = await contributor.attestContributions(orchestrator, saleId);
 
       // now go about your business
@@ -477,10 +474,11 @@ describe("anchor-contributor", () => {
       // wait for sale to start here
       const blockTime = await getBlockTime(connection);
       const saleStart = dummyConductor.saleStart;
-      if (blockTime <= saleStart) {
-        //console.log("waiting", saleStart - blockTime + 1, "seconds");
-        await wait(saleStart - blockTime + 1);
-      }
+      await waitUntilBlock (connection, saleStart);
+      // if (blockTime <= saleStart) {
+      //   //console.log("waiting", saleStart - blockTime + 1, "seconds");
+      //   await wait(saleStart - blockTime + 1);
+      // }
 
       // prep contributions info
       const acceptedTokens = dummyConductor.acceptedTokens;
@@ -565,6 +563,15 @@ describe("anchor-contributor", () => {
     });
   });
 });
+
+async function waitUntilBlock (connection: web3.Connection, saleEnd: number) {
+  let blockTime = await getBlockTime(connection);
+  while (blockTime <= saleEnd) {
+    await wait(1);
+    blockTime = await getBlockTime(connection);
+  }
+}
+
 
 function verifyErrorMsg(e: any, msg: string): boolean {
   if (e.msg) {

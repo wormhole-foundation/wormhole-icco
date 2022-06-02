@@ -602,7 +602,7 @@ describe("anchor-contributor", () => {
 
       // get state
       const buyerState = await contributor.getBuyer(saleId, buyer.publicKey);
-      const totals: any = buyerState.totals;
+      const totals: any = buyerState.contributions;
 
       // check balance changes and state
       for (let i = 0; i < numExpected; ++i) {
@@ -614,7 +614,7 @@ describe("anchor-contributor", () => {
         const total = totals[i];
         const expectedState = refund.eq(new BN("0")) ? "inactive" : "refundClaimed";
         expect(total.status).has.key(expectedState);
-        expect(total.excessContributions.toString()).to.equal(refund.toString());
+        expect(total.excess.toString()).to.equal(refund.toString());
       }
     });
 

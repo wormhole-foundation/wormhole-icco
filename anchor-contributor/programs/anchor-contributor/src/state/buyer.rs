@@ -5,10 +5,9 @@ use crate::{constants::ACCEPTED_TOKENS_MAX, error::ContributorError, state::sale
 
 #[account]
 pub struct Buyer {
-    //pub contributed: [u64; ACCEPTED_TOKENS_MAX], // 8 * ACCEPTED_TOKENS_MAX
-    pub totals: Vec<BuyerContribution>, // 4 + BuyerTotal::LENGTH * ACCEPTED_TOKENS_MAX
-    pub allocation: BuyerAllocation,    // BuyerAllocation::LENGTH
-    pub initialized: bool,              // 1 (not sure for 1 bit)
+    pub contributions: Vec<BuyerContribution>, // 4 + BuyerTotal::LENGTH * ACCEPTED_TOKENS_MAX
+    pub allocation: BuyerAllocation,           // BuyerAllocation::LENGTH
+    pub initialized: bool,                     // 1 (not sure for 1 bit)
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
@@ -37,7 +36,7 @@ impl Buyer {
         (4 + BuyerContribution::LENGTH * ACCEPTED_TOKENS_MAX) + BuyerAllocation::LENGTH + 1;
 
     pub fn initialize(&mut self, num_totals: usize) -> () {
-        self.totals = vec![
+        self.contributions = vec![
             BuyerContribution {
                 amount: 0,
                 excess: 0,
@@ -51,13 +50,16 @@ impl Buyer {
     }
 
     pub fn contribute(&mut self, idx: usize, amount: u64) -> Result<()> {
-        require!(idx < self.totals.len(), ContributorError::InvalidTokenIndex);
         require!(
-            !self.has_claimed(idx),
+            idx < self.contributions.len(),
+            ContributorError::InvalidTokenIndex
+        );
+        require!(
+            !self.has_claimed_index(idx),
             ContributorError::ContributeDeactivated
         );
 
-        let total = &mut self.totals[idx];
+        let total = &mut self.contributions[idx];
         total.amount += amount;
         total.status = ContributionStatus::Active;
         Ok(())
@@ -93,9 +95,12 @@ impl Buyer {
     */
 
     pub fn claim_refund(&mut self, idx: usize) -> Result<u64> {
-        require!(!self.has_claimed(idx), ContributorError::AlreadyClaimed);
+        require!(
+            !self.has_claimed_index(idx),
+            ContributorError::AlreadyClaimed
+        );
 
-        let total = &mut self.totals[idx];
+        let total = &mut self.contributions[idx];
         total.excess = total.amount;
         total.status = ContributionStatus::RefundClaimed;
         Ok(total.excess)
@@ -106,7 +111,7 @@ impl Buyer {
 
         let total_allocation: u128 = sale_totals
             .iter()
-            .zip(self.totals.iter())
+            .zip(self.contributions.iter())
             .map(|(t, c)| t.allocations as u128 * c.amount as u128 / t.contributions as u128)
             .sum();
 
@@ -147,8 +152,8 @@ impl Buyer {
         self.initialized // && self.status == ContributionStatus::Active
     }*/
 
-    fn has_claimed(&self, idx: usize) -> bool {
-        let status = self.totals[idx].status;
+    fn has_claimed_index(&self, idx: usize) -> bool {
+        let status = self.contributions[idx].status;
         status == ContributionStatus::ExcessClaimed || status == ContributionStatus::RefundClaimed
     }
 }

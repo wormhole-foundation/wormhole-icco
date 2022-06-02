@@ -26,8 +26,6 @@ pub struct Sale {
 
     pub totals: Vec<AssetTotal>, // 4 + AssetTotal::MAXIMUM_SIZE * ACCEPTED_TOKENS_MAX
     pub native_token_decimals: u8, // 1
-
-    pub bump: u8, // 1
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq, Debug)]
@@ -91,7 +89,6 @@ impl Sale {
         + 1
         + 1
         + (4 + AssetTotal::MAXIMUM_SIZE * ACCEPTED_TOKENS_MAX)
-        + 1
         + 1;
 
     pub fn set_custodian(&mut self, custodian: &Pubkey) {
@@ -160,6 +157,13 @@ impl Sale {
         let result = self.totals.iter().find(|item| item.mint == *mint);
         require!(result != None, ContributorError::InvalidTokenIndex);
         Ok(result.unwrap().token_index)
+    }
+
+    pub fn get_total_info(&self, mint: &Pubkey) -> Result<(usize, &AssetTotal)> {
+        let result = self.totals.iter().position(|item| item.mint == *mint);
+        require!(result != None, ContributorError::InvalidTokenIndex);
+        let idx = result.unwrap();
+        Ok((idx, &self.totals[idx]))
     }
 
     pub fn get_associated_accepted_token_address(

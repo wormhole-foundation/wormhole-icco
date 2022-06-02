@@ -137,7 +137,7 @@ pub mod anchor_contributor {
         // now update buyer's contributions
         let buyer = &mut ctx.accounts.buyer;
         if !buyer.initialized {
-            buyer.initialize();
+            buyer.initialize(sale.totals.len());
         }
         buyer.contribute(idx, amount)?;
 
@@ -250,6 +250,31 @@ pub mod anchor_contributor {
     }
 
     pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
+        let sale = &ctx.accounts.sale;
+        require!(sale.is_aborted(), ContributorError::SaleNotAborted);
+
+        let to_account = &ctx.accounts.buyer_ata;
+        let mint = token::accessor::mint(&to_account.to_account_info())?;
+        let (idx, _) = sale.get_total_info(&mint)?;
+        let refund = ctx.accounts.buyer.claim_refund(idx)?;
+        require!(refund > 0, ContributorError::NothingToClaim);
+
+        let from_account = &ctx.accounts.custodian_ata;
+        let custodian = &ctx.accounts.custodian;
+
+        // spl transfer refund
+        invoke_signed(
+            &spl_token::instruction::transfer(
+                &token::ID,
+                &from_account.key(),
+                &to_account.key(),
+                &custodian.key(),
+                &[&custodian.key()],
+                refund,
+            )?,
+            &ctx.accounts.to_account_infos(),
+            &[&[&SEED_PREFIX_CUSTODIAN.as_bytes(), &[ctx.bumps["custodian"]]]],
+        )?;
         Ok(())
     }
 

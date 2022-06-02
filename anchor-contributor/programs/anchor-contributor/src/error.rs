@@ -5,6 +5,9 @@ pub enum ContributorError {
     #[msg("AmountTooLarge")]
     AmountTooLarge,
 
+    #[msg("BuyerDeactivated")]
+    BuyerDeactivated,
+
     #[msg("BuyerInactive")]
     BuyerInactive,
 
@@ -38,6 +41,9 @@ pub enum ContributorError {
     #[msg("InvalidTokensAccepted")]
     InvalidAcceptedTokens,
 
+    #[msg("NothingToClaim")]
+    NothingToClaim,
+
     #[msg("SaleAlreadyInitialized")]
     SaleAlreadyInitialized,
 
@@ -58,4 +64,7 @@ pub enum ContributorError {
 
     #[msg("TooManyAcceptedTokens")]
     TooManyAcceptedTokens,
+
+    #[msg("WrongAuthority")]
+    WrongAuthority,
 }

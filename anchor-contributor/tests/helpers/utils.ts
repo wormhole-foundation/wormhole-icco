@@ -38,3 +38,11 @@ export function hexToPublicKey(hexlified: string): web3.PublicKey {
 export async function getPdaAssociatedTokenAddress(mint: web3.PublicKey, pda: web3.PublicKey): Promise<web3.PublicKey> {
   return getAssociatedTokenAddress(mint, pda, true);
 }
+
+export function makeWritableAccountMeta(pubkey: web3.PublicKey): web3.AccountMeta {
+  return {
+    pubkey,
+    isWritable: true,
+    isSigner: false,
+  };
+}

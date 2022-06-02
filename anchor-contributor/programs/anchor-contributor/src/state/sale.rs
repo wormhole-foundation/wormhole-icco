@@ -191,7 +191,7 @@ impl Sale {
     }
 
     pub fn serialize_contributions(&self, block_time: i64) -> Result<Vec<u8>> {
-        require!(self.is_attestable(block_time), SaleError::SaleNotFinished);
+        require!(self.is_attestable(block_time), SaleError::SaleNotAttestable);
 
         let totals = &self.totals;
         let mut attested: Vec<u8> = Vec::with_capacity(
@@ -211,6 +211,7 @@ impl Sale {
     }
 
     pub fn parse_sale_sealed(&mut self, payload: &[u8]) -> Result<()> {
+        require!(!self.has_ended(), SaleError::SaleEnded);
         // check that the payload has at least the number of bytes
         // required to define the number of allocations
         require!(
@@ -296,8 +297,7 @@ impl Sale {
     }
 
     pub fn has_ended(&self) -> bool {
-        return self.initialized && self.status == SaleStatus::Sealed
-            || self.status == SaleStatus::Aborted;
+        return self.initialized && self.status != SaleStatus::Active;
     }
 
     pub fn is_sealed(&self) -> bool {

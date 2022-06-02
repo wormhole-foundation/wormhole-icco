@@ -20,6 +20,9 @@ pub enum SaleError {
     #[msg("InvalidConductor")]
     InvalidConductor,
 
+    #[msg("InvalidRemainingAccounts")]
+    InvalidRemainingAccounts,
+
     #[msg("InvalidTokenDecimals")]
     InvalidTokenDecimals,
 
@@ -38,11 +41,14 @@ pub enum SaleError {
     #[msg("SaleEnded")]
     SaleEnded,
 
-    #[msg("SaleNotFinished")]
-    SaleNotFinished,
-
     #[msg("SaleNotAborted")]
     SaleNotAborted,
+
+    #[msg("SaleNotAttestable")]
+    SaleNotAttestable,
+
+    #[msg("SaleNotFinished")]
+    SaleNotFinished,
 
     #[msg("SaleNotSealed")]
     SaleNotSealed,

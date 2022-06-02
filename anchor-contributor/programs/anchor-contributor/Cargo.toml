@@ -22,6 +22,7 @@ overflow-checks = true
 [dependencies]
 anchor-lang = { version= "0.24.2", features = ["init-if-needed"]}
 anchor-spl = "0.24.2"
+spl-token = "3.3.0"
 num-traits = "0.2"
 num-derive = "0.3"
 borsh = "0.9.3"

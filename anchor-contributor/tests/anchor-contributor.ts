@@ -151,8 +151,8 @@ describe("anchor-contributor", () => {
     });
 
     it("Orchestrator Initialize Sale with Signed VAA", async () => {
-      const startTime = 5 + (await getBlockTime(connection));
-      const duration = 5; // seconds
+      const startTime = 8 + (await getBlockTime(connection));
+      const duration = 8; // seconds
       const initSaleVaa = dummyConductor.createSale(startTime, duration, saleTokenAccount.address);
       const tx = await contributor.initSale(orchestrator, initSaleVaa);
 
@@ -193,6 +193,7 @@ describe("anchor-contributor", () => {
       let caughtError = false;
       try {
         const tx = await contributor.initSale(orchestrator, dummyConductor.initSaleVaa);
+        console.log("should not happen", tx);
       } catch (e) {
         // pda init should fail
         caughtError = "programErrorStack" in e;
@@ -205,17 +206,15 @@ describe("anchor-contributor", () => {
 
     it("User Cannot Contribute Too Early", async () => {
       const saleId = dummyConductor.getSaleId();
-      const tokenIndex = 2;
       const amount = new BN("1000000000"); // 1,000,000,000 lamports
-      const mint = dummyConductor.acceptedTokens[tokenIndex].address;
 
       let caughtError = false;
       try {
         const mint = hexToPublicKey(dummyConductor.acceptedTokens[0].address);
         const tx = await contributor.contribute(buyer, saleId, mint, new BN(amount));
+        console.log("should not happen", tx);
       } catch (e) {
-        console.log("too early", e);
-        caughtError = e.msg == "ContributionTooEarly";
+        caughtError = verifyErrorMsg(e, "ContributionTooEarly");
       }
 
       if (!caughtError) {
@@ -329,10 +328,13 @@ describe("anchor-contributor", () => {
       let caughtError = false;
       try {
         const tx = await contributor.attestContributions(orchestrator, saleId);
-        console.log(tx);
+        console.log("should not happen", tx);
       } catch (e) {
-        console.log(e.error.errorCode.code);
-        caughtError = e.error.errorCode.code == "ContributionTooEarly";
+        caughtError = verifyErrorMsg(e, "SaleNotAttestable");
+      }
+
+      if (!caughtError) {
+        throw Error("did not catch expected error");
       }
     });
 
@@ -354,7 +356,19 @@ describe("anchor-contributor", () => {
 
     // TODO
     it("Orchestrator Cannot Attest Contributions Again", async () => {
-      expect(false).to.be.true;
+      const saleId = dummyConductor.getSaleId();
+
+      let caughtError = false;
+      try {
+        const tx = await contributor.attestContributions(orchestrator, saleId);
+        console.log("should not happen", tx);
+      } catch (e) {
+        caughtError = verifyErrorMsg(e, "SaleNotAttestable");
+      }
+
+      if (!caughtError) {
+        throw Error("did not catch expected error");
+      }
     });
 
     it("User Cannot Contribute After Sale Ended", async () => {
@@ -365,8 +379,9 @@ describe("anchor-contributor", () => {
       try {
         const mint = hexToPublicKey(dummyConductor.acceptedTokens[0].address);
         const tx = await contributor.contribute(buyer, saleId, mint, amount);
+        console.log("should not happen", tx);
       } catch (e) {
-        caughtError = e.msg == "SaleEnded";
+        caughtError = verifyErrorMsg(e, "SaleEnded");
       }
 
       if (!caughtError) {
@@ -399,9 +414,9 @@ describe("anchor-contributor", () => {
       let caughtError = false;
       try {
         const tx = await contributor.sealSale(orchestrator, saleSealedVaa);
+        console.log("should not happen", tx);
       } catch (e) {
-        //caughtError = e.error.errorCode.code == "SaleEnded";
-        console.log(e.error.errorCode.code);
+        caughtError = verifyErrorMsg(e, "SaleEnded");
       }
 
       if (!caughtError) {
@@ -427,17 +442,10 @@ describe("anchor-contributor", () => {
     });
   });
 
-  /*
   describe("Conduct Aborted Sale", () => {
-    // contributor info
-    const contributions = new Map<number, string[]>();
-    contributions.set(2, ["8700000000", "6500000000"]);
-    contributions.set(8, ["4300000000", "2100000000"]);
-
+    // global contributions for test
+    const contributions = new Map<web3.PublicKey, string[]>();
     const totalContributions: BN[] = [];
-    contributions.forEach((amounts) => {
-      totalContributions.push(amounts.map((x) => new BN(x)).reduce((prev, curr) => prev.add(curr)));
-    });
 
     // squirrel away associated sale token account
     let saleTokenAccount: AssociatedTokenAccount;
@@ -452,8 +460,8 @@ describe("anchor-contributor", () => {
     });
 
     it("Orchestrator Initialize Sale with Signed VAA", async () => {
-      const startTime = 10 + (await getBlockTime(connection));
-      const duration = 5; // seconds
+      const startTime = 8 + (await getBlockTime(connection));
+      const duration = 8; // seconds
       const initSaleVaa = dummyConductor.createSale(startTime, duration, saleTokenAccount.address);
       const tx = await contributor.initSale(orchestrator, initSaleVaa);
 
@@ -494,16 +502,27 @@ describe("anchor-contributor", () => {
       const blockTime = await getBlockTime(connection);
       const saleStart = dummyConductor.saleStart;
       if (blockTime <= saleStart) {
+        //console.log("waiting", saleStart - blockTime + 1, "seconds");
         await wait(saleStart - blockTime + 1);
       }
+
+      // prep contributions info
+      const acceptedTokens = dummyConductor.acceptedTokens;
+      const contributedTokens = [hexToPublicKey(acceptedTokens[0].address), hexToPublicKey(acceptedTokens[3].address)];
+      contributions.set(contributedTokens[0], ["1200000000", "3400000000"]);
+      contributions.set(contributedTokens[1], ["5600000000", "7800000000"]);
+
+      contributedTokens.forEach((mint) => {
+        const amounts = contributions.get(mint);
+        totalContributions.push(amounts.map((x) => new BN(x)).reduce((prev, curr) => prev.add(curr)));
+      });
 
       // now go about your business
       // contribute multiple times
       const saleId = dummyConductor.getSaleId();
-      for (const [tokenIndex, contributionAmounts] of contributions) {
-        for (const amount of contributionAmounts) {
-          const mint = dummyConductor.acceptedTokens[tokenIndex].address;
-          const tx = await contributor.contribute(orchestrator, saleId, tokenIndex, mint, new BN(amount));
+      for (const mint of contributedTokens) {
+        for (const amount of contributions.get(mint)) {
+          const tx = await contributor.contribute(buyer, saleId, mint, new BN(amount));
         }
       }
     });
@@ -527,8 +546,9 @@ describe("anchor-contributor", () => {
       let caughtError = false;
       try {
         const tx = await contributor.abortSale(orchestrator, saleAbortedVaa);
+        console.log("should not happen", tx);
       } catch (e) {
-        caughtError = e.error.errorCode.code == "SaleEnded";
+        caughtError = verifyErrorMsg(e, "SaleEnded");
       }
 
       if (!caughtError) {
@@ -537,19 +557,52 @@ describe("anchor-contributor", () => {
     });
 
     // TODO
-    it("User Cannot Claim Refund with Incorrect Token Index", async () => {
-      expect(false).to.be.true;
-    });
-
-    // TODO
     it("User Claims Refund From Sale", async () => {
-      expect(false).to.be.true;
+      const saleId = dummyConductor.getSaleId();
+      const acceptedMints = dummyConductor.acceptedTokens.map((token) => {
+        return hexToPublicKey(token.address);
+      });
+
+      //const tx = await contributor.claimRefund(buyer, saleId, acceptedMints);
     });
 
     // TODO
     it("User Cannot Claim Refund Again", async () => {
-      expect(false).to.be.true;
+      const saleId = dummyConductor.getSaleId();
+      const acceptedMints = dummyConductor.acceptedTokens.map((token) => {
+        return hexToPublicKey(token.address);
+      });
+
+      let caughtError = false;
+      try {
+        //const tx = await contributor.claimRefund(saleId, buyer, acceptedMints);
+        //console.log("should not happen", tx);
+      } catch (e) {
+        caughtError = verifyErrorMsg(e, "BuyerInactive");
+      }
+
+      if (!caughtError) {
+        throw Error("did not catch expected error");
+      }
     });
   });
-  */
 });
+
+function verifyErrorMsg(e: any, msg: string): boolean {
+  if (e.msg) {
+    const result = e.msg == msg;
+    if (!result) {
+      console.error(e);
+    }
+    return result;
+  } else if (e.error.errorMessage) {
+    const result = e.error.errorMessage == msg;
+    if (!result) {
+      console.error(e);
+    }
+    return result;
+  }
+
+  console.error(e);
+  throw Error("unknown error");
+}

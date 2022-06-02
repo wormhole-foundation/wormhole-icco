@@ -23,7 +23,7 @@ declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 pub mod anchor_contributor {
     use super::*;
 
-    use anchor_spl::*;
+    use anchor_spl::{*, token::TokenAccount};
 
     pub fn create_custodian(ctx: Context<CreateCustodian>) -> Result<()> {
         let custodian = &mut ctx.accounts.custodian;
@@ -209,12 +209,15 @@ pub mod anchor_contributor {
             &[&[
                 &b"emitter".as_ref(),
                 &[*ctx.bumps.get("wormhole_derived_emitter").unwrap()],
-            ]],
+            ]], 
         )?;
 
         Ok(())
     }
 
+    /**
+     *
+     */
     pub fn seal_sale(ctx: Context<SealSale>) -> Result<()> {
         let msg = verify_conductor_vaa(&ctx.accounts.core_bridge_vaa, PAYLOAD_SALE_SEALED)?;
 
@@ -230,13 +233,14 @@ pub mod anchor_contributor {
         let conductor_chain = get_conductor_chain()?;
         let conductor_address = get_conductor_address()?;
 
-        for total in &sale.totals {
+        for (i, total) in sale.totals.iter().enumerate() {
             let mint = total.mint;
             let amount = total.contributions;
             let recipient = sale.recipient;
             // token bridge transfer this amount over to conductor_address on conductor_chain to recipient
+            let custody_ata = ctx.remaining_accounts[2*i];
+            let token_acc = ctx.remaining_accounts[(2*i)+1];
         }
-
         Ok(())
     }
 

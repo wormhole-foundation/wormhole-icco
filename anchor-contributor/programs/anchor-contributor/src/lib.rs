@@ -1,26 +1,26 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::borsh::try_from_slice_unchecked;
 use anchor_lang::solana_program::instruction::Instruction;
-use anchor_lang::solana_program::program::{invoke,invoke_signed};
+use anchor_lang::solana_program::program::{invoke, invoke_signed};
 use anchor_lang::solana_program::system_instruction::transfer;
 use anchor_lang::solana_program::sysvar::*;
-use spl_token::*;
 use anchor_spl::*;
+use spl_token::*;
 
 mod constants;
 mod context;
 mod env;
 mod error;
 mod state;
-mod wormhole;
 mod token_bridge;
+mod wormhole;
 
 use constants::*;
 use context::*;
 use error::*;
-use state::sale::{AssetTotal,get_conductor_address, get_conductor_chain, verify_conductor_vaa};
-use wormhole::*;
+use state::sale::{get_conductor_address, get_conductor_chain, verify_conductor_vaa, AssetTotal};
 use token_bridge::*;
+use wormhole::*;
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
@@ -173,7 +173,7 @@ pub mod anchor_contributor {
             &[&[
                 &b"emitter".as_ref(),
                 &[*ctx.bumps.get("wormhole_derived_emitter").unwrap()],
-            ]], 
+            ]],
         )?;
 
         Ok(())
@@ -205,7 +205,7 @@ pub mod anchor_contributor {
             let mut token_account_data:&[u8] = &ctx.remaining_accounts[(4*i)+1].data.borrow_mut();
             let token_acc:token::TokenAccount = token::TokenAccount::try_deserialize(&mut token_account_data)?;
             let wrapped_mint_key = ctx.remaining_accounts[(4*i)+3];
-            let wrapped_meta_key: 
+            let wrapped_meta_key:
 
             let mut is_native = true;
             if token_acc.mint == token_bridge_mint_key {
@@ -234,14 +234,14 @@ pub mod anchor_contributor {
                         AccountMeta::new_readonly(spl_token::id(), false),
                     ],
                     data: (
-                        TRANSFER_WRAPPED_INSTRUCTION, 
+                        TRANSFER_WRAPPED_INSTRUCTION,
                         TransferData {
                             nonce: ctx.accounts.custodian.nonce,
                             amount: amount,
                             fee: 0_u64,
                             target_address: Pubkey::new(&recipient),
                             target_chain: sale.token_chain,
-                        }    
+                        }
                     ).try_to_vec()?
                 };
             } else {
@@ -254,7 +254,7 @@ pub mod anchor_contributor {
     }
     */
 
-    pub fn send_contributions(ctx:Context<SendContributions>, token_idx:u8) -> Result<()> {
+    pub fn send_contributions(ctx: Context<SendContributions>, token_idx: u8) -> Result<()> {
         let msg = verify_conductor_vaa(&ctx.accounts.core_bridge_vaa, PAYLOAD_SALE_SEALED)?;
 
         let sale = &mut ctx.accounts.sale;
@@ -267,15 +267,16 @@ pub mod anchor_contributor {
         let conductor_chain = get_conductor_chain()?;
         let conductor_address = get_conductor_address()?;
 
-        let asset:AssetTotal = *sale.totals.get(token_idx as usize).unwrap();
+        let asset = &sale.totals.get(token_idx as usize).unwrap();
         let mint = asset.mint;
         let amount = asset.contributions;
         let recipient = sale.recipient;
         // token bridge transfer this amount over to conductor_address on conductor_chain to recipient
-        let custody_ata = ctx.accounts.custody_ata;
-        let mut token_account_data:&[u8] = &ctx.accounts.mint_token_account.data.borrow();
-        let token_acc:token::TokenAccount = token::TokenAccount::try_deserialize(&mut token_account_data)?;
-        let wrapped_meta_key = ctx.accounts.wrapped_meta_key;
+        let custody_ata = &ctx.accounts.custody_ata;
+        let mut token_account_data: &[u8] = &ctx.accounts.mint_token_account.data.borrow();
+        let token_acc: token::TokenAccount =
+            token::TokenAccount::try_deserialize(&mut token_account_data)?;
+        let wrapped_meta_key = &ctx.accounts.wrapped_meta_key;
 
         if token_acc.mint == ctx.accounts.token_mint_signer.key() {
             //Wrapped Token
@@ -288,7 +289,10 @@ pub mod anchor_contributor {
                     AccountMeta::new_readonly(ctx.accounts.custodian.key(), true),
                     AccountMeta::new(token_acc.mint, false),
                     AccountMeta::new_readonly(wrapped_meta_key.key(), false), // Wrapped Meta Key
-                    AccountMeta::new_readonly(ctx.accounts.token_bridge_authority_signer.key(), false),
+                    AccountMeta::new_readonly(
+                        ctx.accounts.token_bridge_authority_signer.key(),
+                        false,
+                    ),
                     AccountMeta::new(ctx.accounts.wormhole_config.key(), false),
                     AccountMeta::new(ctx.accounts.wormhole_message_key.key(), true),
                     AccountMeta::new_readonly(ctx.accounts.wormhole_derived_emitter.key(), false),
@@ -303,15 +307,16 @@ pub mod anchor_contributor {
                     AccountMeta::new_readonly(spl_token::id(), false),
                 ],
                 data: (
-                    TRANSFER_WRAPPED_INSTRUCTION, 
+                    TRANSFER_WRAPPED_INSTRUCTION,
                     TransferData {
                         nonce: ctx.accounts.custodian.nonce,
                         amount: amount,
                         fee: 0_u64,
                         target_address: Pubkey::new(&recipient),
                         target_chain: sale.token_chain,
-                    }    
-                ).try_to_vec()?
+                    },
+                )
+                    .try_to_vec()?,
             };
 
             invoke_signed(
@@ -333,18 +338,16 @@ pub mod anchor_contributor {
                     ctx.accounts.rent.to_account_info(),
                     ctx.accounts.system_program.to_account_info(),
                     ctx.accounts.core_bridge.to_account_info(),
-                    ctx.accounts.token_program.to_account_info()
+                    ctx.accounts.token_program.to_account_info(),
                 ],
                 &[&[
                     SEED_PREFIX_CUSTODIAN.as_ref(),
-                    &[*ctx.bumps.get("custodian").unwrap()]
-                ]]
+                    &[*ctx.bumps.get("custodian").unwrap()],
+                ]],
             )?;
-
         } else {
             //Native Token
         }
-
 
         Ok(())
     }

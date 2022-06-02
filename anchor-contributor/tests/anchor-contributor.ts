@@ -301,12 +301,6 @@ describe("anchor-contributor", () => {
         expect(item.excess.toString()).to.equal("0");
       }
 
-      {
-        for (let i = 0; i < expectedContributedValues.length; ++i) {
-          let expectedContribution = expectedContributedValues[i];
-        }
-      }
-
       // check sale state
       {
         const saleState = await contributor.getSale(saleId);

@@ -245,6 +245,7 @@ pub struct SendContributions<'info> {
         bump,
         seeds::program = token_bridge.key()
     )]
+    /// CHECK: We know what we're doing Mr. Anchor ;)
     pub token_mint_signer: AccountInfo<'info>,
 
     #[account(
@@ -252,6 +253,7 @@ pub struct SendContributions<'info> {
         bump,
         seeds::program = token_bridge.key()
     )]
+    /// CHECK: Token Bridge Authority Signer
     pub token_bridge_authority_signer: AccountInfo<'info>,
 
     #[account(

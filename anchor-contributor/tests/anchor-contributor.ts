@@ -300,9 +300,13 @@ describe("anchor-contributor", () => {
         const buyerState = await contributor.getBuyer(saleId, buyer.publicKey);
         expect(buyerState.status).has.key("active");
 
-        const contributed = buyerState.contributed;
+        const contributions = buyerState.contributions;
         for (let i = 0; i < expectedContributedValues.length; ++i) {
-          expect(contributed[i].toString()).to.equal(expectedContributedValues[i].toString());
+            let contribution = contributions[i];
+        const expectedState = refund.eq(new BN("0")) ? "inactive" : "active";
+        expect(contribution.status).has.key(expectedState);
+          expect(contribution.amount.toString()).to.equal(expectedContributedValues[i].toString());
+          expect(contribution.excess.toString()).to.equal("0");
         }
       }
 
@@ -602,7 +606,7 @@ describe("anchor-contributor", () => {
 
       // get state
       const buyerState = await contributor.getBuyer(saleId, buyer.publicKey);
-      const totals: any = buyerState.contributions;
+      const contributions: any = buyerState.contributions;
 
       // check balance changes and state
       for (let i = 0; i < numExpected; ++i) {
@@ -611,10 +615,10 @@ describe("anchor-contributor", () => {
         expect(startingBalanceBuyer[i].add(refund).toString()).to.equal(endingBalanceBuyer[i].toString());
         expect(startingBalanceCustodian[i].sub(refund).toString()).to.equal(endingBalanceCustodian[i].toString());
 
-        const total = totals[i];
+        const contribution = contributions[i];
         const expectedState = refund.eq(new BN("0")) ? "inactive" : "refundClaimed";
-        expect(total.status).has.key(expectedState);
-        expect(total.excess.toString()).to.equal(refund.toString());
+        expect(contribution.status).has.key(expectedState);
+        expect(contribution.excess.toString()).to.equal(refund.toString());
       }
     });
 

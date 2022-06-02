@@ -11,7 +11,7 @@ import { getAccount, getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from "@solana
 import { findBuyerAccount, findCustodianAccount, findSaleAccount, findSignedVaaAccount, KeyBump } from "./accounts";
 import { getBuyerState, getCustodianState, getSaleState } from "./fetch";
 import { postVaa } from "./wormhole";
-import { getPdaAssociatedTokenAddress } from "./utils";
+import { getPdaAssociatedTokenAddress, makeWritableAccountMeta } from "./utils";
 import { ASSOCIATED_PROGRAM_ID } from "@project-serum/anchor/dist/cjs/utils/token";
 
 export class IccoContributor {
@@ -173,10 +173,10 @@ export class IccoContributor {
     const buyerAccount = findBuyerAccount(program.programId, saleId, payer.publicKey);
     const saleAccount = findSaleAccount(program.programId, saleId);
 
-    const remainingAccounts = [];
+    const remainingAccounts: web3.AccountMeta[] = [];
     for (const mint of acceptedMints) {
-      remainingAccounts.push(await getAssociatedTokenAddress(mint, payer.publicKey));
-      remainingAccounts.push(await getPdaAssociatedTokenAddress(mint, custodian));
+      remainingAccounts.push(makeWritableAccountMeta(await getAssociatedTokenAddress(mint, payer.publicKey)));
+      remainingAccounts.push(makeWritableAccountMeta(await getPdaAssociatedTokenAddress(mint, custodian)));
     }
 
     return program.methods

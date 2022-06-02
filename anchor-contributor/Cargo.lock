@@ -138,6 +138,7 @@ dependencies = [
  "num",
  "num-derive",
  "num-traits",
+ "spl-token",
 ]
 
 [[package]]

@@ -133,7 +133,6 @@ describe("anchor-contributor", () => {
     });
   });
 
-  /*
   describe("Conduct Successful Sale", () => {
     // global contributions for test
     const contributions = new Map<web3.PublicKey, string[]>();
@@ -194,6 +193,7 @@ describe("anchor-contributor", () => {
       let caughtError = false;
       try {
         const tx = await contributor.initSale(orchestrator, dummyConductor.initSaleVaa);
+        console.log("should not happen", tx);
       } catch (e) {
         // pda init should fail
         caughtError = "programErrorStack" in e;
@@ -212,9 +212,9 @@ describe("anchor-contributor", () => {
       try {
         const mint = hexToPublicKey(dummyConductor.acceptedTokens[0].address);
         const tx = await contributor.contribute(buyer, saleId, mint, new BN(amount));
+        console.log("should not happen", tx);
       } catch (e) {
-        //console.log("too early", e);
-        caughtError = e.msg == "ContributionTooEarly";
+        caughtError = verifyErrorMsg(e, "ContributionTooEarly");
       }
 
       if (!caughtError) {
@@ -328,10 +328,13 @@ describe("anchor-contributor", () => {
       let caughtError = false;
       try {
         const tx = await contributor.attestContributions(orchestrator, saleId);
-        console.log(tx);
+        console.log("should not happen", tx);
       } catch (e) {
-        console.log(e.error.errorCode.code);
-        caughtError = e.error.errorCode.code == "ContributionTooEarly";
+        caughtError = verifyErrorMsg(e, "SaleNotAttestable");
+      }
+
+      if (!caughtError) {
+        throw Error("did not catch expected error");
       }
     });
 
@@ -353,7 +356,19 @@ describe("anchor-contributor", () => {
 
     // TODO
     it("Orchestrator Cannot Attest Contributions Again", async () => {
-      expect(false).to.be.true;
+      const saleId = dummyConductor.getSaleId();
+
+      let caughtError = false;
+      try {
+        const tx = await contributor.attestContributions(orchestrator, saleId);
+        console.log("should not happen", tx);
+      } catch (e) {
+        caughtError = verifyErrorMsg(e, "SaleNotAttestable");
+      }
+
+      if (!caughtError) {
+        throw Error("did not catch expected error");
+      }
     });
 
     it("User Cannot Contribute After Sale Ended", async () => {
@@ -364,8 +379,9 @@ describe("anchor-contributor", () => {
       try {
         const mint = hexToPublicKey(dummyConductor.acceptedTokens[0].address);
         const tx = await contributor.contribute(buyer, saleId, mint, amount);
+        console.log("should not happen", tx);
       } catch (e) {
-        caughtError = e.msg == "SaleEnded";
+        caughtError = verifyErrorMsg(e, "SaleEnded");
       }
 
       if (!caughtError) {
@@ -398,9 +414,9 @@ describe("anchor-contributor", () => {
       let caughtError = false;
       try {
         const tx = await contributor.sealSale(orchestrator, saleSealedVaa);
+        console.log("should not happen", tx);
       } catch (e) {
-        //caughtError = e.error.errorCode.code == "SaleEnded";
-        console.log(e.error.errorCode.code);
+        caughtError = verifyErrorMsg(e, "SaleEnded");
       }
 
       if (!caughtError) {
@@ -425,7 +441,7 @@ describe("anchor-contributor", () => {
       expect(false).to.be.true;
     });
   });
-  */
+
   describe("Conduct Aborted Sale", () => {
     // global contributions for test
     const contributions = new Map<web3.PublicKey, string[]>();
@@ -530,8 +546,9 @@ describe("anchor-contributor", () => {
       let caughtError = false;
       try {
         const tx = await contributor.abortSale(orchestrator, saleAbortedVaa);
+        console.log("should not happen", tx);
       } catch (e) {
-        caughtError = e.error.errorCode.code == "SaleEnded";
+        caughtError = verifyErrorMsg(e, "SaleEnded");
       }
 
       if (!caughtError) {
@@ -559,9 +576,9 @@ describe("anchor-contributor", () => {
       let caughtError = false;
       try {
         //const tx = await contributor.claimRefund(saleId, buyer, acceptedMints);
+        //console.log("should not happen", tx);
       } catch (e) {
-        console.log(e);
-        caughtError = e.error.errorCode.code == "SaleEnded";
+        caughtError = verifyErrorMsg(e, "BuyerInactive");
       }
 
       if (!caughtError) {
@@ -570,3 +587,22 @@ describe("anchor-contributor", () => {
     });
   });
 });
+
+function verifyErrorMsg(e: any, msg: string): boolean {
+  if (e.msg) {
+    const result = e.msg == msg;
+    if (!result) {
+      console.error(e);
+    }
+    return result;
+  } else if (e.error.errorMessage) {
+    const result = e.error.errorMessage == msg;
+    if (!result) {
+      console.error(e);
+    }
+    return result;
+  }
+
+  console.error(e);
+  throw Error("unknown error");
+}

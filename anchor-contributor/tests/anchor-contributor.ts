@@ -612,7 +612,7 @@ describe("anchor-contributor", () => {
         expect(startingBalanceCustodian[i].sub(refund).toString()).to.equal(endingBalanceCustodian[i].toString());
 
         const total = totals[i];
-        const expectedState = refund.eq(new BN("0")) ? "inactive" : "refundIsClaimed";
+        const expectedState = refund.eq(new BN("0")) ? "inactive" : "refundClaimed";
         expect(total.status).has.key(expectedState);
         expect(total.excessContributions.toString()).to.equal(refund.toString());
       }

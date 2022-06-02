@@ -336,7 +336,6 @@ pub struct ClaimRefund<'info> {
 }
 
 /// ClaimRefund is used for buyers to collect their contributed collateral back
-/*
 #[derive(Accounts)]
 pub struct ClaimRefunds<'info> {
     #[account(
@@ -374,7 +373,6 @@ pub struct ClaimRefunds<'info> {
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
 }
-*/
 
 fn get_sale_id<'info>(vaa_account: &AccountInfo<'info>) -> Result<Vec<u8>> {
     Ok(get_message_data(&vaa_account)?.payload[1..33].into())

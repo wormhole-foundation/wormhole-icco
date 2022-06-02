@@ -129,7 +129,7 @@ describe("anchor-contributor", () => {
       }
     });
   });
-  /*
+
 
   describe("Conduct Successful Sale", () => {
     // global contributions for test
@@ -412,7 +412,7 @@ describe("anchor-contributor", () => {
       expect(false).to.be.true;
     });
   });
-  */
+
 
   describe("Conduct Aborted Sale", () => {
     // global contributions for test

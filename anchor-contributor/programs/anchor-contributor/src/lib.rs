@@ -43,9 +43,8 @@ pub mod anchor_contributor {
         // now parse vaa
         sale.parse_sale_init(&msg.payload)?;
 
-        // TODO: use associated sale token account to get decimals
-        // for now, hardcoding to 9
-        let sale_token_decimals = 9u8;
+        // Use associated sale token account to get solana native decimals
+        let sale_token_decimals = ctx.accounts.sale_token_mint.decimals;
         sale.set_native_sale_token_decimals(sale_token_decimals)?;
 
         Ok(())

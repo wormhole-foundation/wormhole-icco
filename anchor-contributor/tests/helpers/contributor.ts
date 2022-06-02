@@ -33,7 +33,7 @@ export class IccoContributor {
     return getCustodianState(this.program, this.custodianAccount);
   }
 
-  async initSale(payer: web3.Keypair, initSaleVaa: Buffer): Promise<string> {
+  async initSale(payer: web3.Keypair, initSaleVaa: Buffer, saleTokenMint: web3.PublicKey): Promise<string> {
     const program = this.program;
 
     // first post signed vaa to wormhole
@@ -50,6 +50,7 @@ export class IccoContributor {
         custodian: this.custodianAccount.key,
         sale: saleAccount.key,
         coreBridgeVaa: signedVaaAccount.key,
+        saleTokenMint: saleTokenMint,
         owner: payer.publicKey,
         systemProgram: web3.SystemProgram.programId,
       })

@@ -152,7 +152,7 @@ describe("anchor-contributor", () => {
       const startTime = 8 + (await getBlockTime(connection));
       const duration = 8; // seconds
       const initSaleVaa = dummyConductor.createSale(startTime, duration, saleTokenAccount.address);
-      const tx = await contributor.initSale(orchestrator, initSaleVaa);
+      const tx = await contributor.initSale(orchestrator, initSaleVaa, dummyConductor.getSaleTokenOnSolana());
 
       {
         // get the first sale state
@@ -190,7 +190,7 @@ describe("anchor-contributor", () => {
     it("Orchestrator Cannot Initialize Sale Again with Signed VAA", async () => {
       let caughtError = false;
       try {
-        const tx = await contributor.initSale(orchestrator, dummyConductor.initSaleVaa);
+        const tx = await contributor.initSale(orchestrator, dummyConductor.initSaleVaa, dummyConductor.getSaleTokenOnSolana());
         throw Error(`should not happen: ${tx}`);
       } catch (e) {
         // pda init should fail
@@ -435,7 +435,7 @@ describe("anchor-contributor", () => {
       const startTime = 8 + (await getBlockTime(connection));
       const duration = 8; // seconds
       const initSaleVaa = dummyConductor.createSale(startTime, duration, saleTokenAccount.address);
-      const tx = await contributor.initSale(orchestrator, initSaleVaa);
+      const tx = await contributor.initSale(orchestrator, initSaleVaa, dummyConductor.getSaleTokenOnSolana());
 
       {
         const saleId = dummyConductor.getSaleId();
@@ -446,6 +446,7 @@ describe("anchor-contributor", () => {
         //expect(Uint8Array.from(saleState.tokenAddress)).to.deep.equal(Buffer.from(dummyConductor.tokenAddress, "hex"));
         expect(saleState.tokenChain).to.equal(dummyConductor.tokenChain);
         expect(saleState.tokenDecimals).to.equal(dummyConductor.tokenDecimals);
+        expect(saleState.nativeTokenDecimals).to.equal(dummyConductor.nativeTokenDecimals);
         expect(saleState.times.start.toString()).to.equal(dummyConductor.saleStart.toString());
         expect(saleState.times.end.toString()).to.equal(dummyConductor.saleEnd.toString());
         expect(Uint8Array.from(saleState.recipient)).to.deep.equal(Buffer.from(dummyConductor.recipient, "hex"));

@@ -47,6 +47,7 @@ pub struct InitializeSale<'info> {
 
     /// CHECK: This account is owned by Core Bridge so we trust it
     pub core_bridge_vaa: AccountInfo<'info>,
+    pub sale_token_mint: Account<'info, Mint>,
 
     #[account(mut)]
     pub owner: Signer<'info>,

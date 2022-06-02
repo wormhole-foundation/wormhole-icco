@@ -6,45 +6,59 @@ use crate::{constants::ACCEPTED_TOKENS_MAX, error::ContributorError, state::sale
 #[account]
 pub struct Buyer {
     //pub contributed: [u64; ACCEPTED_TOKENS_MAX], // 8 * ACCEPTED_TOKENS_MAX
-    pub totals: Vec<BuyerTotal>, // 4 + BuyerTotal::MAXIMUM_SIZE * ACCEPTED_TOKENS_MAX
-    //pub status: ContributionStatus,     // 1
-    pub initialized: bool, // 1 (not sure for 1 bit)
+    pub totals: Vec<BuyerContribution>, // 4 + BuyerTotal::LENGTH * ACCEPTED_TOKENS_MAX
+    pub allocation: BuyerAllocation,    // BuyerAllocation::LENGTH
+    pub initialized: bool,              // 1 (not sure for 1 bit)
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
-pub struct BuyerTotal {
-    pub contributions: u64,         // 8
-    pub allocations: u64,           // 8
-    pub excess_contributions: u64,  // 8
+pub struct BuyerContribution {
+    pub amount: u64,                // 8
+    pub excess: u64,                // 8
     pub status: ContributionStatus, // 1
 }
 
-impl BuyerTotal {
-    pub const MAXIMUM_SIZE: usize = 8 + 8 + 8 + 1;
+#[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
+pub struct BuyerAllocation {
+    pub amount: u64,   // 8
+    pub claimed: bool, // 1
+}
+
+impl BuyerContribution {
+    pub const LENGTH: usize = 8 + 8 + 8 + 1;
+}
+
+impl BuyerAllocation {
+    pub const LENGTH: usize = 8 + 1;
 }
 
 impl Buyer {
-    pub const MAXIMUM_SIZE: usize = (4 + BuyerTotal::MAXIMUM_SIZE * ACCEPTED_TOKENS_MAX) + 1;
+    pub const MAXIMUM_SIZE: usize =
+        (4 + BuyerContribution::LENGTH * ACCEPTED_TOKENS_MAX) + BuyerAllocation::LENGTH + 1;
 
     pub fn initialize(&mut self, num_totals: usize) -> () {
         self.totals = vec![
-            BuyerTotal {
-                contributions: 0,
-                allocations: 0,
-                excess_contributions: 0,
+            BuyerContribution {
+                amount: 0,
+                excess: 0,
                 status: ContributionStatus::Inactive
             };
             num_totals
         ];
+        self.allocation.amount = 0;
+        self.allocation.claimed = false;
         self.initialized = true;
     }
 
     pub fn contribute(&mut self, idx: usize, amount: u64) -> Result<()> {
         require!(idx < self.totals.len(), ContributorError::InvalidTokenIndex);
-        require!(!self.has_claimed(idx), ContributorError::BuyerDeactivated);
+        require!(
+            !self.has_claimed(idx),
+            ContributorError::ContributeDeactivated
+        );
 
         let total = &mut self.totals[idx];
-        total.contributions += amount;
+        total.amount += amount;
         total.status = ContributionStatus::Active;
         Ok(())
     }
@@ -79,12 +93,30 @@ impl Buyer {
     */
 
     pub fn claim_refund(&mut self, idx: usize) -> Result<u64> {
-        require!(!self.has_claimed(idx), ContributorError::BuyerDeactivated);
+        require!(!self.has_claimed(idx), ContributorError::AlreadyClaimed);
 
         let total = &mut self.totals[idx];
-        total.excess_contributions = total.contributions;
-        total.status = ContributionStatus::RefundIsClaimed;
-        Ok(total.excess_contributions)
+        total.excess = total.amount;
+        total.status = ContributionStatus::RefundClaimed;
+        Ok(total.excess)
+    }
+
+    pub fn claim_allocation(&mut self, sale_totals: &Vec<AssetTotal>) -> Result<u64> {
+        require!(!self.allocation.claimed, ContributorError::AlreadyClaimed);
+
+        let total_allocation: u128 = sale_totals
+            .iter()
+            .zip(self.totals.iter())
+            .map(|(t, c)| t.allocations as u128 * c.amount as u128 / t.contributions as u128)
+            .sum();
+
+        require!(
+            total_allocation < u64::MAX as u128,
+            ContributorError::AmountTooLarge
+        );
+        self.allocation.amount = total_allocation as u64;
+        self.allocation.claimed = true;
+        Ok(self.allocation.amount)
     }
 
     /*
@@ -117,8 +149,7 @@ impl Buyer {
 
     fn has_claimed(&self, idx: usize) -> bool {
         let status = self.totals[idx].status;
-        status == ContributionStatus::AllocationIsClaimed
-            || status == ContributionStatus::RefundIsClaimed
+        status == ContributionStatus::ExcessClaimed || status == ContributionStatus::RefundClaimed
     }
 }
 
@@ -128,6 +159,6 @@ impl Buyer {
 pub enum ContributionStatus {
     Inactive = 0,
     Active,
-    AllocationIsClaimed,
-    RefundIsClaimed,
+    ExcessClaimed,
+    RefundClaimed,
 }

@@ -1,8 +1,8 @@
 use crate::constants::*;
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::sysvar::{clock, rent};
-use anchor_spl::token::{Token, TokenAccount, ID};
 use anchor_spl::associated_token::*;
+use anchor_spl::token::{Mint, Token, TokenAccount, ID};
 use std::str::FromStr;
 
 use crate::{
@@ -93,32 +93,22 @@ pub struct Contribute<'info> {
     )]
     pub buyer: Account<'info, Buyer>,
 
+    #[account(
+        mut,
+        constraint = buyer_ata.owner == owner.key(),
+    )]
+    pub buyer_ata: Account<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        constraint = custodian_ata.owner == custodian.key(),
+    )]
+    pub custodian_ata: Account<'info, TokenAccount>,
+
     #[account(mut)]
     pub owner: Signer<'info>,
     pub system_program: Program<'info, System>,
-
-    /// CHECK: Buyer Associated Token Account
-    #[account(mut)]
-    pub custodian_ata: AccountInfo<'info>,
-
-    /// CHECK: Buyer Associated Token Account
-    #[account(mut)]
-    pub buyer_ata: Account<'info, TokenAccount>,
-    /*
-    pub accepted_mint: Account<'info, Mint>,
-
-    #[account(
-        init_if_needed,
-        payer = owner,
-        associated_token::mint = accepted_mint,
-        associated_token::authority = owner,
-    )]
-    pub buyer_ata: Account<'info, TokenAccount>,
-    */
-    /// CHECK: Custodian Associated Token Account
-    //pub custodian_ata: AccountInfo<'info>,
     pub token_program: Program<'info, Token>,
-    //pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
 /// TODO: write something here
@@ -241,7 +231,6 @@ pub struct SendContributions<'info> {
     /// CHECK: Nullable account
     pub wrapped_meta_key: AccountInfo<'info>,
 
-
     #[account(mut)]
     pub owner: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -264,7 +253,6 @@ pub struct SendContributions<'info> {
         seeds::program = token_bridge.key()
     )]
     pub token_bridge_authority_signer: AccountInfo<'info>,
-
 
     #[account(
         seeds = [
@@ -337,42 +325,8 @@ pub struct SendContributions<'info> {
     /// CHECK: The account constraint will make sure it's the right rent var
     pub rent: AccountInfo<'info>,
 
-    pub token_program: Program<'info, Token>
+    pub token_program: Program<'info, Token>,
 }
-
-/*
-/// ClaimAllocation is used for buyers to collect their contributed collateral back
-#[derive(Accounts)]
-#[instruction(sale_id: Vec<u8>)]
-pub struct ClaimAllocation<'info> {
-    pub contributor: Account<'info, Contributor>,
-
-    #[account(
-        mut,
-        seeds = [
-            SEED_PREFIX_SALE.as_bytes().as_ref(),
-            &sale_id.as_ref(),
-        ],
-        bump,
-    )]
-    pub sale: Account<'info, Sale>,
-
-    #[account(
-        mut,
-        seeds = [
-            SEED_PREFIX_SALE.as_bytes().as_ref(),
-            &sale_id.as_ref(),
-            owner.key().as_ref(),
-        ],
-        bump = buyer.bump,
-    )]
-    pub buyer: Account<'info, Buyer>,
-
-    #[account(mut)]
-    pub owner: Signer<'info>,
-    pub system_program: Program<'info, System>,
-}
-*/
 
 /// AbortSale is used for aborting sale so users can claim refunds (min raise not met)
 #[derive(Accounts)]
@@ -403,9 +357,13 @@ pub struct AbortSale<'info> {
     pub system_program: Program<'info, System>,
 }
 
-/// ClaimRefund is used for buyers to collect their contributed collateral back
+/// ClaimFunds is used for buyers to collect funds after the completion of a sale (sealed or aborted)
+/// used in the following instructions:
+/// * claim_refund
+/// * claim_excess
+/// * claim_allocation
 #[derive(Accounts)]
-pub struct ClaimRefund<'info> {
+pub struct ClaimFunds<'info> {
     #[account(
         mut,
         seeds = [
@@ -436,23 +394,21 @@ pub struct ClaimRefund<'info> {
     )]
     pub buyer: Account<'info, Buyer>,
 
-    #[account(mut)]
-    pub owner: Signer<'info>,
-    pub system_program: Program<'info, System>,
-
-    /// CHECK: Buyer Associated Token Account
     #[account(
         mut,
-        //constraint = buyer_ata.owner == owner.key(),
+        constraint = buyer_ata.owner == owner.key(),
     )]
     pub buyer_ata: Account<'info, TokenAccount>,
 
     #[account(
         mut,
-        //constraint = custodian_ata.owner == custodian.key(),
+        constraint = custodian_ata.owner == custodian.key(),
     )]
     pub custodian_ata: Account<'info, TokenAccount>,
 
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
 }
 

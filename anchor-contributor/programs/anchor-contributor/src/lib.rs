@@ -53,53 +53,33 @@ pub mod anchor_contributor {
     }
 
     pub fn contribute(ctx: Context<Contribute>, amount: u64) -> Result<()> {
-        // get accepted token index
-        let sale = &mut ctx.accounts.sale;
+        let from_account = &ctx.accounts.buyer_ata;
 
         // find token_index
-        let mint = token::accessor::mint(&ctx.accounts.buyer_ata.to_account_info())?;
+        let mint = token::accessor::mint(&from_account.to_account_info())?;
+
+        let sale = &mut ctx.accounts.sale;
         let token_index = sale.get_token_index(&mint)?;
 
-        msg!(
-            "mint: {:?}, token_index: {:?}, custodian_ata: {:?}, buyer_ata: {:?}",
-            mint,
-            token_index,
-            &ctx.accounts.custodian_ata.key(),
-            &ctx.accounts.buyer_ata.key()
-        );
+        // leverage token index search from sale's accepted tokens to find index
+        // on buyer's contributions
+        let clock = Clock::get()?;
+        let idx = sale.update_total_contributions(clock.unix_timestamp, token_index, amount)?;
 
-        let owner = &ctx.accounts.owner;
+        // now update buyer's contributions
+        let buyer = &mut ctx.accounts.buyer;
+        if !buyer.initialized {
+            buyer.initialize(sale.totals.len());
+        }
+        buyer.contribute(idx, amount)?;
 
-        //let ata_seeds: &'a [&[u8]] = &[&owner.key().as_ref(), &token::ID.as_ref(), &mint.as_ref()];
-        /*
-        let (ata, bump) = Pubkey::find_program_address(
-            &[&owner.key().as_ref(), &token::ID.as_ref(), &mint.as_ref()],
-            &associated_token::AssociatedToken::id(),
-        );
-        msg!("ata: {:?}, bump: {:?}", ata, bump);
-        */
+        let to_account = &ctx.accounts.custodian_ata;
+        let transfer_authority = &ctx.accounts.owner;
 
         // spl transfer contribution
-        let ix = spl_token::instruction::transfer(
-            &token::ID,
-            &ctx.accounts.buyer_ata.key(),
-            &ctx.accounts.custodian_ata.key(),
-            &ctx.accounts.owner.key(),
-            &[&ctx.accounts.owner.key()],
-            amount,
-        )?;
-
-        invoke(
-            &ix,
-            &[
-                ctx.accounts.buyer_ata.to_account_info(),
-                ctx.accounts.custodian_ata.to_account_info(),
-                ctx.accounts.owner.to_account_info(),
-                ctx.accounts.token_program.to_account_info(),
-            ],
-        )?;
-
         /*
+        // this doesn't work in devnet?
+
         token::transfer(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
@@ -114,35 +94,17 @@ pub mod anchor_contributor {
         )?;
         */
 
-        /*
-        let custodian_bump = ctx.bumps["custodian"];
-        token::transfer(
-            CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
-                token::Transfer {
-                    to: ctx.accounts.buyer_ata.to_account_info(),
-                    from: ctx.accounts.custodian_ata.to_account_info(),
-                    authority: ctx.accounts.custodian.to_account_info(),
-                },
-                &[&[SEED_PREFIX_CUSTODIAN.as_bytes(), &[custodian_bump]]],
-            ),
-            amount,
+        invoke(
+            &spl_token::instruction::transfer(
+                &token::ID,
+                &ctx.accounts.buyer_ata.key(),
+                &ctx.accounts.custodian_ata.key(),
+                &transfer_authority.key(),
+                &[&transfer_authority.key()],
+                amount,
+            )?,
+            &ctx.accounts.to_account_infos(),
         )?;
-        */
-
-        // leverage token index search from sale's accepted tokens to find index
-        // on buyer's contributions
-        let clock = Clock::get()?;
-        let idx = sale.update_total_contributions(clock.unix_timestamp, token_index, amount)?;
-
-        // now update buyer's contributions
-        let buyer = &mut ctx.accounts.buyer;
-        if !buyer.initialized {
-            buyer.initialize(sale.totals.len());
-        }
-        buyer.contribute(idx, amount)?;
-
-        msg!("finished");
         Ok(())
     }
 
@@ -388,14 +350,12 @@ pub mod anchor_contributor {
     }
 
     pub fn abort_sale(ctx: Context<AbortSale>) -> Result<()> {
-        //let msg = get_message_data(&ctx.accounts.core_bridge_vaa)?;
         let msg = verify_conductor_vaa(&ctx.accounts.core_bridge_vaa, PAYLOAD_SALE_ABORTED)?;
         ctx.accounts.sale.parse_sale_aborted(&msg.payload)?;
 
         Ok(())
     }
-
-    pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
+    pub fn claim_refund(ctx: Context<ClaimFunds>) -> Result<()> {
         let sale = &ctx.accounts.sale;
         require!(sale.is_aborted(), ContributorError::SaleNotAborted);
 
@@ -406,16 +366,33 @@ pub mod anchor_contributor {
         require!(refund > 0, ContributorError::NothingToClaim);
 
         let from_account = &ctx.accounts.custodian_ata;
-        let custodian = &ctx.accounts.custodian;
+        let transfer_authority = &ctx.accounts.custodian;
 
         // spl transfer refund
+        /*
+        // this doesn't work in devnet?
+        let custodian_bump = ctx.bumps["custodian"];
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                token::Transfer {
+                    to: ctx.accounts.buyer_ata.to_account_info(),
+                    from: ctx.accounts.custodian_ata.to_account_info(),
+                    authority: ctx.accounts.custodian.to_account_info(),
+                },
+                &[&[SEED_PREFIX_CUSTODIAN.as_bytes(), &[custodian_bump]]],
+            ),
+            amount,
+        )?;
+        */
+
         invoke_signed(
             &spl_token::instruction::transfer(
                 &token::ID,
                 &from_account.key(),
                 &to_account.key(),
-                &custodian.key(),
-                &[&custodian.key()],
+                &transfer_authority.key(),
+                &[&transfer_authority.key()],
                 refund,
             )?,
             &ctx.accounts.to_account_infos(),
@@ -424,80 +401,48 @@ pub mod anchor_contributor {
         Ok(())
     }
 
-    /*
-    pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
-        let sale = &mut ctx.accounts.sale;
-        require!(sale.is_aborted(), ContributorError::SaleNotAborted);
+    pub fn claim_allocation(ctx: Context<ClaimFunds>) -> Result<()> {
+        let sale = &ctx.accounts.sale;
+        require!(sale.is_sealed(), ContributorError::SaleNotSealed);
 
-        let refunds = ctx.accounts.buyer.claim_refunds(&sale.totals)?;
-        require!(
-            ctx.remaining_accounts.len() == 2 * sale.totals.len(),
-            ContributorError::InvalidRemainingAccounts
-        );
+        let to_account = &ctx.accounts.buyer_ata;
+        let mint = token::accessor::mint(&to_account.to_account_info())?;
+        let allocation = ctx.accounts.buyer.claim_allocation(&sale.totals)?;
+        require!(allocation > 0, ContributorError::NothingToClaim);
 
-        let owner = &ctx.accounts.owner;
-        let custodian = &ctx.accounts.custodian.key();
-        //let custodian_bump = ctx.bumps["custodian"];
+        let from_account = &ctx.accounts.custodian_ata;
+        let transfer_authority = &ctx.accounts.custodian;
 
-        // iterate over refunds and reference remaining accounts by index
-        for (i, buyer_total) in refunds.iter().enumerate() {
-            let buyer_index = 2 * i;
+        // spl transfer refund
+        /*
+        // this doesn't work in devnet?
+        let custodian_bump = ctx.bumps["custodian"];
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                token::Transfer {
+                    to: ctx.accounts.buyer_ata.to_account_info(),
+                    from: ctx.accounts.custodian_ata.to_account_info(),
+                    authority: ctx.accounts.custodian.to_account_info(),
+                },
+                &[&[SEED_PREFIX_CUSTODIAN.as_bytes(), &[custodian_bump]]],
+            ),
+            amount,
+        )?;
+        */
 
-            //let buyer_ata = &atas[buyer_index]; //.to_account_info();
-            {
-                let mint = token::accessor::mint(&ctx.remaining_accounts[buyer_index])?;
-                require!(
-                    sale.get_token_index(&mint).is_ok(),
-                    ContributorError::InvalidRemainingAccounts
-                );
-                let authority = token::accessor::authority(&ctx.remaining_accounts[buyer_index])?;
-                require!(
-                    authority == owner.key(),
-                    ContributorError::InvalidRemainingAccounts
-                );
-            }
-
-            let custodian_index = buyer_index + 1;
-            //let custodian_ata = &atas[custodian_index]; //.to_account_info();
-            {
-                let mint = token::accessor::mint(&ctx.remaining_accounts[custodian_index])?;
-                require!(
-                    sale.get_token_index(&mint).is_ok(),
-                    ContributorError::InvalidRemainingAccounts
-                );
-                let authority =
-                    token::accessor::authority(&ctx.remaining_accounts[custodian_index])?;
-                require!(
-                    authority == *custodian,
-                    ContributorError::InvalidRemainingAccounts
-                );
-            }
-
-            let refund = buyer_total.excess_contributions;
-            if refund == 0 {
-                continue;
-            }
-
-            // TODO: transfer back to owner
-            let ix = spl_token::instruction::transfer(
+        invoke_signed(
+            &spl_token::instruction::transfer(
                 &token::ID,
-                &ctx.remaining_accounts[custodian_index].key(),
-                &ctx.remaining_accounts[buyer_index].key(),
-                &owner.key(),
-                &[&ctx.accounts.custodian.key()],
-                refund,
-            )?;
-            invoke(
-                &ix,
-                &[
-                    ctx.remaining_accounts[custodian_index].to_account_info(),
-                    ctx.remaining_accounts[buyer_index].to_account_info(),
-                    owner.to_account_info(),
-                    ctx.accounts.token_program.to_account_info(),
-                ],
-            )?;
-        }
+                &from_account.key(),
+                &to_account.key(),
+                &transfer_authority.key(),
+                &[&transfer_authority.key()],
+                allocation,
+            )?,
+            &ctx.accounts.to_account_infos(),
+            &[&[&SEED_PREFIX_CUSTODIAN.as_bytes(), &[ctx.bumps["custodian"]]]],
+        )?;
         Ok(())
     }
-    */
 }

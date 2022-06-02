@@ -287,7 +287,58 @@ pub struct AbortSale<'info> {
 
 /// ClaimRefund is used for buyers to collect their contributed collateral back
 #[derive(Accounts)]
+#[instruction(amount:u64)]
 pub struct ClaimRefund<'info> {
+    #[account(
+        mut,
+        seeds = [
+            SEED_PREFIX_CUSTODIAN.as_bytes(),
+        ],
+        bump,
+    )]
+    pub custodian: Account<'info, Custodian>,
+
+    #[account(
+        mut,
+        seeds = [
+            SEED_PREFIX_SALE.as_bytes(),
+            &sale.id,
+        ],
+        bump,
+    )]
+    pub sale: Account<'info, Sale>,
+
+    #[account(
+        init_if_needed,
+        seeds = [
+            SEED_PREFIX_BUYER.as_bytes(),
+            &sale.id,
+            &owner.key().as_ref(),
+        ],
+        payer = owner,
+        bump,
+        space = 8 + Buyer::MAXIMUM_SIZE,
+    )]
+    pub buyer: Account<'info, Buyer>,
+
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    pub system_program: Program<'info, System>,
+
+    /// CHECK: Buyer Associated Token Account
+    #[account(mut)]
+    pub buyer_ata: AccountInfo<'info>,
+
+    #[account(mut)]
+    pub custodian_ata: Account<'info, TokenAccount>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+/// ClaimRefund is used for buyers to collect their contributed collateral back
+/*
+#[derive(Accounts)]
+pub struct ClaimRefunds<'info> {
     #[account(
         mut,
         seeds = [
@@ -321,7 +372,9 @@ pub struct ClaimRefund<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
     pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
 }
+*/
 
 fn get_sale_id<'info>(vaa_account: &AccountInfo<'info>) -> Result<Vec<u8>> {
     Ok(get_message_data(&vaa_account)?.payload[1..33].into())

@@ -86,7 +86,7 @@ export class IccoContributor {
         //associatedTokenProgram: ASSOCIATED_PROGRAM_ID,
       })
       .signers([payer])
-      .rpc({ skipPreflight: true });
+      .rpc();
   }
 
   async attestContributions(payer: web3.Keypair, saleId: Buffer) {
@@ -163,6 +163,34 @@ export class IccoContributor {
         systemProgram: web3.SystemProgram.programId,
       })
       .rpc();
+  }
+
+  async claimRefund(payer: web3.Keypair, saleId: Buffer, acceptedMints: web3.PublicKey[]): Promise<string> {
+    const program = this.program;
+
+    const custodian = this.custodianAccount.key;
+
+    const buyerAccount = findBuyerAccount(program.programId, saleId, payer.publicKey);
+    const saleAccount = findSaleAccount(program.programId, saleId);
+
+    const remainingAccounts = [];
+    for (const mint of acceptedMints) {
+      remainingAccounts.push(await getAssociatedTokenAddress(mint, payer.publicKey));
+      remainingAccounts.push(await getPdaAssociatedTokenAddress(mint, custodian));
+    }
+
+    return program.methods
+      .claimRefund()
+      .accounts({
+        custodian,
+        sale: saleAccount.key,
+        buyer: buyerAccount.key,
+        owner: payer.publicKey,
+        systemProgram: web3.SystemProgram.programId,
+      })
+      .remainingAccounts(remainingAccounts)
+      .signers([payer])
+      .rpc({ skipPreflight: true });
   }
 
   async getSale(saleId: Buffer) {

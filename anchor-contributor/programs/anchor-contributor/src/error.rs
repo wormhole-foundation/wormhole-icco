@@ -20,6 +20,9 @@ pub enum SaleError {
     #[msg("InvalidConductor")]
     InvalidConductor,
 
+    #[msg("InvalidRemainingAccounts")]
+    InvalidRemainingAccounts,
+
     #[msg("InvalidTokenDecimals")]
     InvalidTokenDecimals,
 

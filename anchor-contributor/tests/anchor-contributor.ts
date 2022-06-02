@@ -130,7 +130,6 @@ describe("anchor-contributor", () => {
     });
   });
 
-
   describe("Conduct Successful Sale", () => {
     // global contributions for test
     const contributions = new Map<web3.PublicKey, string[]>();
@@ -190,7 +189,11 @@ describe("anchor-contributor", () => {
     it("Orchestrator Cannot Initialize Sale Again with Signed VAA", async () => {
       let caughtError = false;
       try {
-        const tx = await contributor.initSale(orchestrator, dummyConductor.initSaleVaa, dummyConductor.getSaleTokenOnSolana());
+        const tx = await contributor.initSale(
+          orchestrator,
+          dummyConductor.initSaleVaa,
+          dummyConductor.getSaleTokenOnSolana()
+        );
         throw Error(`should not happen: ${tx}`);
       } catch (e) {
         // pda init should fail
@@ -222,13 +225,8 @@ describe("anchor-contributor", () => {
 
     it("User Contributes to Sale", async () => {
       // wait for sale to start here
-      const blockTime = await getBlockTime(connection);
       const saleStart = dummyConductor.saleStart;
-      await waitUntilBlock (connection, saleStart);
-      // if (blockTime <= saleStart) {
-      //   //console.log("waiting", saleStart - blockTime + 1, "seconds");
-      //   await wait(saleStart - blockTime + 1);
-      // }
+      await waitUntilBlock(connection, saleStart);
 
       // prep contributions info
       const acceptedTokens = dummyConductor.acceptedTokens;
@@ -287,26 +285,25 @@ describe("anchor-contributor", () => {
         new BN(0),
       ];
       const numExpected = expectedContributedValues.length;
+      const buyerState = await contributor.getBuyer(saleId, buyer.publicKey);
+      const totals = buyerState.contributions;
 
-      // check balance changes
+      // check balance changes and state
       for (let i = 0; i < numExpected; ++i) {
         let contribution = expectedContributedValues[i];
         expect(startingBalanceBuyer[i].sub(contribution).toString()).to.equal(endingBalanceBuyer[i].toString());
         expect(startingBalanceCustodian[i].add(contribution).toString()).to.equal(endingBalanceCustodian[i].toString());
+
+        let item = totals[i];
+        const expectedState = contribution.eq(new BN("0")) ? "inactive" : "active";
+        expect(item.status).has.key(expectedState);
+        expect(item.amount.toString()).to.equal(expectedContributedValues[i].toString());
+        expect(item.excess.toString()).to.equal("0");
       }
 
-      // check buyer state
       {
-        const buyerState = await contributor.getBuyer(saleId, buyer.publicKey);
-        expect(buyerState.status).has.key("active");
-
-        const contributions = buyerState.contributions;
         for (let i = 0; i < expectedContributedValues.length; ++i) {
-            let contribution = contributions[i];
-        const expectedState = refund.eq(new BN("0")) ? "inactive" : "active";
-        expect(contribution.status).has.key(expectedState);
-          expect(contribution.amount.toString()).to.equal(expectedContributedValues[i].toString());
-          expect(contribution.excess.toString()).to.equal("0");
+          let expectedContribution = expectedContributedValues[i];
         }
       }
 
@@ -374,7 +371,7 @@ describe("anchor-contributor", () => {
     // TODO
     it("Orchestrator Seals Sale with Signed VAA", async () => {
       const saleSealedVaa = dummyConductor.sealSale(await getBlockTime(connection));
-      console.log("saleSealedVaa", saleSealedVaa.toString("hex"));
+      //console.log("saleSealedVaa", saleSealedVaa.toString("hex"));
       const tx = await contributor.sealSale(orchestrator, saleSealedVaa);
 
       {
@@ -386,6 +383,7 @@ describe("anchor-contributor", () => {
         expect(saleState.status).has.key("sealed");
 
         // TODO: check totals
+        expect(false).to.be.true;
       }
     });
 
@@ -416,7 +414,6 @@ describe("anchor-contributor", () => {
       expect(false).to.be.true;
     });
   });
-
 
   describe("Conduct Aborted Sale", () => {
     // global contributions for test
@@ -476,13 +473,8 @@ describe("anchor-contributor", () => {
 
     it("User Contributes to Sale", async () => {
       // wait for sale to start here
-      const blockTime = await getBlockTime(connection);
       const saleStart = dummyConductor.saleStart;
       await waitUntilBlock(connection, saleStart);
-      // if (blockTime <= saleStart) {
-      //   //console.log("waiting", saleStart - blockTime + 1, "seconds");
-      //   await wait(saleStart - blockTime + 1);
-      // }
 
       // prep contributions info
       const acceptedTokens = dummyConductor.acceptedTokens;
@@ -606,7 +598,7 @@ describe("anchor-contributor", () => {
 
       // get state
       const buyerState = await contributor.getBuyer(saleId, buyer.publicKey);
-      const contributions: any = buyerState.contributions;
+      const totals: any = buyerState.contributions;
 
       // check balance changes and state
       for (let i = 0; i < numExpected; ++i) {
@@ -615,10 +607,10 @@ describe("anchor-contributor", () => {
         expect(startingBalanceBuyer[i].add(refund).toString()).to.equal(endingBalanceBuyer[i].toString());
         expect(startingBalanceCustodian[i].sub(refund).toString()).to.equal(endingBalanceCustodian[i].toString());
 
-        const contribution = contributions[i];
+        const item = totals[i];
         const expectedState = refund.eq(new BN("0")) ? "inactive" : "refundClaimed";
-        expect(contribution.status).has.key(expectedState);
-        expect(contribution.excess.toString()).to.equal(refund.toString());
+        expect(item.status).has.key(expectedState);
+        expect(item.excess.toString()).to.equal(refund.toString());
       }
     });
 

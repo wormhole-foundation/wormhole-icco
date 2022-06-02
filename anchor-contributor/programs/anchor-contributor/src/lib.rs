@@ -45,7 +45,7 @@ pub mod anchor_contributor {
         // TODO: use associated sale token account to get decimals
         // for now, hardcoding to 9
         let sale_token_decimals = 9u8;
-        sale.set_native_sale_token_decimals(sale_token_decimals);
+        sale.set_native_sale_token_decimals(sale_token_decimals)?;
 
         Ok(())
     }
@@ -97,7 +97,6 @@ pub mod anchor_contributor {
         )?;
         */
 
-        //let signer: &[&[u8]] = &[ctx.accounts.owner.key().as_ref()];
         token::transfer(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
@@ -110,10 +109,9 @@ pub mod anchor_contributor {
             ),
             amount,
         )?;
-        msg!("after transfer");
 
+        /*
         let custodian_bump = ctx.bumps["custodian"];
-
         token::transfer(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
@@ -126,7 +124,7 @@ pub mod anchor_contributor {
             ),
             amount,
         )?;
-        msg!("after another transfer");
+        */
 
         // leverage token index search from sale's accepted tokens to find index
         // on buyer's contributions
@@ -252,12 +250,47 @@ pub mod anchor_contributor {
         Ok(())
     }
 
-    pub fn claim_refunds(ctx: Context<ClaimRefund>) -> Result<()> {
+    pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
         let sale = &mut ctx.accounts.sale;
         require!(sale.is_aborted(), SaleError::SaleNotAborted);
 
         let refunds = ctx.accounts.buyer.claim_refunds(&sale.totals)?;
-        for _refund in &refunds {
+        let atas = &ctx.remaining_accounts;
+        require!(
+            atas.len() == sale.totals.len(),
+            SaleError::InvalidRemainingAccounts
+        );
+
+        let owner = &ctx.accounts.owner.key();
+        let custodian = &ctx.accounts.custodian.key();
+
+        // iterate over refunds and reference remaining accounts by index
+        for (i, refund) in refunds.iter().enumerate() {
+            let buyer_index = 2 * i;
+
+            let buyer_ata = atas[buyer_index].to_account_info();
+            {
+                let mint = token::accessor::mint(&buyer_ata)?;
+                require!(
+                    sale.get_token_index(&mint).is_ok(),
+                    SaleError::InvalidRemainingAccounts
+                );
+                let authority = token::accessor::authority(&buyer_ata)?;
+                require!(authority == *owner, SaleError::InvalidRemainingAccounts);
+            }
+
+            let custodian_index = buyer_index + 1;
+            let custodian_ata = atas[custodian_index].to_account_info();
+            {
+                let mint = token::accessor::mint(&custodian_ata)?;
+                require!(
+                    sale.get_token_index(&mint).is_ok(),
+                    SaleError::InvalidRemainingAccounts
+                );
+                let authority = token::accessor::authority(&custodian_ata)?;
+                require!(authority == *custodian, SaleError::InvalidRemainingAccounts);
+            }
+
             // TODO: transfer back to owner
         }
         Ok(())

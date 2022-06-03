@@ -48,10 +48,10 @@ To create a sale, a user invokes the `createSale()` method on the sale conductor
   - The ATA on the Solana contributor where offered tokens will be sent
 - An array of accepted tokens on each chain + the USD conversion rate which they are accepted at
 
-The `createSale()` method deposits the offered tokens, assigns an ID which identifies the sale and attests a `SaleInit` packet over the wormhole. This packet contains all the information from above.
+The `createSale()` method deposits the offered tokens, assigns an ID which identifies the sale and attests a `SaleInit` packet over the wormhole. This packet contains all the information from above. It will also attest a `SolanaSaleInit` packet over the wormhole if any Solana tokens are accepted as collateral in the sale.
 The sale information is also stored locally.
 
-The attested `SaleInit` packet is submitted to the `TokenSaleContributor` contracts. The contributor contracts stores the sale information locally which is relevant to its chain.
+The attested `SaleInit` packet (or the `SolanaSaleInit`) is submitted to the `TokenSaleContributor` contracts. The contributor contracts stores the sale information locally which is relevant to its chain.
 
 The `TokenSaleConductor` contract can terminate the sale by calling `abortSaleBeforeStartTime()` before the sale period begins. Only the wallet that called `createSale()` can invoke this method.
 
@@ -62,12 +62,13 @@ After the sale duration anyone can call the `attestContributions()` method on th
 The `TokenSaleConductor` now collects the `Contributions` packets from all chains & tokens.
 
 After all contributions have been collected, anyone can call the `sealSale()` method on the Conductor.
-The method evaluates whether the minimum raise amount has been met using the conversion rates specified initially (a later version could use rates from an oracle at closing). In case it was successful it:
+The method evaluates whether the minimum raise amount has been met using the conversion rates specified initially (a later version could use rates from an oracle at closing). The conversion rates are scaled based on the accepted token decimals on the conductor chain relative to the token decimals on the native chain. It is crucial that the conversion rates are scaled properly in order to correctly calculate token allocations. In case it was successful it:
 
 - Calculates allocations and excess contributions (if total contributions sum to a value larger than the maximum raise amount)
   - Excess contributions are calculated by taking the difference between the maximum raise amount and the total contributions.
     Each contributor receives excess contributions proportional to their contribution amount (individualContribution / totalContributions \* totalExcessContributions)
 - Emits a `SaleSealed` packet - indicated to the Contributor contracts that the sale was successful
+- Emits another `SaleSealed` packet if the sale accepts Solana tokens as collateral. The message is in the same format as the original `SaleSealed` packet, but only contains information regarding Solana token allocations. This is necessary due to VAA size contraints on Solana.
 - Bridges the relevant share of offered tokens to the Contributor contracts
 
 Or in case the goal was not met, it:
@@ -127,13 +128,18 @@ Owner Only:
 
 - Token
 
-  - uint16 chainId
-  - bytes32 address
+  - uint16 tokenChain
+  - bytes32 tokenAddress
   - uint256 conversionRate
+
+- SolanaToken
+
+  - uint8 tokenIndex
+  - bytes32 tokenAddress
 
 - Contribution
   - uint8 tokenIndex (index in accepted tokens array)
-  - uint256 contributedAmount
+  - uint256 contributed
 - Allocation
 
   - uint8 tokenIndex (index in accepted tokens array)
@@ -161,14 +167,14 @@ SaleInit:
 ```
 // PayloadID uint8 = 1
 uint8 payloadID;
-// Sale ID
+// sale ID
 uint256 saleID;
-// Address of the token being sold. Left-zero-padded if shorter than 32 bytes
+// address of the token being sold, left-zero-padded if shorter than 32 bytes
 bytes32 tokenAddress;
-// Chain ID of the token being sold
+// chain ID of the token being sold
 uint16 tokenChain;
 // sale token decimals
-uint8 tokenDecimals
+uint8 tokenDecimals;
 // token amount being sold
 uint256 tokenAmount;
 // min raise amount
@@ -183,15 +189,15 @@ uint256 saleEnd;
 uint8 tokensLen;
 
 // repeated for tokensLen times, Struct 'Token'
-  // Address of the token. Left-zero-padded if shorter than 32 bytes
+  // address of the token, left-zero-padded if shorter than 32 bytes
   bytes32 tokenAddress;
-  // Chain ID of the token
+  // chain ID of the token
   uint16 tokenChain;
   // conversion rate for the token
   uint256 conversionRate;
 
 // sale token ATA for Solana
-bytes32 solanaTokenAccount
+bytes32 solanaTokenAccount;
 // recipient of proceeds
 bytes32 recipient;
 // refund recipient in case the sale is aborted
@@ -213,7 +219,7 @@ uint8 contributionsLen;
 
 // repeated for tokensLen times, Struct 'Contribution'
   // index in acceptedTokens array
-  uint8 index
+  uint8 tokenIndex;
   // contributed amount of token
   uint256 contributed;
 ```
@@ -245,4 +251,34 @@ SaleAborted:
 uint8 payloadID;
 // Sale ID
 uint256 saleID;
+```
+
+SolanaSaleInit:
+
+```
+// PayloadID uint8 = 5
+uint8 payloadID;
+// sale ID
+uint256 saleID;
+// sale token ATA for solana
+bytes32 solanaTokenAccount;
+// chain ID of the token
+uint16 tokenChain;
+// token decimals
+uint8 tokenDecimals;
+// timestamp raise start
+uint256 saleStart;
+// timestamp raise end
+uint256 saleEnd;
+// accepted tokens length
+uint8 tokensLen;
+
+// repeated for tokensLen times, Struct 'SolanaToken'
+  // index in acceptedTokens array
+  uint8 tokenIndex;
+  // address of the token, left-zero-padded if shorter than 32 bytes
+  bytes32 tokenAddress;
+
+// recipient of proceeds
+bytes32 recipient;
 ```

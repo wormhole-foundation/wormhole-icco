@@ -34,7 +34,7 @@ contract ConductorGovernance is ConductorGetters, ConductorSetters, ERC1967Upgra
 
         _upgradeTo(newImplementation);
 
-        /// Call initialize function of the new implementation
+        /// @dev call initialize function of the new implementation
         (bool success, bytes memory reason) = newImplementation.delegatecall(abi.encodeWithSignature("initialize()"));
 
         require(success, string(reason));

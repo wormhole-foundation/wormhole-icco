@@ -198,7 +198,7 @@ pub struct AttestContributions<'info> {
 }
 
 #[derive(Accounts)]
-pub struct BridgeSealedContributions<'info> {
+pub struct BridgeSealedContribution<'info> {
     #[account(
         mut,
         seeds = [

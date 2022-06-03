@@ -262,7 +262,7 @@ pub mod anchor_contributor {
     }
 
     pub fn bridge_sealed_contributions(
-        ctx: Context<BridgeSealedContributions>,
+        ctx: Context<BridgeSealedContribution>,
         token_idx: u8,
     ) -> Result<()> {
         // by this point, the sale is sealed

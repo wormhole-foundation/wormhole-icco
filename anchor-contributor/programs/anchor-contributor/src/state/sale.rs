@@ -8,7 +8,7 @@ use std::{mem::size_of_val, str::FromStr, u64};
 use crate::{
     constants::*,
     env::*,
-    error::ContributorError,
+    error::*,
     wormhole::{get_message_data, MessageData},
 };
 
@@ -379,11 +379,11 @@ pub fn verify_conductor_vaa<'info>(
     );
     require!(
         msg.emitter_chain == get_conductor_chain()?,
-        ContributorError::InvalidConductor
+        ContributorError::InvalidConductorChain
     );
     require!(
         msg.emitter_address == get_conductor_address()?,
-        ContributorError::InvalidConductor
+        ContributorError::InvalidConductorAddress
     );
     require!(
         msg.payload[0] == payload_type,
@@ -394,17 +394,20 @@ pub fn verify_conductor_vaa<'info>(
 
 // TODO: set up cfg flag to just use constants instead of these getters
 pub fn get_conductor_chain() -> Result<u16> {
-    let conductor_chain: u16 = CONDUCTOR_CHAIN
-        .to_string()
-        .parse()
-        .expect("invalid conductor chain");
-    Ok(conductor_chain)
+    match (CONDUCTOR_CHAIN.to_string().parse()) {
+        Ok(v) => Ok(v),
+        Err(e) => Err(ContributorError::InvalidConductorChain.into()),
+    }
 }
 
 pub fn get_conductor_address() -> Result<[u8; 32]> {
-    let conductor_address = hex::decode(CONDUCTOR_ADDRESS).expect("invalid conductor address");
-    let conductor_address: [u8; 32] = conductor_address
-        .try_into()
-        .expect("invalid conductor address");
-    Ok(conductor_address)
+    match hex::decode(CONDUCTOR_ADDRESS) {
+        Ok(v) => {
+            match v.try_into() {
+               Ok(w) => Ok(w),
+               Err(e) => Err(ContributorError::InvalidConductorAddress.into()),       
+            }
+        }
+        Err(e) => Err(ContributorError::InvalidConductorAddress.into()),
+    }
 }

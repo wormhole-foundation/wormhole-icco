@@ -32,6 +32,12 @@ pub enum ContributorError {
     #[msg("InvalidConductor")]
     InvalidConductor,
 
+    #[msg("InvalidConductorChain")]
+    InvalidConductorChain,
+
+    #[msg("InvalidConductorAddress")]
+    InvalidConductorAddress,
+
     #[msg("InvalidAccount")]
     InvalidAccount,
 

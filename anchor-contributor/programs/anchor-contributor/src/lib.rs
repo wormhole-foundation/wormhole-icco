@@ -5,7 +5,6 @@ use anchor_lang::solana_program::program::{invoke, invoke_signed};
 use anchor_lang::solana_program::system_instruction::transfer;
 use anchor_lang::solana_program::sysvar::*;
 use anchor_spl::*;
-use spl_token::*;
 
 mod constants;
 mod context;
@@ -18,7 +17,7 @@ mod wormhole;
 use constants::*;
 use context::*;
 use error::*;
-use state::sale::{get_conductor_address, get_conductor_chain, verify_conductor_vaa, AssetTotal};
+use state::sale::{get_conductor_address, get_conductor_chain, verify_conductor_vaa};
 use token_bridge::*;
 use wormhole::*;
 

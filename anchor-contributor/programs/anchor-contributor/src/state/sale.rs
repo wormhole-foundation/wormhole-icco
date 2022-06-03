@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::Mint;
 use num::bigint::BigUint;
 use num_derive::*;
-use std::{str::FromStr, u64};
+use std::{str::FromStr, u64, mem::size_of_val};
 
 use crate::{
     constants::*,
@@ -218,17 +218,25 @@ impl Sale {
         );
 
         let totals = &self.totals;
+        // Contributions length is encoded as a single byte, so we fail here if it overflows
+        let contributions_len: u8 = totals.len().try_into().unwrap();
         let mut attested: Vec<u8> = Vec::with_capacity(
-            PAYLOAD_HEADER_LEN + totals.len() * ATTEST_CONTRIBUTIONS_ELEMENT_LEN,
+            PAYLOAD_HEADER_LEN + size_of_val(&CHAIN_ID) + size_of_val(&contributions_len) + totals.len() * ATTEST_CONTRIBUTIONS_ELEMENT_LEN,
         );
 
         // push header
         attested.push(PAYLOAD_ATTEST_CONTRIBUTIONS);
         attested.extend(self.id.iter());
+        attested.extend(CHAIN_ID.to_be_bytes());
+
+        // push contributions length
+        attested.push(contributions_len);
 
         // push each total contributions
         for total in totals {
             attested.push(total.token_index);
+            const pad: usize = 32 - 8; // contributions is 8 bytes, but we need 32 bytes in the payload, so we left-pad
+            attested.extend(vec![0; pad]);
             attested.extend(total.contributions.to_be_bytes());
         }
         Ok(attested)

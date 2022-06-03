@@ -381,6 +381,10 @@ describe("anchor-contributor", () => {
       }
     });
 
+    it("Orchestrator cranks send contributions", async () => {
+      expect(true).to.be.true;
+    })
+
     // TODO
     it("Orchestrator Cannot Seal Sale Again with Signed VAA", async () => {
       const saleSealedVaa = dummyConductor.sealSale(await getBlockTime(connection));

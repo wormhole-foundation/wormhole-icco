@@ -138,6 +138,13 @@ export class IccoContributor {
       .rpc();
   }
 
+  async sendContributions(payer: web3.Keypair, saleId: Buffer) {
+    //Loop through each token and call send contributions for each one
+    const program = this.program;
+
+    
+  }
+
   async abortSale(payer: web3.Keypair, saleAbortedVaa: Buffer): Promise<string> {
     const program = this.program;
 

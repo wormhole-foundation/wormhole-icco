@@ -51,7 +51,7 @@ export class IccoContributor {
         custodian: this.custodianAccount.key,
         sale: saleAccount.key,
         coreBridgeVaa: signedVaaAccount.key,
-        saleTokenMint: saleTokenMint,
+        saleTokenMint,
         owner: payer.publicKey,
         systemProgram: web3.SystemProgram.programId,
       })

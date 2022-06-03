@@ -139,11 +139,14 @@ describe("anchor-contributor", () => {
     let saleTokenAccount: AssociatedTokenAccount;
 
     it("Create ATA for Sale Token if Non-Existent", async () => {
+      //console.log("wtf", dummyConductor.getSaleTokenOnSolana(), contributor.custodianAccount);
+      const allowOwnerOffCurve = true;
       saleTokenAccount = await getOrCreateAssociatedTokenAccount(
         connection,
         orchestrator,
         dummyConductor.getSaleTokenOnSolana(),
-        program.programId
+        contributor.custodianAccount.key,
+        allowOwnerOffCurve
       );
     });
 
@@ -422,11 +425,13 @@ describe("anchor-contributor", () => {
     let saleTokenAccount: AssociatedTokenAccount;
 
     it("Create ATA for Sale Token if Non-Existent", async () => {
+      const allowOwnerOffCurve = true;
       saleTokenAccount = await getOrCreateAssociatedTokenAccount(
         connection,
         orchestrator,
         dummyConductor.getSaleTokenOnSolana(),
-        program.programId
+        contributor.custodianAccount.key,
+        allowOwnerOffCurve
       );
     });
 

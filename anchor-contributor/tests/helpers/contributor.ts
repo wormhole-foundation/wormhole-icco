@@ -11,6 +11,7 @@ import { getPdaAssociatedTokenAddress, makeWritableAccountMeta } from "./utils";
 
 export class IccoContributor {
   program: Program<AnchorContributor>;
+  whMessageKey: web3.Keypair;
   custodianAccount: KeyBump;
 
   constructor(program: Program<AnchorContributor>) {
@@ -93,7 +94,7 @@ export class IccoContributor {
     const whFeeCollector = findProgramAddressSync([Buffer.from("fee_collector")], whCoreBridge)[0];
     const whDerivedEmitter = findProgramAddressSync([Buffer.from("emitter")], program.programId)[0];
     const whSequence = findProgramAddressSync([Buffer.from("Sequence"), whDerivedEmitter.toBytes()], whCoreBridge)[0];
-    const whMessageKey = web3.Keypair.generate();
+    this.whMessageKey = web3.Keypair.generate();
 
     return program.methods
       .attestContributions()
@@ -106,13 +107,14 @@ export class IccoContributor {
         wormholeFeeCollector: whFeeCollector,
         wormholeDerivedEmitter: whDerivedEmitter,
         wormholeSequence: whSequence,
-        wormholeMessageKey: whMessageKey.publicKey,
+        wormholeMessageKey: this.whMessageKey.publicKey,
         clock: web3.SYSVAR_CLOCK_PUBKEY,
         rent: web3.SYSVAR_RENT_PUBKEY,
       })
-      .signers([payer, whMessageKey])
+      .signers([payer, this.whMessageKey])
       .rpc();
   }
+
 
   async sealSale(payer: web3.Keypair, saleSealedVaa: Buffer, saleTokenMint: web3.PublicKey): Promise<string> {
     const program = this.program;

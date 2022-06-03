@@ -323,7 +323,21 @@ describe("anchor-contributor", () => {
       await waitUntilBlock(connection, saleEnd);
       const tx = await contributor.attestContributions(orchestrator, saleId);
 
-      // TODO: verify payload we sent using wormhole
+      // now go about your business. Read VAA back.
+      await connection.confirmTransaction(tx);
+      const attest_vaa_info = await connection.getAccountInfo(
+        contributor.whMessageKey.publicKey,
+        "confirmed"
+      );
+//      console.log(attest_vaa_info);
+      const attest_vaa_data = attest_vaa_info!.data;
+      // Last 300 bytes are VAA.payload. Let;s check it.
+      const attest_vaa_payload = attest_vaa_data.slice(-(33+2+1+33*dummyConductor.acceptedTokens.length));
+      console.log("attest_vaa_payload bytes str: " + attest_vaa_payload.toString("hex"))
+      expect(attest_vaa_payload[0]).to.equal(0x02);
+      for (let i = 0; i < dummyConductor.acceptedTokens.length; ++i) {
+//??        expect(attest_vaa_payload[33+2+1+33*i]).to.equal(dummyConductor.acceptedTokens[i]);
+      }
     });
 
     it("User Cannot Contribute After Sale Ended", async () => {

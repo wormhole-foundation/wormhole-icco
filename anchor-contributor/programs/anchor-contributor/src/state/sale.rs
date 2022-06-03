@@ -260,7 +260,6 @@ impl Sale {
             ContributorError::IncorrectVaaPayload
         );
 
-        let grand_total_allocations: u64 = 0;
         let decimal_difference = (self.token_decimals - self.native_token_decimals) as u32;
 
         // deserialize other things

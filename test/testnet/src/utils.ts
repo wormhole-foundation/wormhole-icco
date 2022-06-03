@@ -6,13 +6,13 @@ import {
   parseSequencesFromLogEth,
   getSignedVAAWithRetry,
   getEmitterAddressEth,
-  nativeToHexString,
+  tryNativeToHexString,
   importCoreWasm,
   redeemOnEth,
   CHAIN_ID_ETH,
+  CHAIN_ID_SOLANA,
 } from "@certusone/wormhole-sdk";
 import {
-  AcceptedToken,
   makeAcceptedToken,
   initSaleOnEth,
   createSaleOnEth,
@@ -20,7 +20,6 @@ import {
   sleepFor,
   secureContributeOnEth,
   parseSaleInit,
-  SaleInit,
   attestContributionsOnEth,
   collectContributionsOnEth,
   sealSaleOnEth,
@@ -57,6 +56,8 @@ import {
   SealSaleResult,
   saleParams,
   SaleSealed,
+  AcceptedToken,
+  SaleInit,
 } from "./structs";
 import { signContribution } from "./kyc";
 import { assert } from "console";
@@ -67,6 +68,12 @@ export async function extractVaaPayload(
   const { parse_vaa } = await importCoreWasm();
   const { payload: payload } = parse_vaa(signedVaa);
   return payload;
+}
+
+export async function parseVaaPayload(signedVaa: Uint8Array) {
+  const { parse_vaa } = await importCoreWasm();
+  let parsedVaa = parse_vaa(signedVaa);
+  return parsedVaa;
 }
 
 export function getCurrentTime(): number {
@@ -105,30 +112,46 @@ export async function buildAcceptedTokens(
 
   for (const config of tokenConfig) {
     const wallet = initiatorWallet(CHAIN_ID_TO_NETWORK.get(config.chainId));
-    const token = ERC20__factory.connect(config.address, wallet);
-    const tokenDecimals = await token.decimals();
     const network = CHAIN_ID_TO_NETWORK.get(config.chainId);
 
-    // compute the normalized conversionRate
-    const acceptedTokenDecimalsOnConductor =
-      await getAcceptedTokenDecimalsOnConductor(
-        config.chainId,
-        CONDUCTOR_CHAIN_ID,
-        WORMHOLE_ADDRESSES[network].tokenBridge,
-        WORMHOLE_ADDRESSES[CONDUCTOR_NETWORK].tokenBridge,
-        testProvider(network),
-        testProvider(CONDUCTOR_NETWORK),
-        config.address,
-        tokenDecimals
-      );
+    let tokenDecimals;
+    let acceptedTokenDecimalsOnConductor;
+    if (config.chainId == CHAIN_ID_SOLANA) {
+      // TODO - implement get solana token decimals on conductor
+      if (config.address == "5Dmmc5CC6ZpKif8iN5DSY9qNYrWJvEKcX2JrxGESqRMu") {
+        tokenDecimals = 6; // should look these up on solana
+        acceptedTokenDecimalsOnConductor = 6; // should look these
+      } else if (
+        config.address == "3Ftc5hTz9sG4huk79onufGiebJNDMZNL8HYgdMJ9E7JR"
+      ) {
+        tokenDecimals = 8; // should look these up on solana
+        acceptedTokenDecimalsOnConductor = 18; // should look these
+      }
+    } else {
+      const token = ERC20__factory.connect(config.address, wallet);
+      tokenDecimals = await token.decimals();
 
+      // compute the normalized conversionRate
+      acceptedTokenDecimalsOnConductor =
+        await getAcceptedTokenDecimalsOnConductor(
+          config.chainId,
+          CONDUCTOR_CHAIN_ID,
+          WORMHOLE_ADDRESSES[network].tokenBridge,
+          WORMHOLE_ADDRESSES[CONDUCTOR_NETWORK].tokenBridge,
+          testProvider(network),
+          testProvider(CONDUCTOR_NETWORK),
+          config.address,
+          tokenDecimals
+        );
+    }
+
+    // normalize the conversion rate and then push the accepted token
     const normalizedConversionRate = await normalizeConversionRate(
       SALE_CONFIG.denominationDecimals,
       tokenDecimals,
       config.conversionRate,
       acceptedTokenDecimalsOnConductor
     );
-
     acceptedTokens.push(
       makeAcceptedToken(
         config.chainId,
@@ -205,8 +228,8 @@ export async function createSaleOnEthAndGetVaa(
   refundRecipientAddress,
   acceptedTokens: AcceptedToken[],
   solanaTokenAccount: ethers.BytesLike
-): Promise<Uint8Array> {
-  // create
+): Promise<Uint8Array[]> {
+  // create the sale on the conductor
   const receipt = await createSaleOnEth(
     conductorAddress,
     localTokenAddress,
@@ -224,12 +247,28 @@ export async function createSaleOnEthAndGetVaa(
     seller
   );
 
-  return getSignedVaaFromReceiptOnEth(
-    chainId,
-    conductorAddress,
+  // fetch sequences from receipt
+  const sequences = parseSequencesFromLogEth(
     receipt,
-    CONDUCTOR_NETWORK
+    WORMHOLE_ADDRESSES[CONDUCTOR_NETWORK].wormhole
   );
+
+  const saleInitSequence = sequences[sequences.length - 1];
+  if (saleInitSequence === undefined) {
+    console.log("no vaa sequences found");
+  }
+
+  // fetch VAA for each sequence in the receipt
+  const signedVaas: Uint8Array[] = [];
+  for (const sequence of sequences) {
+    const signedVaa = await getSignedVaaFromSequence(
+      CONDUCTOR_CHAIN_ID,
+      getEmitterAddressEth(CONDUCTOR_ADDRESS),
+      sequence
+    );
+    signedVaas.push(signedVaa);
+  }
+  return signedVaas;
 }
 
 export async function createSaleOnEthAndInit(
@@ -238,7 +277,7 @@ export async function createSaleOnEthAndInit(
   conductorChainId: ChainId,
   raiseParams: saleParams,
   acceptedTokens: AcceptedToken[]
-): Promise<SaleInit> {
+): Promise<Uint8Array[]> {
   // fetch localToken decimals
   const decimals = await getErc20Decimals(
     testProvider(CONDUCTOR_NETWORK),
@@ -256,7 +295,7 @@ export async function createSaleOnEthAndInit(
   );
 
   // create the sale
-  const saleInitVaa = await createSaleOnEthAndGetVaa(
+  const saleInitVaas = await createSaleOnEthAndGetVaa(
     initiatorConductorWallet,
     conductorAddress,
     conductorChainId,
@@ -279,14 +318,19 @@ export async function createSaleOnEthAndInit(
     acceptedTokens,
     solanaTokenAccount
   );
+  return saleInitVaas;
+}
 
+export async function initializeSaleOnEthContributors(
+  saleInitVaa: Uint8Array
+): Promise<SaleInit> {
   // parse the sale init payload for return value
   const saleInitPayload = await extractVaaPayload(saleInitVaa);
   const saleInit = await parseSaleInit(saleInitPayload);
 
   {
     const receipts = await Promise.all(
-      CONTRIBUTOR_NETWORKS.map(
+      CONTRIBUTOR_NETWORKS.filter((ntwrk) => ntwrk != "solana_testnet").map(
         async (network): Promise<ethers.ContractReceipt> => {
           return initSaleOnEth(
             TESTNET_ADDRESSES[network],
@@ -303,9 +347,11 @@ export async function createSaleOnEthAndInit(
 
 export async function getLatestBlockTime(isMax = true): Promise<number> {
   const currentBlocks = await Promise.all(
-    CONTRIBUTOR_NETWORKS.map((network): Promise<ethers.providers.Block> => {
-      return getCurrentBlock(testProvider(network));
-    })
+    CONTRIBUTOR_NETWORKS.filter((ntwrk) => ntwrk != "solana_testnet").map(
+      (network): Promise<ethers.providers.Block> => {
+        return getCurrentBlock(testProvider(network));
+      }
+    )
   );
 
   return currentBlocks
@@ -417,7 +463,7 @@ export async function prepareAndExecuteContribution(
   // get KYC signature
   const signature = await signContribution(
     testRpc(CHAIN_ID_TO_NETWORK.get(contribution.chainId)),
-    nativeToHexString(CONDUCTOR_ADDRESS, contribution.chainId)!,
+    tryNativeToHexString(CONDUCTOR_ADDRESS, contribution.chainId)!,
     saleId,
     tokenIndex,
     amount,
@@ -444,46 +490,54 @@ export async function prepareAndExecuteContribution(
   return true;
 }
 
-export async function attestAndCollectContributions(
+export async function attestAndCollectContributionsOnEth(
   saleInit: SaleInit
 ): Promise<void> {
   const saleId = saleInit.saleId;
 
   const signedVaas = await Promise.all(
-    CONTRIBUTOR_NETWORKS.map(async (network): Promise<Uint8Array> => {
-      const receipt = await attestContributionsOnEth(
-        TESTNET_ADDRESSES[network],
-        saleId,
-        initiatorWallet(network)
-      );
-      console.log("Attested contribution for", network);
+    CONTRIBUTOR_NETWORKS.filter((ntwrk) => ntwrk != "solana_testnet").map(
+      async (network): Promise<Uint8Array> => {
+        const receipt = await attestContributionsOnEth(
+          TESTNET_ADDRESSES[network],
+          saleId,
+          initiatorWallet(network)
+        );
+        console.log("Attested contribution for", network);
 
-      return getSignedVaaFromReceiptOnEth(
-        WORMHOLE_ADDRESSES[network].chainId,
-        TESTNET_ADDRESSES[network],
-        receipt,
-        network
-      );
-    })
+        return getSignedVaaFromReceiptOnEth(
+          WORMHOLE_ADDRESSES[network].chainId,
+          TESTNET_ADDRESSES[network],
+          receipt,
+          network
+        );
+      }
+    )
   );
 
   console.info("Finished attesting contributions.");
+  console.info("Collecting contributions from EVM.");
+  await collectContributionsOnConductor(signedVaas, saleInit.saleId);
+}
 
-  {
-    const receipts = await collectContributionsOnEth(
-      CONDUCTOR_ADDRESS,
-      signedVaas,
-      initiatorWallet(CONDUCTOR_NETWORK)
-    );
-    assert(receipts.length == signedVaas.length);
-  }
+export async function collectContributionsOnConductor(
+  signedVaas: Uint8Array[],
+  saleId: ethers.BigNumberish
+): Promise<void> {
+  const receipts = await collectContributionsOnEth(
+    CONDUCTOR_ADDRESS,
+    signedVaas,
+    initiatorWallet(CONDUCTOR_NETWORK)
+  );
+  assert(receipts.length == signedVaas.length);
+
   console.info("Finished collecting contributions.");
 
   // confirm that all contributions were actually collected
   const conductorSale = await getSaleFromConductorOnEth(
     CONDUCTOR_ADDRESS,
     testProvider(CONDUCTOR_NETWORK),
-    saleInit.saleId
+    saleId
   );
 
   for (let i = 0; i < conductorSale.contributionsCollected.length; i++) {
@@ -494,8 +548,6 @@ export async function attestAndCollectContributions(
       conductorSale.contributionsCollected[i]
     );
   }
-
-  return;
 }
 
 export async function sealSaleAndParseReceiptOnEth(

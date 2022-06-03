@@ -78,6 +78,23 @@ export interface SaleInit {
   refundRecipient: string;
 }
 
+export interface SolanaToken {
+  tokenIndex: number;
+  tokenAddress: ethers.BytesLike;
+}
+
+export interface SolanaSaleInit {
+  payloadId: number;
+  saleId: ethers.BigNumberish;
+  solanaTokenAccount: ethers.BytesLike;
+  tokenChain: number;
+  tokenDecimals: number;
+  saleStart: ethers.BigNumberish;
+  saleEnd: ethers.BigNumberish;
+  acceptedTokens: SolanaToken[];
+  recipient: string;
+}
+
 export interface Allocation {
   tokenIndex: number;
   allocation: ethers.BigNumberish;

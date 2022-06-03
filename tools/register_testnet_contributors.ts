@@ -1,10 +1,11 @@
 import yargs from "yargs";
 import { registerChainOnEth, nativeToUint8Array } from "wormhole-icco-sdk";
+import { tryNativeToUint8Array } from "@certusone/wormhole-sdk";
 import { ethers } from "ethers";
 
 const fs = require("fs");
 const DeploymentConfig = require("../../ethereum/icco_deployment_config.js");
-const ConductorRpc = DeploymentConfig["conductor"].rpc;
+const ConductorConfig = DeploymentConfig["conductor"];
 
 function parseArgs(): string[] {
   const parsed = yargs(process.argv.slice(2))
@@ -34,14 +35,26 @@ async function main() {
     );
 
     // create wallet to call sdk method with
-    const provider = new ethers.providers.JsonRpcProvider(ConductorRpc);
-    const wallet: ethers.Wallet = new ethers.Wallet(config.mnemonic, provider);
-
-    // convert contributor address to bytes
-    const contributorAddressBytes: Uint8Array = nativeToUint8Array(
-      testnet[networks[i]],
-      config.contributorChainId
+    const provider = new ethers.providers.JsonRpcProvider(ConductorConfig.rpc);
+    const wallet: ethers.Wallet = new ethers.Wallet(
+      ConductorConfig.mnemonic,
+      provider
     );
+
+    // if it's a solana registration - create 32 byte address
+    let contributorAddressBytes: Uint8Array;
+    if (config.contributorChainId == 1) {
+      contributorAddressBytes = tryNativeToUint8Array(
+        testnet[networks[i]],
+        "solana"
+      );
+    } else {
+      // convert contributor address to bytes
+      contributorAddressBytes = nativeToUint8Array(
+        testnet[networks[i]],
+        config.contributorChainId
+      );
+    }
 
     try {
       // need to fix this to add custody account addr

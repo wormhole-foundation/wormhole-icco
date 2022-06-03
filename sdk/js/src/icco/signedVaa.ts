@@ -1,7 +1,14 @@
 import { ethers } from "ethers";
 import { ChainId, uint8ArrayToHex } from "@certusone/wormhole-sdk";
 
-import { AcceptedToken, Allocation, SaleInit, SaleSealed } from "./structs";
+import {
+  AcceptedToken,
+  Allocation,
+  SaleInit,
+  SolanaSaleInit,
+  SolanaToken,
+  SaleSealed,
+} from "./structs";
 
 const VAA_PAYLOAD_NUM_ACCEPTED_TOKENS = 228;
 const VAA_PAYLOAD_ACCEPTED_TOKEN_BYTES_LENGTH = 50;
@@ -71,6 +78,60 @@ function parseAcceptedTokens(
           startIndex + VAA_PAYLOAD_ACCEPTED_TOKEN_BYTES_LENGTH
         )
       ).toString(),
+    };
+    tokens.push(token);
+  }
+  return tokens;
+}
+
+const SOLANA_VAA_PAYLOAD_NUM_ACCEPTED_TOKENS = 132;
+const SOLANA_VAA_PAYLOAD_ACCEPTED_TOKEN_BYTES_LENGTH = 33;
+
+export async function parseSolanaSaleInit(
+  payload: Uint8Array
+): Promise<SolanaSaleInit> {
+  const buffer = Buffer.from(payload);
+
+  const numAcceptedTokens = buffer.readUInt8(
+    SOLANA_VAA_PAYLOAD_NUM_ACCEPTED_TOKENS
+  );
+
+  const recipientIndex =
+    SOLANA_VAA_PAYLOAD_NUM_ACCEPTED_TOKENS +
+    numAcceptedTokens * SOLANA_VAA_PAYLOAD_ACCEPTED_TOKEN_BYTES_LENGTH +
+    1;
+  return {
+    payloadId: buffer.readUInt8(0),
+    saleId: ethers.BigNumber.from(payload.slice(1, 33)).toString(),
+    solanaTokenAccount: uint8ArrayToHex(payload.slice(33, 65)),
+    tokenChain: buffer.readUInt16BE(65),
+    tokenDecimals: buffer.readUInt8(67),
+    saleStart: ethers.BigNumber.from(payload.slice(68, 100)).toString(),
+    saleEnd: ethers.BigNumber.from(payload.slice(100, 132)).toString(),
+    acceptedTokens: parseSolanaAcceptedTokens(payload, numAcceptedTokens),
+    recipient: uint8ArrayToHex(
+      payload.slice(recipientIndex, recipientIndex + 32)
+    ),
+  };
+}
+
+function parseSolanaAcceptedTokens(
+  payload: Uint8Array,
+  numTokens: number
+): SolanaToken[] {
+  const buffer = Buffer.from(payload);
+
+  const tokens: SolanaToken[] = [];
+  for (let i = 0; i < numTokens; ++i) {
+    const startIndex =
+      SOLANA_VAA_PAYLOAD_NUM_ACCEPTED_TOKENS +
+      1 +
+      i * SOLANA_VAA_PAYLOAD_ACCEPTED_TOKEN_BYTES_LENGTH;
+    const token: SolanaToken = {
+      tokenIndex: buffer.readUInt8(startIndex),
+      tokenAddress: uint8ArrayToHex(
+        payload.slice(startIndex + 1, startIndex + 33)
+      ),
     };
     tokens.push(token);
   }

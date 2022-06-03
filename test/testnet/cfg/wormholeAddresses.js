@@ -1,5 +1,10 @@
 module.exports = {
   guardianRpc: ["https://wormhole-v2-testnet-api.certus.one"],
+  solana_testnet: {
+    wormhole: "3u8hJUVTA4jH1wYAyUur7FFZVQ8H635K3tSHHF4ssjQ5",
+    tokenBridge: "DZnkkTmCiFWfYTfT41X3Rd1kDgozqzxWaHqsw6W4x2oe",
+    chainId: 1,
+  },
   goerli: {
     wormhole: "0x706abc4E45D419950511e474C7B9Ed348A4a716c",
     tokenBridge: "0xF890982f9310df57d00f659cf4fd87e65adEd8d7",

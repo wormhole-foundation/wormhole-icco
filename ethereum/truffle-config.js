@@ -57,7 +57,7 @@ module.exports = {
         );
       },
       network_id: "5",
-      gas: 4465030,
+      gas: 6465030,
       gasPrice: 10000000000,
     },
     binance: {

@@ -423,6 +423,11 @@ pub mod anchor_contributor {
         let buyer_token_accts = &token_accts[num_accepted..];
 
         let transfer_authority = &ctx.accounts.custodian;
+
+        // Collect ALL account Infos to pass to trasfer.
+        let mut infos = ctx.accounts.to_account_infos();
+        infos.extend_from_slice(&ctx.remaining_accounts);
+
         for (total, from_acct, to_acct) in izip!(totals, custodian_token_accts, buyer_token_accts) {
             let mint = token::accessor::mint(&to_acct.to_account_info())?;
             let (idx, _) = sale.get_total_info(&mint)?;
@@ -441,13 +446,7 @@ pub mod anchor_contributor {
                     &[&transfer_authority.key()],
                     refund,
                 )?,
-                &[
-                    from_acct.to_account_info(),
-                    to_acct.to_account_info(),
-                    transfer_authority.to_account_info(),
-                    ctx.accounts.owner.to_account_info(),
-                    ctx.accounts.token_program.to_account_info(),
-                ],
+                &infos,
                 &[&[&SEED_PREFIX_CUSTODIAN.as_bytes(), &[ctx.bumps["custodian"]]]],
             )?;
         }

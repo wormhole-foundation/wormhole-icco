@@ -52,6 +52,14 @@ pub struct InitializeSale<'info> {
     pub core_bridge_vaa: AccountInfo<'info>,
     pub sale_token_mint: Account<'info, Mint>,
 
+    #[
+        account(
+            constraint = custodian_sale_token_acct.mint == sale_token_mint.key(),
+            constraint = custodian_sale_token_acct.owner == custodian.key(),
+        )
+    ]
+    pub custodian_sale_token_acct: Account<'info, TokenAccount>,
+
     #[account(mut)]
     pub owner: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -418,6 +426,20 @@ pub struct ClaimAllocation<'info> {
         bump,
     )]
     pub buyer: Account<'info, Buyer>,
+
+    #[account(
+        mut,
+        constraint = buyer_sale_token_acct.mint == sale.sale_token_mint,
+        constraint = buyer_sale_token_acct.owner == owner.key(),
+    )]
+    pub buyer_sale_token_acct: Account<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        constraint = custodian_sale_token_acct.mint == sale.sale_token_mint,
+        constraint = custodian_sale_token_acct.owner == custodian.key(),
+    )]
+    pub custodian_sale_token_acct: Account<'info, TokenAccount>,
 
     #[account(mut)]
     pub owner: Signer<'info>,

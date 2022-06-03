@@ -373,9 +373,9 @@ pub fn verify_conductor_vaa<'info>(
 
 // TODO: set up cfg flag to just use constants instead of these getters
 pub fn get_conductor_chain() -> Result<u16> {
-    match (CONDUCTOR_CHAIN.to_string().parse()) {
+    match CONDUCTOR_CHAIN.to_string().parse() {
         Ok(v) => Ok(v),
-        Err(e) => Err(ContributorError::InvalidConductorChain.into()),
+        _ => Err(ContributorError::InvalidConductorChain.into()),
     }
 }
 
@@ -385,6 +385,6 @@ pub fn get_conductor_address() -> Result<[u8; 32]> {
             Ok(w) => Ok(w),
             Err(e) => Err(ContributorError::InvalidConductorAddress.into()),
         },
-        Err(e) => Err(ContributorError::InvalidConductorAddress.into()),
+        _ => Err(ContributorError::InvalidConductorAddress.into()),
     }
 }

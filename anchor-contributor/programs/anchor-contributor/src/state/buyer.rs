@@ -100,10 +100,10 @@ impl Buyer {
             ContributorError::AlreadyClaimed
         );
 
-        let total = &mut self.contributions[idx];
-        total.excess = total.amount;
-        total.status = ContributionStatus::RefundClaimed;
-        Ok(total.excess)
+        let contribution = &mut self.contributions[idx];
+        contribution.excess = contribution.amount;
+        contribution.status = ContributionStatus::RefundClaimed;
+        Ok(contribution.excess)
     }
 
     pub fn claim_allocation(&mut self, sale_totals: &Vec<AssetTotal>) -> Result<u64> {
@@ -112,7 +112,10 @@ impl Buyer {
         let total_allocation: u128 = sale_totals
             .iter()
             .zip(self.contributions.iter())
-            .map(|(t, c)| t.allocations as u128 * c.amount as u128 / t.contributions as u128)
+            .map(|(t, c)| match t.contributions {
+                0 => 0,
+                _ => t.allocations as u128 * c.amount as u128 / t.contributions as u128,
+            })
             .sum();
 
         require!(
@@ -122,6 +125,29 @@ impl Buyer {
         self.allocation.amount = total_allocation as u64;
         self.allocation.claimed = true;
         Ok(self.allocation.amount)
+    }
+
+    pub fn claim_excess(&mut self, idx: usize, total: &AssetTotal) -> Result<u64> {
+        require!(
+            !self.has_claimed_index(idx),
+            ContributorError::AlreadyClaimed
+        );
+        let excess_contribution = match total.contributions {
+            0 => 0,
+            _ => {
+                let contribution = &self.contributions[idx];
+                total.excess_contributions as u128 * contribution.amount as u128
+                    / total.contributions as u128
+            }
+        };
+        require!(
+            excess_contribution < u64::MAX as u128,
+            ContributorError::AmountTooLarge
+        );
+        let contribution = &mut self.contributions[idx];
+        contribution.excess = excess_contribution as u64;
+        contribution.status = ContributionStatus::ExcessClaimed;
+        Ok(contribution.excess)
     }
 
     /*

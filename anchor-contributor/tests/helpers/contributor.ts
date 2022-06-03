@@ -2,7 +2,12 @@ import { importCoreWasm } from "@certusone/wormhole-sdk";
 import { BN, Program, web3 } from "@project-serum/anchor";
 import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey";
 import { AnchorContributor } from "../../target/types/anchor_contributor";
-import { getAccount, getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import {
+  getAccount,
+  getAssociatedTokenAddress,
+  getOrCreateAssociatedTokenAccount,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
 
 import { findBuyerAccount, findCustodianAccount, findSaleAccount, findSignedVaaAccount, KeyBump } from "./accounts";
 import { getBuyerState, getCustodianState, getSaleState } from "./fetch";
@@ -38,21 +43,24 @@ export class IccoContributor {
   async initSale(payer: web3.Keypair, initSaleVaa: Buffer, saleTokenMint: web3.PublicKey): Promise<string> {
     const program = this.program;
 
+    const custodian = this.custodianAccount.key;
+
     // first post signed vaa to wormhole
     await postVaa(program.provider.connection, payer, initSaleVaa);
     const signedVaaAccount = findSignedVaaAccount(initSaleVaa);
 
     const saleId = await parseSaleId(initSaleVaa);
     const saleAccount = findSaleAccount(program.programId, saleId);
+    const custodianSaleTokenAcct = await getPdaAssociatedTokenAddress(saleTokenMint, custodian);
 
-    //const contributorAccount = this.contributorAccount;
     return program.methods
       .initSale()
       .accounts({
-        custodian: this.custodianAccount.key,
+        custodian,
         sale: saleAccount.key,
         coreBridgeVaa: signedVaaAccount.key,
         saleTokenMint,
+        custodianSaleTokenAcct,
         owner: payer.publicKey,
         systemProgram: web3.SystemProgram.programId,
       })
@@ -139,8 +147,7 @@ export class IccoContributor {
         owner: payer.publicKey,
         systemProgram: web3.SystemProgram.programId,
       })
-      .rpc({ skipPreflight: true });
-    //.rpc();
+      .rpc();
   }
 
   async sendContributions(payer: web3.Keypair, saleId: Buffer) {
@@ -212,6 +219,67 @@ export class IccoContributor {
       .signers([payer])
       .remainingAccounts(remainingAccounts)
       .rpc();
+  }
+
+  async claimAllocation(
+    payer: web3.Keypair,
+    saleId: Buffer,
+    saleTokenMint: web3.PublicKey,
+    mints: web3.PublicKey[]
+  ): Promise<string> {
+    const program = this.program;
+
+    const custodian = this.custodianAccount.key;
+
+    const buyerAccount = findBuyerAccount(program.programId, saleId, payer.publicKey);
+    const saleAccount = findSaleAccount(program.programId, saleId);
+
+    const buyerTokenAccount = await getOrCreateAssociatedTokenAccount(
+      program.provider.connection,
+      payer,
+      saleTokenMint,
+      payer.publicKey
+    );
+    const buyerSaleTokenAcct = buyerTokenAccount.address;
+    const custodianSaleTokenAcct = await getPdaAssociatedTokenAddress(saleTokenMint, custodian);
+
+    const remainingAccounts: web3.AccountMeta[] = [];
+
+    // push custodian token accounts
+    const custodianTokenAccounts = await Promise.all(
+      mints.map(async (mint) => getPdaAssociatedTokenAddress(mint, custodian))
+    );
+    remainingAccounts.push(
+      ...custodianTokenAccounts.map((acct) => {
+        return makeWritableAccountMeta(acct);
+      })
+    );
+
+    // next buyers
+    const buyerTokenAccounts = await Promise.all(
+      mints.map(async (mint) => getAssociatedTokenAddress(mint, payer.publicKey))
+    );
+    remainingAccounts.push(
+      ...buyerTokenAccounts.map((acct) => {
+        return makeWritableAccountMeta(acct);
+      })
+    );
+
+    return program.methods
+      .claimAllocation()
+      .accounts({
+        custodian,
+        sale: saleAccount.key,
+        buyer: buyerAccount.key,
+        buyerSaleTokenAcct,
+        custodianSaleTokenAcct,
+        owner: payer.publicKey,
+        systemProgram: web3.SystemProgram.programId,
+      })
+      .signers([payer])
+      .remainingAccounts(remainingAccounts)
+      .rpc({ skipPreflight: true });
+    //.rpc();
   }
 
   async getSale(saleId: Buffer) {

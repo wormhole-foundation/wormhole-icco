@@ -431,7 +431,71 @@ describe("anchor-contributor", () => {
 
     // TODO
     it("User Claims Allocations From Sale", async () => {
-      expect(false).to.be.true;
+      const saleId = dummyConductor.getSaleId();
+      const acceptedTokens = dummyConductor.acceptedTokens;
+      const acceptedMints = acceptedTokens.map((token) => {
+        return hexToPublicKey(token.address);
+      });
+
+      const startingBalanceBuyer = await Promise.all(
+        acceptedTokens.map(async (token) => {
+          const mint = hexToPublicKey(token.address);
+          return getSplBalance(connection, mint, buyer.publicKey);
+        })
+      );
+      const startingBalanceCustodian = await Promise.all(
+        acceptedTokens.map(async (token) => {
+          const mint = hexToPublicKey(token.address);
+          return getPdaSplBalance(connection, mint, contributor.custodianAccount.key);
+        })
+      );
+
+      const tx = await contributor.claimAllocation(buyer, saleId, dummyConductor.getSaleTokenOnSolana(), acceptedMints);
+
+      const endingBalanceBuyer = await Promise.all(
+        acceptedTokens.map(async (token) => {
+          const mint = hexToPublicKey(token.address);
+          return getSplBalance(connection, mint, buyer.publicKey);
+        })
+      );
+      const endingBalanceCustodian = await Promise.all(
+        acceptedTokens.map(async (token) => {
+          const mint = hexToPublicKey(token.address);
+          return getPdaSplBalance(connection, mint, contributor.custodianAccount.key);
+        })
+      );
+
+      const buyerState = await contributor.getBuyer(saleId, buyer.publicKey);
+      console.log("buyerState", buyerState);
+      /*
+      const expectedExcessValues = [
+        totalContributions[0],
+        new BN(0),
+        new BN(0),
+        totalContributions[1],
+        new BN(0),
+        new BN(0),
+        new BN(0),
+        new BN(0),
+      ];
+      const numExpected = expectedRefundValues.length;
+
+      // get state
+      const buyerState = await contributor.getBuyer(saleId, buyer.publicKey);
+      const totals: any = buyerState.contributions;
+
+      // check balance changes and state
+      for (let i = 0; i < numExpected; ++i) {
+        let refund = expectedRefundValues[i];
+
+        expect(startingBalanceBuyer[i].add(refund).toString()).to.equal(endingBalanceBuyer[i].toString());
+        expect(startingBalanceCustodian[i].sub(refund).toString()).to.equal(endingBalanceCustodian[i].toString());
+
+        const item = totals[i];
+        expect(item.status).has.key("refundClaimed");
+        expect(item.excess.toString()).to.equal(refund.toString());
+      }
+      */
     });
 
     // TODO

@@ -42,9 +42,14 @@ pub mod anchor_contributor {
         // now parse vaa
         sale.parse_sale_init(&msg.payload)?;
 
-        // Use associated sale token account to get solana native decimals
-        //let sale_token_decimals = ctx.accounts.sale_token_mint.decimals;
+        // the associated token address we deserialized from the payload
+        // should agree with the token account we passed into the context
+        require!(
+            sale.associated_sale_token_address == ctx.accounts.custodian_sale_token_acct.key(),
+            ContributorError::IncorrectVaaPayload
+        );
 
+        // save sale token mint info
         sale.set_sale_token_mint_info(
             &ctx.accounts.sale_token_mint.key(),
             &ctx.accounts.sale_token_mint,
@@ -416,25 +421,28 @@ pub mod anchor_contributor {
         Ok(())
     }
 
-    /*
-    pub fn claim_allocation(ctx: Context<ClaimAllocation>) -> Result<()> {
+    pub fn claim_allocation<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, ClaimAllocation<'info>>,
+    ) -> Result<()> {
         let sale = &ctx.accounts.sale;
         require!(sale.is_sealed(), ContributorError::SaleNotSealed);
 
-        // check mints
-        let to_account = &ctx.accounts.buyer_token_acct;
+        // first deal with the allocation
+        let to_account = &ctx.accounts.buyer_sale_token_acct;
         require!(
             to_account.mint == sale.sale_token_mint,
             ContributorError::InvalidAccount
         );
-        let from_account = &ctx.accounts.custodian_token_acct;
+        let from_account = &ctx.accounts.custodian_sale_token_acct;
         require!(
             from_account.mint == sale.sale_token_mint,
             ContributorError::InvalidAccount
         );
 
+        let totals = &sale.totals;
+
         // compute allocation
-        let allocation = ctx.accounts.buyer.claim_allocation(&sale.totals)?;
+        let allocation = ctx.accounts.buyer.claim_allocation(totals)?;
         require!(allocation > 0, ContributorError::NothingToClaim);
 
         // and make sure there are sufficient funds
@@ -443,7 +451,7 @@ pub mod anchor_contributor {
             ContributorError::InsufficientFunds
         );
 
-        // spl transfer refund
+        // spl transfer allocation
         /*
         // this doesn't work in devnet?
         let custodian_bump = ctx.bumps["custodian"];
@@ -474,7 +482,55 @@ pub mod anchor_contributor {
             &ctx.accounts.to_account_infos(),
             &[&[&SEED_PREFIX_CUSTODIAN.as_bytes(), &[ctx.bumps["custodian"]]]],
         )?;
+
+        // now compute excess and transfer
+        let num_accepted = totals.len();
+        let token_accts = &ctx.remaining_accounts;
+        require!(
+            token_accts.len() == 2 * num_accepted,
+            ContributorError::InvalidRemainingAccounts
+        );
+        let custodian_token_accts = &token_accts[..num_accepted];
+        let buyer_token_accts = &token_accts[num_accepted..];
+
+        let owner = &ctx.accounts.owner;
+        let transfer_authority = &ctx.accounts.custodian;
+
+        // Collect ALL account Infos to pass to trasfer.
+        let mut all_accts = ctx.accounts.to_account_infos();
+        all_accts.extend_from_slice(&ctx.remaining_accounts);
+
+        let buyer = &mut ctx.accounts.buyer;
+        for (total, from_acct, to_acct) in izip!(totals, custodian_token_accts, buyer_token_accts) {
+            require!(
+                token::accessor::authority(&from_acct)? == transfer_authority.key(),
+                ContributorError::InvalidAccount
+            );
+            require!(
+                token::accessor::authority(&to_acct)? == owner.key(),
+                ContributorError::InvalidAccount
+            );
+            let mint = token::accessor::mint(&to_acct)?;
+            let (idx, _) = sale.get_total_info(&mint)?;
+
+            let excess = buyer.claim_excess(idx, total)?;
+            if excess == 0 {
+                continue;
+            }
+
+            invoke_signed(
+                &spl_token::instruction::transfer(
+                    &token::ID,
+                    &from_acct.key(),
+                    &to_acct.key(),
+                    &transfer_authority.key(),
+                    &[&transfer_authority.key()],
+                    excess,
+                )?,
+                &all_accts,
+                &[&[&SEED_PREFIX_CUSTODIAN.as_bytes(), &[ctx.bumps["custodian"]]]],
+            )?;
+        }
         Ok(())
     }
-    */
 }

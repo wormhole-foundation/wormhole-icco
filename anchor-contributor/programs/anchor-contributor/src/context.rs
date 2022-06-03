@@ -59,7 +59,6 @@ pub struct InitializeSale<'info> {
 
 /// Contribute is used for buyers to contribute collateral
 #[derive(Accounts)]
-#[instruction(amount:u64)]
 pub struct Contribute<'info> {
     #[account(
         mut,
@@ -191,7 +190,7 @@ pub struct AttestContributions<'info> {
 }
 
 #[derive(Accounts)]
-pub struct SendContributions<'info> {
+pub struct BridgeSealedContributions<'info> {
     #[account(
         mut,
         seeds = [
@@ -205,17 +204,11 @@ pub struct SendContributions<'info> {
         mut,
         seeds = [
             SEED_PREFIX_SALE.as_bytes(),
-            &get_sale_id(&core_bridge_vaa)?,
+            &sale.id,
         ],
         bump,
     )]
     pub sale: Account<'info, Sale>,
-
-    #[account(
-        constraint = core_bridge_vaa.owner == &core_bridge.key()
-    )]
-    /// CHECK: This account is owned by Core Bridge so we trust it
-    pub core_bridge_vaa: AccountInfo<'info>,
 
     #[account(
         constraint = custody_ata.owner == &AssociatedToken::id()

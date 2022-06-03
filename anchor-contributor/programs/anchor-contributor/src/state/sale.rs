@@ -120,8 +120,11 @@ impl Sale {
         self.id = Sale::get_id(payload);
 
         // deserialize other things
-        self.associated_sale_token_address =
-            Pubkey::new(&to_bytes32(payload, INDEX_SALE_INIT_TOKEN_ADDRESS));
+        let mut addr = [0u8; 32];
+        addr.copy_from_slice(
+            &payload[INDEX_SALE_INIT_TOKEN_ADDRESS..INDEX_SALE_INIT_TOKEN_ADDRESS + 32],
+        );
+        self.associated_sale_token_address = Pubkey::new(&addr);
         self.token_chain = to_u16_be(payload, INDEX_SALE_INIT_TOKEN_CHAIN);
         self.token_decimals = payload[INDEX_SALE_INIT_TOKEN_DECIMALS];
 
@@ -133,7 +136,9 @@ impl Sale {
         // where this guy is based on how many accepted tokens there are. yes, we hate this, too
         let recipient_idx =
             INDEX_SALE_INIT_ACCEPTED_TOKENS_START + 1 + ACCEPTED_TOKEN_NUM_BYTES * num_accepted;
-        self.recipient = to_bytes32(payload, recipient_idx);
+        //self.recipient = to_bytes32(payload, recipient_idx);
+        self.recipient
+            .copy_from_slice(&payload[recipient_idx..recipient_idx + 32]);
 
         // finally set the status to active
         self.status = SaleStatus::Active;
@@ -152,17 +157,6 @@ impl Sale {
         Ok(())
     }
 
-    /*
-    pub fn set_native_sale_token_decimals(&mut self, decimals: u8) -> Result<()> {
-        require!(
-            self.token_decimals >= decimals,
-            ContributorError::InvalidTokenDecimals
-        );
-        self.native_token_decimals = decimals;
-        Ok(())
-    }
-    */
-
     pub fn get_token_index(&self, mint: &Pubkey) -> Result<u8> {
         let result = self.totals.iter().find(|item| item.mint == *mint);
         require!(result != None, ContributorError::InvalidTokenIndex);
@@ -175,17 +169,6 @@ impl Sale {
         let idx = result.unwrap();
         Ok((idx, &self.totals[idx]))
     }
-
-    /*
-    pub fn get_associated_accepted_token_address(
-        &self,
-        token_index: u8,
-        owner: &Pubkey,
-    ) -> Result<Pubkey> {
-        let idx = self.get_index(token_index)?;
-        Ok(get_associated_token_address(owner, &self.totals[idx].mint))
-    }
-    */
 
     pub fn update_total_contributions(
         &mut self,
@@ -344,7 +327,9 @@ impl Sale {
     }
 
     fn get_id(payload: &[u8]) -> [u8; 32] {
-        to_bytes32(payload, INDEX_SALE_ID)
+        let mut output = [0u8; 32];
+        output.copy_from_slice(&payload[INDEX_SALE_ID..INDEX_SALE_ID + 32]);
+        output
     }
 }
 
@@ -357,9 +342,9 @@ fn to_u64_be(bytes: &[u8], index: usize) -> u64 {
     u64::from_be_bytes(bytes[index..index + 8].try_into().unwrap())
 }
 
-fn to_bytes32(bytes: &[u8], index: usize) -> [u8; 32] {
-    bytes[index..index + 32].try_into().unwrap()
-}
+//fn to_bytes32(bytes: &[u8], index: usize) -> [u8; 32] {
+//    bytes[index..index + 32].try_into().unwrap()
+//}
 
 pub fn verify_conductor_vaa<'info>(
     vaa_account: &AccountInfo<'info>,
@@ -396,12 +381,10 @@ pub fn get_conductor_chain() -> Result<u16> {
 
 pub fn get_conductor_address() -> Result<[u8; 32]> {
     match hex::decode(CONDUCTOR_ADDRESS) {
-        Ok(v) => {
-            match v.try_into() {
-               Ok(w) => Ok(w),
-               Err(e) => Err(ContributorError::InvalidConductorAddress.into()),       
-            }
-        }
+        Ok(v) => match v.try_into() {
+            Ok(w) => Ok(w),
+            Err(e) => Err(ContributorError::InvalidConductorAddress.into()),
+        },
         Err(e) => Err(ContributorError::InvalidConductorAddress.into()),
     }
 }

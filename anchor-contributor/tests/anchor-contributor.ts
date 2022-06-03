@@ -361,13 +361,12 @@ describe("anchor-contributor", () => {
       }
     });
 
-    it("Simulate Allocation Bridge Transfer Redemptions", async () => {
+    it("Orchestrator Seals Sale with Signed VAA", async () => {
       // all we're doing here is minting spl tokens to replicate token bridge's mechanism
       // of unlocking or minting tokens to someone's associated token account
       await dummyConductor.redeemAllocationsOnSolana(connection, orchestrator, contributor.custodianAccount.key);
-    });
 
-    it("Orchestrator Seals Sale with Signed VAA", async () => {
+      // now go about your business
       const saleSealedVaa = dummyConductor.sealSale(await getBlockTime(connection), contributions);
       const saleTokenMint = dummyConductor.getSaleTokenOnSolana();
       const allocations = dummyConductor.allocations;

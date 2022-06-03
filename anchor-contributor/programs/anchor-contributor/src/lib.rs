@@ -186,9 +186,7 @@ pub mod anchor_contributor {
 
         // TODO: check balance of the sale token on the contract to make sure
         // we have enough for claimants
-        let totals = &sale.totals;
-        let total_allocations: u64 = totals.iter().map(|total| total.allocations).sum();
-
+        let total_allocations: u64 = sale.totals.iter().map(|total| total.allocations).sum();
         let custodian_sale_token_acct = &ctx.accounts.custodian_sale_token_acct;
         require!(
             custodian_sale_token_acct.amount >= total_allocations,
@@ -258,15 +256,13 @@ pub mod anchor_contributor {
         */
     }
 
-    pub fn send_contributions(ctx: Context<SendContributions>, token_idx: u8) -> Result<()> {
-        let msg = verify_conductor_vaa(&ctx.accounts.core_bridge_vaa, PAYLOAD_SALE_SEALED)?;
-
-        let sale = &mut ctx.accounts.sale;
-        sale.parse_sale_sealed(&msg.payload)?;
-
-        // TODO: check balance of the sale token on the contract to make sure
-        // we have enough for claimants
-        let sale_token_account = sale.associated_sale_token_address;
+    pub fn bridge_sealed_contributions(
+        ctx: Context<BridgeSealedContributions>,
+        token_idx: u8,
+    ) -> Result<()> {
+        // by this point, the sale is sealed
+        let sale = &ctx.accounts.sale;
+        require!(sale.is_sealed(), ContributorError::SaleNotSealed);
 
         let conductor_chain = get_conductor_chain()?;
         let conductor_address = get_conductor_address()?;

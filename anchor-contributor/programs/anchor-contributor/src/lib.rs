@@ -249,13 +249,12 @@ pub mod anchor_contributor {
         Ok(())
     }
 
-    /*
-    pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
-        Ok(())
-    }
-    */
+    // pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
+    //     Ok(())
+    // }
 
-    pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
+
+    pub fn claim_refund<'a, 'b, 'c, 'info>(ctx: Context<'a, 'b, 'c, 'info, ClaimRefund<'info>>) -> Result<()> {
         let sale = &mut ctx.accounts.sale;
         require!(sale.is_aborted(), ContributorError::SaleNotAborted);
 

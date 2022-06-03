@@ -336,7 +336,7 @@ describe("anchor-contributor", () => {
       console.log("attest_vaa_payload bytes str: " + attest_vaa_payload.toString("hex"))
       expect(attest_vaa_payload[0]).to.equal(0x02);
       for (let i = 0; i < dummyConductor.acceptedTokens.length; ++i) {
-//??        expect(attest_vaa_payload[33+2+1+33*i]).to.equal(dummyConductor.acceptedTokens[i]);
+        expect(attest_vaa_payload[33+2+1+33*i]).to.equal(dummyConductor.acceptedTokens[i].index);
       }
     });
 

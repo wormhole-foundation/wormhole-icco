@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::Mint;
 use num::bigint::BigUint;
+use num::traits::ToPrimitive;
 use num_derive::*;
 use std::{mem::size_of_val, str::FromStr, u64};
 
@@ -261,6 +262,7 @@ impl Sale {
         );
 
         let decimal_difference = (self.token_decimals - self.native_token_decimals) as u32;
+        let pow10_divider = BigUint::from(10u128).pow(decimal_difference);
 
         // deserialize other things
         for i in 0..num_allocations {
@@ -272,29 +274,28 @@ impl Sale {
                 &payload[start + INDEX_ALLOCATIONS_AMOUNT..start + INDEX_ALLOCATIONS_EXCESS],
             );
 
-            let adjusted_allocations = allocation / BigUint::from(10u128).pow(decimal_difference);
-            require!(
-                adjusted_allocations < BigUint::from(u64::MAX),
-                ContributorError::AmountTooLarge
-            );
+//            let adjusted_allocations = (allocation / decimal_difference).to_u64().expect("cannot cast adjusted_allocations to u64");
 
             // take first 24 bytes and see if this is greater than zero
-            let excess_contributions = BigUint::from_bytes_be(
-                &payload[start + INDEX_ALLOCATIONS_AMOUNT..start + INDEX_ALLOCATIONS_EXCESS + 24],
-            );
-            require!(
-                excess_contributions > BigUint::from(0 as u128),
-                ContributorError::AmountTooLarge
-            );
+            // let excess_contributions = BigUint::from_bytes_be(
+            //     &payload[start + INDEX_ALLOCATIONS_AMOUNT..start + INDEX_ALLOCATIONS_EXCESS + 24],
+            // );
+            // require!(
+            //     excess_contributions > BigUint::from(0 as u128),
+            //     ContributorError::AmountTooLarge
+            // );
 
             let total = &mut totals[i];
-            total.allocations = adjusted_allocations.try_into().expect("cannot cast to u64");
-            // now take last 8 bytes for excess contributions
-            total.excess_contributions = u64::from_be_bytes(
-                payload[start + INDEX_ALLOCATIONS_AMOUNT + 24..start + INDEX_ALLOCATIONS_EXCESS]
-                    .try_into()
-                    .unwrap(),
-            );
+
+            match (allocation / pow10_divider.clone()).to_u64() {
+                Some(v) => { total.allocations = v; },
+                None => return Result::Err(ContributorError::AmountTooLarge.into()),
+            }
+
+            match BigUint::from_bytes_be(&payload[start + INDEX_ALLOCATIONS_AMOUNT..start + INDEX_ALLOCATIONS_EXCESS + 32]).to_u64() {
+                Some(v) => { total.excess_contributions = v; },
+                None => return Result::Err(ContributorError::AmountTooLarge.into()),
+            }
         }
 
         // finally set the status to sealed

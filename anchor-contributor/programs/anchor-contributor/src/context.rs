@@ -364,7 +364,7 @@ pub struct AbortSale<'info> {
 /// ClaimAllocations is used for buyer <> custodian interaction to retrieve allocations
 /// and excess from custodian
 #[derive(Accounts)]
-pub struct ClaimAllocations<'info> {
+pub struct ClaimAllocation<'info> {
     #[account(
         mut,
         seeds = [

@@ -3,10 +3,11 @@ import { BN, Program, web3 } from "@project-serum/anchor";
 import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey";
 import { AnchorContributor } from "../../target/types/anchor_contributor";
 import { getAccount, getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+
 import { findBuyerAccount, findCustodianAccount, findSaleAccount, findSignedVaaAccount, KeyBump } from "./accounts";
 import { getBuyerState, getCustodianState, getSaleState } from "./fetch";
 import { postVaa } from "./wormhole";
-import { getPdaAssociatedTokenAddress } from "./utils";
+import { getPdaAssociatedTokenAddress, makeWritableAccountMeta } from "./utils";
 
 export class IccoContributor {
   program: Program<AnchorContributor>;
@@ -180,6 +181,51 @@ export class IccoContributor {
         custodianAta,
       })
       .signers([payer])
+      .rpc({ skipPreflight: true });
+    //.rpc()
+  }
+
+  async claimRefunds(payer: web3.Keypair, saleId: Buffer, mints: web3.PublicKey[]): Promise<string> {
+    const program = this.program;
+
+    const custodian = this.custodianAccount.key;
+
+    const buyerAccount = findBuyerAccount(program.programId, saleId, payer.publicKey);
+    const saleAccount = findSaleAccount(program.programId, saleId);
+
+    const remainingAccounts: web3.AccountMeta[] = [];
+
+    // push custodian token accounts
+    const custodianTokenAccounts = await Promise.all(
+      mints.map(async (mint) => getAssociatedTokenAddress(mint, payer.publicKey))
+    );
+    remainingAccounts.push(
+      ...custodianTokenAccounts.map((acct) => {
+        return makeWritableAccountMeta(acct);
+      })
+    );
+
+    // next buyers
+    const buyerTokenAccounts = await Promise.all(
+      mints.map(async (mint) => getAssociatedTokenAddress(mint, payer.publicKey))
+    );
+    remainingAccounts.push(
+      ...buyerTokenAccounts.map((acct) => {
+        return makeWritableAccountMeta(acct);
+      })
+    );
+
+    return program.methods
+      .claimRefunds()
+      .accounts({
+        custodian,
+        sale: saleAccount.key,
+        buyer: buyerAccount.key,
+        owner: payer.publicKey,
+        systemProgram: web3.SystemProgram.programId,
+      })
+      .signers([payer])
+      .remainingAccounts(remainingAccounts)
       .rpc({ skipPreflight: true });
     //.rpc()
   }

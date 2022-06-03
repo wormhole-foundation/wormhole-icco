@@ -27,6 +27,7 @@ declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 #[program]
 pub mod anchor_contributor {
     use super::*;
+    use itertools::izip;
 
     pub fn create_custodian(ctx: Context<CreateCustodian>) -> Result<()> {
         let custodian = &mut ctx.accounts.custodian;
@@ -358,7 +359,8 @@ pub mod anchor_contributor {
 
         Ok(())
     }
-    pub fn claim_refund(ctx: Context<ClaimFunds>) -> Result<()> {
+
+    pub fn claim_refund(ctx: Context<TransferCustody>) -> Result<()> {
         let sale = &ctx.accounts.sale;
         require!(sale.is_aborted(), ContributorError::SaleNotAborted);
 
@@ -404,7 +406,55 @@ pub mod anchor_contributor {
         Ok(())
     }
 
-    pub fn claim_allocation(ctx: Context<ClaimFunds>) -> Result<()> {
+    pub fn claim_refunds<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, TransferUsingRemainingAccounts<'info>>,
+    ) -> Result<()> {
+        let sale = &ctx.accounts.sale;
+        require!(sale.is_aborted(), ContributorError::SaleNotAborted);
+
+        let totals = &sale.totals;
+        let num_accepted = totals.len();
+        let token_accts = &ctx.remaining_accounts;
+        require!(
+            token_accts.len() == 2 * num_accepted,
+            ContributorError::InvalidRemainingAccounts
+        );
+        let custodian_token_accts = &token_accts[..num_accepted];
+        let buyer_token_accts = &token_accts[num_accepted..];
+
+        let transfer_authority = &ctx.accounts.custodian;
+        for (total, from_acct, to_acct) in izip!(totals, custodian_token_accts, buyer_token_accts) {
+            let mint = token::accessor::mint(&to_acct.to_account_info())?;
+            let (idx, _) = sale.get_total_info(&mint)?;
+
+            let refund = ctx.accounts.buyer.claim_refund(idx)?;
+            if refund == 0 {
+                continue;
+            }
+
+            invoke_signed(
+                &spl_token::instruction::transfer(
+                    &token::ID,
+                    &from_acct.key(),
+                    &to_acct.key(),
+                    &transfer_authority.key(),
+                    &[&transfer_authority.key()],
+                    refund,
+                )?,
+                &[
+                    from_acct.to_account_info(),
+                    to_acct.to_account_info(),
+                    transfer_authority.to_account_info(),
+                    ctx.accounts.owner.to_account_info(),
+                    ctx.accounts.token_program.to_account_info(),
+                ],
+                &[&[&SEED_PREFIX_CUSTODIAN.as_bytes(), &[ctx.bumps["custodian"]]]],
+            )?;
+        }
+        Ok(())
+    }
+
+    pub fn claim_allocation(ctx: Context<TransferCustody>) -> Result<()> {
         let sale = &ctx.accounts.sale;
         require!(sale.is_sealed(), ContributorError::SaleNotSealed);
 

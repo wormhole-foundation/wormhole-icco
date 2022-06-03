@@ -359,13 +359,13 @@ pub struct AbortSale<'info> {
     pub system_program: Program<'info, System>,
 }
 
-/// ClaimFunds is used for buyers to collect funds after the completion of a sale (sealed or aborted)
-/// used in the following instructions:
+/// TransferCustody is used for buyer <> custodian interaction, transferring funds
+/// between the two. It is used in the following instructions:
 /// * claim_refund
 /// * claim_excess
 /// * claim_allocation
 #[derive(Accounts)]
-pub struct ClaimFunds<'info> {
+pub struct TransferCustody<'info> {
     #[account(
         mut,
         seeds = [
@@ -407,6 +407,44 @@ pub struct ClaimFunds<'info> {
         constraint = custodian_ata.owner == custodian.key(),
     )]
     pub custodian_ata: Account<'info, TokenAccount>,
+
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct TransferUsingRemainingAccounts<'info> {
+    #[account(
+        mut,
+        seeds = [
+            SEED_PREFIX_CUSTODIAN.as_bytes(),
+        ],
+        bump,
+    )]
+    pub custodian: Account<'info, Custodian>,
+
+    #[account(
+        mut,
+        seeds = [
+            SEED_PREFIX_SALE.as_bytes(),
+            &sale.id,
+        ],
+        bump,
+    )]
+    pub sale: Account<'info, Sale>,
+
+    #[account(
+        mut,
+        seeds = [
+            SEED_PREFIX_BUYER.as_bytes(),
+            &sale.id,
+            &owner.key().as_ref(),
+        ],
+        bump,
+    )]
+    pub buyer: Account<'info, Buyer>,
 
     #[account(mut)]
     pub owner: Signer<'info>,

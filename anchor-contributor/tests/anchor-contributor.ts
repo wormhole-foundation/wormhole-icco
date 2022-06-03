@@ -565,6 +565,9 @@ describe("anchor-contributor", () => {
         }
       }
 
+      // uncomment this if you like to play with fire
+      // const tx = await contributor.claimRefunds(buyer, saleId, acceptedMints);
+
       const endingBalanceBuyer = await Promise.all(
         acceptedTokens.map(async (token) => {
           const mint = hexToPublicKey(token.address);

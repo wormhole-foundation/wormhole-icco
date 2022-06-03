@@ -422,17 +422,27 @@ pub mod anchor_contributor {
         let custodian_token_accts = &token_accts[..num_accepted];
         let buyer_token_accts = &token_accts[num_accepted..];
 
+        let owner = &ctx.accounts.owner;
         let transfer_authority = &ctx.accounts.custodian;
 
         // Collect ALL account Infos to pass to trasfer.
-        let mut infos = ctx.accounts.to_account_infos();
-        infos.extend_from_slice(&ctx.remaining_accounts);
+        let mut all_accts = ctx.accounts.to_account_infos();
+        all_accts.extend_from_slice(&ctx.remaining_accounts);
 
+        let buyer = &mut ctx.accounts.buyer;
         for (total, from_acct, to_acct) in izip!(totals, custodian_token_accts, buyer_token_accts) {
-            let mint = token::accessor::mint(&to_acct.to_account_info())?;
+            require!(
+                token::accessor::authority(&from_acct)? == transfer_authority.key(),
+                ContributorError::InvalidAccount
+            );
+            require!(
+                token::accessor::authority(&to_acct)? == owner.key(),
+                ContributorError::InvalidAccount
+            );
+            let mint = token::accessor::mint(&to_acct)?;
             let (idx, _) = sale.get_total_info(&mint)?;
 
-            let refund = ctx.accounts.buyer.claim_refund(idx)?;
+            let refund = buyer.claim_refund(idx)?;
             if refund == 0 {
                 continue;
             }
@@ -446,7 +456,7 @@ pub mod anchor_contributor {
                     &[&transfer_authority.key()],
                     refund,
                 )?,
-                &infos,
+                &all_accts,
                 &[&[&SEED_PREFIX_CUSTODIAN.as_bytes(), &[ctx.bumps["custodian"]]]],
             )?;
         }
@@ -461,12 +471,12 @@ pub mod anchor_contributor {
         let to_account = &ctx.accounts.buyer_ata;
         require!(
             to_account.mint == sale.sale_token_mint,
-            ContributorError::InvalidMint
+            ContributorError::InvalidAccount
         );
         let from_account = &ctx.accounts.custodian_ata;
         require!(
             from_account.mint == sale.sale_token_mint,
-            ContributorError::InvalidMint
+            ContributorError::InvalidAccount
         );
 
         // compute allocation

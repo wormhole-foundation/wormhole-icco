@@ -32,8 +32,8 @@ pub enum ContributorError {
     #[msg("InvalidConductor")]
     InvalidConductor,
 
-    #[msg("InvalidMint")]
-    InvalidMint,
+    #[msg("InvalidAccount")]
+    InvalidAccount,
 
     #[msg("InvalidRemainingAccounts")]
     InvalidRemainingAccounts,

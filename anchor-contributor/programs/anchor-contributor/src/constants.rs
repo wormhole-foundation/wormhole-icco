@@ -43,3 +43,6 @@ pub const INDEX_ALLOCATIONS_INDEX: usize = 0;
 pub const INDEX_ALLOCATIONS_AMOUNT: usize = 1;
 pub const INDEX_ALLOCATIONS_EXCESS: usize = 33;
 pub const INDEX_ALLOCATIONS_END: usize = 65;
+
+// misc
+pub const PAD_U64: usize = 24;

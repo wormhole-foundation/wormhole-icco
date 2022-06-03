@@ -238,8 +238,7 @@ impl Sale {
         // push each total contributions
         for total in totals {
             attested.push(total.token_index);
-            const pad: usize = 32 - 8; // contributions is 8 bytes, but we need 32 bytes in the payload, so we left-pad
-            attested.extend(vec![0; pad]);
+            attested.extend(vec![0; PAD_U64]); // contribution is 8 bytes, but we need 32 bytes in the payload, so we left-pad
             attested.extend(total.contributions.to_be_bytes());
         }
         Ok(attested)

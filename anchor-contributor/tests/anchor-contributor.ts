@@ -600,7 +600,6 @@ describe("anchor-contributor", () => {
       // get state
       const buyerState = await contributor.getBuyer(saleId, buyer.publicKey);
       const totals: any = buyerState.contributions;
-      console.log("buyerState -- ", buyerState);
 
       // check balance changes and state
       for (let i = 0; i < numExpected; ++i) {
@@ -610,11 +609,8 @@ describe("anchor-contributor", () => {
         expect(startingBalanceCustodian[i].sub(refund).toString()).to.equal(endingBalanceCustodian[i].toString());
 
         const item = totals[i];
-        console.log("i, item -- ", i, item.status, "  ", item.excess.toString(), "  ", refund.toString());
-
-        const expectedState = refund.eq(new BN("0")) ? "inactive" : "refundClaimed";
-        //        expect(item.status).has.key(expectedState);
-        //        expect(item.excess.toString()).to.equal(refund.toString());
+        expect(item.status).has.key("refundClaimed");
+        expect(item.excess.toString()).to.equal(refund.toString());
       }
     });
 

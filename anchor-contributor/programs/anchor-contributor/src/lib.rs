@@ -57,7 +57,7 @@ pub mod anchor_contributor {
     }
 
     pub fn contribute(ctx: Context<Contribute>, amount: u64) -> Result<()> {
-        let from_account = &ctx.accounts.buyer_ata;
+        let from_account = &ctx.accounts.buyer_token_acct;
 
         // find token_index
         let sale = &mut ctx.accounts.sale;
@@ -75,7 +75,7 @@ pub mod anchor_contributor {
         }
         buyer.contribute(idx, amount)?;
 
-        let to_account = &ctx.accounts.custodian_ata;
+        let to_account = &ctx.accounts.custodian_token_acct;
         let transfer_authority = &ctx.accounts.owner;
 
         // spl transfer contribution
@@ -86,8 +86,8 @@ pub mod anchor_contributor {
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
                 token::Transfer {
-                    from: ctx.accounts.buyer_ata.to_account_info(),
-                    to: ctx.accounts.custodian_ata.to_account_info(),
+                    from: ctx.accounts.buyer_token_acct.to_account_info(),
+                    to: ctx.accounts.custodian_token_acct.to_account_info(),
                     authority: ctx.accounts.owner.to_account_info(),
                 },
                 &[&[ctx.accounts.owner.key().as_ref()]],
@@ -99,8 +99,8 @@ pub mod anchor_contributor {
         invoke(
             &spl_token::instruction::transfer(
                 &token::ID,
-                &ctx.accounts.buyer_ata.key(),
-                &ctx.accounts.custodian_ata.key(),
+                &ctx.accounts.buyer_token_acct.key(),
+                &ctx.accounts.custodian_token_acct.key(),
                 &transfer_authority.key(),
                 &[&transfer_authority.key()],
                 amount,
@@ -424,12 +424,12 @@ pub mod anchor_contributor {
         require!(sale.is_sealed(), ContributorError::SaleNotSealed);
 
         // check mints
-        let to_account = &ctx.accounts.buyer_ata;
+        let to_account = &ctx.accounts.buyer_token_acct;
         require!(
             to_account.mint == sale.sale_token_mint,
             ContributorError::InvalidAccount
         );
-        let from_account = &ctx.accounts.custodian_ata;
+        let from_account = &ctx.accounts.custodian_token_acct;
         require!(
             from_account.mint == sale.sale_token_mint,
             ContributorError::InvalidAccount
@@ -453,8 +453,8 @@ pub mod anchor_contributor {
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
                 token::Transfer {
-                    to: ctx.accounts.buyer_ata.to_account_info(),
-                    from: ctx.accounts.custodian_ata.to_account_info(),
+                    to: ctx.accounts.buyer_token_acct.to_account_info(),
+                    from: ctx.accounts.custodian_token_acct.to_account_info(),
                     authority: ctx.accounts.custodian.to_account_info(),
                 },
                 &[&[SEED_PREFIX_CUSTODIAN.as_bytes(), &[custodian_bump]]],

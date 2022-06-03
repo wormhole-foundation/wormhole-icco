@@ -95,17 +95,17 @@ pub struct Contribute<'info> {
 
     #[account(
         mut,
-        constraint = buyer_ata.mint == custodian_ata.mint,
-        constraint = buyer_ata.owner == owner.key(),
+        constraint = buyer_token_acct.mint == custodian_token_acct.mint,
+        constraint = buyer_token_acct.owner == owner.key(),
     )]
-    pub buyer_ata: Account<'info, TokenAccount>,
+    pub buyer_token_acct: Account<'info, TokenAccount>,
 
     #[account(
         mut,
-        constraint = buyer_ata.mint == custodian_ata.mint,
-        constraint = custodian_ata.owner == custodian.key(),
+        constraint = buyer_token_acct.mint == custodian_token_acct.mint,
+        constraint = custodian_token_acct.owner == custodian.key(),
     )]
-    pub custodian_ata: Account<'info, TokenAccount>,
+    pub custodian_token_acct: Account<'info, TokenAccount>,
 
     #[account(mut)]
     pub owner: Signer<'info>,

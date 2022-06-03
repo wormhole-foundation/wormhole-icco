@@ -65,8 +65,8 @@ export class IccoContributor {
 
     const buyerAccount = findBuyerAccount(program.programId, saleId, payer.publicKey);
     const saleAccount = findSaleAccount(program.programId, saleId);
-    const buyerAta = await getAssociatedTokenAddress(mint, payer.publicKey);
-    const custodianAta = await getPdaAssociatedTokenAddress(mint, custodian);
+    const buyerTokenAcct = await getAssociatedTokenAddress(mint, payer.publicKey);
+    const custodianTokenAcct = await getPdaAssociatedTokenAddress(mint, custodian);
 
     return program.methods
       .contribute(amount)
@@ -76,8 +76,8 @@ export class IccoContributor {
         buyer: buyerAccount.key,
         owner: payer.publicKey,
         systemProgram: web3.SystemProgram.programId,
-        buyerAta,
-        custodianAta,
+        buyerTokenAcct,
+        custodianTokenAcct,
       })
       .signers([payer])
       .rpc();

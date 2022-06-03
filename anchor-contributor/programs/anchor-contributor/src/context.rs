@@ -95,12 +95,14 @@ pub struct Contribute<'info> {
 
     #[account(
         mut,
+        constraint = buyer_ata.mint == custodian_ata.mint,
         constraint = buyer_ata.owner == owner.key(),
     )]
     pub buyer_ata: Account<'info, TokenAccount>,
 
     #[account(
         mut,
+        constraint = buyer_ata.mint == custodian_ata.mint,
         constraint = custodian_ata.owner == custodian.key(),
     )]
     pub custodian_ata: Account<'info, TokenAccount>,
@@ -398,12 +400,14 @@ pub struct TransferCustody<'info> {
 
     #[account(
         mut,
+        constraint = buyer_ata.mint == custodian_ata.mint,
         constraint = buyer_ata.owner == owner.key(),
     )]
     pub buyer_ata: Account<'info, TokenAccount>,
 
     #[account(
         mut,
+        constraint = buyer_ata.mint == custodian_ata.mint,
         constraint = custodian_ata.owner == custodian.key(),
     )]
     pub custodian_ata: Account<'info, TokenAccount>,

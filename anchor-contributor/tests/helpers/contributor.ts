@@ -3,10 +3,11 @@ import { BN, Program, web3 } from "@project-serum/anchor";
 import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey";
 import { AnchorContributor } from "../../target/types/anchor_contributor";
 import { getAccount, getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+
 import { findBuyerAccount, findCustodianAccount, findSaleAccount, findSignedVaaAccount, KeyBump } from "./accounts";
 import { getBuyerState, getCustodianState, getSaleState } from "./fetch";
 import { postVaa } from "./wormhole";
-import { getPdaAssociatedTokenAddress } from "./utils";
+import { getPdaAssociatedTokenAddress, makeWritableAccountMeta } from "./utils";
 
 export class IccoContributor {
   program: Program<AnchorContributor>;
@@ -33,7 +34,7 @@ export class IccoContributor {
     return getCustodianState(this.program, this.custodianAccount);
   }
 
-  async initSale(payer: web3.Keypair, initSaleVaa: Buffer): Promise<string> {
+  async initSale(payer: web3.Keypair, initSaleVaa: Buffer, saleTokenMint: web3.PublicKey): Promise<string> {
     const program = this.program;
 
     // first post signed vaa to wormhole
@@ -50,6 +51,7 @@ export class IccoContributor {
         custodian: this.custodianAccount.key,
         sale: saleAccount.key,
         coreBridgeVaa: signedVaaAccount.key,
+        saleTokenMint: saleTokenMint,
         owner: payer.publicKey,
         systemProgram: web3.SystemProgram.programId,
       })
@@ -136,6 +138,13 @@ export class IccoContributor {
       .rpc();
   }
 
+  async sendContributions(payer: web3.Keypair, saleId: Buffer) {
+    //Loop through each token and call send contributions for each one
+    const program = this.program;
+
+    
+  }
+
   async abortSale(payer: web3.Keypair, saleAbortedVaa: Buffer): Promise<string> {
     const program = this.program;
 
@@ -179,6 +188,51 @@ export class IccoContributor {
         custodianAta,
       })
       .signers([payer])
+      .rpc({ skipPreflight: true });
+    //.rpc()
+  }
+
+  async claimRefunds(payer: web3.Keypair, saleId: Buffer, mints: web3.PublicKey[]): Promise<string> {
+    const program = this.program;
+
+    const custodian = this.custodianAccount.key;
+
+    const buyerAccount = findBuyerAccount(program.programId, saleId, payer.publicKey);
+    const saleAccount = findSaleAccount(program.programId, saleId);
+
+    const remainingAccounts: web3.AccountMeta[] = [];
+
+    // push custodian token accounts
+    const custodianTokenAccounts = await Promise.all(
+      mints.map(async (mint) => getAssociatedTokenAddress(mint, payer.publicKey))
+    );
+    remainingAccounts.push(
+      ...custodianTokenAccounts.map((acct) => {
+        return makeWritableAccountMeta(acct);
+      })
+    );
+
+    // next buyers
+    const buyerTokenAccounts = await Promise.all(
+      mints.map(async (mint) => getAssociatedTokenAddress(mint, payer.publicKey))
+    );
+    remainingAccounts.push(
+      ...buyerTokenAccounts.map((acct) => {
+        return makeWritableAccountMeta(acct);
+      })
+    );
+
+    return program.methods
+      .claimRefunds()
+      .accounts({
+        custodian,
+        sale: saleAccount.key,
+        buyer: buyerAccount.key,
+        owner: payer.publicKey,
+        systemProgram: web3.SystemProgram.programId,
+      })
+      .signers([payer])
+      .remainingAccounts(remainingAccounts)
       .rpc({ skipPreflight: true });
     //.rpc()
   }

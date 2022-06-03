@@ -2,14 +2,17 @@ use anchor_lang::prelude::*;
 
 #[error_code]
 pub enum ContributorError {
+    #[msg("AlreadyClaimed")]
+    AlreadyClaimed,
+
     #[msg("AmountTooLarge")]
     AmountTooLarge,
 
-    #[msg("BuyerDeactivated")]
-    BuyerDeactivated,
-
     #[msg("BuyerInactive")]
     BuyerInactive,
+
+    #[msg("ContributeDeactivated")]
+    ContributeDeactivated,
 
     #[msg("ContributionTooEarly")]
     ContributionTooEarly,
@@ -20,11 +23,17 @@ pub enum ContributorError {
     #[msg("IncorrectVaaPayload")]
     IncorrectVaaPayload,
 
+    #[msg("InsufficientFunds")]
+    InsufficientFunds,
+
     #[msg("InvalidAcceptedTokenPayload")]
     InvalidAcceptedTokenPayload,
 
     #[msg("InvalidConductor")]
     InvalidConductor,
+
+    #[msg("InvalidMint")]
+    InvalidMint,
 
     #[msg("InvalidRemainingAccounts")]
     InvalidRemainingAccounts,

@@ -9,3 +9,4 @@ tilt.json
 sdk/js/src/icco/*js
 sdk/js/src/index.js
 .vscode
+.DS_Store

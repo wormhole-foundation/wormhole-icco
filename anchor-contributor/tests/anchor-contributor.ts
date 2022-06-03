@@ -47,9 +47,6 @@ describe("anchor-contributor", () => {
 
   describe("Test Preparation", () => {
     it("Create Dummy Sale Token", async () => {
-      // mint 8 unique tokens
-      const mint = await createMint(connection, orchestrator, orchestrator.publicKey, orchestrator.publicKey, 9);
-
       // we need to simulate attesting the sale token on Solana.
       // this allows us to "redeem" the sale token prior to sealing the sale
       // (which in the case of this test means minting it on the contributor program's ATA)
@@ -132,7 +129,6 @@ describe("anchor-contributor", () => {
       }
     });
   });
-  /*
 
   describe("Conduct Successful Sale", () => {
     // global contributions for test
@@ -155,7 +151,7 @@ describe("anchor-contributor", () => {
       const startTime = 8 + (await getBlockTime(connection));
       const duration = 8; // seconds
       const initSaleVaa = dummyConductor.createSale(startTime, duration, saleTokenAccount.address);
-      const tx = await contributor.initSale(orchestrator, initSaleVaa);
+      const tx = await contributor.initSale(orchestrator, initSaleVaa, dummyConductor.getSaleTokenOnSolana());
 
       {
         // get the first sale state
@@ -193,7 +189,11 @@ describe("anchor-contributor", () => {
     it("Orchestrator Cannot Initialize Sale Again with Signed VAA", async () => {
       let caughtError = false;
       try {
-        const tx = await contributor.initSale(orchestrator, dummyConductor.initSaleVaa);
+        const tx = await contributor.initSale(
+          orchestrator,
+          dummyConductor.initSaleVaa,
+          dummyConductor.getSaleTokenOnSolana()
+        );
         throw Error(`should not happen: ${tx}`);
       } catch (e) {
         // pda init should fail
@@ -225,13 +225,8 @@ describe("anchor-contributor", () => {
 
     it("User Contributes to Sale", async () => {
       // wait for sale to start here
-      const blockTime = await getBlockTime(connection);
       const saleStart = dummyConductor.saleStart;
-      await waitUntilBlock (connection, saleStart);
-      // if (blockTime <= saleStart) {
-      //   //console.log("waiting", saleStart - blockTime + 1, "seconds");
-      //   await wait(saleStart - blockTime + 1);
-      // }
+      await waitUntilBlock(connection, saleStart);
 
       // prep contributions info
       const acceptedTokens = dummyConductor.acceptedTokens;
@@ -290,23 +285,20 @@ describe("anchor-contributor", () => {
         new BN(0),
       ];
       const numExpected = expectedContributedValues.length;
+      const buyerState = await contributor.getBuyer(saleId, buyer.publicKey);
+      const totals = buyerState.contributions;
 
-      // check balance changes
+      // check balance changes and state
       for (let i = 0; i < numExpected; ++i) {
         let contribution = expectedContributedValues[i];
         expect(startingBalanceBuyer[i].sub(contribution).toString()).to.equal(endingBalanceBuyer[i].toString());
         expect(startingBalanceCustodian[i].add(contribution).toString()).to.equal(endingBalanceCustodian[i].toString());
-      }
 
-      // check buyer state
-      {
-        const buyerState = await contributor.getBuyer(saleId, buyer.publicKey);
-        expect(buyerState.status).has.key("active");
-
-        const contributed = buyerState.contributed;
-        for (let i = 0; i < expectedContributedValues.length; ++i) {
-          expect(contributed[i].toString()).to.equal(expectedContributedValues[i].toString());
-        }
+        let item = totals[i];
+        const expectedState = contribution.eq(new BN("0")) ? "inactive" : "active";
+        expect(item.status).has.key(expectedState);
+        expect(item.amount.toString()).to.equal(expectedContributedValues[i].toString());
+        expect(item.excess.toString()).to.equal("0");
       }
 
       // check sale state
@@ -373,7 +365,7 @@ describe("anchor-contributor", () => {
     // TODO
     it("Orchestrator Seals Sale with Signed VAA", async () => {
       const saleSealedVaa = dummyConductor.sealSale(await getBlockTime(connection));
-      console.log("saleSealedVaa", saleSealedVaa.toString("hex"));
+      //console.log("saleSealedVaa", saleSealedVaa.toString("hex"));
       const tx = await contributor.sealSale(orchestrator, saleSealedVaa);
 
       {
@@ -385,8 +377,13 @@ describe("anchor-contributor", () => {
         expect(saleState.status).has.key("sealed");
 
         // TODO: check totals
+        expect(false).to.be.true;
       }
     });
+
+    it("Orchestrator cranks send contributions", async () => {
+      expect(true).to.be.true;
+    })
 
     // TODO
     it("Orchestrator Cannot Seal Sale Again with Signed VAA", async () => {
@@ -415,7 +412,6 @@ describe("anchor-contributor", () => {
       expect(false).to.be.true;
     });
   });
-  */
 
   describe("Conduct Aborted Sale", () => {
     // global contributions for test
@@ -438,7 +434,7 @@ describe("anchor-contributor", () => {
       const startTime = 8 + (await getBlockTime(connection));
       const duration = 8; // seconds
       const initSaleVaa = dummyConductor.createSale(startTime, duration, saleTokenAccount.address);
-      const tx = await contributor.initSale(orchestrator, initSaleVaa);
+      const tx = await contributor.initSale(orchestrator, initSaleVaa, dummyConductor.getSaleTokenOnSolana());
 
       {
         const saleId = dummyConductor.getSaleId();
@@ -449,6 +445,7 @@ describe("anchor-contributor", () => {
         //expect(Uint8Array.from(saleState.tokenAddress)).to.deep.equal(Buffer.from(dummyConductor.tokenAddress, "hex"));
         expect(saleState.tokenChain).to.equal(dummyConductor.tokenChain);
         expect(saleState.tokenDecimals).to.equal(dummyConductor.tokenDecimals);
+        expect(saleState.nativeTokenDecimals).to.equal(dummyConductor.nativeTokenDecimals);
         expect(saleState.times.start.toString()).to.equal(dummyConductor.saleStart.toString());
         expect(saleState.times.end.toString()).to.equal(dummyConductor.saleEnd.toString());
         expect(Uint8Array.from(saleState.recipient)).to.deep.equal(Buffer.from(dummyConductor.recipient, "hex"));
@@ -474,13 +471,8 @@ describe("anchor-contributor", () => {
 
     it("User Contributes to Sale", async () => {
       // wait for sale to start here
-      const blockTime = await getBlockTime(connection);
       const saleStart = dummyConductor.saleStart;
       await waitUntilBlock(connection, saleStart);
-      // if (blockTime <= saleStart) {
-      //   //console.log("waiting", saleStart - blockTime + 1, "seconds");
-      //   await wait(saleStart - blockTime + 1);
-      // }
 
       // prep contributions info
       const acceptedTokens = dummyConductor.acceptedTokens;
@@ -577,6 +569,9 @@ describe("anchor-contributor", () => {
         }
       }
 
+      // uncomment this if you like to play with fire
+      // const tx = await contributor.claimRefunds(buyer, saleId, acceptedMints);
+
       const endingBalanceBuyer = await Promise.all(
         acceptedTokens.map(async (token) => {
           const mint = hexToPublicKey(token.address);
@@ -604,7 +599,7 @@ describe("anchor-contributor", () => {
 
       // get state
       const buyerState = await contributor.getBuyer(saleId, buyer.publicKey);
-      const totals: any = buyerState.totals;
+      const totals: any = buyerState.contributions;
 
       // check balance changes and state
       for (let i = 0; i < numExpected; ++i) {
@@ -613,10 +608,10 @@ describe("anchor-contributor", () => {
         expect(startingBalanceBuyer[i].add(refund).toString()).to.equal(endingBalanceBuyer[i].toString());
         expect(startingBalanceCustodian[i].sub(refund).toString()).to.equal(endingBalanceCustodian[i].toString());
 
-        const total = totals[i];
-        const expectedState = refund.eq(new BN("0")) ? "inactive" : "refundIsClaimed";
-        expect(total.status).has.key(expectedState);
-        expect(total.excessContributions.toString()).to.equal(refund.toString());
+        const item = totals[i];
+        const expectedState = refund.eq(new BN("0")) ? "inactive" : "refundClaimed";
+        expect(item.status).has.key(expectedState);
+        expect(item.excess.toString()).to.equal(refund.toString());
       }
     });
 

@@ -1,8 +1,8 @@
 use anchor_lang::prelude::*;
-use anchor_spl::associated_token::get_associated_token_address;
+use anchor_spl::token::Mint;
 use num::bigint::BigUint;
 use num_derive::*;
-use std::{str::FromStr, u64};
+use std::{str::FromStr, u64, mem::size_of_val};
 
 use crate::{
     constants::*,
@@ -26,6 +26,7 @@ pub struct Sale {
 
     pub totals: Vec<AssetTotal>, // 4 + AssetTotal::MAXIMUM_SIZE * ACCEPTED_TOKENS_MAX
     pub native_token_decimals: u8, // 1
+    pub sale_token_mint: Pubkey, // 32
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq, Debug)]
@@ -89,7 +90,8 @@ impl Sale {
         + 1
         + 1
         + (4 + AssetTotal::MAXIMUM_SIZE * ACCEPTED_TOKENS_MAX)
-        + 1;
+        + 1
+        + 32;
 
     pub fn set_custodian(&mut self, custodian: &Pubkey) {
         self.custodian = custodian.clone();
@@ -144,6 +146,18 @@ impl Sale {
         Ok(())
     }
 
+    pub fn set_sale_token_mint_info(&mut self, mint: &Pubkey, mint_info: &Mint) -> Result<()> {
+        let decimals = mint_info.decimals;
+        require!(
+            self.token_decimals >= decimals,
+            ContributorError::InvalidTokenDecimals
+        );
+        self.native_token_decimals = decimals;
+        self.sale_token_mint = mint.clone();
+        Ok(())
+    }
+
+    /*
     pub fn set_native_sale_token_decimals(&mut self, decimals: u8) -> Result<()> {
         require!(
             self.token_decimals >= decimals,
@@ -152,6 +166,7 @@ impl Sale {
         self.native_token_decimals = decimals;
         Ok(())
     }
+    */
 
     pub fn get_token_index(&self, mint: &Pubkey) -> Result<u8> {
         let result = self.totals.iter().find(|item| item.mint == *mint);
@@ -166,6 +181,7 @@ impl Sale {
         Ok((idx, &self.totals[idx]))
     }
 
+    /*
     pub fn get_associated_accepted_token_address(
         &self,
         token_index: u8,
@@ -174,6 +190,7 @@ impl Sale {
         let idx = self.get_index(token_index)?;
         Ok(get_associated_token_address(owner, &self.totals[idx].mint))
     }
+    */
 
     pub fn update_total_contributions(
         &mut self,
@@ -201,17 +218,25 @@ impl Sale {
         );
 
         let totals = &self.totals;
+        // Contributions length is encoded as a single byte, so we fail here if it overflows
+        let contributions_len: u8 = totals.len().try_into().unwrap();
         let mut attested: Vec<u8> = Vec::with_capacity(
-            PAYLOAD_HEADER_LEN + totals.len() * ATTEST_CONTRIBUTIONS_ELEMENT_LEN,
+            PAYLOAD_HEADER_LEN + size_of_val(&CHAIN_ID) + size_of_val(&contributions_len) + totals.len() * ATTEST_CONTRIBUTIONS_ELEMENT_LEN,
         );
 
         // push header
         attested.push(PAYLOAD_ATTEST_CONTRIBUTIONS);
         attested.extend(self.id.iter());
+        attested.extend(CHAIN_ID.to_be_bytes());
+
+        // push contributions length
+        attested.push(contributions_len);
 
         // push each total contributions
         for total in totals {
             attested.push(total.token_index);
+            const pad: usize = 32 - 8; // contributions is 8 bytes, but we need 32 bytes in the payload, so we left-pad
+            attested.extend(vec![0; pad]);
             attested.extend(total.contributions.to_be_bytes());
         }
         Ok(attested)

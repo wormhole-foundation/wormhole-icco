@@ -361,13 +361,10 @@ pub struct AbortSale<'info> {
     pub system_program: Program<'info, System>,
 }
 
-/// TransferCustody is used for buyer <> custodian interaction, transferring funds
-/// between the two. It is used in the following instructions:
-/// * claim_refund
-/// * claim_excess
-/// * claim_allocation
+/// ClaimAllocations is used for buyer <> custodian interaction to retrieve allocations
+/// and excess from custodian
 #[derive(Accounts)]
-pub struct TransferCustody<'info> {
+pub struct ClaimAllocations<'info> {
     #[account(
         mut,
         seeds = [
@@ -398,28 +395,15 @@ pub struct TransferCustody<'info> {
     )]
     pub buyer: Account<'info, Buyer>,
 
-    #[account(
-        mut,
-        constraint = buyer_ata.mint == custodian_ata.mint,
-        constraint = buyer_ata.owner == owner.key(),
-    )]
-    pub buyer_ata: Account<'info, TokenAccount>,
-
-    #[account(
-        mut,
-        constraint = buyer_ata.mint == custodian_ata.mint,
-        constraint = custodian_ata.owner == custodian.key(),
-    )]
-    pub custodian_ata: Account<'info, TokenAccount>,
-
     #[account(mut)]
     pub owner: Signer<'info>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
 }
 
+/// ClaimRefunds is used for buyer <> custodian interaction to retrieve refunds from custodian
 #[derive(Accounts)]
-pub struct TransferUsingRemainingAccounts<'info> {
+pub struct ClaimRefunds<'info> {
     #[account(
         mut,
         seeds = [

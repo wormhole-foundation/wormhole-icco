@@ -361,53 +361,8 @@ pub mod anchor_contributor {
         Ok(())
     }
 
-    pub fn claim_refund(ctx: Context<TransferCustody>) -> Result<()> {
-        let sale = &ctx.accounts.sale;
-        require!(sale.is_aborted(), ContributorError::SaleNotAborted);
-
-        let to_account = &ctx.accounts.buyer_ata;
-        let (idx, _) = sale.get_total_info(&to_account.mint)?;
-        let refund = ctx.accounts.buyer.claim_refund(idx)?;
-        require!(refund > 0, ContributorError::NothingToClaim);
-
-        let from_account = &ctx.accounts.custodian_ata;
-        let transfer_authority = &ctx.accounts.custodian;
-
-        // spl transfer refund
-        /*
-        // this doesn't work in devnet?
-        let custodian_bump = ctx.bumps["custodian"];
-        token::transfer(
-            CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
-                token::Transfer {
-                    to: ctx.accounts.buyer_ata.to_account_info(),
-                    from: ctx.accounts.custodian_ata.to_account_info(),
-                    authority: ctx.accounts.custodian.to_account_info(),
-                },
-                &[&[SEED_PREFIX_CUSTODIAN.as_bytes(), &[custodian_bump]]],
-            ),
-            amount,
-        )?;
-        */
-
-        invoke_signed(
-            &spl_token::instruction::transfer(
-                &token::ID,
-                &from_account.key(),
-                &to_account.key(),
-                &transfer_authority.key(),
-                &[&transfer_authority.key()],
-                refund,
-            )?,
-            &ctx.accounts.to_account_infos(),
-            &[&[&SEED_PREFIX_CUSTODIAN.as_bytes(), &[ctx.bumps["custodian"]]]],
-        )?;
-        Ok(())
-    }
-
     pub fn claim_refunds<'a, 'b, 'c, 'info>(
-        ctx: Context<'a, 'b, 'c, 'info, TransferUsingRemainingAccounts<'info>>,
+        ctx: Context<'a, 'b, 'c, 'info, ClaimRefunds<'info>>,
     ) -> Result<()> {
         let sale = &ctx.accounts.sale;
         require!(sale.is_aborted(), ContributorError::SaleNotAborted);
@@ -463,7 +418,8 @@ pub mod anchor_contributor {
         Ok(())
     }
 
-    pub fn claim_allocation(ctx: Context<TransferCustody>) -> Result<()> {
+    /*
+    pub fn claim_allocation(ctx: Context<ClaimAllocation>) -> Result<()> {
         let sale = &ctx.accounts.sale;
         require!(sale.is_sealed(), ContributorError::SaleNotSealed);
 
@@ -522,4 +478,5 @@ pub mod anchor_contributor {
         )?;
         Ok(())
     }
+    */
 }

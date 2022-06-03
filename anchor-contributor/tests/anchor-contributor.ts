@@ -545,31 +545,6 @@ describe("anchor-contributor", () => {
         })
       );
 
-      // const validClaimIndices = [0, 3];
-      // for (let i = 0; i < acceptedMints.length; ++i) {
-      //   let valid = validClaimIndices.indexOf(i) >= 0;
-      //   let mint = acceptedMints[i];
-
-      //   // if we have something to claim, we should get a successful transaction.
-      //   // if not, we will get an error saying there is nothing to claim
-      //   if (valid) {
-      //     const tx = await contributor.claimRefund(buyer, saleId, mint);
-      //   } else {
-      //     let caughtError = false;
-      //     try {
-      //       const tx = await contributor.claimRefund(buyer, saleId, mint);
-      //       throw Error(`should not happen: ${i}, ${tx}`);
-      //     } catch (e) {
-      //       caughtError = verifyErrorMsg(e, "NothingToClaim");
-      //     }
-
-      //     if (!caughtError) {
-      //       throw Error("did not catch expected error");
-      //     }
-      //   }
-      // }
-
-      // uncomment this if you like to play with fire
       const tx = await contributor.claimRefunds(buyer, saleId, acceptedMints);
 
       const endingBalanceBuyer = await Promise.all(

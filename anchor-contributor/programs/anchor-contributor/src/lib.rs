@@ -47,8 +47,12 @@ pub mod anchor_contributor {
         sale.parse_sale_init(&msg.payload)?;
 
         // Use associated sale token account to get solana native decimals
-        let sale_token_decimals = ctx.accounts.sale_token_mint.decimals;
-        sale.set_native_sale_token_decimals(sale_token_decimals)?;
+        //let sale_token_decimals = ctx.accounts.sale_token_mint.decimals;
+
+        sale.set_sale_token_mint_info(
+            &ctx.accounts.sale_token_mint.key(),
+            &ctx.accounts.sale_token_mint,
+        )?;
 
         Ok(())
     }
@@ -57,10 +61,8 @@ pub mod anchor_contributor {
         let from_account = &ctx.accounts.buyer_ata;
 
         // find token_index
-        let mint = token::accessor::mint(&from_account.to_account_info())?;
-
         let sale = &mut ctx.accounts.sale;
-        let token_index = sale.get_token_index(&mint)?;
+        let token_index = sale.get_token_index(&from_account.mint)?;
 
         // leverage token index search from sale's accepted tokens to find index
         // on buyer's contributions
@@ -365,8 +367,7 @@ pub mod anchor_contributor {
         require!(sale.is_aborted(), ContributorError::SaleNotAborted);
 
         let to_account = &ctx.accounts.buyer_ata;
-        let mint = token::accessor::mint(&to_account.to_account_info())?;
-        let (idx, _) = sale.get_total_info(&mint)?;
+        let (idx, _) = sale.get_total_info(&to_account.mint)?;
         let refund = ctx.accounts.buyer.claim_refund(idx)?;
         require!(refund > 0, ContributorError::NothingToClaim);
 
@@ -458,13 +459,27 @@ pub mod anchor_contributor {
         let sale = &ctx.accounts.sale;
         require!(sale.is_sealed(), ContributorError::SaleNotSealed);
 
+        // check mints
         let to_account = &ctx.accounts.buyer_ata;
-        let mint = token::accessor::mint(&to_account.to_account_info())?;
+        require!(
+            to_account.mint == sale.sale_token_mint,
+            ContributorError::InvalidMint
+        );
+        let from_account = &ctx.accounts.custodian_ata;
+        require!(
+            from_account.mint == sale.sale_token_mint,
+            ContributorError::InvalidMint
+        );
+
+        // compute allocation
         let allocation = ctx.accounts.buyer.claim_allocation(&sale.totals)?;
         require!(allocation > 0, ContributorError::NothingToClaim);
 
-        let from_account = &ctx.accounts.custodian_ata;
-        let transfer_authority = &ctx.accounts.custodian;
+        // and make sure there are sufficient funds
+        require!(
+            from_account.amount >= allocation,
+            ContributorError::InsufficientFunds
+        );
 
         // spl transfer refund
         /*
@@ -484,6 +499,7 @@ pub mod anchor_contributor {
         )?;
         */
 
+        let transfer_authority = &ctx.accounts.custodian;
         invoke_signed(
             &spl_token::instruction::transfer(
                 &token::ID,

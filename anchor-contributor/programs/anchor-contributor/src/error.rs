@@ -23,11 +23,17 @@ pub enum ContributorError {
     #[msg("IncorrectVaaPayload")]
     IncorrectVaaPayload,
 
+    #[msg("InsufficientFunds")]
+    InsufficientFunds,
+
     #[msg("InvalidAcceptedTokenPayload")]
     InvalidAcceptedTokenPayload,
 
     #[msg("InvalidConductor")]
     InvalidConductor,
+
+    #[msg("InvalidMint")]
+    InvalidMint,
 
     #[msg("InvalidRemainingAccounts")]
     InvalidRemainingAccounts,

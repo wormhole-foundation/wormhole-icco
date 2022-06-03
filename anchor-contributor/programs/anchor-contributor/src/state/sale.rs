@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::associated_token::get_associated_token_address;
+use anchor_spl::token::Mint;
 use num::bigint::BigUint;
 use num_derive::*;
 use std::{str::FromStr, u64};
@@ -26,6 +26,7 @@ pub struct Sale {
 
     pub totals: Vec<AssetTotal>, // 4 + AssetTotal::MAXIMUM_SIZE * ACCEPTED_TOKENS_MAX
     pub native_token_decimals: u8, // 1
+    pub sale_token_mint: Pubkey, // 32
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq, Debug)]
@@ -89,7 +90,8 @@ impl Sale {
         + 1
         + 1
         + (4 + AssetTotal::MAXIMUM_SIZE * ACCEPTED_TOKENS_MAX)
-        + 1;
+        + 1
+        + 32;
 
     pub fn set_custodian(&mut self, custodian: &Pubkey) {
         self.custodian = custodian.clone();
@@ -144,6 +146,18 @@ impl Sale {
         Ok(())
     }
 
+    pub fn set_sale_token_mint_info(&mut self, mint: &Pubkey, mint_info: &Mint) -> Result<()> {
+        let decimals = mint_info.decimals;
+        require!(
+            self.token_decimals >= decimals,
+            ContributorError::InvalidTokenDecimals
+        );
+        self.native_token_decimals = decimals;
+        self.sale_token_mint = mint.clone();
+        Ok(())
+    }
+
+    /*
     pub fn set_native_sale_token_decimals(&mut self, decimals: u8) -> Result<()> {
         require!(
             self.token_decimals >= decimals,
@@ -152,6 +166,7 @@ impl Sale {
         self.native_token_decimals = decimals;
         Ok(())
     }
+    */
 
     pub fn get_token_index(&self, mint: &Pubkey) -> Result<u8> {
         let result = self.totals.iter().find(|item| item.mint == *mint);
@@ -166,6 +181,7 @@ impl Sale {
         Ok((idx, &self.totals[idx]))
     }
 
+    /*
     pub fn get_associated_accepted_token_address(
         &self,
         token_index: u8,
@@ -174,6 +190,7 @@ impl Sale {
         let idx = self.get_index(token_index)?;
         Ok(get_associated_token_address(owner, &self.totals[idx].mint))
     }
+    */
 
     pub fn update_total_contributions(
         &mut self,

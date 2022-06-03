@@ -114,7 +114,7 @@ export class IccoContributor {
       .rpc();
   }
 
-  async sealSale(payer: web3.Keypair, saleSealedVaa: Buffer): Promise<string> {
+  async sealSale(payer: web3.Keypair, saleSealedVaa: Buffer, saleTokenMint: web3.PublicKey): Promise<string> {
     const program = this.program;
 
     const custodian = this.custodianAccount.key;
@@ -125,6 +125,7 @@ export class IccoContributor {
 
     const saleId = await parseSaleId(saleSealedVaa);
     const saleAccount = findSaleAccount(program.programId, saleId);
+    const custodianSaleTokenAcct = await getPdaAssociatedTokenAddress(saleTokenMint, custodian);
 
     return program.methods
       .sealSale()
@@ -132,6 +133,7 @@ export class IccoContributor {
         custodian,
         sale: saleAccount.key,
         coreBridgeVaa: signedVaaAccount.key,
+        custodianSaleTokenAcct,
         owner: payer.publicKey,
         systemProgram: web3.SystemProgram.programId,
       })

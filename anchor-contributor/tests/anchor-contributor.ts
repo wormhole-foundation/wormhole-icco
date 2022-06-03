@@ -368,33 +368,34 @@ describe("anchor-contributor", () => {
     // TODO
     it("Orchestrator Seals Sale with Signed VAA", async () => {
       const saleSealedVaa = dummyConductor.sealSale(await getBlockTime(connection));
+      const saleTokenMint = dummyConductor.getSaleTokenOnSolana();
+
       //console.log("saleSealedVaa", saleSealedVaa.toString("hex"));
-      const tx = await contributor.sealSale(orchestrator, saleSealedVaa);
+      const tx = await contributor.sealSale(orchestrator, saleSealedVaa, saleTokenMint);
 
       {
         // get the first sale state
         const saleId = dummyConductor.getSaleId();
         const saleState = await contributor.getSale(saleId);
+        console.log("saleState", saleState);
 
         // verify
         expect(saleState.status).has.key("sealed");
-
-        // TODO: check totals
-        expect(false).to.be.true;
       }
     });
 
-    it("Orchestrator cranks send contributions", async () => {
-      expect(true).to.be.true;
+    it("Orchestrator Bridges Contributions to Conductor", async () => {
+      expect(false).to.be.true;
     });
 
     // TODO
     it("Orchestrator Cannot Seal Sale Again with Signed VAA", async () => {
       const saleSealedVaa = dummyConductor.sealSale(await getBlockTime(connection));
+      const saleTokenMint = dummyConductor.getSaleTokenOnSolana();
 
       let caughtError = false;
       try {
-        const tx = await contributor.sealSale(orchestrator, saleSealedVaa);
+        const tx = await contributor.sealSale(orchestrator, saleSealedVaa, saleTokenMint);
         throw Error(`should not happen: ${tx}`);
       } catch (e) {
         caughtError = verifyErrorMsg(e, "SaleEnded");
@@ -416,188 +417,188 @@ describe("anchor-contributor", () => {
     });
   });
 
-  describe("Conduct Aborted Sale", () => {
-    // global contributions for test
-    const contributions = new Map<web3.PublicKey, string[]>();
-    const totalContributions: BN[] = [];
+  //   describe("Conduct Aborted Sale", () => {
+  //     // global contributions for test
+  //     const contributions = new Map<web3.PublicKey, string[]>();
+  //     const totalContributions: BN[] = [];
 
-    // squirrel away associated sale token account
-    let saleTokenAccount: AssociatedTokenAccount;
+  //     // squirrel away associated sale token account
+  //     let saleTokenAccount: AssociatedTokenAccount;
 
-    it("Create ATA for Sale Token if Non-Existent", async () => {
-      const allowOwnerOffCurve = true;
-      saleTokenAccount = await getOrCreateAssociatedTokenAccount(
-        connection,
-        orchestrator,
-        dummyConductor.getSaleTokenOnSolana(),
-        contributor.custodianAccount.key,
-        allowOwnerOffCurve
-      );
-    });
+  //     it("Create ATA for Sale Token if Non-Existent", async () => {
+  //       const allowOwnerOffCurve = true;
+  //       saleTokenAccount = await getOrCreateAssociatedTokenAccount(
+  //         connection,
+  //         orchestrator,
+  //         dummyConductor.getSaleTokenOnSolana(),
+  //         contributor.custodianAccount.key,
+  //         allowOwnerOffCurve
+  //       );
+  //     });
 
-    it("Orchestrator Initialize Sale with Signed VAA", async () => {
-      const startTime = 8 + (await getBlockTime(connection));
-      const duration = 8; // seconds
-      const initSaleVaa = dummyConductor.createSale(startTime, duration, saleTokenAccount.address);
-      const tx = await contributor.initSale(orchestrator, initSaleVaa, dummyConductor.getSaleTokenOnSolana());
+  //     it("Orchestrator Initialize Sale with Signed VAA", async () => {
+  //       const startTime = 8 + (await getBlockTime(connection));
+  //       const duration = 8; // seconds
+  //       const initSaleVaa = dummyConductor.createSale(startTime, duration, saleTokenAccount.address);
+  //       const tx = await contributor.initSale(orchestrator, initSaleVaa, dummyConductor.getSaleTokenOnSolana());
 
-      {
-        const saleId = dummyConductor.getSaleId();
-        const saleState = await contributor.getSale(saleId);
+  //       {
+  //         const saleId = dummyConductor.getSaleId();
+  //         const saleState = await contributor.getSale(saleId);
 
-        // verify
-        expect(Uint8Array.from(saleState.id)).to.deep.equal(saleId);
-        //expect(Uint8Array.from(saleState.tokenAddress)).to.deep.equal(Buffer.from(dummyConductor.tokenAddress, "hex"));
-        expect(saleState.tokenChain).to.equal(dummyConductor.tokenChain);
-        expect(saleState.tokenDecimals).to.equal(dummyConductor.tokenDecimals);
-        expect(saleState.nativeTokenDecimals).to.equal(dummyConductor.nativeTokenDecimals);
-        expect(saleState.times.start.toString()).to.equal(dummyConductor.saleStart.toString());
-        expect(saleState.times.end.toString()).to.equal(dummyConductor.saleEnd.toString());
-        expect(Uint8Array.from(saleState.recipient)).to.deep.equal(Buffer.from(dummyConductor.recipient, "hex"));
-        expect(saleState.status).has.key("active");
+  //         // verify
+  //         expect(Uint8Array.from(saleState.id)).to.deep.equal(saleId);
+  //         //expect(Uint8Array.from(saleState.tokenAddress)).to.deep.equal(Buffer.from(dummyConductor.tokenAddress, "hex"));
+  //         expect(saleState.tokenChain).to.equal(dummyConductor.tokenChain);
+  //         expect(saleState.tokenDecimals).to.equal(dummyConductor.tokenDecimals);
+  //         expect(saleState.nativeTokenDecimals).to.equal(dummyConductor.nativeTokenDecimals);
+  //         expect(saleState.times.start.toString()).to.equal(dummyConductor.saleStart.toString());
+  //         expect(saleState.times.end.toString()).to.equal(dummyConductor.saleEnd.toString());
+  //         expect(Uint8Array.from(saleState.recipient)).to.deep.equal(Buffer.from(dummyConductor.recipient, "hex"));
+  //         expect(saleState.status).has.key("active");
 
-        // check totals
-        const totals: any = saleState.totals;
-        const numAccepted = dummyConductor.acceptedTokens.length;
-        expect(totals.length).to.equal(numAccepted);
+  //         // check totals
+  //         const totals: any = saleState.totals;
+  //         const numAccepted = dummyConductor.acceptedTokens.length;
+  //         expect(totals.length).to.equal(numAccepted);
 
-        for (let i = 0; i < numAccepted; ++i) {
-          const total = totals[i];
-          const acceptedToken = dummyConductor.acceptedTokens[i];
+  //         for (let i = 0; i < numAccepted; ++i) {
+  //           const total = totals[i];
+  //           const acceptedToken = dummyConductor.acceptedTokens[i];
 
-          expect(total.tokenIndex).to.equal(acceptedToken.index);
-          expect(tryNativeToHexString(total.mint.toString(), CHAIN_ID_SOLANA)).to.equal(acceptedToken.address);
-          expect(total.contributions.toString()).to.equal("0");
-          expect(total.allocations.toString()).to.equal("0");
-          expect(total.excessContributions.toString()).to.equal("0");
-        }
-      }
-    });
+  //           expect(total.tokenIndex).to.equal(acceptedToken.index);
+  //           expect(tryNativeToHexString(total.mint.toString(), CHAIN_ID_SOLANA)).to.equal(acceptedToken.address);
+  //           expect(total.contributions.toString()).to.equal("0");
+  //           expect(total.allocations.toString()).to.equal("0");
+  //           expect(total.excessContributions.toString()).to.equal("0");
+  //         }
+  //       }
+  //     });
 
-    it("User Contributes to Sale", async () => {
-      // wait for sale to start here
-      const saleStart = dummyConductor.saleStart;
-      await waitUntilBlock(connection, saleStart);
+  //     it("User Contributes to Sale", async () => {
+  //       // wait for sale to start here
+  //       const saleStart = dummyConductor.saleStart;
+  //       await waitUntilBlock(connection, saleStart);
 
-      // prep contributions info
-      const acceptedTokens = dummyConductor.acceptedTokens;
-      const contributedTokens = [hexToPublicKey(acceptedTokens[0].address), hexToPublicKey(acceptedTokens[3].address)];
-      contributions.set(contributedTokens[0], ["1200000000", "3400000000"]);
-      contributions.set(contributedTokens[1], ["5600000000", "7800000000"]);
+  //       // prep contributions info
+  //       const acceptedTokens = dummyConductor.acceptedTokens;
+  //       const contributedTokens = [hexToPublicKey(acceptedTokens[0].address), hexToPublicKey(acceptedTokens[3].address)];
+  //       contributions.set(contributedTokens[0], ["1200000000", "3400000000"]);
+  //       contributions.set(contributedTokens[1], ["5600000000", "7800000000"]);
 
-      contributedTokens.forEach((mint) => {
-        const amounts = contributions.get(mint);
-        totalContributions.push(amounts.map((x) => new BN(x)).reduce((prev, curr) => prev.add(curr)));
-      });
+  //       contributedTokens.forEach((mint) => {
+  //         const amounts = contributions.get(mint);
+  //         totalContributions.push(amounts.map((x) => new BN(x)).reduce((prev, curr) => prev.add(curr)));
+  //       });
 
-      // now go about your business
-      // contribute multiple times
-      const saleId = dummyConductor.getSaleId();
-      for (const mint of contributedTokens) {
-        for (const amount of contributions.get(mint)) {
-          const tx = await contributor.contribute(buyer, saleId, mint, new BN(amount));
-        }
-      }
-    });
+  //       // now go about your business
+  //       // contribute multiple times
+  //       const saleId = dummyConductor.getSaleId();
+  //       for (const mint of contributedTokens) {
+  //         for (const amount of contributions.get(mint)) {
+  //           const tx = await contributor.contribute(buyer, saleId, mint, new BN(amount));
+  //         }
+  //       }
+  //     });
 
-    it("Orchestrator Aborts Sale with Signed VAA", async () => {
-      // TODO: need to abort sale
-      const saleAbortedVaa = dummyConductor.abortSale(await getBlockTime(connection));
-      const tx = await contributor.abortSale(orchestrator, saleAbortedVaa);
+  //     it("Orchestrator Aborts Sale with Signed VAA", async () => {
+  //       // TODO: need to abort sale
+  //       const saleAbortedVaa = dummyConductor.abortSale(await getBlockTime(connection));
+  //       const tx = await contributor.abortSale(orchestrator, saleAbortedVaa);
 
-      {
-        const saleId = dummyConductor.getSaleId();
-        const saleState = await contributor.getSale(saleId);
-        expect(saleState.status).has.key("aborted");
-      }
-    });
+  //       {
+  //         const saleId = dummyConductor.getSaleId();
+  //         const saleState = await contributor.getSale(saleId);
+  //         expect(saleState.status).has.key("aborted");
+  //       }
+  //     });
 
-    it("Orchestrator Cannot Abort Sale Again", async () => {
-      const saleAbortedVaa = dummyConductor.abortSale(await getBlockTime(connection));
-      // cannot abort the sale again
+  //     it("Orchestrator Cannot Abort Sale Again", async () => {
+  //       const saleAbortedVaa = dummyConductor.abortSale(await getBlockTime(connection));
+  //       // cannot abort the sale again
 
-      let caughtError = false;
-      try {
-        const tx = await contributor.abortSale(orchestrator, saleAbortedVaa);
-        throw Error(`should not happen: ${tx}`);
-      } catch (e) {
-        caughtError = verifyErrorMsg(e, "SaleEnded");
-      }
+  //       let caughtError = false;
+  //       try {
+  //         const tx = await contributor.abortSale(orchestrator, saleAbortedVaa);
+  //         throw Error(`should not happen: ${tx}`);
+  //       } catch (e) {
+  //         caughtError = verifyErrorMsg(e, "SaleEnded");
+  //       }
 
-      if (!caughtError) {
-        throw Error("did not catch expected error");
-      }
-    });
+  //       if (!caughtError) {
+  //         throw Error("did not catch expected error");
+  //       }
+  //     });
 
-    // TODO
-    it("User Claims Refund From Sale", async () => {
-      const saleId = dummyConductor.getSaleId();
-      const acceptedTokens = dummyConductor.acceptedTokens;
-      const acceptedMints = acceptedTokens.map((token) => {
-        return hexToPublicKey(token.address);
-      });
+  //     // TODO
+  //     it("User Claims Refund From Sale", async () => {
+  //       const saleId = dummyConductor.getSaleId();
+  //       const acceptedTokens = dummyConductor.acceptedTokens;
+  //       const acceptedMints = acceptedTokens.map((token) => {
+  //         return hexToPublicKey(token.address);
+  //       });
 
-      const startingBalanceBuyer = await Promise.all(
-        acceptedTokens.map(async (token) => {
-          const mint = hexToPublicKey(token.address);
-          return getSplBalance(connection, mint, buyer.publicKey);
-        })
-      );
-      const startingBalanceCustodian = await Promise.all(
-        acceptedTokens.map(async (token) => {
-          const mint = hexToPublicKey(token.address);
-          return getPdaSplBalance(connection, mint, contributor.custodianAccount.key);
-        })
-      );
+  //       const startingBalanceBuyer = await Promise.all(
+  //         acceptedTokens.map(async (token) => {
+  //           const mint = hexToPublicKey(token.address);
+  //           return getSplBalance(connection, mint, buyer.publicKey);
+  //         })
+  //       );
+  //       const startingBalanceCustodian = await Promise.all(
+  //         acceptedTokens.map(async (token) => {
+  //           const mint = hexToPublicKey(token.address);
+  //           return getPdaSplBalance(connection, mint, contributor.custodianAccount.key);
+  //         })
+  //       );
 
-      const tx = await contributor.claimRefunds(buyer, saleId, acceptedMints);
+  //       const tx = await contributor.claimRefunds(buyer, saleId, acceptedMints);
 
-      const endingBalanceBuyer = await Promise.all(
-        acceptedTokens.map(async (token) => {
-          const mint = hexToPublicKey(token.address);
-          return getSplBalance(connection, mint, buyer.publicKey);
-        })
-      );
-      const endingBalanceCustodian = await Promise.all(
-        acceptedTokens.map(async (token) => {
-          const mint = hexToPublicKey(token.address);
-          return getPdaSplBalance(connection, mint, contributor.custodianAccount.key);
-        })
-      );
+  //       const endingBalanceBuyer = await Promise.all(
+  //         acceptedTokens.map(async (token) => {
+  //           const mint = hexToPublicKey(token.address);
+  //           return getSplBalance(connection, mint, buyer.publicKey);
+  //         })
+  //       );
+  //       const endingBalanceCustodian = await Promise.all(
+  //         acceptedTokens.map(async (token) => {
+  //           const mint = hexToPublicKey(token.address);
+  //           return getPdaSplBalance(connection, mint, contributor.custodianAccount.key);
+  //         })
+  //       );
 
-      const expectedRefundValues = [
-        totalContributions[0],
-        new BN(0),
-        new BN(0),
-        totalContributions[1],
-        new BN(0),
-        new BN(0),
-        new BN(0),
-        new BN(0),
-      ];
-      const numExpected = expectedRefundValues.length;
+  //       const expectedRefundValues = [
+  //         totalContributions[0],
+  //         new BN(0),
+  //         new BN(0),
+  //         totalContributions[1],
+  //         new BN(0),
+  //         new BN(0),
+  //         new BN(0),
+  //         new BN(0),
+  //       ];
+  //       const numExpected = expectedRefundValues.length;
 
-      // get state
-      const buyerState = await contributor.getBuyer(saleId, buyer.publicKey);
-      const totals: any = buyerState.contributions;
+  //       // get state
+  //       const buyerState = await contributor.getBuyer(saleId, buyer.publicKey);
+  //       const totals: any = buyerState.contributions;
 
-      // check balance changes and state
-      for (let i = 0; i < numExpected; ++i) {
-        let refund = expectedRefundValues[i];
+  //       // check balance changes and state
+  //       for (let i = 0; i < numExpected; ++i) {
+  //         let refund = expectedRefundValues[i];
 
-        expect(startingBalanceBuyer[i].add(refund).toString()).to.equal(endingBalanceBuyer[i].toString());
-        expect(startingBalanceCustodian[i].sub(refund).toString()).to.equal(endingBalanceCustodian[i].toString());
+  //         expect(startingBalanceBuyer[i].add(refund).toString()).to.equal(endingBalanceBuyer[i].toString());
+  //         expect(startingBalanceCustodian[i].sub(refund).toString()).to.equal(endingBalanceCustodian[i].toString());
 
-        const item = totals[i];
-        expect(item.status).has.key("refundClaimed");
-        expect(item.excess.toString()).to.equal(refund.toString());
-      }
-    });
+  //         const item = totals[i];
+  //         expect(item.status).has.key("refundClaimed");
+  //         expect(item.excess.toString()).to.equal(refund.toString());
+  //       }
+  //     });
 
-    it("User Cannot Claim Refund Again", async () => {
-      // TODO
-    });
-  });
+  //     it("User Cannot Claim Refund Again", async () => {
+  //       // TODO
+  //     });
+  //   });
 });
 
 async function waitUntilBlock(connection: web3.Connection, saleEnd: number) {

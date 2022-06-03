@@ -102,7 +102,6 @@ pub struct Contribute<'info> {
 
     #[account(
         mut,
-        constraint = buyer_token_acct.mint == custodian_token_acct.mint,
         constraint = custodian_token_acct.owner == custodian.key(),
     )]
     pub custodian_token_acct: Account<'info, TokenAccount>,
@@ -345,16 +344,49 @@ pub struct AbortSale<'info> {
     )]
     pub sale: Account<'info, Sale>,
 
-    /*
-    #[account(
-        constraint = verify_conductor_vaa(&core_bridge_vaa, &contributor, PAYLOAD_SALE_ABORTED)?,
-    )]
-    */
     #[account(
         constraint = core_bridge_vaa.owner == &Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap()
     )]
     /// CHECK: This account is owned by Core Bridge so we trust it
     pub core_bridge_vaa: AccountInfo<'info>,
+
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+/// SealSale is used for closing successful sale so users can claim allocations (min raise met)
+#[derive(Accounts)]
+pub struct SealSale<'info> {
+    #[account(
+        seeds = [
+            SEED_PREFIX_CUSTODIAN.as_bytes(),
+        ],
+        bump,
+    )]
+    pub custodian: Account<'info, Custodian>,
+
+    #[account(
+        mut,
+        seeds = [
+            SEED_PREFIX_SALE.as_bytes(),
+            &get_sale_id(&core_bridge_vaa)?,
+        ],
+        bump,
+    )]
+    pub sale: Account<'info, Sale>,
+
+    #[account(
+        constraint = core_bridge_vaa.owner == &Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap()
+    )]
+    /// CHECK: This account is owned by Core Bridge so we trust it
+    pub core_bridge_vaa: AccountInfo<'info>,
+
+    #[account(
+        constraint = custodian_sale_token_acct.mint == sale.sale_token_mint,
+        constraint = custodian_sale_token_acct.owner == custodian.key(),
+    )]
+    pub custodian_sale_token_acct: Account<'info, TokenAccount>,
 
     #[account(mut)]
     pub owner: Signer<'info>,
@@ -375,7 +407,6 @@ pub struct ClaimAllocation<'info> {
     pub custodian: Account<'info, Custodian>,
 
     #[account(
-        mut,
         seeds = [
             SEED_PREFIX_SALE.as_bytes(),
             &sale.id,
@@ -414,7 +445,6 @@ pub struct ClaimRefunds<'info> {
     pub custodian: Account<'info, Custodian>,
 
     #[account(
-        mut,
         seeds = [
             SEED_PREFIX_SALE.as_bytes(),
             &sale.id,

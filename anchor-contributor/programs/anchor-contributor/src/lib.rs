@@ -181,7 +181,6 @@ pub mod anchor_contributor {
         Ok(())
     }
 
-    /*
     pub fn seal_sale(ctx: Context<SealSale>) -> Result<()> {
         let msg = verify_conductor_vaa(&ctx.accounts.core_bridge_vaa, PAYLOAD_SALE_SEALED)?;
 
@@ -190,10 +189,10 @@ pub mod anchor_contributor {
 
         // TODO: check balance of the sale token on the contract to make sure
         // we have enough for claimants
-        let sale_token_account = sale.associated_sale_token_address;
+        let custodian_sale_token_acct = &ctx.accounts.custodian_sale_token_acct;
+        //custodian_sale_token_acct.amount;
 
-        // TODO: need to bridge collateral over to recipient (total_collateral minus excess_collateral)
-        // TODO: set up cfg flag to just use constants instead of these getters
+        /*
         let conductor_chain = get_conductor_chain()?;
 
         let (token_bridge_mint_key, _) = Pubkey::find_program_address(&["mint_signer".as_ref()], &ctx.accounts.token_bridge.key());
@@ -252,9 +251,9 @@ pub mod anchor_contributor {
 
             ctx.accounts.custodian.nonce += 1;
         }
+        */
         Ok(())
     }
-    */
 
     pub fn send_contributions(ctx: Context<SendContributions>, token_idx: u8) -> Result<()> {
         let msg = verify_conductor_vaa(&ctx.accounts.core_bridge_vaa, PAYLOAD_SALE_SEALED)?;

@@ -273,14 +273,11 @@ impl Sale {
                 &payload[start + INDEX_ALLOCATIONS_AMOUNT..start + INDEX_ALLOCATIONS_EXCESS],
             );
 
-            let adjusted = allocation / BigUint::from(10u128).pow(decimal_difference);
+            let adjusted_allocations = allocation / BigUint::from(10u128).pow(decimal_difference);
             require!(
-                adjusted < BigUint::from(u64::MAX),
+                adjusted_allocations < BigUint::from(u64::MAX),
                 ContributorError::AmountTooLarge
             );
-
-            // is there a better way to do this part?
-            let adjusted = &adjusted.to_bytes_be();
 
             // take first 24 bytes and see if this is greater than zero
             let excess_contributions = BigUint::from_bytes_be(
@@ -292,7 +289,8 @@ impl Sale {
             );
 
             let total = &mut totals[i];
-            // now take last 8 bytes
+            total.allocations = adjusted_allocations.try_into().expect("cannot cast to u64");
+            // now take last 8 bytes for excess contributions
             total.excess_contributions = u64::from_be_bytes(
                 payload[start + INDEX_ALLOCATIONS_AMOUNT + 24..start + INDEX_ALLOCATIONS_EXCESS]
                     .try_into()

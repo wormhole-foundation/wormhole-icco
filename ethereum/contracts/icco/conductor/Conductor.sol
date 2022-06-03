@@ -50,7 +50,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
         }
 
         /** 
-         * @dev Fetch the sale token decimals and place in the SaleInit struct.
+         * @dev Fetch the sale token decimals on this chain.
          * The Contributors need to know this to scale allocations on non-evm chains.            
          */ 
         (,bytes memory queriedDecimals) = localTokenAddress.staticcall(
@@ -97,7 +97,9 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
         ICCOStructs.Raise memory raise,
         ICCOStructs.Token[] memory acceptedTokens   
     ) public payable nonReentrant returns (
-        uint256 saleId
+        uint256 saleId,
+        uint256 wormholeSequence,
+        uint256 wormholeSequence2
     ) {
         /// validate sale parameters from client
         require(block.timestamp < raise.saleStart, "sale start must be in the future");
@@ -157,7 +159,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
                     tokenIndex: uint8(i),
                     tokenAddress: acceptedTokens[i].tokenAddress
                 });
-                /// only allow 10 accepted tokens for the Solana Contributor
+                /// only allow 8 accepted tokens for the Solana Contributor
                 require(solanaAcceptedTokens.length < 8, "too many solana tokens");
                 /// save in contract storage
                 solanaAcceptedTokens.push(solanaToken);
@@ -206,7 +208,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
         }); 
 
         /// @dev send encoded SaleInit struct to Contributors via wormhole.        
-        wormhole.publishMessage{
+        wormholeSequence = wormhole.publishMessage{
             value : messageFee
         }(0, ICCOStructs.encodeSaleInit(saleInit), consistencyLevel());
 
@@ -234,7 +236,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
             });
 
             /// @dev send encoded SolanaSaleInit struct to the solana Contributor
-            wormhole.publishMessage{
+            wormholeSequence2 = wormhole.publishMessage{
                 value : messageFee
             }(0, ICCOStructs.encodeSolanaSaleInit(solanaSaleInit), consistencyLevel());    
 
@@ -321,7 +323,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
      * - it calculates allocations and excess contributions for each accepted token
      * - it disseminates a saleSealed or saleAborted message to Contributors via wormhole
      */
-    function sealSale(uint256 saleId) public payable returns (uint256 wormholeSequence) {
+    function sealSale(uint256 saleId) public payable returns (uint256 wormholeSequence, uint256 wormholeSequence2) {
         require(saleExists(saleId), "sale not initiated");
 
         ConductorStructs.Sale memory sale = sales(saleId);
@@ -360,7 +362,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
                 accounting.totalExcessContribution = accounting.totalContribution - sale.maxRaise;
             }
 
-            /// @dev This is a successful sale struct that saves sale token allocation information.
+            /// @dev This is a successful sale struct that saves sale token allocation information
             ICCOStructs.SaleSealed memory saleSealed = ICCOStructs.SaleSealed({
                 payloadID : 3,
                 saleID : saleId,
@@ -440,11 +442,14 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
             /// @dev send encoded SaleSealed message to Contributor contracts
             wormholeSequence = wormhole.publishMessage{
                 value : accounting.messageFee
-            }(0, ICCOStructs.encodeSaleSealed(saleSealed), consistencyLevel());
+            }(0, ICCOStructs.encodeSaleSealed(saleSealed), consistencyLevel()); 
 
             { /// scope to make code more readable
                 /// @dev send separate SaleSealed VAA if accepting Solana tokens
                 if (sale.solanaAcceptedTokensCount > 0) {
+                    // make sure we still have enough gas to send the Solana message  
+                    require(accounting.valueSent >= accounting.messageFee, "insufficient wormhole messaging fees");
+
                     /// create new array to handle solana allocations 
                     ICCOStructs.Allocation[] memory solanaAllocations = new ICCOStructs.Allocation[](sale.solanaAcceptedTokensCount);
 
@@ -460,7 +465,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
                     saleSealed.allocations = solanaAllocations;
 
                     /// @dev send encoded SaleSealed message to Solana Contributor
-                    wormholeSequence = wormhole.publishMessage{
+                    wormholeSequence2 = wormhole.publishMessage{
                         value : accounting.messageFee
                     }(0, ICCOStructs.encodeSaleSealed(saleSealed), consistencyLevel());
                 }

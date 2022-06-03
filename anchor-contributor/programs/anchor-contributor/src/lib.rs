@@ -39,9 +39,6 @@ pub mod anchor_contributor {
         let msg = verify_conductor_vaa(&ctx.accounts.core_bridge_vaa, PAYLOAD_SALE_INIT_SOLANA)?;
         let sale = &mut ctx.accounts.sale;
 
-        // set token custodian to check for future sale updates
-        sale.set_custodian(&ctx.accounts.custodian.key());
-
         // now parse vaa
         sale.parse_sale_init(&msg.payload)?;
 
@@ -189,9 +186,16 @@ pub mod anchor_contributor {
 
         // TODO: check balance of the sale token on the contract to make sure
         // we have enough for claimants
-        let custodian_sale_token_acct = &ctx.accounts.custodian_sale_token_acct;
-        //custodian_sale_token_acct.amount;
+        let totals = &sale.totals;
+        let total_allocations: u64 = totals.iter().map(|total| total.allocations).sum();
 
+        let custodian_sale_token_acct = &ctx.accounts.custodian_sale_token_acct;
+        require!(
+            custodian_sale_token_acct.amount >= total_allocations,
+            ContributorError::InsufficientFunds
+        );
+
+        Ok(())
         /*
         let conductor_chain = get_conductor_chain()?;
 
@@ -252,7 +256,6 @@ pub mod anchor_contributor {
             ctx.accounts.custodian.nonce += 1;
         }
         */
-        Ok(())
     }
 
     pub fn send_contributions(ctx: Context<SendContributions>, token_idx: u8) -> Result<()> {

@@ -137,7 +137,8 @@ export class IccoContributor {
         owner: payer.publicKey,
         systemProgram: web3.SystemProgram.programId,
       })
-      .rpc();
+      .rpc({ skipPreflight: true });
+    //.rpc();
   }
 
   async sendContributions(payer: web3.Keypair, saleId: Buffer) {
@@ -197,9 +198,6 @@ export class IccoContributor {
       })
     );
 
-    //    console.log("!!! remAcc len: ", remainingAccounts.length);
-    //    console.log("!!! remAccs: ", remainingAccounts);
-
     return program.methods
       .claimRefunds()
       .accounts({
@@ -211,8 +209,7 @@ export class IccoContributor {
       })
       .signers([payer])
       .remainingAccounts(remainingAccounts)
-      .rpc({ skipPreflight: true });
-    //.rpc()
+      .rpc();
   }
 
   async getSale(saleId: Buffer) {

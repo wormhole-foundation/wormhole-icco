@@ -15,7 +15,6 @@ use crate::{
 #[account]
 #[derive(Debug)]
 pub struct Sale {
-    pub custodian: Pubkey,                     // 32
     pub id: [u8; 32],                          // 32
     pub associated_sale_token_address: Pubkey, // 32
     pub token_chain: u16,                      // 2
@@ -83,7 +82,6 @@ impl AssetTotal {
 impl Sale {
     pub const MAXIMUM_SIZE: usize = 32
         + 32
-        + 32
         + 2
         + 1
         + (8 + 8)
@@ -93,10 +91,6 @@ impl Sale {
         + (4 + AssetTotal::MAXIMUM_SIZE * ACCEPTED_TOKENS_MAX)
         + 1
         + 32;
-
-    pub fn set_custodian(&mut self, custodian: &Pubkey) {
-        self.custodian = custodian.clone();
-    }
 
     pub fn parse_sale_init(&mut self, payload: &[u8]) -> Result<()> {
         require!(!self.initialized, ContributorError::SaleAlreadyInitialized);
@@ -254,10 +248,9 @@ impl Sale {
             ContributorError::IncorrectVaaPayload
         );
 
-        let totals = &mut self.totals;
         let num_allocations = payload[INDEX_SALE_SEALED_ALLOCATIONS_START] as usize;
         require!(
-            num_allocations == totals.len(),
+            num_allocations == self.totals.len(),
             ContributorError::IncorrectVaaPayload
         );
 
@@ -267,33 +260,34 @@ impl Sale {
         // deserialize other things
         for i in 0..num_allocations {
             let start = INDEX_SALE_SEALED_ALLOCATIONS_START + 1 + ALLOCATION_NUM_BYTES * i;
-
-            // convert allocation to u64 based on decimal difference
-            // TODO: put in a separate method
-            let allocation = BigUint::from_bytes_be(
-                &payload[start + INDEX_ALLOCATIONS_AMOUNT..start + INDEX_ALLOCATIONS_EXCESS],
+            let total = &self.totals[i];
+            require!(
+                payload[start] == total.token_index,
+                ContributorError::IncorrectVaaPayload
             );
 
-//            let adjusted_allocations = (allocation / decimal_difference).to_u64().expect("cannot cast adjusted_allocations to u64");
+            let total = &mut self.totals[i];
 
-            // take first 24 bytes and see if this is greater than zero
-            // let excess_contributions = BigUint::from_bytes_be(
-            //     &payload[start + INDEX_ALLOCATIONS_AMOUNT..start + INDEX_ALLOCATIONS_EXCESS + 24],
-            // );
-            // require!(
-            //     excess_contributions > BigUint::from(0 as u128),
-            //     ContributorError::AmountTooLarge
-            // );
-
-            let total = &mut totals[i];
-
-            match (allocation / pow10_divider.clone()).to_u64() {
-                Some(v) => { total.allocations = v; },
+            // convert allocation to u64 based on decimal difference and save
+            let raw_allocation = BigUint::from_bytes_be(
+                &payload[start + INDEX_ALLOCATIONS_AMOUNT..start + INDEX_ALLOCATIONS_EXCESS],
+            );
+            match (raw_allocation / pow10_divider.clone()).to_u64() {
+                Some(value) => {
+                    total.allocations = value;
+                }
                 None => return Result::Err(ContributorError::AmountTooLarge.into()),
             }
 
-            match BigUint::from_bytes_be(&payload[start + INDEX_ALLOCATIONS_AMOUNT..start + INDEX_ALLOCATIONS_EXCESS + 32]).to_u64() {
-                Some(v) => { total.excess_contributions = v; },
+            // and save excess contribution
+            match BigUint::from_bytes_be(
+                &payload[start + INDEX_ALLOCATIONS_EXCESS..start + INDEX_ALLOCATIONS_END],
+            )
+            .to_u64()
+            {
+                Some(value) => {
+                    total.excess_contributions = value;
+                }
                 None => return Result::Err(ContributorError::AmountTooLarge.into()),
             }
         }

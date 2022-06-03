@@ -1,11 +1,12 @@
 import { web3 } from "@project-serum/anchor";
 import { CHAIN_ID_ETH, CHAIN_ID_SOLANA, tryNativeToHexString } from "@certusone/wormhole-sdk";
-import { createMint } from "@solana/spl-token";
+import { createMint, mintTo } from "@solana/spl-token";
 import { BigNumber, BigNumberish } from "ethers";
 
-import { toBigNumberHex } from "./utils";
+import { getPdaAssociatedTokenAddress, hexToPublicKey, toBigNumberHex } from "./utils";
 import { CONDUCTOR_ADDRESS, CONDUCTOR_CHAIN } from "./consts";
 import { signAndEncodeVaa } from "./wormhole";
+import { BN } from "bn.js";
 
 // sale struct info
 export const MAX_ACCEPTED_TOKENS = 8;
@@ -38,7 +39,27 @@ export class DummyConductor {
 
   async attestSaleToken(connection: web3.Connection, payer: web3.Keypair): Promise<void> {
     const mint = await createMint(connection, payer, payer.publicKey, payer.publicKey, this.nativeTokenDecimals);
-    this.saleTokenOnSolana = mint.toBase58();
+    this.saleTokenOnSolana = mint.toString();
+    return;
+  }
+
+  async redeemAllocationsOnSolana(
+    connection: web3.Connection,
+    payer: web3.Keypair,
+    custodian: web3.PublicKey
+  ): Promise<void> {
+    const mint = new web3.PublicKey(this.saleTokenOnSolana);
+    const custodianTokenAcct = await getPdaAssociatedTokenAddress(mint, custodian);
+    const amount = this.allocations.map((item) => new BN(item.allocation)).reduce((prev, curr) => prev.add(curr));
+
+    await mintTo(
+      connection,
+      payer,
+      mint,
+      custodianTokenAcct,
+      payer,
+      BigInt(amount.toString()) // 20,000,000,000 lamports
+    );
     return;
   }
 
@@ -48,27 +69,11 @@ export class DummyConductor {
 
   async createAcceptedTokens(connection: web3.Connection, payer: web3.Keypair): Promise<AcceptedToken[]> {
     const tokenIndices = [2, 3, 5, 8, 13, 21, 34, 55];
-    const allocations = [
-      "10000000000",
-      "10000000000",
-      "20000000000",
-      "30000000000",
-      "50000000000",
-      "80000000000",
-      "130000000000",
-      "210000000000",
-    ];
-    const excessContributions = ["1234567", "8901234", "5678901", "2345678", "3456789", "123456", "7890123", "4567890"];
+
     for (let i = 0; i < MAX_ACCEPTED_TOKENS; ++i) {
       // just make everything the same number of decimals (9)
       const mint = await createMint(connection, payer, payer.publicKey, payer.publicKey, 9);
-      const acceptedToken = makeAcceptedToken(tokenIndices[i], mint.toBase58());
-      this.acceptedTokens.push(acceptedToken);
-
-      // make up allocations, too
-      const allocation = makeAllocation(tokenIndices[i], allocations[i], excessContributions[i]);
-      this.allocations.push(allocation);
-      //this.allocations
+      this.acceptedTokens.push(makeAcceptedToken(tokenIndices[i], mint.toString()));
     }
     return this.acceptedTokens;
   }
@@ -80,6 +85,7 @@ export class DummyConductor {
   createSale(startTime: number, duration: number, associatedSaleTokenAddress: web3.PublicKey): Buffer {
     // uptick saleId for every new sale
     ++this.saleId;
+    ++this.wormholeSequence;
 
     // set up sale time based on block time
     this.saleStart = startTime;
@@ -105,7 +111,36 @@ export class DummyConductor {
     return this.initSaleVaa;
   }
 
-  sealSale(blockTime: number): Buffer {
+  getAllocationMultiplier(): string {
+    const decimalDifference = this.tokenDecimals - this.nativeTokenDecimals;
+    return BigNumber.from("10").pow(decimalDifference).toString();
+  }
+
+  sealSale(blockTime: number, contributions: Map<string, string[]>): Buffer {
+    ++this.wormholeSequence;
+    this.allocations = [];
+
+    const allocationMultiplier = this.getAllocationMultiplier();
+
+    // make up allocations and excess contributions
+    const excessContributionDivisor = BigNumber.from("5");
+
+    const acceptedTokens = this.acceptedTokens;
+    for (let i = 0; i < acceptedTokens.length; ++i) {
+      const token = acceptedTokens[i];
+      const addr = hexToPublicKey(token.address).toString();
+
+      const contributionSubset = contributions.get(addr);
+      if (contributionSubset === undefined) {
+        this.allocations.push(makeAllocation(token.index, "0", "0"));
+      } else {
+        const total = contributionSubset.map((x) => BigNumber.from(x)).reduce((prev, curr) => prev.add(curr));
+        const excessContribution = total.div(excessContributionDivisor).toString();
+
+        const allocation = BigNumber.from(this.expectedAllocations[i]).mul(allocationMultiplier).toString();
+        this.allocations.push(makeAllocation(token.index, allocation, excessContribution));
+      }
+    }
     return signAndEncodeVaa(
       blockTime,
       this.nonce,
@@ -117,6 +152,7 @@ export class DummyConductor {
   }
 
   abortSale(blockTime: number): Buffer {
+    ++this.wormholeSequence;
     return signAndEncodeVaa(
       blockTime,
       this.nonce,
@@ -133,6 +169,18 @@ export class DummyConductor {
   tokenDecimals = 18;
   nativeTokenDecimals = 7;
   recipient = tryNativeToHexString("0x22d491bde2303f2f43325b2108d26f1eaba1e32b", CHAIN_ID_ETH);
+
+  // we won't use all of these, but these are purely to verify decimal shift
+  expectedAllocations = [
+    "1000000000",
+    "1000000000",
+    "2000000000",
+    "3000000000",
+    "5000000000",
+    "8000000000",
+    "13000000000",
+    "21000000000",
+  ];
 
   // wormhole nonce
   nonce = 0;
@@ -216,7 +264,7 @@ export function encodeSaleSealed(
 ): Buffer {
   const headerLen = 33;
   const numAllocations = allocations.length;
-  const encoded = Buffer.alloc(headerLen + numAllocations * NUM_BYTES_ALLOCATION);
+  const encoded = Buffer.alloc(headerLen + 1 + numAllocations * NUM_BYTES_ALLOCATION);
 
   encoded.writeUInt8(3, 0); // saleSealed payload = 3
   encoded.write(toBigNumberHex(saleId, 32), 1, "hex");

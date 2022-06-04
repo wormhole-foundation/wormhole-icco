@@ -81,23 +81,19 @@ pub mod anchor_contributor {
         let transfer_authority = &ctx.accounts.owner;
 
         // spl transfer contribution
-        /*
-        // this doesn't work in devnet?
-
         token::transfer(
-            CpiContext::new_with_signer(
+            CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
                 token::Transfer {
-                    from: ctx.accounts.buyer_token_acct.to_account_info(),
-                    to: ctx.accounts.custodian_token_acct.to_account_info(),
-                    authority: ctx.accounts.owner.to_account_info(),
+                    to: to_account.to_account_info(),
+                    from: from_account.to_account_info(),
+                    authority: transfer_authority.to_account_info(),
                 },
-                &[&[ctx.accounts.owner.key().as_ref()]],
             ),
             amount,
         )?;
-        */
 
+        /*
         invoke(
             &spl_token::instruction::transfer(
                 &token::ID,
@@ -109,6 +105,7 @@ pub mod anchor_contributor {
             )?,
             &ctx.accounts.to_account_infos(),
         )?;
+        */
         Ok(())
     }
 
@@ -404,7 +401,20 @@ pub mod anchor_contributor {
             if refund == 0 {
                 continue;
             }
+            token::transfer(
+                CpiContext::new_with_signer(
+                    ctx.accounts.token_program.to_account_info(),
+                    token::Transfer {
+                        to: to_acct.to_account_info(),
+                        from: from_acct.to_account_info(),
+                        authority: transfer_authority.to_account_info(),
+                    },
+                    &[&[SEED_PREFIX_CUSTODIAN.as_bytes(), &[ctx.bumps["custodian"]]]],
+                ),
+                refund,
+            )?;
 
+            /*
             invoke_signed(
                 &spl_token::instruction::transfer(
                     &token::ID,
@@ -417,6 +427,7 @@ pub mod anchor_contributor {
                 &all_accts,
                 &[&[&SEED_PREFIX_CUSTODIAN.as_bytes(), &[ctx.bumps["custodian"]]]],
             )?;
+            */
         }
         Ok(())
     }
@@ -452,24 +463,21 @@ pub mod anchor_contributor {
         );
 
         // spl transfer allocation
-        /*
-        // this doesn't work in devnet?
-        let custodian_bump = ctx.bumps["custodian"];
+        let transfer_authority = &ctx.accounts.custodian;
         token::transfer(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
                 token::Transfer {
-                    to: ctx.accounts.buyer_token_acct.to_account_info(),
-                    from: ctx.accounts.custodian_token_acct.to_account_info(),
-                    authority: ctx.accounts.custodian.to_account_info(),
+                    to: to_account.to_account_info(),
+                    from: from_account.to_account_info(),
+                    authority: transfer_authority.to_account_info(),
                 },
-                &[&[SEED_PREFIX_CUSTODIAN.as_bytes(), &[custodian_bump]]],
+                &[&[SEED_PREFIX_CUSTODIAN.as_bytes(), &[ctx.bumps["custodian"]]]],
             ),
-            amount,
+            allocation,
         )?;
-        */
 
-        let transfer_authority = &ctx.accounts.custodian;
+        /*
         invoke_signed(
             &spl_token::instruction::transfer(
                 &token::ID,
@@ -482,6 +490,7 @@ pub mod anchor_contributor {
             &ctx.accounts.to_account_infos(),
             &[&[&SEED_PREFIX_CUSTODIAN.as_bytes(), &[ctx.bumps["custodian"]]]],
         )?;
+        */
 
         // now compute excess and transfer
         let num_accepted = totals.len();
@@ -518,6 +527,20 @@ pub mod anchor_contributor {
                 continue;
             }
 
+            token::transfer(
+                CpiContext::new_with_signer(
+                    ctx.accounts.token_program.to_account_info(),
+                    token::Transfer {
+                        to: to_acct.to_account_info(),
+                        from: from_acct.to_account_info(),
+                        authority: transfer_authority.to_account_info(),
+                    },
+                    &[&[SEED_PREFIX_CUSTODIAN.as_bytes(), &[ctx.bumps["custodian"]]]],
+                ),
+                excess,
+            )?;
+
+            /*
             invoke_signed(
                 &spl_token::instruction::transfer(
                     &token::ID,
@@ -530,6 +553,7 @@ pub mod anchor_contributor {
                 &all_accts,
                 &[&[&SEED_PREFIX_CUSTODIAN.as_bytes(), &[ctx.bumps["custodian"]]]],
             )?;
+            */
         }
         Ok(())
     }

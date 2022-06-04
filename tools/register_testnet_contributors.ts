@@ -25,7 +25,14 @@ async function main() {
   const networks = parseArgs();
 
   for (let i = 0; i < networks.length; i++) {
-    const config = DeploymentConfig[networks[i]];
+    let config;
+    if (networks[i] == "solana_emitter") {
+      // we're registering the solana contributor emitter address
+      // but this doesn't have a key in the Deployment config
+      config = DeploymentConfig["solana_testnet"];
+    } else {
+      config = DeploymentConfig[networks[i]];
+    }
     if (!config) {
       throw Error("deployment config undefined");
     }

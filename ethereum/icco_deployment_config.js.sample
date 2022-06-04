@@ -126,4 +126,13 @@ module.exports = {
     rpc: "",
     deployImplementationOnly: false,
   },
+  solana_testnet: {
+    conductorChainId: 2,
+    contributorChainId: 1,
+    authority: "",
+    wormhole: "",
+    tokenBridge: "",
+    mnemonic: "",
+    rpc: "",
+  },
 };

@@ -278,8 +278,8 @@ export class IccoContributor {
       })
       .signers([payer])
       .remainingAccounts(remainingAccounts)
-      .rpc({ skipPreflight: true });
-    //.rpc();
+      .rpc();
+     //.rpc({ skipPreflight: true });
   }
 
   async getSale(saleId: Buffer) {

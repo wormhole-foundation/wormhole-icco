@@ -323,20 +323,43 @@ describe("anchor-contributor", () => {
       await waitUntilBlock(connection, saleEnd);
       const tx = await contributor.attestContributions(orchestrator, saleId);
 
-      // now go about your business. Read VAA back.
+      const expectedContributedValues = [
+        totalContributions[0],
+        new BN(0),
+        new BN(0),
+        totalContributions[1],
+        new BN(0),
+        new BN(0),
+        new BN(0),
+        new BN(0),
+      ];
+      const numExpected = expectedContributedValues.length;
+
+      // now go about your business. read VAA back.
       await connection.confirmTransaction(tx);
-      const attest_vaa_info = await connection.getAccountInfo(
-        contributor.whMessageKey.publicKey,
-        "confirmed"
-      );
-//      console.log(attest_vaa_info);
-      const attest_vaa_data = attest_vaa_info!.data;
-      // Last 300 bytes are VAA.payload. Let;s check it.
-      const attest_vaa_payload = attest_vaa_data.slice(-(33+2+1+33*dummyConductor.acceptedTokens.length));
-      console.log("attest_vaa_payload bytes str: " + attest_vaa_payload.toString("hex"))
-      expect(attest_vaa_payload[0]).to.equal(0x02);
+      const vaaAccountInfo = await connection.getAccountInfo(contributor.whMessageKey.publicKey, "confirmed");
+      const attestContributionsVaa = vaaAccountInfo.data;
+
+      const headerLength = 33;
+      const contributionLength = 33;
+      const payloadLength = headerLength + 3 + contributionLength * numExpected;
+      const payload = attestContributionsVaa.slice(-payloadLength);
+
+      const payloadId = 2;
+      expect(payload.readUint8(0)).to.equal(payloadId);
+      expect(payload.subarray(1, 33).toString("hex")).to.equal(saleId.toString("hex"));
+      expect(payload.readUint16BE(33)).to.equal(CHAIN_ID_SOLANA as number);
+      expect(payload.readUint8(35)).to.equal(numExpected);
+
+      const contributionsStart = headerLength + 3;
       for (let i = 0; i < dummyConductor.acceptedTokens.length; ++i) {
-        expect(attest_vaa_payload[33+2+1+33*i]).to.equal(dummyConductor.acceptedTokens[i].index);
+        const start = contributionsStart + contributionLength * i;
+
+        const tokenIndex = payload.readUint8(start);
+        expect(tokenIndex).to.equal(dummyConductor.acceptedTokens[i].index);
+
+        const amount = new BN(payload.subarray(start + 1, start + 33));
+        expect(amount.toString()).to.equal(expectedContributedValues[i].toString());
       }
     });
 

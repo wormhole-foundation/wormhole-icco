@@ -158,6 +158,8 @@ export class IccoContributor {
   async abortSale(payer: web3.Keypair, saleAbortedVaa: Buffer): Promise<string> {
     const program = this.program;
 
+    const custodian = this.custodianAccount.key;
+
     // first post signed vaa to wormhole
     await postVaa(program.provider.connection, payer, saleAbortedVaa);
     const signedVaaAccount = findSignedVaaAccount(saleAbortedVaa);
@@ -168,6 +170,7 @@ export class IccoContributor {
     return program.methods
       .abortSale()
       .accounts({
+        custodian,
         sale: saleAccount.key,
         coreBridgeVaa: signedVaaAccount.key,
         owner: payer.publicKey,

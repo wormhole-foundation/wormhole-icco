@@ -8,7 +8,6 @@ use std::str::FromStr;
 use crate::{
     constants::{SEED_PREFIX_BUYER, SEED_PREFIX_CUSTODIAN, SEED_PREFIX_SALE},
     state::{Buyer, Custodian, Sale},
-    wormhole::get_message_data,
 };
 
 #[derive(Accounts)]
@@ -31,13 +30,19 @@ pub struct CreateCustodian<'info> {
 
 #[derive(Accounts)]
 pub struct InitializeSale<'info> {
+    #[account(
+        seeds = [
+            SEED_PREFIX_CUSTODIAN.as_bytes(),
+        ],
+        bump,
+    )]
     pub custodian: Account<'info, Custodian>,
 
     #[account(
         init,
         seeds = [
             SEED_PREFIX_SALE.as_bytes(),
-            &get_sale_id(&core_bridge_vaa)?,
+            &Custodian::get_sale_id_from_vaa(&core_bridge_vaa)?,
         ],
         payer = owner,
         bump,
@@ -46,7 +51,7 @@ pub struct InitializeSale<'info> {
     pub sale: Account<'info, Sale>,
 
     #[account(
-        constraint = core_bridge_vaa.owner == &Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap()
+        constraint = core_bridge_vaa.owner.key() == Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap()
     )]
     /// CHECK: This account is owned by Core Bridge so we trust it
     pub core_bridge_vaa: AccountInfo<'info>,
@@ -69,7 +74,6 @@ pub struct InitializeSale<'info> {
 #[derive(Accounts)]
 pub struct Contribute<'info> {
     #[account(
-        mut,
         seeds = [
             SEED_PREFIX_CUSTODIAN.as_bytes(),
         ],
@@ -123,7 +127,6 @@ pub struct Contribute<'info> {
 #[derive(Accounts)]
 pub struct AttestContributions<'info> {
     #[account(
-        mut,
         seeds = [
             SEED_PREFIX_SALE.as_bytes(),
             &sale.id,
@@ -200,7 +203,6 @@ pub struct AttestContributions<'info> {
 #[derive(Accounts)]
 pub struct BridgeSealedContribution<'info> {
     #[account(
-        mut,
         seeds = [
             SEED_PREFIX_CUSTODIAN.as_bytes(),
         ],
@@ -336,17 +338,25 @@ pub struct BridgeSealedContribution<'info> {
 #[derive(Accounts)]
 pub struct AbortSale<'info> {
     #[account(
+        seeds = [
+            SEED_PREFIX_CUSTODIAN.as_bytes(),
+        ],
+        bump,
+    )]
+    pub custodian: Account<'info, Custodian>,
+
+    #[account(
         mut,
         seeds = [
             SEED_PREFIX_SALE.as_bytes(),
-            &get_sale_id(&core_bridge_vaa)?,
+            &sale.id,
         ],
         bump,
     )]
     pub sale: Account<'info, Sale>,
 
     #[account(
-        constraint = core_bridge_vaa.owner == &Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap()
+        constraint = core_bridge_vaa.owner.key() == Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap()
     )]
     /// CHECK: This account is owned by Core Bridge so we trust it
     pub core_bridge_vaa: AccountInfo<'info>,
@@ -371,14 +381,14 @@ pub struct SealSale<'info> {
         mut,
         seeds = [
             SEED_PREFIX_SALE.as_bytes(),
-            &get_sale_id(&core_bridge_vaa)?,
+            &sale.id,
         ],
         bump,
     )]
     pub sale: Account<'info, Sale>,
 
     #[account(
-        constraint = core_bridge_vaa.owner == &Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap()
+        constraint = core_bridge_vaa.owner.key() == Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap()
     )]
     /// CHECK: This account is owned by Core Bridge so we trust it
     pub core_bridge_vaa: AccountInfo<'info>,
@@ -399,7 +409,6 @@ pub struct SealSale<'info> {
 #[derive(Accounts)]
 pub struct ClaimAllocation<'info> {
     #[account(
-        mut,
         seeds = [
             SEED_PREFIX_CUSTODIAN.as_bytes(),
         ],
@@ -451,7 +460,6 @@ pub struct ClaimAllocation<'info> {
 #[derive(Accounts)]
 pub struct ClaimRefunds<'info> {
     #[account(
-        mut,
         seeds = [
             SEED_PREFIX_CUSTODIAN.as_bytes(),
         ],
@@ -483,8 +491,4 @@ pub struct ClaimRefunds<'info> {
     pub owner: Signer<'info>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
-}
-
-fn get_sale_id<'info>(vaa_account: &AccountInfo<'info>) -> Result<Vec<u8>> {
-    Ok(get_message_data(&vaa_account)?.payload[1..33].into())
 }

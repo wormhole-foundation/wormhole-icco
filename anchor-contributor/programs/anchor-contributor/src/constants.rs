@@ -39,7 +39,6 @@ pub const ATTEST_CONTRIBUTIONS_ELEMENT_LEN: usize = 33; // token index + amount
 pub const INDEX_SALE_SEALED_ALLOCATIONS_START: usize = 33;
 
 pub const ALLOCATION_NUM_BYTES: usize = 65;
-pub const INDEX_ALLOCATIONS_INDEX: usize = 0;
 pub const INDEX_ALLOCATIONS_AMOUNT: usize = 1;
 pub const INDEX_ALLOCATIONS_EXCESS: usize = 33;
 pub const INDEX_ALLOCATIONS_END: usize = 65;

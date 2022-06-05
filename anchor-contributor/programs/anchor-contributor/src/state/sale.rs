@@ -3,14 +3,9 @@ use anchor_spl::token::Mint;
 use num::bigint::BigUint;
 use num::traits::ToPrimitive;
 use num_derive::*;
-use std::{mem::size_of_val, str::FromStr, u64};
+use std::{mem::size_of_val, u64};
 
-use crate::{
-    constants::*,
-    env::*,
-    error::*,
-    wormhole::{get_message_data, MessageData},
-};
+use crate::{constants::*, error::*};
 
 #[account]
 #[derive(Debug)]
@@ -345,46 +340,3 @@ fn to_u64_be(bytes: &[u8], index: usize) -> u64 {
 //fn to_bytes32(bytes: &[u8], index: usize) -> [u8; 32] {
 //    bytes[index..index + 32].try_into().unwrap()
 //}
-
-pub fn verify_conductor_vaa<'info>(
-    vaa_account: &AccountInfo<'info>,
-    payload_type: u8,
-) -> Result<MessageData> {
-    let msg = get_message_data(&vaa_account)?;
-
-    require!(
-        vaa_account.to_account_info().owner == &Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap(),
-        ContributorError::InvalidVaaAction
-    );
-    require!(
-        msg.emitter_chain == get_conductor_chain()?,
-        ContributorError::InvalidConductorChain
-    );
-    require!(
-        msg.emitter_address == get_conductor_address()?,
-        ContributorError::InvalidConductorAddress
-    );
-    require!(
-        msg.payload[0] == payload_type,
-        ContributorError::InvalidVaaAction
-    );
-    Ok(msg)
-}
-
-// TODO: set up cfg flag to just use constants instead of these getters
-pub fn get_conductor_chain() -> Result<u16> {
-    match CONDUCTOR_CHAIN.to_string().parse() {
-        Ok(v) => Ok(v),
-        _ => Err(ContributorError::InvalidConductorChain.into()),
-    }
-}
-
-pub fn get_conductor_address() -> Result<[u8; 32]> {
-    match hex::decode(CONDUCTOR_ADDRESS) {
-        Ok(v) => match v.try_into() {
-            Ok(w) => Ok(w),
-            Err(e) => Err(ContributorError::InvalidConductorAddress.into()),
-        },
-        _ => Err(ContributorError::InvalidConductorAddress.into()),
-    }
-}

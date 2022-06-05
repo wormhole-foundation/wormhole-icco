@@ -1,14 +1,13 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::borsh::try_from_slice_unchecked;
 use anchor_lang::solana_program::instruction::Instruction;
-use anchor_lang::solana_program::program::{invoke, invoke_signed};
+use anchor_lang::solana_program::program::invoke_signed;
 use anchor_lang::solana_program::system_instruction::transfer;
 use anchor_lang::solana_program::sysvar::*;
 use anchor_spl::*;
 
 mod constants;
 mod context;
-mod env;
 mod error;
 mod state;
 mod token_bridge;
@@ -17,7 +16,6 @@ mod wormhole;
 use constants::*;
 use context::*;
 use error::*;
-use state::sale::{get_conductor_address, get_conductor_chain, verify_conductor_vaa};
 use token_bridge::*;
 use wormhole::*;
 
@@ -29,14 +27,14 @@ pub mod anchor_contributor {
     use itertools::izip;
 
     pub fn create_custodian(ctx: Context<CreateCustodian>) -> Result<()> {
-        let custodian = &mut ctx.accounts.custodian;
-        custodian.owner = ctx.accounts.owner.key();
-
-        Ok(())
+        ctx.accounts.custodian.new(&ctx.accounts.owner.key())
     }
 
     pub fn init_sale(ctx: Context<InitializeSale>) -> Result<()> {
-        let msg = verify_conductor_vaa(&ctx.accounts.core_bridge_vaa, PAYLOAD_SALE_INIT_SOLANA)?;
+        let msg = ctx.accounts.custodian.parse_and_verify_conductor_vaa(
+            &ctx.accounts.core_bridge_vaa,
+            PAYLOAD_SALE_INIT_SOLANA,
+        )?;
         let sale = &mut ctx.accounts.sale;
 
         // now parse vaa
@@ -110,11 +108,11 @@ pub mod anchor_contributor {
     }
 
     pub fn attest_contributions(ctx: Context<AttestContributions>) -> Result<()> {
-        // get accepted token index
-        let sale = &mut ctx.accounts.sale;
-
         let clock = Clock::get()?;
-        let vaa_payload = sale.serialize_contributions(clock.unix_timestamp)?;
+        let vaa_payload = ctx
+            .accounts
+            .sale
+            .serialize_contributions(clock.unix_timestamp)?;
 
         // Send WH Message
         let bridge_data: BridgeData =
@@ -181,9 +179,17 @@ pub mod anchor_contributor {
     }
 
     pub fn seal_sale(ctx: Context<SealSale>) -> Result<()> {
-        let msg = verify_conductor_vaa(&ctx.accounts.core_bridge_vaa, PAYLOAD_SALE_SEALED)?;
-
         let sale = &mut ctx.accounts.sale;
+        let msg = ctx
+            .accounts
+            .custodian
+            .parse_and_verify_conductor_vaa_and_sale(
+                &ctx.accounts.core_bridge_vaa,
+                PAYLOAD_SALE_SEALED,
+                sale.id,
+            )?;
+
+        // all good
         sale.parse_sale_sealed(&msg.payload)?;
 
         // TODO: check balance of the sale token on the contract to make sure
@@ -266,8 +272,9 @@ pub mod anchor_contributor {
         let sale = &ctx.accounts.sale;
         require!(sale.is_sealed(), ContributorError::SaleNotSealed);
 
-        let conductor_chain = get_conductor_chain()?;
-        let conductor_address = get_conductor_address()?;
+        let custodian = &ctx.accounts.custodian;
+        let conductor_chain = custodian.conductor_chain;
+        let conductor_address = custodian.conductor_address;
 
         let asset = &sale.totals.get(token_idx as usize).unwrap();
         let mint = asset.mint;
@@ -355,8 +362,18 @@ pub mod anchor_contributor {
     }
 
     pub fn abort_sale(ctx: Context<AbortSale>) -> Result<()> {
-        let msg = verify_conductor_vaa(&ctx.accounts.core_bridge_vaa, PAYLOAD_SALE_ABORTED)?;
-        ctx.accounts.sale.parse_sale_aborted(&msg.payload)?;
+        let sale = &mut ctx.accounts.sale;
+        let msg = ctx
+            .accounts
+            .custodian
+            .parse_and_verify_conductor_vaa_and_sale(
+                &ctx.accounts.core_bridge_vaa,
+                PAYLOAD_SALE_ABORTED,
+                sale.id,
+            )?;
+
+        // all good
+        sale.parse_sale_aborted(&msg.payload)?;
 
         Ok(())
     }

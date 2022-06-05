@@ -1,4 +1,11 @@
-import { AnchorProvider, workspace, web3, Program, setProvider, BN } from "@project-serum/anchor";
+import {
+  AnchorProvider,
+  workspace,
+  web3,
+  Program,
+  setProvider,
+  BN,
+} from "@project-serum/anchor";
 import { AnchorContributor } from "../target/types/anchor_contributor";
 import { expect } from "chai";
 import { readFileSync } from "fs";
@@ -54,17 +61,27 @@ describe("anchor-contributor", () => {
   const connection = program.provider.connection;
 
   const orchestrator = web3.Keypair.fromSecretKey(
-    Uint8Array.from(JSON.parse(readFileSync("./tests/test_orchestrator_keypair.json").toString()))
+    Uint8Array.from(
+      JSON.parse(
+        readFileSync("./tests/test_orchestrator_keypair.json").toString()
+      )
+    )
   );
   const buyer = web3.Keypair.fromSecretKey(
-    Uint8Array.from(JSON.parse(readFileSync("./tests/test_buyer_keypair.json").toString()))
+    Uint8Array.from(
+      JSON.parse(readFileSync("./tests/test_buyer_keypair.json").toString())
+    )
   );
 
   // dummy conductor to generate vaas
   const dummyConductor = new DummyConductor(CONDUCTOR_CHAIN, CONDUCTOR_ADDRESS);
 
   // our contributor
-  const contributor = new IccoContributor(program, CORE_BRIDGE_ADDRESS, postVaaSolanaWithRetry);
+  const contributor = new IccoContributor(
+    program,
+    CORE_BRIDGE_ADDRESS,
+    postVaaSolanaWithRetry
+  );
 
   // kyc for signing contributions
   const kyc = new KycAuthority(KYC_PRIVATE, CONDUCTOR_ADDRESS, contributor);
@@ -97,7 +114,14 @@ describe("anchor-contributor", () => {
         dummyConductor.getSaleTokenOnSolana(),
         orchestrator.publicKey
       );
-      await mintTo(connection, orchestrator, saleTokenMint, tokenAccount.address, orchestrator, 1n);
+      await mintTo(
+        connection,
+        orchestrator,
+        saleTokenMint,
+        tokenAccount.address,
+        orchestrator,
+        1n
+      );
 
       const transaction = await transferFromSolana(
         connection,
@@ -116,13 +140,21 @@ describe("anchor-contributor", () => {
 
     it("Mint Accepted SPL Tokens to Buyer", async () => {
       // first create them and add them to the accepted tokens list
-      const acceptedTokens = await dummyConductor.createAcceptedTokens(connection, orchestrator);
+      const acceptedTokens = await dummyConductor.createAcceptedTokens(
+        connection,
+        orchestrator
+      );
 
       for (const token of acceptedTokens) {
         const mint = hexToPublicKey(token.address);
 
         // create ata for buyer
-        const tokenAccount = await getOrCreateAssociatedTokenAccount(connection, buyer, mint, buyer.publicKey);
+        const tokenAccount = await getOrCreateAssociatedTokenAccount(
+          connection,
+          buyer,
+          mint,
+          buyer.publicKey
+        );
 
         // now mint to buyer for testing
         let amount = new BN("200000000000");
@@ -149,12 +181,16 @@ describe("anchor-contributor", () => {
       const custodianState = await contributor.getCustodian();
 
       // verify
-      expect(custodianState.owner.toString()).to.equal(orchestrator.publicKey.toString());
+      expect(custodianState.owner.toString()).to.equal(
+        orchestrator.publicKey.toString()
+      );
     });
 
     it("Create ATAs for Custodian", async () => {
       for (const token of dummyConductor.acceptedTokens) {
-        const mint = new web3.PublicKey(tryHexToNativeString(token.address, CHAIN_ID_SOLANA));
+        const mint = new web3.PublicKey(
+          tryHexToNativeString(token.address, CHAIN_ID_SOLANA)
+        );
 
         const allowOwnerOffCurve = true;
         await getOrCreateAssociatedTokenAccount(
@@ -190,8 +226,16 @@ describe("anchor-contributor", () => {
     it("Orchestrator Initialize Sale with Signed VAA", async () => {
       const startTime = 8 + (await getBlockTime(connection));
       const duration = 8; // seconds
-      const initSaleVaa = dummyConductor.createSale(startTime, duration, saleTokenAccount.address);
-      const tx = await contributor.initSale(orchestrator, initSaleVaa, dummyConductor.getSaleTokenOnSolana());
+      const initSaleVaa = dummyConductor.createSale(
+        startTime,
+        duration,
+        saleTokenAccount.address
+      );
+      const tx = await contributor.initSale(
+        orchestrator,
+        initSaleVaa,
+        dummyConductor.getSaleTokenOnSolana()
+      );
 
       {
         // get the first sale state
@@ -203,9 +247,15 @@ describe("anchor-contributor", () => {
         //expect(Uint8Array.from(saleState.tokenAddress)).to.deep.equal(Buffer.from(dummyConductor.tokenAddress, "hex"));
         expect(saleState.tokenChain).to.equal(dummyConductor.tokenChain);
         expect(saleState.tokenDecimals).to.equal(dummyConductor.tokenDecimals);
-        expect(saleState.times.start.toString()).to.equal(dummyConductor.saleStart.toString());
-        expect(saleState.times.end.toString()).to.equal(dummyConductor.saleEnd.toString());
-        expect(Uint8Array.from(saleState.recipient)).to.deep.equal(Buffer.from(dummyConductor.recipient, "hex"));
+        expect(saleState.times.start.toString()).to.equal(
+          dummyConductor.saleStart.toString()
+        );
+        expect(saleState.times.end.toString()).to.equal(
+          dummyConductor.saleEnd.toString()
+        );
+        expect(Uint8Array.from(saleState.recipient)).to.deep.equal(
+          Buffer.from(dummyConductor.recipient, "hex")
+        );
         expect(saleState.status).has.key("active");
 
         // check totals
@@ -218,7 +268,9 @@ describe("anchor-contributor", () => {
           const acceptedToken = dummyConductor.acceptedTokens[i];
 
           expect(total.tokenIndex).to.equal(acceptedToken.index);
-          expect(tryNativeToHexString(total.mint.toString(), CHAIN_ID_SOLANA)).to.equal(acceptedToken.address);
+          expect(
+            tryNativeToHexString(total.mint.toString(), CHAIN_ID_SOLANA)
+          ).to.equal(acceptedToken.address);
           expect(total.contributions.toString()).to.equal("0");
           expect(total.allocations.toString()).to.equal("0");
           expect(total.excessContributions.toString()).to.equal("0");
@@ -257,7 +309,12 @@ describe("anchor-contributor", () => {
           saleId,
           tokenIndex,
           amount,
-          await kyc.signContribution(saleId, tokenIndex, amount, buyer.publicKey)
+          await kyc.signContribution(
+            saleId,
+            tokenIndex,
+            amount,
+            buyer.publicKey
+          )
         );
         throw Error(`should not happen: ${tx}`);
       } catch (e) {
@@ -281,8 +338,19 @@ describe("anchor-contributor", () => {
       let caughtError = false;
       try {
         // generate bad signature w/ amount that disagrees w/ instruction input
-        const badSignature = await kyc.signContribution(saleId, tokenIndex, new BN("42069"), buyer.publicKey);
-        const tx = await contributor.contribute(buyer, saleId, tokenIndex, amount, badSignature);
+        const badSignature = await kyc.signContribution(
+          saleId,
+          tokenIndex,
+          new BN("42069"),
+          buyer.publicKey
+        );
+        const tx = await contributor.contribute(
+          buyer,
+          saleId,
+          tokenIndex,
+          amount,
+          badSignature
+        );
         throw Error(`should not happen: ${tx}`);
       } catch (e) {
         caughtError = verifyErrorMsg(e, "InvalidKycSignature");
@@ -296,13 +364,24 @@ describe("anchor-contributor", () => {
     it("User Contributes to Sale", async () => {
       // prep contributions info
       const acceptedTokens = dummyConductor.acceptedTokens;
-      const contributedTokenIndices = [acceptedTokens[0].index, acceptedTokens[3].index];
-      contributions.set(contributedTokenIndices[0], ["1200000000", "3400000000"]);
-      contributions.set(contributedTokenIndices[1], ["5600000000", "7800000000"]);
+      const contributedTokenIndices = [
+        acceptedTokens[0].index,
+        acceptedTokens[3].index,
+      ];
+      contributions.set(contributedTokenIndices[0], [
+        "1200000000",
+        "3400000000",
+      ]);
+      contributions.set(contributedTokenIndices[1], [
+        "5600000000",
+        "7800000000",
+      ]);
 
       contributedTokenIndices.forEach((tokenIndex) => {
         const amounts = contributions.get(tokenIndex);
-        totalContributions.push(amounts.map((x) => new BN(x)).reduce((prev, curr) => prev.add(curr)));
+        totalContributions.push(
+          amounts.map((x) => new BN(x)).reduce((prev, curr) => prev.add(curr))
+        );
       });
 
       const startingBalanceBuyer = await Promise.all(
@@ -314,7 +393,11 @@ describe("anchor-contributor", () => {
       const startingBalanceCustodian = await Promise.all(
         acceptedTokens.map(async (token) => {
           const mint = hexToPublicKey(token.address);
-          return getPdaSplBalance(connection, mint, contributor.custodianAccount.key);
+          return getPdaSplBalance(
+            connection,
+            mint,
+            contributor.custodianAccount.key
+          );
         })
       );
 
@@ -322,13 +405,20 @@ describe("anchor-contributor", () => {
       // contribute multiple times
       const saleId = dummyConductor.getSaleId();
       for (const tokenIndex of contributedTokenIndices) {
-        for (const amount of contributions.get(tokenIndex).map((value) => new BN(value))) {
+        for (const amount of contributions
+          .get(tokenIndex)
+          .map((value) => new BN(value))) {
           const tx = await contributor.contribute(
             buyer,
             saleId,
             tokenIndex,
             amount,
-            await kyc.signContribution(saleId, tokenIndex, amount, buyer.publicKey)
+            await kyc.signContribution(
+              saleId,
+              tokenIndex,
+              amount,
+              buyer.publicKey
+            )
           );
         }
       }
@@ -342,7 +432,11 @@ describe("anchor-contributor", () => {
       const endingBalanceCustodian = await Promise.all(
         acceptedTokens.map(async (token) => {
           const mint = hexToPublicKey(token.address);
-          return getPdaSplBalance(connection, mint, contributor.custodianAccount.key);
+          return getPdaSplBalance(
+            connection,
+            mint,
+            contributor.custodianAccount.key
+          );
         })
       );
 
@@ -367,13 +461,17 @@ describe("anchor-contributor", () => {
         // check balance changes and state
         for (let i = 0; i < numExpected; ++i) {
           let contribution = expectedContributedAmounts[i];
-          expect(startingBalanceBuyer[i].sub(contribution).toString()).to.equal(endingBalanceBuyer[i].toString());
-          expect(startingBalanceCustodian[i].add(contribution).toString()).to.equal(
-            endingBalanceCustodian[i].toString()
+          expect(startingBalanceBuyer[i].sub(contribution).toString()).to.equal(
+            endingBalanceBuyer[i].toString()
           );
+          expect(
+            startingBalanceCustodian[i].add(contribution).toString()
+          ).to.equal(endingBalanceCustodian[i].toString());
 
           let item = totals[i];
-          const expectedState = contribution.eq(new BN("0")) ? "inactive" : "active";
+          const expectedState = contribution.eq(new BN("0"))
+            ? "inactive"
+            : "active";
           expect(item.status).has.key(expectedState);
           expect(item.amount.toString()).to.equal(contribution.toString());
           expect(item.excess.toString()).to.equal("0");
@@ -388,7 +486,9 @@ describe("anchor-contributor", () => {
 
         for (let i = 0; i < numExpected; ++i) {
           const total = totals[i];
-          expect(total.contributions.toString()).to.equal(expectedContributedAmounts[i].toString());
+          expect(total.contributions.toString()).to.equal(
+            expectedContributedAmounts[i].toString()
+          );
           expect(total.allocations.toString()).to.equal("0");
           expect(total.excessContributions.toString()).to.equal("0");
         }
@@ -445,7 +545,9 @@ describe("anchor-contributor", () => {
 
       const payloadId = 2;
       expect(payload.readUint8(0)).to.equal(payloadId);
-      expect(payload.subarray(1, 33).toString("hex")).to.equal(saleId.toString("hex"));
+      expect(payload.subarray(1, 33).toString("hex")).to.equal(
+        saleId.toString("hex")
+      );
       expect(payload.readUint16BE(33)).to.equal(CHAIN_ID_SOLANA as number);
       expect(payload.readUint8(35)).to.equal(numExpected);
 
@@ -457,7 +559,9 @@ describe("anchor-contributor", () => {
         expect(tokenIndex).to.equal(dummyConductor.acceptedTokens[i].index);
 
         const amount = new BN(payload.subarray(start + 1, start + 33));
-        expect(amount.toString()).to.equal(expectedContributedAmounts[i].toString());
+        expect(amount.toString()).to.equal(
+          expectedContributedAmounts[i].toString()
+        );
       }
     });
 
@@ -473,7 +577,12 @@ describe("anchor-contributor", () => {
           saleId,
           tokenIndex,
           amount,
-          await kyc.signContribution(saleId, tokenIndex, amount, buyer.publicKey)
+          await kyc.signContribution(
+            saleId,
+            tokenIndex,
+            amount,
+            buyer.publicKey
+          )
         );
         throw Error(`should not happen: ${tx}`);
       } catch (e) {
@@ -486,12 +595,19 @@ describe("anchor-contributor", () => {
     });
 
     it("Orchestrator Cannot Seal Sale Without Allocation Bridge Transfers Redeemed", async () => {
-      const saleSealedVaa = dummyConductor.sealSale(await getBlockTime(connection), contributions);
+      const saleSealedVaa = dummyConductor.sealSale(
+        await getBlockTime(connection),
+        contributions
+      );
       const saleTokenMint = dummyConductor.getSaleTokenOnSolana();
 
       let caughtError = false;
       try {
-        const tx = await contributor.sealSale(orchestrator, saleSealedVaa, saleTokenMint);
+        const tx = await contributor.sealSale(
+          orchestrator,
+          saleSealedVaa,
+          saleTokenMint
+        );
         throw Error(`should not happen: ${tx}`);
       } catch (e) {
         caughtError = verifyErrorMsg(e, "InsufficientFunds");
@@ -505,14 +621,25 @@ describe("anchor-contributor", () => {
     it("Orchestrator Seals Sale with Signed VAA", async () => {
       // all we're doing here is minting spl tokens to replicate token bridge's mechanism
       // of unlocking or minting tokens to someone's associated token account
-      await dummyConductor.redeemAllocationsOnSolana(connection, orchestrator, contributor.custodianAccount.key);
+      await dummyConductor.redeemAllocationsOnSolana(
+        connection,
+        orchestrator,
+        contributor.custodianAccount.key
+      );
 
       // now go about your business
-      const saleSealedVaa = dummyConductor.sealSale(await getBlockTime(connection), contributions);
+      const saleSealedVaa = dummyConductor.sealSale(
+        await getBlockTime(connection),
+        contributions
+      );
       const saleTokenMint = dummyConductor.getSaleTokenOnSolana();
       const allocations = dummyConductor.allocations;
 
-      const tx = await contributor.sealSale(orchestrator, saleSealedVaa, saleTokenMint);
+      const tx = await contributor.sealSale(
+        orchestrator,
+        saleSealedVaa,
+        saleTokenMint
+      );
 
       {
         // get the first sale state
@@ -530,20 +657,31 @@ describe("anchor-contributor", () => {
           const actual = totals[i];
           const expected = allocations[i];
 
-          const adjustedAllocation = BigNumber.from(expected.allocation).div(allocationDivisor).toString();
+          const adjustedAllocation = BigNumber.from(expected.allocation)
+            .div(allocationDivisor)
+            .toString();
           expect(actual.allocations.toString()).to.equal(adjustedAllocation);
-          expect(actual.excessContributions.toString()).to.equal(expected.excessContribution);
+          expect(actual.excessContributions.toString()).to.equal(
+            expected.excessContribution
+          );
         }
       }
     });
 
     it("Orchestrator Cannot Seal Sale Again with Signed VAA", async () => {
-      const saleSealedVaa = dummyConductor.sealSale(await getBlockTime(connection), contributions);
+      const saleSealedVaa = dummyConductor.sealSale(
+        await getBlockTime(connection),
+        contributions
+      );
       const saleTokenMint = dummyConductor.getSaleTokenOnSolana();
 
       let caughtError = false;
       try {
-        const tx = await contributor.sealSale(orchestrator, saleSealedVaa, saleTokenMint);
+        const tx = await contributor.sealSale(
+          orchestrator,
+          saleSealedVaa,
+          saleTokenMint
+        );
         throw Error(`should not happen: ${tx}`);
       } catch (e) {
         caughtError = verifyErrorMsg(e, "SaleEnded");
@@ -581,11 +719,20 @@ describe("anchor-contributor", () => {
       const startingBalanceCustodian = await Promise.all(
         acceptedTokens.map(async (token) => {
           const mint = hexToPublicKey(token.address);
-          return getPdaSplBalance(connection, mint, contributor.custodianAccount.key);
+          return getPdaSplBalance(
+            connection,
+            mint,
+            contributor.custodianAccount.key
+          );
         })
       );
 
-      const tx = await contributor.claimAllocation(buyer, saleId, dummyConductor.getSaleTokenOnSolana(), acceptedMints);
+      const tx = await contributor.claimAllocation(
+        buyer,
+        saleId,
+        dummyConductor.getSaleTokenOnSolana(),
+        acceptedMints
+      );
 
       const endingBalanceBuyer = await Promise.all(
         acceptedTokens.map(async (token) => {
@@ -596,7 +743,11 @@ describe("anchor-contributor", () => {
       const endingBalanceCustodian = await Promise.all(
         acceptedTokens.map(async (token) => {
           const mint = hexToPublicKey(token.address);
-          return getPdaSplBalance(connection, mint, contributor.custodianAccount.key);
+          return getPdaSplBalance(
+            connection,
+            mint,
+            contributor.custodianAccount.key
+          );
         })
       );
 
@@ -604,14 +755,20 @@ describe("anchor-contributor", () => {
       const buyerState = await contributor.getBuyer(saleId, buyer.publicKey);
       expect(buyerState.allocation.claimed).to.be.true;
 
-      const allocationDivisor = new BN(dummyConductor.getAllocationMultiplier());
+      const allocationDivisor = new BN(
+        dummyConductor.getAllocationMultiplier()
+      );
       const expectedAllocation = dummyConductor.allocations
         .map((item) => new BN(item.allocation))
         .reduce((prev, curr) => prev.add(curr))
         .div(allocationDivisor);
-      expect(buyerState.allocation.amount.toString()).to.equal(expectedAllocation.toString());
+      expect(buyerState.allocation.amount.toString()).to.equal(
+        expectedAllocation.toString()
+      );
 
-      const expectedExcessAmounts = dummyConductor.allocations.map((item) => new BN(item.excessContribution));
+      const expectedExcessAmounts = dummyConductor.allocations.map(
+        (item) => new BN(item.excessContribution)
+      );
       const numExpected = expectedExcessAmounts.length;
 
       const totals: any = buyerState.contributions;
@@ -621,8 +778,12 @@ describe("anchor-contributor", () => {
       for (let i = 0; i < numExpected; ++i) {
         let excess = expectedExcessAmounts[i];
 
-        expect(startingBalanceBuyer[i].add(excess).toString()).to.equal(endingBalanceBuyer[i].toString());
-        expect(startingBalanceCustodian[i].sub(excess).toString()).to.equal(endingBalanceCustodian[i].toString());
+        expect(startingBalanceBuyer[i].add(excess).toString()).to.equal(
+          endingBalanceBuyer[i].toString()
+        );
+        expect(startingBalanceCustodian[i].sub(excess).toString()).to.equal(
+          endingBalanceCustodian[i].toString()
+        );
 
         const item = totals[i];
         expect(item.status).has.key("excessClaimed");
@@ -679,8 +840,16 @@ describe("anchor-contributor", () => {
     it("Orchestrator Initialize Sale with Signed VAA", async () => {
       const startTime = 8 + (await getBlockTime(connection));
       const duration = 8; // seconds
-      const initSaleVaa = dummyConductor.createSale(startTime, duration, saleTokenAccount.address);
-      const tx = await contributor.initSale(orchestrator, initSaleVaa, dummyConductor.getSaleTokenOnSolana());
+      const initSaleVaa = dummyConductor.createSale(
+        startTime,
+        duration,
+        saleTokenAccount.address
+      );
+      const tx = await contributor.initSale(
+        orchestrator,
+        initSaleVaa,
+        dummyConductor.getSaleTokenOnSolana()
+      );
 
       {
         const saleId = dummyConductor.getSaleId();
@@ -691,10 +860,18 @@ describe("anchor-contributor", () => {
         //expect(Uint8Array.from(saleState.tokenAddress)).to.deep.equal(Buffer.from(dummyConductor.tokenAddress, "hex"));
         expect(saleState.tokenChain).to.equal(dummyConductor.tokenChain);
         expect(saleState.tokenDecimals).to.equal(dummyConductor.tokenDecimals);
-        expect(saleState.nativeTokenDecimals).to.equal(dummyConductor.nativeTokenDecimals);
-        expect(saleState.times.start.toString()).to.equal(dummyConductor.saleStart.toString());
-        expect(saleState.times.end.toString()).to.equal(dummyConductor.saleEnd.toString());
-        expect(Uint8Array.from(saleState.recipient)).to.deep.equal(Buffer.from(dummyConductor.recipient, "hex"));
+        expect(saleState.nativeTokenDecimals).to.equal(
+          dummyConductor.nativeTokenDecimals
+        );
+        expect(saleState.times.start.toString()).to.equal(
+          dummyConductor.saleStart.toString()
+        );
+        expect(saleState.times.end.toString()).to.equal(
+          dummyConductor.saleEnd.toString()
+        );
+        expect(Uint8Array.from(saleState.recipient)).to.deep.equal(
+          Buffer.from(dummyConductor.recipient, "hex")
+        );
         expect(saleState.status).has.key("active");
 
         // check totals
@@ -707,7 +884,9 @@ describe("anchor-contributor", () => {
           const acceptedToken = dummyConductor.acceptedTokens[i];
 
           expect(total.tokenIndex).to.equal(acceptedToken.index);
-          expect(tryNativeToHexString(total.mint.toString(), CHAIN_ID_SOLANA)).to.equal(acceptedToken.address);
+          expect(
+            tryNativeToHexString(total.mint.toString(), CHAIN_ID_SOLANA)
+          ).to.equal(acceptedToken.address);
           expect(total.contributions.toString()).to.equal("0");
           expect(total.allocations.toString()).to.equal("0");
           expect(total.excessContributions.toString()).to.equal("0");
@@ -722,33 +901,53 @@ describe("anchor-contributor", () => {
 
       // prep contributions info
       const acceptedTokens = dummyConductor.acceptedTokens;
-      const contributedTokenIndices = [acceptedTokens[0].index, acceptedTokens[3].index];
-      contributions.set(contributedTokenIndices[0], ["1200000000", "3400000000"]);
-      contributions.set(contributedTokenIndices[1], ["5600000000", "7800000000"]);
+      const contributedTokenIndices = [
+        acceptedTokens[0].index,
+        acceptedTokens[3].index,
+      ];
+      contributions.set(contributedTokenIndices[0], [
+        "1200000000",
+        "3400000000",
+      ]);
+      contributions.set(contributedTokenIndices[1], [
+        "5600000000",
+        "7800000000",
+      ]);
 
       contributedTokenIndices.forEach((tokenIndex) => {
         const amounts = contributions.get(tokenIndex);
-        totalContributions.push(amounts.map((x) => new BN(x)).reduce((prev, curr) => prev.add(curr)));
+        totalContributions.push(
+          amounts.map((x) => new BN(x)).reduce((prev, curr) => prev.add(curr))
+        );
       });
 
       // now go about your business
       // contribute multiple times
       const saleId = dummyConductor.getSaleId();
       for (const tokenIndex of contributedTokenIndices) {
-        for (const amount of contributions.get(tokenIndex).map((value) => new BN(value))) {
+        for (const amount of contributions
+          .get(tokenIndex)
+          .map((value) => new BN(value))) {
           const tx = await contributor.contribute(
             buyer,
             saleId,
             tokenIndex,
             amount,
-            await kyc.signContribution(saleId, tokenIndex, amount, buyer.publicKey)
+            await kyc.signContribution(
+              saleId,
+              tokenIndex,
+              amount,
+              buyer.publicKey
+            )
           );
         }
       }
     });
 
     it("Orchestrator Aborts Sale with Signed VAA", async () => {
-      const saleAbortedVaa = dummyConductor.abortSale(await getBlockTime(connection));
+      const saleAbortedVaa = dummyConductor.abortSale(
+        await getBlockTime(connection)
+      );
       const tx = await contributor.abortSale(orchestrator, saleAbortedVaa);
 
       {
@@ -759,7 +958,9 @@ describe("anchor-contributor", () => {
     });
 
     it("Orchestrator Cannot Abort Sale Again", async () => {
-      const saleAbortedVaa = dummyConductor.abortSale(await getBlockTime(connection));
+      const saleAbortedVaa = dummyConductor.abortSale(
+        await getBlockTime(connection)
+      );
       // cannot abort the sale again
 
       let caughtError = false;
@@ -791,7 +992,11 @@ describe("anchor-contributor", () => {
       const startingBalanceCustodian = await Promise.all(
         acceptedTokens.map(async (token) => {
           const mint = hexToPublicKey(token.address);
-          return getPdaSplBalance(connection, mint, contributor.custodianAccount.key);
+          return getPdaSplBalance(
+            connection,
+            mint,
+            contributor.custodianAccount.key
+          );
         })
       );
 
@@ -806,7 +1011,11 @@ describe("anchor-contributor", () => {
       const endingBalanceCustodian = await Promise.all(
         acceptedTokens.map(async (token) => {
           const mint = hexToPublicKey(token.address);
-          return getPdaSplBalance(connection, mint, contributor.custodianAccount.key);
+          return getPdaSplBalance(
+            connection,
+            mint,
+            contributor.custodianAccount.key
+          );
         })
       );
 
@@ -831,8 +1040,12 @@ describe("anchor-contributor", () => {
       for (let i = 0; i < numExpected; ++i) {
         let refund = expectedRefundAmounts[i];
 
-        expect(startingBalanceBuyer[i].add(refund).toString()).to.equal(endingBalanceBuyer[i].toString());
-        expect(startingBalanceCustodian[i].sub(refund).toString()).to.equal(endingBalanceCustodian[i].toString());
+        expect(startingBalanceBuyer[i].add(refund).toString()).to.equal(
+          endingBalanceBuyer[i].toString()
+        );
+        expect(startingBalanceCustodian[i].sub(refund).toString()).to.equal(
+          endingBalanceCustodian[i].toString()
+        );
 
         const item = totals[i];
         expect(item.status).has.key("refundClaimed");

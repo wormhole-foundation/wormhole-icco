@@ -432,8 +432,6 @@ pub struct BridgeSealedContribution<'info> {
 /// * `owner` (signer)
 #[derive(Accounts)]
 pub struct AbortSale<'info> {
-    pub custodian: Account<'info, Custodian>,
-
     #[account(
         seeds = [
             SEED_PREFIX_CUSTODIAN.as_bytes(),

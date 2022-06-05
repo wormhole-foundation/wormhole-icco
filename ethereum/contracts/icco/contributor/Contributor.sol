@@ -159,6 +159,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
                 saleId, 
                 tokenIndex, 
                 amount, 
+                bytes12(0x0),
                 msg.sender, 
                 getSaleContribution(saleId, tokenIndex, msg.sender)
             ); 

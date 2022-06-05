@@ -13,6 +13,7 @@ import { findBuyerAccount, findCustodianAccount, findSaleAccount, findSignedVaaA
 import { getBuyerState, getCustodianState, getSaleState } from "./fetch";
 import { postVaa } from "./wormhole";
 import { getPdaAssociatedTokenAddress, makeWritableAccountMeta } from "./utils";
+import { CORE_BRIDGE_ADDRESS } from "./consts";
 
 export class IccoContributor {
   program: Program<AnchorContributor>;
@@ -67,7 +68,25 @@ export class IccoContributor {
       .rpc();
   }
 
-  async contribute(payer: web3.Keypair, saleId: Buffer, mint: web3.PublicKey, amount: BN): Promise<string> {
+  async contribute(
+    payer: web3.Keypair,
+    saleId: Buffer,
+    tokenIndex: number,
+    amount: BN,
+    kycSignature: Buffer
+  ): Promise<string> {
+    // first find mint
+    const state = await this.getSale(saleId);
+
+    const totals: any = state.totals;
+    const found = totals.find((item) => item.tokenIndex == tokenIndex);
+    if (found == undefined) {
+      throw "tokenIndex not found";
+    }
+
+    const mint = found.mint;
+
+    // now prepare instruction
     const program = this.program;
 
     const custodian = this.custodianAccount.key;
@@ -78,7 +97,7 @@ export class IccoContributor {
     const custodianTokenAcct = await getPdaAssociatedTokenAddress(mint, custodian);
 
     return program.methods
-      .contribute(amount)
+      .contribute(amount, kycSignature)
       .accounts({
         custodian,
         sale: saleAccount.key,
@@ -97,11 +116,13 @@ export class IccoContributor {
 
     // Accounts
     const saleAcc = findSaleAccount(program.programId, saleId).key;
-    const whCoreBridge = new web3.PublicKey("Bridge1p5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o");
-    const whConfig = findProgramAddressSync([Buffer.from("Bridge")], whCoreBridge)[0];
-    const whFeeCollector = findProgramAddressSync([Buffer.from("fee_collector")], whCoreBridge)[0];
+    const whConfig = findProgramAddressSync([Buffer.from("Bridge")], CORE_BRIDGE_ADDRESS)[0];
+    const whFeeCollector = findProgramAddressSync([Buffer.from("fee_collector")], CORE_BRIDGE_ADDRESS)[0];
     const whDerivedEmitter = findProgramAddressSync([Buffer.from("emitter")], program.programId)[0];
-    const whSequence = findProgramAddressSync([Buffer.from("Sequence"), whDerivedEmitter.toBytes()], whCoreBridge)[0];
+    const whSequence = findProgramAddressSync(
+      [Buffer.from("Sequence"), whDerivedEmitter.toBytes()],
+      CORE_BRIDGE_ADDRESS
+    )[0];
     this.whMessageKey = web3.Keypair.generate();
 
     return program.methods
@@ -110,7 +131,7 @@ export class IccoContributor {
         sale: saleAcc,
         owner: payer.publicKey,
         systemProgram: web3.SystemProgram.programId,
-        coreBridge: whCoreBridge,
+        coreBridge: CORE_BRIDGE_ADDRESS,
         wormholeConfig: whConfig,
         wormholeFeeCollector: whFeeCollector,
         wormholeDerivedEmitter: whDerivedEmitter,
@@ -122,7 +143,6 @@ export class IccoContributor {
       .signers([payer, this.whMessageKey])
       .rpc();
   }
-
 
   async sealSale(payer: web3.Keypair, saleSealedVaa: Buffer, saleTokenMint: web3.PublicKey): Promise<string> {
     const program = this.program;
@@ -282,7 +302,7 @@ export class IccoContributor {
       .signers([payer])
       .remainingAccounts(remainingAccounts)
       .rpc();
-     //.rpc({ skipPreflight: true });
+    //.rpc({ skipPreflight: true });
   }
 
   async getSale(saleId: Buffer) {

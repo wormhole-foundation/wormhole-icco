@@ -5,7 +5,7 @@ use num::traits::ToPrimitive;
 use num_derive::*;
 use std::{mem::size_of_val, u64};
 
-use crate::{constants::*, error::*};
+use crate::{constants::*, env::GLOBAL_KYC_AUTHORITY, error::*};
 
 #[account]
 #[derive(Debug)]
@@ -17,6 +17,7 @@ pub struct Sale {
     pub times: SaleTimes,                      // 8 + 8
     pub recipient: [u8; 32],                   // 32
     pub status: SaleStatus,                    // 1
+    pub kyc_authority: [u8; 20],               // 20
     pub initialized: bool,                     // 1
 
     pub totals: Vec<AssetTotal>, // 4 + AssetTotal::MAXIMUM_SIZE * ACCEPTED_TOKENS_MAX
@@ -82,6 +83,7 @@ impl Sale {
         + (8 + 8)
         + 32
         + 1
+        + 20
         + 1
         + (4 + AssetTotal::MAXIMUM_SIZE * ACCEPTED_TOKENS_MAX)
         + 1
@@ -135,6 +137,12 @@ impl Sale {
         self.recipient
             .copy_from_slice(&payload[recipient_idx..recipient_idx + 32]);
 
+        // we may need to deserialize kyc authority in sale init. but for now, just use global
+        self.kyc_authority
+            .copy_from_slice(&match hex::decode(GLOBAL_KYC_AUTHORITY) {
+                Ok(decoded) => decoded,
+                _ => return Result::Err(ContributorError::InvalidKycAuthority.into()),
+            });
         // finally set the status to active
         self.status = SaleStatus::Active;
 

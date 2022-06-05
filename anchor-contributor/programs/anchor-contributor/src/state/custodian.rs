@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::{
     constants::INDEX_SALE_ID,
+    env::{CONDUCTOR_ADDRESS, CONDUCTOR_CHAIN},
     error::ContributorError,
     wormhole::{get_message_data, MessageData},
 };
@@ -19,16 +20,15 @@ impl Custodian {
     pub const MAXIMUM_SIZE: usize = 2 + 32 + 32 + 4;
 
     pub fn new(&mut self, owner: &Pubkey) -> Result<()> {
-        self.conductor_chain = match std::env!("CONDUCTOR_CHAIN").to_string().parse() {
+        self.conductor_chain = match CONDUCTOR_CHAIN.to_string().parse() {
             Ok(v) => v,
             _ => return Result::Err(ContributorError::InvalidConductorChain.into()),
         };
-        self.conductor_address.copy_from_slice(
-            &match hex::decode(std::env!("CONDUCTOR_ADDRESS")) {
+        self.conductor_address
+            .copy_from_slice(&match hex::decode(CONDUCTOR_ADDRESS) {
                 Ok(decoded) => decoded,
                 _ => return Result::Err(ContributorError::InvalidConductorAddress.into()),
-            },
-        );
+            });
         self.owner = owner.clone();
         self.nonce = 0;
         Ok(())

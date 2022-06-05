@@ -116,7 +116,7 @@ export class DummyConductor {
     return BigNumber.from("10").pow(decimalDifference).toString();
   }
 
-  sealSale(blockTime: number, contributions: Map<string, string[]>): Buffer {
+  sealSale(blockTime: number, contributions: Map<number, string[]>): Buffer {
     ++this.wormholeSequence;
     this.allocations = [];
 
@@ -127,18 +127,16 @@ export class DummyConductor {
 
     const acceptedTokens = this.acceptedTokens;
     for (let i = 0; i < acceptedTokens.length; ++i) {
-      const token = acceptedTokens[i];
-      const addr = hexToPublicKey(token.address).toString();
-
-      const contributionSubset = contributions.get(addr);
+      const tokenIndex = acceptedTokens[i].index;
+      const contributionSubset = contributions.get(tokenIndex);
       if (contributionSubset === undefined) {
-        this.allocations.push(makeAllocation(token.index, "0", "0"));
+        this.allocations.push(makeAllocation(tokenIndex, "0", "0"));
       } else {
         const total = contributionSubset.map((x) => BigNumber.from(x)).reduce((prev, curr) => prev.add(curr));
         const excessContribution = total.div(excessContributionDivisor).toString();
 
         const allocation = BigNumber.from(this.expectedAllocations[i]).mul(allocationMultiplier).toString();
-        this.allocations.push(makeAllocation(token.index, allocation, excessContribution));
+        this.allocations.push(makeAllocation(tokenIndex, allocation, excessContribution));
       }
     }
     return signAndEncodeVaa(

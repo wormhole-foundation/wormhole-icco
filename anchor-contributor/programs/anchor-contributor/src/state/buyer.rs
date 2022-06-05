@@ -65,35 +65,6 @@ impl Buyer {
         Ok(())
     }
 
-    // when a sale is sealed, we will now have information about
-    // total allocations and excess contributions for each
-    // token index
-    /*
-    pub fn claim_allocations(&mut self, totals: &Vec<AssetTotal>) -> Result<Vec<BuyerTotal>> {
-        require!(self.is_active(), ContributorError::BuyerInactive);
-
-        let mut buyer_totals: Vec<BuyerTotal> = Vec::with_capacity(totals.len());
-        for (i, asset) in totals.iter().enumerate() {
-            let contributed = self.contributed[i];
-            if contributed == 0 {
-                continue;
-            }
-
-            let allocations = asset.allocations * contributed / asset.contributions;
-            let excess_contributions =
-                asset.excess_contributions * contributed / asset.contributions;
-
-            buyer_totals.push(BuyerTotal {
-                mint: asset.mint,
-                allocations,
-                excess_contributions,
-            });
-        }
-        self.status = ContributionStatus::AllocationIsClaimed;
-        Ok(buyer_totals)
-    }
-    */
-
     pub fn claim_refund(&mut self, idx: usize) -> Result<u64> {
         require!(
             !self.has_claimed_index(idx),
@@ -149,29 +120,6 @@ impl Buyer {
         contribution.status = ContributionStatus::ExcessClaimed;
         Ok(contribution.excess)
     }
-
-    /*
-    pub fn claim_refunds(&mut self, totals: &Vec<AssetTotal>) -> Result<Vec<BuyerTotal>> {
-        require!(self.is_active(), ContributorError::BuyerInactive);
-
-        let mut refunds: Vec<BuyerTotal> = Vec::with_capacity(totals.len());
-        for (i, asset) in totals.iter().enumerate() {
-            let contributed = self.contributed[i];
-            if contributed == 0 {
-                continue;
-            }
-
-            refunds.push(BuyerTotal {
-                mint: asset.mint,
-                allocations: 0,
-                excess_contributions: contributed,
-            });
-        }
-
-        self.status = ContributionStatus::RefundIsClaimed;
-        Ok(refunds)
-    }
-    */
 
     /*
     fn is_active(&self) -> bool {

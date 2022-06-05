@@ -29,3 +29,6 @@ borsh = "0.9.3"
 hex = "0.4.3"
 num = "0.4"
 itertools = "0.8"
+libsecp256k1 = "0.7.0"
+getrandom = { version = "0.2", features = ["custom"] }
+sha3 = "0.10.1"

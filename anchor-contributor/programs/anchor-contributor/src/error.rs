@@ -17,6 +17,9 @@ pub enum ContributorError {
     #[msg("ContributionTooEarly")]
     ContributionTooEarly,
 
+    #[msg("EcdsaRecoverFailure")]
+    EcdsaRecoverFailure,
+
     #[msg("IncorrectSale")]
     IncorrectSale,
 
@@ -29,8 +32,11 @@ pub enum ContributorError {
     #[msg("InvalidAcceptedTokenPayload")]
     InvalidAcceptedTokenPayload,
 
-    #[msg("InvalidConductor")]
-    InvalidConductor,
+    #[msg("InvalidTokensAccepted")]
+    InvalidAcceptedTokens,
+
+    #[msg("InvalidAccount")]
+    InvalidAccount,
 
     #[msg("InvalidConductorChain")]
     InvalidConductorChain,
@@ -38,8 +44,11 @@ pub enum ContributorError {
     #[msg("InvalidConductorAddress")]
     InvalidConductorAddress,
 
-    #[msg("InvalidAccount")]
-    InvalidAccount,
+    #[msg("InvalidKycAuthority")]
+    InvalidKycAuthority,
+
+    #[msg("InvalidKycSignature")]
+    InvalidKycSignature,
 
     #[msg("InvalidRemainingAccounts")]
     InvalidRemainingAccounts,
@@ -52,9 +61,6 @@ pub enum ContributorError {
 
     #[msg("InvalidVaaAction")]
     InvalidVaaAction,
-
-    #[msg("InvalidTokensAccepted")]
-    InvalidAcceptedTokens,
 
     #[msg("NothingToClaim")]
     NothingToClaim,

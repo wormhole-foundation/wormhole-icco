@@ -8,6 +8,8 @@ use anchor_spl::*;
 
 mod constants;
 mod context;
+mod cryptography;
+mod env;
 mod error;
 mod state;
 mod token_bridge;
@@ -56,12 +58,15 @@ pub mod anchor_contributor {
         Ok(())
     }
 
-    pub fn contribute(ctx: Context<Contribute>, amount: u64) -> Result<()> {
+    pub fn contribute(ctx: Context<Contribute>, amount: u64, signature: Vec<u8>) -> Result<()> {
         let from_account = &ctx.accounts.buyer_token_acct;
 
         // find token_index
         let sale = &mut ctx.accounts.sale;
         let token_index = sale.get_token_index(&from_account.mint)?;
+
+        // TODO: verify signature
+        require!(signature.len() == 65, ContributorError::InvalidKycSignature);
 
         // leverage token index search from sale's accepted tokens to find index
         // on buyer's contributions

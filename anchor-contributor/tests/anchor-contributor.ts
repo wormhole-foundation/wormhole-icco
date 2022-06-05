@@ -16,6 +16,7 @@ import {
   wait,
 } from "./helpers/utils";
 import { BigNumber } from "ethers";
+import { KycAuthority } from "./helpers/kyc";
 
 setDefaultWasm("node");
 
@@ -38,6 +39,9 @@ describe("anchor-contributor", () => {
 
   // our contributor
   const contributor = new IccoContributor(program);
+
+  // kyc for signing contributions
+  const kyc = new KycAuthority(contributor);
 
   before("Airdrop SOL", async () => {
     await connection.requestAirdrop(buyer.publicKey, 8000000000); // 8,000,000,000 lamports
@@ -110,7 +114,7 @@ describe("anchor-contributor", () => {
 
   describe("Conduct Successful Sale", () => {
     // global contributions for test
-    const contributions = new Map<string, string[]>();
+    const contributions = new Map<number, string[]>();
     const totalContributions: BN[] = [];
 
     // squirrel away associated sale token account
@@ -187,12 +191,18 @@ describe("anchor-contributor", () => {
 
     it("User Cannot Contribute Too Early", async () => {
       const saleId = dummyConductor.getSaleId();
+      const tokenIndex = 2;
       const amount = new BN("1000000000"); // 1,000,000,000 lamports
 
       let caughtError = false;
       try {
-        const mint = hexToPublicKey(dummyConductor.acceptedTokens[0].address);
-        const tx = await contributor.contribute(buyer, saleId, mint, new BN(amount));
+        const tx = await contributor.contribute(
+          buyer,
+          saleId,
+          tokenIndex,
+          amount,
+          await kyc.signContribution(saleId, tokenIndex, amount, buyer.publicKey)
+        );
         throw Error(`should not happen: ${tx}`);
       } catch (e) {
         caughtError = verifyErrorMsg(e, "ContributionTooEarly");
@@ -210,15 +220,12 @@ describe("anchor-contributor", () => {
 
       // prep contributions info
       const acceptedTokens = dummyConductor.acceptedTokens;
-      const contributedTokens = [
-        hexToPublicKey(acceptedTokens[0].address).toString(),
-        hexToPublicKey(acceptedTokens[3].address).toString(),
-      ];
-      contributions.set(contributedTokens[0], ["1200000000", "3400000000"]);
-      contributions.set(contributedTokens[1], ["5600000000", "7800000000"]);
+      const contributedTokenIndices = [acceptedTokens[0].index, acceptedTokens[3].index];
+      contributions.set(contributedTokenIndices[0], ["1200000000", "3400000000"]);
+      contributions.set(contributedTokenIndices[1], ["5600000000", "7800000000"]);
 
-      contributedTokens.forEach((addr) => {
-        const amounts = contributions.get(addr);
+      contributedTokenIndices.forEach((tokenIndex) => {
+        const amounts = contributions.get(tokenIndex);
         totalContributions.push(amounts.map((x) => new BN(x)).reduce((prev, curr) => prev.add(curr)));
       });
 
@@ -238,10 +245,15 @@ describe("anchor-contributor", () => {
       // now go about your business
       // contribute multiple times
       const saleId = dummyConductor.getSaleId();
-      for (const addr of contributedTokens) {
-        for (const amount of contributions.get(addr)) {
-          const mint = new web3.PublicKey(addr);
-          const tx = await contributor.contribute(buyer, saleId, mint, new BN(amount));
+      for (const tokenIndex of contributedTokenIndices) {
+        for (const amount of contributions.get(tokenIndex).map((value) => new BN(value))) {
+          const tx = await contributor.contribute(
+            buyer,
+            saleId,
+            tokenIndex,
+            amount,
+            await kyc.signContribution(saleId, tokenIndex, amount, buyer.publicKey)
+          );
         }
       }
 
@@ -372,12 +384,18 @@ describe("anchor-contributor", () => {
 
     it("User Cannot Contribute After Sale Ended", async () => {
       const saleId = dummyConductor.getSaleId();
+      const tokenIndex = 2;
       const amount = new BN("1000000000"); // 1,000,000,000 lamports
 
       let caughtError = false;
       try {
-        const mint = hexToPublicKey(dummyConductor.acceptedTokens[0].address);
-        const tx = await contributor.contribute(buyer, saleId, mint, amount);
+        const tx = await contributor.contribute(
+          buyer,
+          saleId,
+          tokenIndex,
+          amount,
+          await kyc.signContribution(saleId, tokenIndex, amount, buyer.publicKey)
+        );
         throw Error(`should not happen: ${tx}`);
       } catch (e) {
         caughtError = verifyErrorMsg(e, "SaleEnded");
@@ -556,7 +574,7 @@ describe("anchor-contributor", () => {
 
   describe("Conduct Aborted Sale", () => {
     // global contributions for test
-    const contributions = new Map<string, string[]>();
+    const contributions = new Map<number, string[]>();
     const totalContributions: BN[] = [];
 
     // squirrel away associated sale token account
@@ -619,25 +637,27 @@ describe("anchor-contributor", () => {
 
       // prep contributions info
       const acceptedTokens = dummyConductor.acceptedTokens;
-      const contributedTokens = [
-        hexToPublicKey(acceptedTokens[0].address).toString(),
-        hexToPublicKey(acceptedTokens[3].address).toString(),
-      ];
-      contributions.set(contributedTokens[0], ["1200000000", "3400000000"]);
-      contributions.set(contributedTokens[1], ["5600000000", "7800000000"]);
+      const contributedTokenIndices = [acceptedTokens[0].index, acceptedTokens[3].index];
+      contributions.set(contributedTokenIndices[0], ["1200000000", "3400000000"]);
+      contributions.set(contributedTokenIndices[1], ["5600000000", "7800000000"]);
 
-      contributedTokens.forEach((addr) => {
-        const amounts = contributions.get(addr);
+      contributedTokenIndices.forEach((tokenIndex) => {
+        const amounts = contributions.get(tokenIndex);
         totalContributions.push(amounts.map((x) => new BN(x)).reduce((prev, curr) => prev.add(curr)));
       });
 
       // now go about your business
       // contribute multiple times
       const saleId = dummyConductor.getSaleId();
-      for (const addr of contributedTokens) {
-        for (const amount of contributions.get(addr)) {
-          const mint = new web3.PublicKey(addr);
-          const tx = await contributor.contribute(buyer, saleId, mint, new BN(amount));
+      for (const tokenIndex of contributedTokenIndices) {
+        for (const amount of contributions.get(tokenIndex).map((value) => new BN(value))) {
+          const tx = await contributor.contribute(
+            buyer,
+            saleId,
+            tokenIndex,
+            amount,
+            await kyc.signContribution(saleId, tokenIndex, amount, buyer.publicKey)
+          );
         }
       }
     });

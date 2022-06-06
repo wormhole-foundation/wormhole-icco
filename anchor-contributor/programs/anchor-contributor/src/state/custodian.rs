@@ -10,26 +10,32 @@ use crate::{
 #[account]
 #[derive(Default)]
 pub struct Custodian {
-    pub conductor_chain: u16,        // 2
-    pub conductor_address: [u8; 32], // 32
-    pub owner: Pubkey,               // 32
-    pub nonce: u32,                  // 4
+    pub owner: Pubkey, // 32
+    pub nonce: u32,    // 4
 }
 
 impl Custodian {
-    pub const MAXIMUM_SIZE: usize = 2 + 32 + 32 + 4;
+    pub const MAXIMUM_SIZE: usize = 32 + 4;
 
-    pub fn new(&mut self, owner: &Pubkey) -> Result<()> {
-        self.conductor_chain = match CONDUCTOR_CHAIN.to_string().parse() {
+    pub fn conductor_chain() -> Result<u16> {
+        let chain_id: u16 = match CONDUCTOR_CHAIN.to_string().parse() {
             Ok(v) => v,
             _ => return Result::Err(ContributorError::InvalidConductorChain.into()),
         };
-        self.conductor_address
-            .copy_from_slice(&match hex::decode(CONDUCTOR_ADDRESS) {
-                Ok(decoded) => decoded,
-                _ => return Result::Err(ContributorError::InvalidConductorAddress.into()),
-            });
-        self.owner = owner.clone();
+        Ok(chain_id)
+    }
+
+    pub fn conductor_address() -> Result<[u8; 32]> {
+        let mut addr = [0u8; 32];
+        addr.copy_from_slice(&match hex::decode(CONDUCTOR_ADDRESS) {
+            Ok(decoded) => decoded,
+            _ => return Result::Err(ContributorError::InvalidConductorAddress.into()),
+        });
+        Ok(addr)
+    }
+
+    pub fn new(&mut self, owner: &Pubkey) -> Result<()> {
+        self.owner = owner.clone(); // owner doesn't actually do anything
         self.nonce = 0;
         Ok(())
     }
@@ -41,11 +47,11 @@ impl Custodian {
     ) -> Result<MessageData> {
         let msg = get_message_data(&vaa_acct)?;
         require!(
-            msg.emitter_chain == self.conductor_chain,
+            msg.emitter_chain == Custodian::conductor_chain()?,
             ContributorError::InvalidConductorChain
         );
         require!(
-            msg.emitter_address == self.conductor_address,
+            msg.emitter_address == Custodian::conductor_address()?,
             ContributorError::InvalidConductorAddress
         );
         require!(

@@ -27,6 +27,7 @@ declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 pub mod anchor_contributor {
     use super::*;
     use itertools::izip;
+    use state::custodian::Custodian;
 
     pub fn create_custodian(ctx: Context<CreateCustodian>) -> Result<()> {
         ctx.accounts.custodian.new(&ctx.accounts.owner.key())
@@ -278,8 +279,8 @@ pub mod anchor_contributor {
         require!(sale.is_sealed(), ContributorError::SaleNotSealed);
 
         let custodian = &ctx.accounts.custodian;
-        let conductor_chain = custodian.conductor_chain;
-        let conductor_address = custodian.conductor_address;
+        let conductor_chain = Custodian::conductor_chain()?;
+        let conductor_address = Custodian::conductor_address()?;
 
         let asset = &sale.totals.get(token_idx as usize).unwrap();
         let mint = asset.mint;

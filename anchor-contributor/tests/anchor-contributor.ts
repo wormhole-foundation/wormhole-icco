@@ -213,11 +213,31 @@ describe("anchor-contributor", () => {
       }
     });
 
-    it("User Contributes to Sale", async () => {
+    it("User Cannot Contribute With Bad Signature", async () => {
       // wait for sale to start here
       const saleStart = dummyConductor.saleStart;
       await waitUntilBlock(connection, saleStart);
 
+      const saleId = dummyConductor.getSaleId();
+      const tokenIndex = 2;
+      const amount = new BN("1000000000"); // 1,000,000,000 lamports
+
+      let caughtError = false;
+      try {
+        // generate bad signature w/ amount that disagrees w/ instruction input
+        const badSignature = await kyc.signContribution(saleId, tokenIndex, new BN("42069"), buyer.publicKey);
+        const tx = await contributor.contribute(buyer, saleId, tokenIndex, amount, badSignature);
+        throw Error(`should not happen: ${tx}`);
+      } catch (e) {
+        caughtError = verifyErrorMsg(e, "InvalidKycSignature");
+      }
+
+      if (!caughtError) {
+        throw Error("did not catch expected error");
+      }
+    });
+
+    it("User Contributes to Sale", async () => {
       // prep contributions info
       const acceptedTokens = dummyConductor.acceptedTokens;
       const contributedTokenIndices = [acceptedTokens[0].index, acceptedTokens[3].index];

@@ -96,19 +96,22 @@ export class IccoContributor {
     const buyerTokenAcct = await getAssociatedTokenAddress(mint, payer.publicKey);
     const custodianTokenAcct = await getPdaAssociatedTokenAddress(mint, custodian);
 
-    return program.methods
-      .contribute(amount, kycSignature)
-      .accounts({
-        custodian,
-        sale: saleAccount.key,
-        buyer: buyerAccount.key,
-        owner: payer.publicKey,
-        systemProgram: web3.SystemProgram.programId,
-        buyerTokenAcct,
-        custodianTokenAcct,
-      })
-      .signers([payer])
-      .rpc();
+    return (
+      program.methods
+        .contribute(amount, kycSignature)
+        .accounts({
+          custodian,
+          sale: saleAccount.key,
+          buyer: buyerAccount.key,
+          owner: payer.publicKey,
+          systemProgram: web3.SystemProgram.programId,
+          buyerTokenAcct,
+          custodianTokenAcct,
+        })
+        .signers([payer])
+        //.rpc();
+        .rpc({ skipPreflight: true })
+    );
   }
 
   async attestContributions(payer: web3.Keypair, saleId: Buffer) {

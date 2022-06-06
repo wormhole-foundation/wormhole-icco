@@ -1,11 +1,17 @@
-use anchor_lang::prelude::*;
+use anchor_lang::{
+    prelude::*,
+    solana_program::{keccak, secp256k1_recover::secp256k1_recover},
+};
 use anchor_spl::token::Mint;
 use num::bigint::BigUint;
 use num::traits::ToPrimitive;
 use num_derive::*;
 use std::{mem::size_of_val, u64};
 
-use crate::{constants::*, env::GLOBAL_KYC_AUTHORITY, error::*};
+use crate::{
+    constants::*, cryptography::ethereum_ecrecover, env::GLOBAL_KYC_AUTHORITY, error::*,
+    state::custodian::Custodian,
+};
 
 #[account]
 #[derive(Debug)]
@@ -17,7 +23,7 @@ pub struct Sale {
     pub times: SaleTimes,                      // 8 + 8
     pub recipient: [u8; 32],                   // 32
     pub status: SaleStatus,                    // 1
-    pub kyc_authority: [u8; 20],               // 20
+    pub kyc_authority: [u8; 20],               // 20 (this is an evm pubkey)
     pub initialized: bool,                     // 1
 
     pub totals: Vec<AssetTotal>, // 4 + AssetTotal::MAXIMUM_SIZE * ACCEPTED_TOKENS_MAX
@@ -137,7 +143,8 @@ impl Sale {
         self.recipient
             .copy_from_slice(&payload[recipient_idx..recipient_idx + 32]);
 
-        // we may need to deserialize kyc authority in sale init. but for now, just use global
+        // we may need to deserialize kyc authority in sale init in the future.
+        // but for now, just use global
         self.kyc_authority
             .copy_from_slice(&match hex::decode(GLOBAL_KYC_AUTHORITY) {
                 Ok(decoded) => decoded,
@@ -297,6 +304,52 @@ impl Sale {
         // finally set the status to aborted
         self.status = SaleStatus::Aborted;
 
+        Ok(())
+    }
+
+    pub fn verify_kyc_authority(
+        &self,
+        token_index: u8,
+        amount: u64,
+        buyer: &Pubkey,
+        prev_contribution: u64,
+        kyc_signature: &[u8],
+    ) -> Result<()> {
+        require!(
+            kyc_signature.len() == 65,
+            ContributorError::InvalidKycSignature
+        );
+        // first encode arguments
+        let mut encoded: Vec<u8> = Vec::with_capacity(6 * 32);
+
+        // grab conductor address from Custodian
+        encoded.extend(Custodian::conductor_address()?); // 32
+
+        // sale id
+        encoded.extend(self.id); // 32
+
+        // token index
+        encoded.extend(vec![0u8; PAD_U8]); // 31 (zero padding u8)
+        encoded.push(token_index); // 1
+
+        // amount
+        encoded.extend(vec![0u8; PAD_U64]); // 24
+        encoded.extend(amount.to_be_bytes()); // 8
+
+        // buyer
+        encoded.extend(buyer.to_bytes()); // 32
+
+        // previously contributed amount
+        encoded.extend(vec![0u8; PAD_U64]); // 24
+        encoded.extend(prev_contribution.to_be_bytes()); // 8
+
+        let hash = keccak::hash(&encoded);
+        let recovered = ethereum_ecrecover(kyc_signature, &hash.to_bytes())?;
+
+        require!(
+            recovered == self.kyc_authority,
+            ContributorError::InvalidKycSignature
+        );
         Ok(())
     }
 

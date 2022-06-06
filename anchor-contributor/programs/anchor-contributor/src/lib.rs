@@ -59,32 +59,40 @@ pub mod anchor_contributor {
         Ok(())
     }
 
-    pub fn contribute(ctx: Context<Contribute>, amount: u64, signature: Vec<u8>) -> Result<()> {
+    pub fn contribute(ctx: Context<Contribute>, amount: u64, kyc_signature: Vec<u8>) -> Result<()> {
         let from_account = &ctx.accounts.buyer_token_acct;
 
         // find token_index
-        let sale = &mut ctx.accounts.sale;
-        let token_index = sale.get_token_index(&from_account.mint)?;
+        let sale = &ctx.accounts.sale;
+        let (idx, asset) = sale.get_total_info(&from_account.mint)?;
+        let token_index = asset.token_index;
 
-        // TODO: verify signature
-        require!(signature.len() == 65, ContributorError::InvalidKycSignature);
-
-        // leverage token index search from sale's accepted tokens to find index
-        // on buyer's contributions
-        let clock = Clock::get()?;
-        let idx = sale.update_total_contributions(clock.unix_timestamp, token_index, amount)?;
-
-        // now update buyer's contributions
+        // get buyer acct
         let buyer = &mut ctx.accounts.buyer;
         if !buyer.initialized {
             buyer.initialize(sale.totals.len());
         }
+
+        // verify signature from instruction
+        let transfer_authority = &ctx.accounts.owner;
+        sale.verify_kyc_authority(
+            token_index,
+            amount,
+            &transfer_authority.key(),
+            buyer.contributions[idx].amount,
+            &kyc_signature,
+        )?;
+
+        // check to see if we can still contribute and uptick total contributions
+        let clock = Clock::get()?;
+        let sale = &mut ctx.accounts.sale;
+        sale.update_total_contributions(clock.unix_timestamp, token_index, amount)?;
+
+        // now update buyer's contributions
         buyer.contribute(idx, amount)?;
 
-        let to_account = &ctx.accounts.custodian_token_acct;
-        let transfer_authority = &ctx.accounts.owner;
-
         // spl transfer contribution
+        let to_account = &ctx.accounts.custodian_token_acct;
         token::transfer(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),

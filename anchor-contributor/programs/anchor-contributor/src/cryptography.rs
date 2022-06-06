@@ -1,27 +1,16 @@
 use anchor_lang::prelude::Result;
-use libsecp256k1::{recover, Message, RecoveryId, Signature};
-use sha3::{Digest, Keccak256};
+use anchor_lang::solana_program::{keccak, secp256k1_recover::secp256k1_recover};
 
 use crate::error::ContributorError;
 
-pub fn keccak256(serialized: &[u8]) -> [u8; 32] {
-    let mut hasher = Keccak256::new();
-    hasher.update(serialized);
-    hasher.finalize()[..].try_into().expect("len != 32")
-}
-
-fn ethereum_ecrecover(sig: &[u8], msg: &[u8; 32]) -> Result<[u8; 20]> {
-    let v = RecoveryId::parse(if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8)
+pub fn ethereum_ecrecover(sig: &[u8], msg: &[u8; 32]) -> Result<[u8; 20]> {
+    let recovered = secp256k1_recover(msg.as_slice(), sig[64], &sig[0..64])
         .map_err(|_| ContributorError::EcdsaRecoverFailure)?;
-    let rs = Signature::parse_overflowing_slice(&sig[..64])
-        .map_err(|_| ContributorError::EcdsaRecoverFailure)?;
-    let msg = Message::parse(msg);
-    let pubkey = recover(&msg, &rs, &v).map_err(|_| ContributorError::EcdsaRecoverFailure)?;
 
-    let hash = keccak256(&pubkey.serialize()[1..65]);
+    let hash = keccak::hash(&recovered.to_bytes());
 
     let mut pubkey = [0u8; 20];
-    pubkey.copy_from_slice(&hash[12..32]);
+    pubkey.copy_from_slice(&hash.to_bytes()[12..32]);
     Ok(pubkey)
 }
 

@@ -2,3 +2,8 @@
 members = [
     "programs/*"
 ]
+
+[profile.release]
+overflow-checks = true
+opt-level = 3
+incremental = false

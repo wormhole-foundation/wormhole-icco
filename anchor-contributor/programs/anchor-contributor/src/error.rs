@@ -1,4 +1,4 @@
-use anchor_lang::prelude::*;
+use anchor_lang::prelude::error_code;
 
 #[error_code]
 pub enum ContributorError {
@@ -19,12 +19,6 @@ pub enum ContributorError {
 
     #[msg("EcdsaRecoverFailure")]
     EcdsaRecoverFailure,
-
-    #[msg("IncorrectSale")]
-    IncorrectSale,
-
-    #[msg("IncorrectVaaPayload")]
-    IncorrectVaaPayload,
 
     #[msg("InsufficientFunds")]
     InsufficientFunds,
@@ -59,8 +53,14 @@ pub enum ContributorError {
     #[msg("InvalidTokenIndex")]
     InvalidTokenIndex,
 
+    #[msg("InvalidSale")]
+    InvalidSale,
+
     #[msg("InvalidVaaAction")]
     InvalidVaaAction,
+
+    #[msg("InvalidVaaPayload")]
+    InvalidVaaPayload,
 
     #[msg("NothingToClaim")]
     NothingToClaim,
@@ -85,7 +85,4 @@ pub enum ContributorError {
 
     #[msg("TooManyAcceptedTokens")]
     TooManyAcceptedTokens,
-
-    #[msg("WrongAuthority")]
-    WrongAuthority,
 }

@@ -1,5 +1,7 @@
-use anchor_lang::prelude::Result;
-use anchor_lang::solana_program::{keccak, secp256k1_recover::secp256k1_recover};
+use anchor_lang::{
+    prelude::Result,
+    solana_program::{keccak, secp256k1_recover::secp256k1_recover},
+};
 
 use crate::error::ContributorError;
 

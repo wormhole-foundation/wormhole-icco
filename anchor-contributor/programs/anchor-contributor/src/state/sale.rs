@@ -1,20 +1,39 @@
-use anchor_lang::{
-    prelude::*,
-    solana_program::{keccak, secp256k1_recover::secp256k1_recover},
-};
+use anchor_lang::{prelude::*, solana_program::keccak};
 use anchor_spl::token::Mint;
-use num::bigint::BigUint;
-use num::traits::ToPrimitive;
+use num::{bigint::BigUint, traits::ToPrimitive};
 use num_derive::*;
 use std::{mem::size_of_val, u64};
 
 use crate::{
-    constants::*, cryptography::ethereum_ecrecover, env::GLOBAL_KYC_AUTHORITY, error::*,
-    state::custodian::Custodian,
+    constants::*, cryptography::ethereum_ecrecover, env::GLOBAL_KYC_AUTHORITY,
+    error::ContributorError, state::custodian::Custodian,
 };
 
+#[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, Default, PartialEq, Eq, Debug)]
+pub struct AssetTotal {
+    pub token_index: u8,           // 1
+    pub mint: Pubkey,              // 32
+    pub contributions: u64,        // 8
+    pub allocations: u64,          // 8
+    pub excess_contributions: u64, // 8
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
+pub struct SaleTimes {
+    pub start: u64,
+    pub end: u64,
+}
+
+#[derive(
+    AnchorSerialize, AnchorDeserialize, FromPrimitive, ToPrimitive, Copy, Clone, PartialEq, Eq,
+)]
+pub enum SaleStatus {
+    Active,
+    Sealed,
+    Aborted,
+}
+
 #[account]
-#[derive(Debug)]
 pub struct Sale {
     pub id: [u8; 32],                          // 32
     pub associated_sale_token_address: Pubkey, // 32
@@ -29,38 +48,6 @@ pub struct Sale {
     pub totals: Vec<AssetTotal>, // 4 + AssetTotal::MAXIMUM_SIZE * ACCEPTED_TOKENS_MAX
     pub native_token_decimals: u8, // 1
     pub sale_token_mint: Pubkey, // 32
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq, Debug)]
-pub struct SaleTimes {
-    pub start: u64,
-    pub end: u64,
-}
-
-#[derive(
-    AnchorSerialize,
-    AnchorDeserialize,
-    FromPrimitive,
-    ToPrimitive,
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    Debug,
-)]
-pub enum SaleStatus {
-    Active,
-    Sealed,
-    Aborted,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, Default, PartialEq, Eq, Debug)]
-pub struct AssetTotal {
-    pub token_index: u8,           // 1
-    pub mint: Pubkey,              // 32
-    pub contributions: u64,        // 8
-    pub allocations: u64,          // 8
-    pub excess_contributions: u64, // 8
 }
 
 impl AssetTotal {
@@ -103,7 +90,7 @@ impl Sale {
         // required to define the number of accepted tokens
         require!(
             payload.len() > INDEX_SALE_INIT_ACCEPTED_TOKENS_START,
-            ContributorError::IncorrectVaaPayload
+            ContributorError::InvalidVaaPayload
         );
 
         let num_accepted = payload[INDEX_SALE_INIT_ACCEPTED_TOKENS_START] as usize;
@@ -237,13 +224,13 @@ impl Sale {
         // required to define the number of allocations
         require!(
             payload.len() > INDEX_SALE_SEALED_ALLOCATIONS_START,
-            ContributorError::IncorrectVaaPayload
+            ContributorError::InvalidVaaPayload
         );
 
         let num_allocations = payload[INDEX_SALE_SEALED_ALLOCATIONS_START] as usize;
         require!(
             num_allocations == self.totals.len(),
-            ContributorError::IncorrectVaaPayload
+            ContributorError::InvalidVaaPayload
         );
 
         let decimal_difference = (self.token_decimals - self.native_token_decimals) as u32;
@@ -255,7 +242,7 @@ impl Sale {
             let total = &self.totals[i];
             require!(
                 payload[start] == total.token_index,
-                ContributorError::IncorrectVaaPayload
+                ContributorError::InvalidVaaPayload
             );
 
             let total = &mut self.totals[i];
@@ -289,7 +276,7 @@ impl Sale {
         // payload type + sale id
         require!(
             payload.len() == PAYLOAD_HEADER_LEN,
-            ContributorError::IncorrectVaaPayload
+            ContributorError::InvalidVaaPayload
         );
 
         // finally set the status to aborted
@@ -388,7 +375,3 @@ fn to_u16_be(bytes: &[u8], index: usize) -> u16 {
 fn to_u64_be(bytes: &[u8], index: usize) -> u64 {
     u64::from_be_bytes(bytes[index..index + 8].try_into().unwrap())
 }
-
-//fn to_bytes32(bytes: &[u8], index: usize) -> [u8; 32] {
-//    bytes[index..index + 32].try_into().unwrap()
-//}

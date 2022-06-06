@@ -81,7 +81,7 @@ impl Custodian {
         let msg = self.parse_and_verify_conductor_vaa(vaa_acct, payload_type)?;
         require!(
             Custodian::get_sale_id_from_payload(&msg.payload) == sale_id,
-            ContributorError::IncorrectSale,
+            ContributorError::InvalidSale,
         );
         Ok(msg)
     }

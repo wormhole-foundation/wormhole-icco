@@ -1,15 +1,25 @@
-use crate::constants::*;
-use anchor_lang::prelude::*;
-use anchor_lang::solana_program::sysvar::{clock, rent};
-use anchor_spl::associated_token::*;
-use anchor_spl::token::{Mint, Token, TokenAccount, ID};
+use anchor_lang::{
+    prelude::*,
+    solana_program::sysvar::{clock, rent},
+};
+use anchor_spl::{
+    associated_token::AssociatedToken,
+    token::{Mint, Token, TokenAccount, ID},
+};
 use std::str::FromStr;
 
 use crate::{
-    constants::{SEED_PREFIX_BUYER, SEED_PREFIX_CUSTODIAN, SEED_PREFIX_SALE},
+    constants::*,
     state::{Buyer, Custodian, Sale},
 };
 
+/// Context allows contract owner to create an account that acts
+/// to hold all associated token accounts for all sales.
+/// See `create_custodian` instruction in lib.rs.
+///
+/// Mutable
+/// * `custodian`
+/// * `owner` (signer)
 #[derive(Accounts)]
 pub struct CreateCustodian<'info> {
     #[account(
@@ -28,8 +38,22 @@ pub struct CreateCustodian<'info> {
     pub system_program: Program<'info, System>,
 }
 
+/// Context provides all accounts required for someone to initialize a sale
+/// with a signed VAA sent by the conductor. A `Sale` is created at this step,
+/// which will be used for future actions.
+/// See `init_sale` instruction in lib.rs.
+///
+/// /// Immutable
+/// * `custodian`
+/// * `core_bridge_vaa`
+/// * `sale_token_mint`
+/// * `custodian_sale_token_acct`
+///
+/// Mutable
+/// * `sale`
+/// * `owner` (signer)
 #[derive(Accounts)]
-pub struct InitializeSale<'info> {
+pub struct InitSale<'info> {
     #[account(
         seeds = [
             SEED_PREFIX_CUSTODIAN.as_bytes(),
@@ -70,7 +94,19 @@ pub struct InitializeSale<'info> {
     pub system_program: Program<'info, System>,
 }
 
-/// Contribute is used for buyers to contribute collateral
+/// Context provides all accounts required for user to send contribution
+/// to ongoing sale.
+/// See `contribute` instruction in lib.rs.
+///
+/// Immutable
+/// * `custodian`
+///
+/// Mutable
+/// * `sale`
+/// * `buyer`
+/// * `buyer_token_acct`
+/// * `custodian_token_acct`
+/// * `owner` (signer)
 #[derive(Accounts)]
 pub struct Contribute<'info> {
     #[account(
@@ -123,7 +159,22 @@ pub struct Contribute<'info> {
     pub token_program: Program<'info, Token>,
 }
 
-/// TODO: write something here
+/// Context provides all accounts required to attest contributions.
+/// See `attest_contributions` instruction in lib.rs.
+///
+/// Immutable
+/// * `sale`
+/// * `core_bridge`
+/// * `clock`
+/// * `rent`
+///
+/// Mutable
+/// * `wormhole_config`
+/// * `wormhole_fee_collector`
+/// * `wormhole_derived_emitter`
+/// * `wormhole_sequence`
+/// * `wormhole_message_key`
+/// * `owner` (signer)
 #[derive(Accounts)]
 pub struct AttestContributions<'info> {
     #[account(
@@ -135,69 +186,74 @@ pub struct AttestContributions<'info> {
     )]
     pub sale: Account<'info, Sale>,
 
-    #[account(mut)]
-    pub owner: Signer<'info>,
-    pub system_program: Program<'info, System>,
-
     #[account(
         constraint = core_bridge.key() == Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap()
     )]
     /// CHECK: If someone passes in the wrong account, Guardians won't read the message
     pub core_bridge: AccountInfo<'info>,
+
     #[account(
+        mut,
         seeds = [
             b"Bridge".as_ref()
         ],
         bump,
-        seeds::program = Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap(),
-        mut
+        seeds::program = Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap()
     )]
     /// CHECK: If someone passes in the wrong account, Guardians won't read the message
     pub wormhole_config: AccountInfo<'info>,
+
     #[account(
+        mut,
         seeds = [
             b"fee_collector".as_ref()
         ],
         bump,
-        seeds::program = Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap(),
-        mut
+        seeds::program = Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap()
     )]
     /// CHECK: If someone passes in the wrong account, Guardians won't read the message
     pub wormhole_fee_collector: AccountInfo<'info>,
+
     #[account(
+        mut,
         seeds = [
             b"emitter".as_ref(),
         ],
-        bump,
-        mut
+        bump
     )]
     /// CHECK: If someone passes in the wrong account, Guardians won't read the message
     pub wormhole_derived_emitter: AccountInfo<'info>,
+
     #[account(
+        mut,
         seeds = [
             b"Sequence".as_ref(),
             wormhole_derived_emitter.key().to_bytes().as_ref()
         ],
         bump,
-        seeds::program = Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap(),
-        mut
+        seeds::program = Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap()
     )]
     /// CHECK: If someone passes in the wrong account, Guardians won't read the message
     pub wormhole_sequence: AccountInfo<'info>,
+
     #[account(mut)]
     pub wormhole_message_key: Signer<'info>,
-    #[account(mut)]
-    pub payer: Signer<'info>,
+
     #[account(
         constraint = clock.key() == clock::id()
     )]
     /// CHECK: The account constraint will make sure it's the right clock var
     pub clock: AccountInfo<'info>,
+
     #[account(
         constraint = rent.key() == rent::id()
     )]
     /// CHECK: The account constraint will make sure it's the right rent var
     pub rent: AccountInfo<'info>,
+
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
@@ -334,7 +390,17 @@ pub struct BridgeSealedContribution<'info> {
     pub token_program: Program<'info, Token>,
 }
 
-/// AbortSale is used for aborting sale so users can claim refunds (min raise not met)
+/// Context provides all accounts required for someone to abort a sale
+/// with a signed VAA sent by the conductor (sale didn't meet min raise).
+/// See `abort_sale` instruction in lib.rs.
+///
+/// Immutable
+/// * `custodian`
+/// * `core_bridge_vaa`
+///
+/// Mutable
+/// * `sale`
+/// * `owner` (signer)
 #[derive(Accounts)]
 pub struct AbortSale<'info> {
     #[account(
@@ -366,7 +432,18 @@ pub struct AbortSale<'info> {
     pub system_program: Program<'info, System>,
 }
 
-/// SealSale is used for closing successful sale so users can claim allocations (min raise met)
+/// Context provides all accounts required for someone to seal a sale
+/// with a signed VAA sent by the conductor (sale met at least min raise).
+/// See `seal_sale` instruction in lib.rs.
+///
+/// Immutable
+/// * `custodian`
+/// * `core_bridge_vaa`
+/// * `custodian_sale_token_acct`
+///
+/// Mutable
+/// * `sale`
+/// * `owner` (signer)
 #[derive(Accounts)]
 pub struct SealSale<'info> {
     #[account(
@@ -404,8 +481,22 @@ pub struct SealSale<'info> {
     pub system_program: Program<'info, System>,
 }
 
-/// ClaimAllocations is used for buyer <> custodian interaction to retrieve allocations
-/// and excess from custodian
+/// Context provides all accounts required for user to claim his allocation
+/// and excess contributions after the sale has been sealed.
+/// See `claim_allocation` instruction in lib.rs.
+///
+/// Immutable
+/// * `custodian`
+/// * `sale`
+///
+/// Mutable
+/// * `buyer`
+/// * `custodian_sale_token_acct`
+/// * `buyer_sale_token_acct`
+/// * `owner` (signer)
+///
+/// NOTE: With `claim_allocation`, remaining accounts are passed in
+/// depending on however many accepted tokens there are for a given sale.
 #[derive(Accounts)]
 pub struct ClaimAllocation<'info> {
     #[account(
@@ -438,17 +529,17 @@ pub struct ClaimAllocation<'info> {
 
     #[account(
         mut,
-        constraint = buyer_sale_token_acct.mint == sale.sale_token_mint,
-        constraint = buyer_sale_token_acct.owner == owner.key(),
-    )]
-    pub buyer_sale_token_acct: Account<'info, TokenAccount>,
-
-    #[account(
-        mut,
         constraint = custodian_sale_token_acct.mint == sale.sale_token_mint,
         constraint = custodian_sale_token_acct.owner == custodian.key(),
     )]
     pub custodian_sale_token_acct: Account<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        constraint = buyer_sale_token_acct.mint == sale.sale_token_mint,
+        constraint = buyer_sale_token_acct.owner == owner.key(),
+    )]
+    pub buyer_sale_token_acct: Account<'info, TokenAccount>,
 
     #[account(mut)]
     pub owner: Signer<'info>,
@@ -456,7 +547,20 @@ pub struct ClaimAllocation<'info> {
     pub token_program: Program<'info, Token>,
 }
 
-/// ClaimRefunds is used for buyer <> custodian interaction to retrieve refunds from custodian
+/// Context provides all accounts required for user to claim his refunds
+/// after the sale has been aborted.
+/// See `claim_refunds` instruction in lib.rs.
+///
+/// /// Immutable
+/// * `custodian`
+/// * `sale`
+///
+/// Mutable
+/// * `buyer`
+/// * `owner` (signer)
+///
+/// NOTE: With `claim_refunds`, remaining accounts are passed in
+/// depending on however many accepted tokens there are for a given sale.
 #[derive(Accounts)]
 pub struct ClaimRefunds<'info> {
     #[account(

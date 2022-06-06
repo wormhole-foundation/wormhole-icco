@@ -145,11 +145,10 @@ impl Sale {
 
         // we may need to deserialize kyc authority in sale init in the future.
         // but for now, just use global
-        self.kyc_authority
-            .copy_from_slice(&match hex::decode(GLOBAL_KYC_AUTHORITY) {
-                Ok(decoded) => decoded,
-                _ => return Result::Err(ContributorError::InvalidKycAuthority.into()),
-            });
+        self.kyc_authority.copy_from_slice(
+            &hex::decode(GLOBAL_KYC_AUTHORITY)
+                .map_err(|_| ContributorError::InvalidKycAuthority)?,
+        );
         // finally set the status to active
         self.status = SaleStatus::Active;
 
@@ -265,24 +264,16 @@ impl Sale {
             let raw_allocation = BigUint::from_bytes_be(
                 &payload[start + INDEX_ALLOCATIONS_AMOUNT..start + INDEX_ALLOCATIONS_EXCESS],
             );
-            match (raw_allocation / pow10_divider.clone()).to_u64() {
-                Some(value) => {
-                    total.allocations = value;
-                }
-                None => return Result::Err(ContributorError::AmountTooLarge.into()),
-            }
+            total.allocations = (raw_allocation / pow10_divider.clone())
+                .to_u64()
+                .ok_or(ContributorError::AmountTooLarge)?;
 
             // and save excess contribution
-            match BigUint::from_bytes_be(
+            total.excess_contributions = BigUint::from_bytes_be(
                 &payload[start + INDEX_ALLOCATIONS_EXCESS..start + INDEX_ALLOCATIONS_END],
             )
             .to_u64()
-            {
-                Some(value) => {
-                    total.excess_contributions = value;
-                }
-                None => return Result::Err(ContributorError::AmountTooLarge.into()),
-            }
+            .ok_or(ContributorError::AmountTooLarge)?;
         }
 
         // finally set the status to sealed

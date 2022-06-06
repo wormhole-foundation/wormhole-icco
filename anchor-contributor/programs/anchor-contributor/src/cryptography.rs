@@ -4,7 +4,7 @@ use anchor_lang::solana_program::{keccak, secp256k1_recover::secp256k1_recover};
 use crate::error::ContributorError;
 
 pub fn ethereum_ecrecover(sig: &[u8], msg: &[u8; 32]) -> Result<[u8; 20]> {
-    let recovered = secp256k1_recover(msg.as_slice(), sig[64], &sig[0..64])
+    let recovered = secp256k1_recover(&msg[..], sig[64], &sig[0..64])
         .map_err(|_| ContributorError::EcdsaRecoverFailure)?;
 
     let hash = keccak::hash(&recovered.to_bytes());

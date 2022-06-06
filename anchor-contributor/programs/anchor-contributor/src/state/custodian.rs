@@ -18,19 +18,19 @@ impl Custodian {
     pub const MAXIMUM_SIZE: usize = 32 + 4;
 
     pub fn conductor_chain() -> Result<u16> {
-        let chain_id: u16 = match CONDUCTOR_CHAIN.to_string().parse() {
-            Ok(v) => v,
-            _ => return Result::Err(ContributorError::InvalidConductorChain.into()),
-        };
+        let chain_id = CONDUCTOR_CHAIN
+            .to_string()
+            .parse()
+            .map_err(|_| ContributorError::InvalidConductorChain)?;
         Ok(chain_id)
     }
 
     pub fn conductor_address() -> Result<[u8; 32]> {
         let mut addr = [0u8; 32];
-        addr.copy_from_slice(&match hex::decode(CONDUCTOR_ADDRESS) {
-            Ok(decoded) => decoded,
-            _ => return Result::Err(ContributorError::InvalidConductorAddress.into()),
-        });
+        addr.copy_from_slice(
+            &hex::decode(CONDUCTOR_ADDRESS)
+                .map_err(|_| ContributorError::InvalidConductorAddress)?,
+        );
         Ok(addr)
     }
 

@@ -236,8 +236,16 @@ pub struct AttestContributions<'info> {
     /// CHECK: If someone passes in the wrong account, Guardians won't read the message
     pub wormhole_sequence: AccountInfo<'info>,
 
-    #[account(mut)]
-    pub wormhole_message_key: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [
+            b"attest-contributions".as_ref(),
+            &sale.id,
+        ],
+        bump,
+    )]
+    /// CHECK: If someone passes in the wrong account, Guardians won't read the message
+    pub vaa_msg_acct: AccountInfo<'info>,
 
     #[account(
         constraint = clock.key() == clock::id()

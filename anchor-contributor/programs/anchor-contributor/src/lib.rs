@@ -207,7 +207,7 @@ pub mod anchor_contributor {
                 program_id: ctx.accounts.core_bridge.key(),
                 accounts: vec![
                     AccountMeta::new(ctx.accounts.wormhole_config.key(), false),
-                    AccountMeta::new(ctx.accounts.wormhole_message_key.key(), true),
+                    AccountMeta::new(ctx.accounts.vaa_msg_acct.key(), true),
                     AccountMeta::new_readonly(ctx.accounts.wormhole_derived_emitter.key(), true),
                     AccountMeta::new(ctx.accounts.wormhole_sequence.key(), false),
                     AccountMeta::new(ctx.accounts.owner.key(), true),
@@ -227,10 +227,17 @@ pub mod anchor_contributor {
                     .try_to_vec()?,
             },
             &ctx.accounts.to_account_infos(),
-            &[&[
-                &b"emitter".as_ref(),
-                &[*ctx.bumps.get("wormhole_derived_emitter").unwrap()],
-            ]],
+            &[
+                &[
+                    &b"attest-contributions".as_ref(),
+                    &ctx.accounts.sale.id,
+                    &[ctx.bumps["vaa_msg_acct"]],
+                ],
+                &[
+                    &b"emitter".as_ref(),
+                    &[ctx.bumps["wormhole_derived_emitter"]],
+                ],
+            ],
         )?;
 
         // Finish instruction.

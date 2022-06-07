@@ -17,6 +17,8 @@ import {
 } from "./helpers/utils";
 import { BigNumber } from "ethers";
 import { KycAuthority } from "./helpers/kyc";
+import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey";
+import { findAttestContributionsMsgAccount } from "./helpers/accounts";
 
 setDefaultWasm("node");
 
@@ -376,7 +378,10 @@ describe("anchor-contributor", () => {
 
       // now go about your business. read VAA back.
       await connection.confirmTransaction(tx);
-      const vaaAccountInfo = await connection.getAccountInfo(contributor.whMessageKey.publicKey, "confirmed");
+      const vaaAccountInfo = await connection.getAccountInfo(
+        findAttestContributionsMsgAccount(program.programId, saleId).key,
+        "confirmed"
+      );
       const attestContributionsVaa = vaaAccountInfo.data;
 
       const headerLength = 33;

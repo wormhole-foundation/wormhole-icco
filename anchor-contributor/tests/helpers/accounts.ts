@@ -10,7 +10,7 @@ export type KeyBump = {
   bump: number;
 };
 
-function findKeyBump(seeds: (Buffer | Uint8Array)[], program: web3.PublicKey): KeyBump {
+export function findKeyBump(seeds: (Buffer | Uint8Array)[], program: web3.PublicKey): KeyBump {
   const [key, bump] = findProgramAddressSync(seeds, program);
   return {
     key,
@@ -33,4 +33,8 @@ export function findSaleAccount(programId: web3.PublicKey, saleId: Buffer): KeyB
 
 export function findBuyerAccount(programId: web3.PublicKey, saleId: Buffer, buyer: web3.PublicKey): KeyBump {
   return findKeyBump([Buffer.from("icco-buyer"), saleId, buyer.toBuffer()], programId);
+}
+
+export function findAttestContributionsMsgAccount(programId: web3.PublicKey, saleId: Buffer): KeyBump {
+  return findKeyBump([Buffer.from("attest-contributions"), saleId], programId);
 }

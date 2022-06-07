@@ -9,7 +9,15 @@ import {
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 
-import { findBuyerAccount, findCustodianAccount, findSaleAccount, findSignedVaaAccount, KeyBump } from "./accounts";
+import {
+  findAttestContributionsMsgAccount,
+  findBuyerAccount,
+  findCustodianAccount,
+  findKeyBump,
+  findSaleAccount,
+  findSignedVaaAccount,
+  KeyBump,
+} from "./accounts";
 import { getBuyerState, getCustodianState, getSaleState } from "./fetch";
 import { postVaa } from "./wormhole";
 import { getPdaAssociatedTokenAddress, makeWritableAccountMeta } from "./utils";
@@ -119,14 +127,14 @@ export class IccoContributor {
 
     // Accounts
     const saleAcc = findSaleAccount(program.programId, saleId).key;
-    const whConfig = findProgramAddressSync([Buffer.from("Bridge")], CORE_BRIDGE_ADDRESS)[0];
-    const whFeeCollector = findProgramAddressSync([Buffer.from("fee_collector")], CORE_BRIDGE_ADDRESS)[0];
-    const whDerivedEmitter = findProgramAddressSync([Buffer.from("emitter")], program.programId)[0];
-    const whSequence = findProgramAddressSync(
-      [Buffer.from("Sequence"), whDerivedEmitter.toBytes()],
+    const wormholeConfig = findKeyBump([Buffer.from("Bridge")], CORE_BRIDGE_ADDRESS).key;
+    const wormholeFeeCollector = findKeyBump([Buffer.from("fee_collector")], CORE_BRIDGE_ADDRESS).key;
+    const wormholeDerivedEmitter = findKeyBump([Buffer.from("emitter")], program.programId).key;
+    const wormholeSequence = findKeyBump(
+      [Buffer.from("Sequence"), wormholeDerivedEmitter.toBytes()],
       CORE_BRIDGE_ADDRESS
-    )[0];
-    this.whMessageKey = web3.Keypair.generate();
+    ).key;
+    const vaaMsgAcct = findAttestContributionsMsgAccount(program.programId, saleId).key;
 
     return program.methods
       .attestContributions()
@@ -135,15 +143,15 @@ export class IccoContributor {
         owner: payer.publicKey,
         systemProgram: web3.SystemProgram.programId,
         coreBridge: CORE_BRIDGE_ADDRESS,
-        wormholeConfig: whConfig,
-        wormholeFeeCollector: whFeeCollector,
-        wormholeDerivedEmitter: whDerivedEmitter,
-        wormholeSequence: whSequence,
-        wormholeMessageKey: this.whMessageKey.publicKey,
+        wormholeConfig,
+        wormholeFeeCollector,
+        wormholeDerivedEmitter,
+        wormholeSequence,
+        vaaMsgAcct,
         clock: web3.SYSVAR_CLOCK_PUBKEY,
         rent: web3.SYSVAR_RENT_PUBKEY,
       })
-      .signers([payer, this.whMessageKey])
+      .signers([payer])
       .rpc();
   }
 

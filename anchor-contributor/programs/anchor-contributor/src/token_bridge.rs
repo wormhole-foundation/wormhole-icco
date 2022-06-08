@@ -9,9 +9,9 @@ pub struct TransferData {
     pub nonce: u32,
     pub amount: u64,
     pub fee: u64,
-    pub target_address: Pubkey,
+    pub target_address: [u8; 32],
     pub target_chain: u16,
 }
 
-pub const TRANSFER_WRAPPED_INSTRUCTION: u8 = 4; 
+pub const TRANSFER_WRAPPED_INSTRUCTION: u8 = 4;
 pub const TRANSFER_NATIVE_INSTRUCTION: u8 = 5;

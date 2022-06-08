@@ -1,4 +1,4 @@
-import { importCoreWasm } from "@certusone/wormhole-sdk";
+import { importCoreWasm, tryHexToNativeString } from "@certusone/wormhole-sdk";
 import { BN, Program, web3 } from "@project-serum/anchor";
 import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey";
 import { AnchorContributor } from "../../target/types/anchor_contributor";
@@ -22,6 +22,7 @@ import { getBuyerState, getCustodianState, getSaleState } from "./fetch";
 import { postVaa } from "./wormhole";
 import { getPdaAssociatedTokenAddress, makeWritableAccountMeta } from "./utils";
 import { CORE_BRIDGE_ADDRESS } from "./consts";
+import { AcceptedToken } from "./conductor";
 
 export class IccoContributor {
   program: Program<AnchorContributor>;
@@ -181,9 +182,50 @@ export class IccoContributor {
       .rpc();
   }
 
-  async sendContributions(payer: web3.Keypair, saleId: Buffer) {
+  async sendContributions(payer: web3.Keypair, saleId: Buffer, acceptedTokens: AcceptedToken[]) {
     //Loop through each token and call send contributions for each one
     const program = this.program;
+
+    const custodian = this.custodianAccount.key;
+    const sale = findSaleAccount(program.programId, saleId).key;
+    const TokenBridge = new web3.PublicKey("B6RHG3mfcckmrYN1UhmJzyS1XX3fZKbkeUcpJe9Sy3FE");
+    const tokenBridgeMintSigner = findProgramAddressSync(
+      [
+        Buffer.from("mint_signer")
+      ],
+      TokenBridge
+    )[0]
+    console.log("Token Bridge Mint Signer: ", tokenBridgeMintSigner);
+
+    const isTokenWrapped = async (address: web3.PublicKey) => {
+      //Get the token info and check mint is Token Bridge Mint Signer
+      const tokenAcc = await getAccount(program.provider.connection, address);
+      if(tokenAcc.mint == tokenBridgeMintSigner){
+        return true;
+      } else {
+        return false;
+      }
+    }
+
+    for (let token of acceptedTokens){
+      let wrappedMetaKey = new web3.PublicKey("");
+      if(isTokenWrapped(new web3.PublicKey(token.address))){
+        wrappedMetaKey; //TODO::!
+      }
+
+
+      await program.methods.bridgeSealedContributions(token.index)
+        .accounts({
+          custodian: this.custodianAccount.key,
+          sale: findSaleAccount(program.programId, saleId).key,
+          custodyAta: await getPdaAssociatedTokenAddress(
+            new web3.PublicKey(tryHexToNativeString(token.address, "solana")),
+            custodian
+          ),
+          mintTokenAccount: new web3.PublicKey(tryHexToNativeString(token.address, "solana")),
+        })
+        .rpc();
+    }
   }
 
   async abortSale(payer: web3.Keypair, saleAbortedVaa: Buffer): Promise<string> {

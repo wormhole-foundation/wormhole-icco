@@ -311,8 +311,7 @@ pub mod anchor_contributor {
 
         let asset = &sale.totals.get(token_idx as usize).unwrap();
         let mint = asset.mint;
-        let amount = asset.contributions;
-        let recipient = sale.recipient;
+        let amount = asset.contributions - asset.excess_contributions;
         // token bridge transfer this amount over to conductor_address on conductor_chain to recipient
         let custody_ata = &ctx.accounts.custody_ata;
         let mut token_account_data: &[u8] = &ctx.accounts.mint_token_account.data.borrow();
@@ -352,9 +351,9 @@ pub mod anchor_contributor {
                     TRANSFER_WRAPPED_INSTRUCTION,
                     TransferData {
                         nonce: ctx.accounts.custodian.nonce,
-                        amount: amount,
-                        fee: 0_u64,
-                        target_address: Pubkey::new(&recipient),
+                        amount,
+                        fee: 0,
+                        target_address: sale.recipient,
                         target_chain: sale.token_chain,
                     },
                 )

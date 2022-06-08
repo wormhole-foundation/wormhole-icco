@@ -1,4 +1,0 @@
-[workspace]
-members = ["program", "client"]
-[patch.crates-io]
-#memmap2 = { git = "https://github.com/certusone/wormhole", branch="feat/token-bridge-proxy" }

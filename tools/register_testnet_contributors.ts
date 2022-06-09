@@ -51,8 +51,8 @@ async function main() {
       contributorAddressBytes = tryNativeToUint8Array(testnet[networks[i]], "solana");
       const solanaProgId = new web3.PublicKey(contributorAddressBytes);
       const [key, bump] = findProgramAddressSync([Buffer.from("emitter")], solanaProgId);
-      contributorAddressBytes = key;
-      console.log("solana contributorEmitter address: ", contributorAddressBytes);
+      contributorAddressBytes = key.toBuffer();
+      console.log("solana contributorEmitter address: ", key.toBase58());
     } else {
       // convert contributor address to bytes
       contributorAddressBytes = nativeToUint8Array(testnet[networks[i]], config.contributorChainId);

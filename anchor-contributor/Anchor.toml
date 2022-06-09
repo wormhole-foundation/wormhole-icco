@@ -1,7 +1,8 @@
 [features]
 seeds = false
 [programs.localnet]
-anchor_contributor = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
+# Solana Devnet and local same
+anchor_contributor = "BQJjZVdMHjHEePYa5nkB8bMNtxVg3Sff9KgS7x62B1pZ"
 
 [registry]
 url = "https://anchor.projectserum.com"

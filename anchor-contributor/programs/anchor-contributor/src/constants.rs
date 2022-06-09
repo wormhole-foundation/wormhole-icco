@@ -1,5 +1,10 @@
+// local
 pub const CORE_BRIDGE_ADDRESS: &str = "Bridge1p5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o";
 pub const TOKEN_BRIDGE_ADDRESS: &str = "B6RHG3mfcckmrYN1UhmJzyS1XX3fZKbkeUcpJe9Sy3FE";
+
+// Solana Devnet
+//pub const CORE_BRIDGE_ADDRESS: &str = "3u8hJUVTA4jH1wYAyUur7FFZVQ8H635K3tSHHF4ssjQ5";
+//pub const TOKEN_BRIDGE_ADDRESS: &str = "DZnkkTmCiFWfYTfT41X3Rd1kDgozqzxWaHqsw6W4x2oe";
 
 // seed prefixes
 pub const SEED_PREFIX_CUSTODIAN: &str = "icco-custodian";

@@ -15,7 +15,7 @@ use error::*;
 use token_bridge::*;
 use wormhole::*;
 
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+declare_id!("BQJjZVdMHjHEePYa5nkB8bMNtxVg3Sff9KgS7x62B1pZ");  // Solana devnet same
 
 #[program]
 pub mod anchor_contributor {

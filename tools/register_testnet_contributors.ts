@@ -2,6 +2,8 @@ import yargs from "yargs";
 import { registerChainOnEth, nativeToUint8Array } from "wormhole-icco-sdk";
 import { tryNativeToUint8Array } from "@certusone/wormhole-sdk";
 import { ethers } from "ethers";
+import { web3 } from "@project-serum/anchor";
+import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey";
 
 const fs = require("fs");
 const DeploymentConfig = require("../../ethereum/icco_deployment_config.js");
@@ -37,30 +39,23 @@ async function main() {
       throw Error("deployment config undefined");
     }
 
-    const testnet = JSON.parse(
-      fs.readFileSync(`${__dirname}/../../testnet.json`, "utf8")
-    );
+    const testnet = JSON.parse(fs.readFileSync(`${__dirname}/../../testnet.json`, "utf8"));
 
     // create wallet to call sdk method with
     const provider = new ethers.providers.JsonRpcProvider(ConductorConfig.rpc);
-    const wallet: ethers.Wallet = new ethers.Wallet(
-      ConductorConfig.mnemonic,
-      provider
-    );
+    const wallet: ethers.Wallet = new ethers.Wallet(ConductorConfig.mnemonic, provider);
 
     // if it's a solana registration - create 32 byte address
     let contributorAddressBytes: Uint8Array;
     if (config.contributorChainId == 1) {
-      contributorAddressBytes = tryNativeToUint8Array(
-        testnet[networks[i]],
-        "solana"
-      );
+      contributorAddressBytes = tryNativeToUint8Array(testnet[networks[i]], "solana");
+      const solanaProgId = new web3.PublicKey(contributorAddressBytes);
+      const [key, bump] = findProgramAddressSync([Buffer.from("emitter")], solanaProgId);
+      contributorAddressBytes = key;
+      console.log("solana contributorEmitter address: ", contributorAddressBytes);
     } else {
       // convert contributor address to bytes
-      contributorAddressBytes = nativeToUint8Array(
-        testnet[networks[i]],
-        config.contributorChainId
-      );
+      contributorAddressBytes = nativeToUint8Array(testnet[networks[i]], config.contributorChainId);
     }
 
     try {
@@ -74,12 +69,7 @@ async function main() {
       );
 
       // output hash
-      console.info(
-        "Registering contributor on network:",
-        networks[i],
-        "txHash:",
-        tx.transactionHash
-      );
+      console.info("Registering contributor on network:", networks[i], "txHash:", tx.transactionHash);
     } catch (error: any) {
       const errorMsg = error.toString();
       if (errorMsg.includes("chain already registered")) {

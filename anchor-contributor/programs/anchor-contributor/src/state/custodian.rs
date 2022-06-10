@@ -2,10 +2,12 @@ use anchor_lang::prelude::*;
 
 use crate::{
     constants::INDEX_SALE_ID,
-    env::{CONDUCTOR_ADDRESS, CONDUCTOR_CHAIN},
+    env::*,
     error::ContributorError,
     wormhole::{get_message_data, MessageData},
 };
+
+use std::str::FromStr;
 
 #[account]
 #[derive(Default)]
@@ -32,6 +34,18 @@ impl Custodian {
                 .map_err(|_| ContributorError::InvalidConductorAddress)?,
         );
         Ok(addr)
+    }
+
+    pub fn wormhole() -> Result<Pubkey> {
+        let pubkey = Pubkey::from_str(CORE_BRIDGE_ADDRESS)
+            .map_err(|_| ContributorError::InvalidWormholeAddress)?;
+        Ok(pubkey)
+    }
+
+    pub fn token_bridge() -> Result<Pubkey> {
+        let pubkey = Pubkey::from_str(TOKEN_BRIDGE_ADDRESS)
+            .map_err(|_| ContributorError::InvalidWormholeAddress)?;
+        Ok(pubkey)
     }
 
     pub fn new(&mut self, owner: &Pubkey) -> Result<()> {

@@ -2,6 +2,7 @@
     "scripts": {
         "unit-test": "bash -ac '. test.env && cargo test'",
         "integration-test": "bash -ac '. test.env && anchor test'",
+        "deploy-devnet": "bash migrations/deploy-devnet.sh",
         "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
         "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
     },

@@ -44,8 +44,14 @@ pub enum ContributorError {
     #[msg("InvalidKycSignature")]
     InvalidKycSignature,
 
+    #[msg("InvalidSale")]
+    InvalidSale,
+
     #[msg("InvalidRemainingAccounts")]
     InvalidRemainingAccounts,
+
+    #[msg("InvalidTokenBridgeAddress")]
+    InvalidTokenBridgeAddress,
 
     #[msg("InvalidTokenDecimals")]
     InvalidTokenDecimals,
@@ -53,11 +59,11 @@ pub enum ContributorError {
     #[msg("InvalidTokenIndex")]
     InvalidTokenIndex,
 
-    #[msg("InvalidSale")]
-    InvalidSale,
-
     #[msg("InvalidVaaAction")]
     InvalidVaaAction,
+
+    #[msg("InvalidWormholeAddress")]
+    InvalidWormholeAddress,
 
     #[msg("InvalidVaaPayload")]
     InvalidVaaPayload,

@@ -6,7 +6,6 @@ use anchor_spl::{
     associated_token::AssociatedToken,
     token::{Mint, Token, TokenAccount, ID},
 };
-use std::str::FromStr;
 
 use crate::{
     constants::*,
@@ -75,7 +74,7 @@ pub struct InitSale<'info> {
     pub sale: Account<'info, Sale>,
 
     #[account(
-        constraint = core_bridge_vaa.owner.key() == Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap()
+        constraint = core_bridge_vaa.owner.key() ==  Custodian::wormhole()?
     )]
     /// CHECK: This account is owned by Core Bridge so we trust it
     pub core_bridge_vaa: AccountInfo<'info>,
@@ -187,7 +186,7 @@ pub struct AttestContributions<'info> {
     pub sale: Account<'info, Sale>,
 
     #[account(
-        constraint = core_bridge.key() == Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap()
+        constraint = core_bridge.key() == Custodian::wormhole()?
     )]
     /// CHECK: If someone passes in the wrong account, Guardians won't read the message
     pub core_bridge: AccountInfo<'info>,
@@ -198,7 +197,7 @@ pub struct AttestContributions<'info> {
             b"Bridge".as_ref()
         ],
         bump,
-        seeds::program = Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap()
+        seeds::program =  Custodian::wormhole()?
     )]
     /// CHECK: If someone passes in the wrong account, Guardians won't read the message
     pub wormhole_config: AccountInfo<'info>,
@@ -209,7 +208,7 @@ pub struct AttestContributions<'info> {
             b"fee_collector".as_ref()
         ],
         bump,
-        seeds::program = Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap()
+        seeds::program = Custodian::wormhole()?
     )]
     /// CHECK: If someone passes in the wrong account, Guardians won't read the message
     pub wormhole_fee_collector: AccountInfo<'info>,
@@ -231,7 +230,7 @@ pub struct AttestContributions<'info> {
             wormhole_derived_emitter.key().to_bytes().as_ref()
         ],
         bump,
-        seeds::program = Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap()
+        seeds::program = Custodian::wormhole()?
     )]
     /// CHECK: If someone passes in the wrong account, Guardians won't read the message
     pub wormhole_sequence: AccountInfo<'info>,
@@ -304,7 +303,7 @@ pub struct BridgeSealedContribution<'info> {
     pub system_program: Program<'info, System>,
 
     #[account(
-        constraint = token_bridge.key() == Pubkey::from_str(TOKEN_BRIDGE_ADDRESS).unwrap()
+        constraint = token_bridge.key() == Custodian::token_bridge()?
     )]
     /// CHECK: Checked in account constraints
     pub token_bridge: AccountInfo<'info>,
@@ -329,14 +328,14 @@ pub struct BridgeSealedContribution<'info> {
             b"config".as_ref()
         ],
         bump,
-        seeds::program = Pubkey::from_str(TOKEN_BRIDGE_ADDRESS).unwrap(),
+        seeds::program = Custodian::token_bridge()?,
         mut
     )]
     /// CHECK: If someone passes in the wrong account, Guardians won't read the message
     pub token_config: AccountInfo<'info>,
 
     #[account(
-        constraint = core_bridge.key() == Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap()
+        constraint = core_bridge.key() == Custodian::wormhole()?
     )]
     /// CHECK: If someone passes in the wrong account, Guardians won't read the message
     pub core_bridge: AccountInfo<'info>,
@@ -345,7 +344,7 @@ pub struct BridgeSealedContribution<'info> {
             b"Bridge".as_ref()
         ],
         bump,
-        seeds::program = Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap(),
+        seeds::program = Custodian::wormhole()?,
         mut
     )]
     /// CHECK: If someone passes in the wrong account, Guardians won't read the message
@@ -355,7 +354,7 @@ pub struct BridgeSealedContribution<'info> {
             b"fee_collector".as_ref()
         ],
         bump,
-        seeds::program = Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap(),
+        seeds::program = Custodian::wormhole()?,
         mut
     )]
     /// CHECK: If someone passes in the wrong account, Guardians won't read the message
@@ -375,7 +374,7 @@ pub struct BridgeSealedContribution<'info> {
             wormhole_derived_emitter.key().to_bytes().as_ref()
         ],
         bump,
-        seeds::program = Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap(),
+        seeds::program = Custodian::wormhole()?,
         mut
     )]
     /// CHECK: If someone passes in the wrong account, Guardians won't read the message
@@ -430,7 +429,7 @@ pub struct AbortSale<'info> {
     pub sale: Account<'info, Sale>,
 
     #[account(
-        constraint = core_bridge_vaa.owner.key() == Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap()
+        constraint = core_bridge_vaa.owner.key() == Custodian::wormhole()?
     )]
     /// CHECK: This account is owned by Core Bridge so we trust it
     pub core_bridge_vaa: AccountInfo<'info>,
@@ -473,7 +472,7 @@ pub struct SealSale<'info> {
     pub sale: Account<'info, Sale>,
 
     #[account(
-        constraint = core_bridge_vaa.owner.key() == Pubkey::from_str(CORE_BRIDGE_ADDRESS).unwrap()
+        constraint = core_bridge_vaa.owner.key() == Custodian::wormhole()?
     )]
     /// CHECK: This account is owned by Core Bridge so we trust it
     pub core_bridge_vaa: AccountInfo<'info>,

@@ -2,7 +2,12 @@ import { getOriginalAssetSol, importCoreWasm, tryHexToNativeString } from "@cert
 import { BN, Program, web3 } from "@project-serum/anchor";
 import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey";
 import { AnchorContributor } from "../../target/types/anchor_contributor";
-import { getAccount, getAssociatedTokenAddress, getOrCreateAssociatedTokenAccount, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import {
+  getAccount,
+  getAssociatedTokenAddress,
+  getOrCreateAssociatedTokenAccount,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
 
 import {
   findAttestContributionsMsgAccount,
@@ -17,7 +22,7 @@ import { getBuyerState, getCustodianState, getSaleState } from "./fetch";
 import { getPdaAssociatedTokenAddress, makeWritableAccountMeta } from "./utils";
 import { CORE_BRIDGE_ADDRESS } from "./consts";
 import { PostVaaMethod, SolanaAcceptedToken as AcceptedToken, SolanaAcceptedToken } from "./types";
-import { serializeUint16 } from 'byteify';
+import { serializeUint16 } from "byteify";
 
 export class IccoContributor {
   program: Program<AnchorContributor>;
@@ -187,21 +192,12 @@ export class IccoContributor {
     const custodian = this.custodianAccount.key;
     const sale = findSaleAccount(program.programId, saleId).key;
     const TokenBridge = new web3.PublicKey("B6RHG3mfcckmrYN1UhmJzyS1XX3fZKbkeUcpJe9Sy3FE");
-    const tokenBridgeAuthoritySigner = findProgramAddressSync([
-      Buffer.from("authority_signer")
-    ], TokenBridge)[0];
-    console.log("Token Bridge Authority Signer: ", tokenBridgeAuthoritySigner.toString())
-    const tokenBridgeMintSigner = findProgramAddressSync(
-      [
-        Buffer.from("mint_signer")
-      ],
-      TokenBridge
-    )[0]
+    const tokenBridgeAuthoritySigner = findProgramAddressSync([Buffer.from("authority_signer")], TokenBridge)[0];
+    console.log("Token Bridge Authority Signer: ", tokenBridgeAuthoritySigner.toString());
+    const tokenBridgeMintSigner = findProgramAddressSync([Buffer.from("mint_signer")], TokenBridge)[0];
     console.log("Token Bridge Mint Signer: ", tokenBridgeMintSigner.toString());
-    const tokenConfigAcct = findProgramAddressSync([
-      Buffer.from("config")
-    ], TokenBridge)[0];
-    console.log("Token Config: ", tokenConfigAcct);
+    const tokenConfigAcct = findProgramAddressSync([Buffer.from("config")], TokenBridge)[0];
+    console.log("Token Config: ", tokenConfigAcct.toString());
     const isTokenWrapped = async (address: web3.PublicKey) => {
       //Get the token info and check mint is Token Bridge Mint Signer
       const tokenAcc = await getAccount(program.provider.connection, address);
@@ -212,57 +208,42 @@ export class IccoContributor {
       }
     };
 
-    for (let token of acceptedTokens){
+    for (let token of acceptedTokens) {
       let wrappedMintKey = new web3.PublicKey("");
       let wrappedMetaKey = new web3.PublicKey(""); //Null for Native Transfer
       let tokenInfo = await getOriginalAssetSol(program.provider.connection, TokenBridge.toString(), token.address);
 
       let custodyKey = new web3.PublicKey("");
-      let custodySignerKey = findProgramAddressSync([
-        Buffer.from("custody_signer")
-      ], TokenBridge)[0]
+      let custodySignerKey = findProgramAddressSync([Buffer.from("custody_signer")], TokenBridge)[0];
       console.log("Custody Signer: ", custodySignerKey);
 
-      if(isTokenWrapped(new web3.PublicKey(token.address))){
+      if (isTokenWrapped(new web3.PublicKey(token.address))) {
         //First derive the Wrapped Mint Key
-        wrappedMintKey = findProgramAddressSync([
-          Buffer.from("wrapped"),
-          serializeUint16(tokenInfo.chainId),
-          (new web3.PublicKey(token.address)).toBytes()
-        ], TokenBridge)[0];
+        wrappedMintKey = findProgramAddressSync(
+          [Buffer.from("wrapped"), serializeUint16(tokenInfo.chainId), new web3.PublicKey(token.address).toBytes()],
+          TokenBridge
+        )[0];
         //Then derive the Wrapped Meta Key
-        wrappedMetaKey = findProgramAddressSync([
-          Buffer.from("meta"),
-          wrappedMintKey.toBytes()
-        ], TokenBridge)[0];
+        wrappedMetaKey = findProgramAddressSync([Buffer.from("meta"), wrappedMintKey.toBytes()], TokenBridge)[0];
       } else {
-        custodyKey = findProgramAddressSync([
-          tokenInfo.assetAddress
-        ], TokenBridge)[0]
+        custodyKey = findProgramAddressSync([tokenInfo.assetAddress], TokenBridge)[0];
       }
 
+      const coreConfig = findProgramAddressSync([Buffer.from("config")], CORE_BRIDGE_ADDRESS)[0];
 
-      const coreConfig = findProgramAddressSync([
-        Buffer.from("config")
-      ], CORE_BRIDGE_ADDRESS)[0]
+      const feeCollector = findProgramAddressSync([Buffer.from("fee_collector")], CORE_BRIDGE_ADDRESS)[0];
 
-      const feeCollector = findProgramAddressSync([
-        Buffer.from("fee_collector")
-      ], CORE_BRIDGE_ADDRESS)[0]
-      
-      const programEmitter = findProgramAddressSync([
-        Buffer.from('emitter')
-      ], program.programId)[0]
+      const programEmitter = findProgramAddressSync([Buffer.from("emitter")], program.programId)[0];
 
-      const sequence = findProgramAddressSync([
-        Buffer.from("Sequence"),
-        programEmitter.toBytes()
-      ], CORE_BRIDGE_ADDRESS)[0]
+      const sequence = findProgramAddressSync(
+        [Buffer.from("Sequence"), programEmitter.toBytes()],
+        CORE_BRIDGE_ADDRESS
+      )[0];
 
       const msgKey = web3.Keypair.generate();
 
-
-      await program.methods.bridgeSealedContributions(token.index)
+      await program.methods
+        .bridgeSealedContributions(token.index)
         .accounts({
           custodian: this.custodianAccount.key,
           sale: findSaleAccount(program.programId, saleId).key,
@@ -288,7 +269,7 @@ export class IccoContributor {
           payer: payer,
           clock: web3.SYSVAR_CLOCK_PUBKEY,
           rent: web3.SYSVAR_RENT_PUBKEY,
-          tokenProgram: TOKEN_PROGRAM_ID
+          tokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
     }

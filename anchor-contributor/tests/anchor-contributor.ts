@@ -504,7 +504,9 @@ describe("anchor-contributor", () => {
     });
 
     it("Orchestrator Bridges Contributions to Conductor", async () => {
-      expect(false).to.be.true;
+      const saleId = dummyConductor.getSaleId();
+      const acceptedTokens = dummyConductor.acceptedTokens;
+      const tx = await contributor.sendContributions(orchestrator, saleId, acceptedTokens);
     });
 
     // TODO

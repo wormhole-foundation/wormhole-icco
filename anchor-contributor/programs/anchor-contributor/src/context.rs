@@ -298,8 +298,12 @@ pub struct BridgeSealedContribution<'info> {
     /// CHECK: Nullable account
     pub wrapped_meta_key: AccountInfo<'info>,
 
-    #[account(mut)]
-    pub owner: Signer<'info>,
+    /// CHECK: Nullable account
+    pub custody_key: AccountInfo<'info>,
+    
+    /// CHECK: Only for native assets. TODO: Check that the owner of this key is the Token Bridge
+    pub custody_signer_key: AccountInfo<'info>,
+
     pub system_program: Program<'info, System>,
 
     #[account(

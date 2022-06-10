@@ -324,7 +324,7 @@ pub mod anchor_contributor {
             let send_wrapped_ix = Instruction {
                 program_id: ctx.accounts.token_bridge.key(),
                 accounts: vec![
-                    AccountMeta::new(ctx.accounts.owner.key(), true),
+                    AccountMeta::new(ctx.accounts.payer.key(), true),
                     AccountMeta::new_readonly(ctx.accounts.token_config.key(), false),
                     AccountMeta::new(custody_ata.key(), false),
                     AccountMeta::new_readonly(ctx.accounts.custodian.key(), true),
@@ -363,7 +363,7 @@ pub mod anchor_contributor {
             invoke_signed(
                 &send_wrapped_ix,
                 &[
-                    ctx.accounts.owner.to_account_info(),
+                    ctx.accounts.payer.to_account_info(),
                     ctx.accounts.token_config.to_account_info(),
                     custody_ata.to_account_info(),
                     ctx.accounts.custodian.to_account_info(),
@@ -388,6 +388,68 @@ pub mod anchor_contributor {
             )?;
         } else {
             //Native Token
+            let send_native_ix = Instruction {
+                program_id: ctx.accounts.token_bridge.key(),
+                accounts: vec![
+                    AccountMeta::new(ctx.accounts.payer.key(), true),
+                    AccountMeta::new_readonly(ctx.accounts.token_config.key(), false),
+                    AccountMeta::new(custody_ata.key(), false),
+                    AccountMeta::new(token_acc.mint, false),
+                    AccountMeta::new_readonly(ctx.accounts.custody_key.key(), false),
+                    AccountMeta::new_readonly(
+                        ctx.accounts.token_bridge_authority_signer.key(),
+                        false,
+                    ),
+                    AccountMeta::new_readonly(ctx.accounts.custody_signer_key.key(), false),
+                    AccountMeta::new(ctx.accounts.wormhole_config.key(), false),
+                    AccountMeta::new(ctx.accounts.wormhole_message_key.key(), true),
+                    AccountMeta::new_readonly(ctx.accounts.wormhole_derived_emitter.key(), false),
+                    AccountMeta::new(ctx.accounts.wormhole_sequence.key(), false),
+                    AccountMeta::new(ctx.accounts.wormhole_fee_collector.key(), false),
+                    AccountMeta::new_readonly(clock::id(), false),
+                    // Dependencies
+                    AccountMeta::new_readonly(rent::id(), false),
+                    AccountMeta::new_readonly(ctx.accounts.system_program.key(), false),
+                    // Program
+                    AccountMeta::new_readonly(ctx.accounts.core_bridge.key(), false),
+                    AccountMeta::new_readonly(spl_token::id(), false),
+                ],
+                data: (
+                    TRANSFER_NATIVE_INSTRUCTION,
+                    TransferData {
+                        nonce: ctx.accounts.custodian.nonce,
+                        amount: amount,
+                        fee: 0_u64,
+                        target_address: sale.recipient,
+                        target_chain: sale.token_chain,
+                    },
+                )
+                    .try_to_vec()?,
+            };
+
+            invoke_signed(
+                &send_native_ix,
+                &[
+                    ctx.accounts.payer.to_account_info(),
+                    ctx.accounts.token_config.to_account_info(),
+                    custody_ata.to_account_info(),
+                    ctx.accounts.mint_token_account.to_account_info(),
+                    ctx.accounts.custody_key.to_account_info(),
+                    ctx.accounts.token_bridge_authority_signer.to_account_info(),
+                    ctx.accounts.custody_signer_key.to_account_info(),
+                    ctx.accounts.wormhole_config.to_account_info(),
+                    ctx.accounts.wormhole_message_key.to_account_info(),
+                    ctx.accounts.wormhole_derived_emitter.to_account_info(),
+                    ctx.accounts.wormhole_sequence.to_account_info(),
+                    ctx.accounts.wormhole_fee_collector.to_account_info(),
+                    ctx.accounts.clock.to_account_info(),
+                    ctx.accounts.rent.to_account_info(),
+                    ctx.accounts.system_program.to_account_info(),
+                    ctx.accounts.core_bridge.to_account_info(),
+                    ctx.accounts.token_program.to_account_info(),
+                ],
+                &[&[]],
+            )?;
         }
 
         // TODO: need to check custodian ata to see if there are enough funds
@@ -396,6 +458,7 @@ pub mod anchor_contributor {
 
         Ok(())
     }
+
 
     /// Instruction to abort the current sale. This parses an inbound signed VAA sent
     /// by the conductor.

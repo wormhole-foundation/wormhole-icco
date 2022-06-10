@@ -284,20 +284,24 @@ pub struct BridgeSealedContribution<'info> {
     pub sale: Account<'info, Sale>,
 
     /// CHECK: Check if owned by ATA Program
-    pub custody_ata: AccountInfo<'info>,
+    #[account(mut)]
+    pub custody_ata: Box<Account<'info, TokenAccount>>,
 
+    /*
     #[account(
         constraint = mint_token_account.owner == &ID
     )]
+    */
+    #[account(mut)]
     /// CHECK: Check if owned by SPL Account
-    pub mint_token_account: AccountInfo<'info>,
+    pub mint_token_account: Box<Account<'info, Mint>>,
 
     /// CHECK: Nullable account
     pub wrapped_meta_key: AccountInfo<'info>,
 
     /// CHECK: Nullable account
+    #[account(mut)]
     pub custody_key: AccountInfo<'info>,
-    
     /// CHECK: Only for native assets. TODO: Check that the owner of this key is the Token Bridge
     pub custody_signer_key: AccountInfo<'info>,
 
@@ -361,11 +365,12 @@ pub struct BridgeSealedContribution<'info> {
     /// CHECK: If someone passes in the wrong account, Guardians won't read the message
     pub wormhole_fee_collector: AccountInfo<'info>,
     #[account(
+        mut,
         seeds = [
             b"emitter".as_ref(),
         ],
         bump,
-        mut
+        seeds::program = Custodian::token_bridge()?
     )]
     /// CHECK: If someone passes in the wrong account, Guardians won't read the message
     pub wormhole_derived_emitter: AccountInfo<'info>,

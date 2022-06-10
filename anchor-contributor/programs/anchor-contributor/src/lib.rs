@@ -15,7 +15,7 @@ use error::*;
 use token_bridge::*;
 use wormhole::*;
 
-declare_id!("BQJjZVdMHjHEePYa5nkB8bMNtxVg3Sff9KgS7x62B1pZ");  // Solana devnet same
+declare_id!("BQJjZVdMHjHEePYa5nkB8bMNtxVg3Sff9KgS7x62B1pZ"); // Solana devnet same
 
 #[program]
 pub mod anchor_contributor {
@@ -306,19 +306,18 @@ pub mod anchor_contributor {
         let sale = &ctx.accounts.sale;
         require!(sale.is_sealed(), ContributorError::SaleNotSealed);
 
-        let conductor_chain = Custodian::conductor_chain()?;
-        let conductor_address = Custodian::conductor_address()?;
-
-        let asset = &sale.totals.get(token_idx as usize).unwrap();
-        let mint = asset.mint;
+        let custody_ata = &ctx.accounts.custody_ata;
+        //let asset = &sale.totals.get(token_idx as usize).unwrap();
+        let mint = custody_ata.mint;
+        let (_, asset) = sale.get_total_info(&mint)?;
         let amount = asset.contributions - asset.excess_contributions;
         // token bridge transfer this amount over to conductor_address on conductor_chain to recipient
-        let custody_ata = &ctx.accounts.custody_ata;
-        let mut token_account_data: &[u8] = &ctx.accounts.mint_token_account.data.borrow();
-        let token_acc: token::TokenAccount = token::TokenAccount::try_deserialize(&mut token_account_data)?;
         let wrapped_meta_key = &ctx.accounts.wrapped_meta_key;
+
         msg!("Get to If Statement!");
-        if token_acc.mint == ctx.accounts.token_mint_signer.key() {
+        if ctx.accounts.mint_token_account.mint_authority.unwrap()
+            == ctx.accounts.token_mint_signer.key()
+        {
             msg!("Wrapped Token!");
             //Wrapped Token
             let send_wrapped_ix = Instruction {
@@ -328,7 +327,7 @@ pub mod anchor_contributor {
                     AccountMeta::new_readonly(ctx.accounts.token_config.key(), false),
                     AccountMeta::new(custody_ata.key(), false),
                     AccountMeta::new_readonly(ctx.accounts.custodian.key(), true),
-                    AccountMeta::new(token_acc.mint, false),
+                    AccountMeta::new(mint, false),
                     AccountMeta::new_readonly(wrapped_meta_key.key(), false), // Wrapped Meta Key
                     AccountMeta::new_readonly(
                         ctx.accounts.token_bridge_authority_signer.key(),
@@ -336,7 +335,7 @@ pub mod anchor_contributor {
                     ),
                     AccountMeta::new(ctx.accounts.wormhole_config.key(), false),
                     AccountMeta::new(ctx.accounts.wormhole_message_key.key(), true),
-                    AccountMeta::new_readonly(ctx.accounts.wormhole_derived_emitter.key(), false),
+                    AccountMeta::new_readonly(ctx.accounts.wormhole_derived_emitter.key(), true),
                     AccountMeta::new(ctx.accounts.wormhole_sequence.key(), false),
                     AccountMeta::new(ctx.accounts.wormhole_fee_collector.key(), false),
                     AccountMeta::new_readonly(clock::id(), false),
@@ -395,8 +394,8 @@ pub mod anchor_contributor {
                     AccountMeta::new(ctx.accounts.payer.key(), true),
                     AccountMeta::new_readonly(ctx.accounts.token_config.key(), false),
                     AccountMeta::new(custody_ata.key(), false),
-                    AccountMeta::new(token_acc.mint, false),
-                    AccountMeta::new_readonly(ctx.accounts.custody_key.key(), false),
+                    AccountMeta::new(mint, false),
+                    AccountMeta::new(ctx.accounts.custody_key.key(), false),
                     AccountMeta::new_readonly(
                         ctx.accounts.token_bridge_authority_signer.key(),
                         false,
@@ -449,7 +448,8 @@ pub mod anchor_contributor {
                     ctx.accounts.core_bridge.to_account_info(),
                     ctx.accounts.token_program.to_account_info(),
                 ],
-                &[&[]],
+                &[&[SEED_PREFIX_CUSTODIAN.as_bytes(), &[ctx.bumps["custodian"]]]],
+                //&[&[]],
             )?;
         }
 
@@ -459,7 +459,6 @@ pub mod anchor_contributor {
 
         Ok(())
     }
-
 
     /// Instruction to abort the current sale. This parses an inbound signed VAA sent
     /// by the conductor.

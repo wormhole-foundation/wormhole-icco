@@ -3,10 +3,10 @@ import { CHAIN_ID_ETH, CHAIN_ID_SOLANA, tryNativeToHexString } from "@certusone/
 import { createMint, mintTo } from "@solana/spl-token";
 import { BigNumber, BigNumberish } from "ethers";
 
-import { getPdaAssociatedTokenAddress, hexToPublicKey, toBigNumberHex } from "./utils";
-import { CONDUCTOR_ADDRESS, CONDUCTOR_CHAIN } from "./consts";
+import { getPdaAssociatedTokenAddress, toBigNumberHex } from "./utils";
 import { signAndEncodeVaa } from "./wormhole";
 import { BN } from "bn.js";
+import { SolanaAcceptedToken } from "./types";
 
 // sale struct info
 export const MAX_ACCEPTED_TOKENS = 8;
@@ -14,6 +14,9 @@ const NUM_BYTES_ACCEPTED_TOKEN = 33;
 const NUM_BYTES_ALLOCATION = 65;
 
 export class DummyConductor {
+  chainId: number;
+  address: Buffer;
+
   saleId: number;
   wormholeSequence: number;
 
@@ -23,10 +26,13 @@ export class DummyConductor {
   initSaleVaa: Buffer;
 
   saleTokenOnSolana: string;
-  acceptedTokens: AcceptedToken[];
+  acceptedTokens: SolanaAcceptedToken[];
   allocations: Allocation[];
 
-  constructor() {
+  constructor(chainId: number, address: string) {
+    this.chainId = chainId;
+    this.address = Buffer.from(address, "hex");
+
     this.saleId = 0;
     this.wormholeSequence = 0;
 
@@ -67,13 +73,13 @@ export class DummyConductor {
     return new web3.PublicKey(this.saleTokenOnSolana);
   }
 
-  async createAcceptedTokens(connection: web3.Connection, payer: web3.Keypair): Promise<AcceptedToken[]> {
+  async createAcceptedTokens(connection: web3.Connection, payer: web3.Keypair): Promise<SolanaAcceptedToken[]> {
     const tokenIndices = [2, 3, 5, 8, 13, 21, 34, 55];
 
     for (let i = 0; i < MAX_ACCEPTED_TOKENS; ++i) {
       // just make everything the same number of decimals (9)
       const mint = await createMint(connection, payer, payer.publicKey, payer.publicKey, 9);
-      this.acceptedTokens.push(makeAcceptedToken(tokenIndices[i], mint.toString()));
+      this.acceptedTokens.push(makeSolanaAcceptedToken(tokenIndices[i], mint.toString()));
     }
     return this.acceptedTokens;
   }
@@ -94,8 +100,8 @@ export class DummyConductor {
     this.initSaleVaa = signAndEncodeVaa(
       startTime,
       this.nonce,
-      CONDUCTOR_CHAIN,
-      Buffer.from(CONDUCTOR_ADDRESS).toString("hex"),
+      this.chainId,
+      this.address,
       this.wormholeSequence,
       encodeSaleInit(
         this.saleId,
@@ -142,8 +148,8 @@ export class DummyConductor {
     return signAndEncodeVaa(
       blockTime,
       this.nonce,
-      CONDUCTOR_CHAIN,
-      Buffer.from(CONDUCTOR_ADDRESS).toString("hex"),
+      this.chainId,
+      this.address,
       this.wormholeSequence,
       encodeSaleSealed(this.saleId, this.allocations)
     );
@@ -154,8 +160,8 @@ export class DummyConductor {
     return signAndEncodeVaa(
       blockTime,
       this.nonce,
-      CONDUCTOR_CHAIN,
-      Buffer.from(CONDUCTOR_ADDRESS).toString("hex"),
+      this.chainId,
+      this.address,
       this.wormholeSequence,
       encodeSaleAborted(this.saleId)
     );
@@ -184,7 +190,7 @@ export class DummyConductor {
   nonce = 0;
 }
 
-function makeAcceptedToken(index: number, pubkey: string): AcceptedToken {
+function makeSolanaAcceptedToken(index: number, pubkey: string): SolanaAcceptedToken {
   return { index, address: tryNativeToHexString(pubkey, CHAIN_ID_SOLANA) };
 }
 
@@ -192,12 +198,7 @@ function makeAllocation(index: number, allocation: string, excessContribution: s
   return { index, allocation, excessContribution };
 }
 
-export interface AcceptedToken {
-  index: number; // uint8
-  address: string; // 32 bytes
-}
-
-export function encodeAcceptedTokens(acceptedTokens: AcceptedToken[]): Buffer {
+export function encodeAcceptedTokens(acceptedTokens: SolanaAcceptedToken[]): Buffer {
   const n = acceptedTokens.length;
   const encoded = Buffer.alloc(NUM_BYTES_ACCEPTED_TOKEN * n);
   for (let i = 0; i < n; ++i) {
@@ -216,7 +217,7 @@ export function encodeSaleInit(
   tokenDecimals: number,
   saleStart: number,
   saleEnd: number,
-  acceptedTokens: AcceptedToken[], // 33 * n_tokens
+  acceptedTokens: SolanaAcceptedToken[], // 33 * n_tokens
   recipient: string // 32 bytes
 ): Buffer {
   const numTokens = acceptedTokens.length;

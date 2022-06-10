@@ -1,5 +1,7 @@
 {
     "scripts": {
+        "unit-test": "bash -ac '. test.env && cargo test'",
+        "integration-test": "bash -ac '. test.env && anchor test'",
         "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
         "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
     },

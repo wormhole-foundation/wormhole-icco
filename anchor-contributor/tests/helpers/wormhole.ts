@@ -3,33 +3,37 @@ import keccak256 from "keccak256";
 import { soliditySha3 } from "web3-utils";
 import { postVaaSolanaWithRetry } from "@certusone/wormhole-sdk";
 
-import { CORE_BRIDGE_ADDRESS } from "./consts";
-
 const elliptic = require("elliptic");
 
-export async function postVaa(connection: web3.Connection, payer: web3.Keypair, signedVaa: Buffer): Promise<void> {
+/*
+export async function postVaa(
+  connection: web3.Connection,
+  payer: web3.Keypair,
+  wormhole: web3.PublicKey,
+  signedVaa: Buffer
+): Promise<void> {
   await postVaaSolanaWithRetry(
     connection,
     async (tx) => {
       tx.partialSign(payer);
       return tx;
     },
-    CORE_BRIDGE_ADDRESS.toString(),
+    wormhole.toString(),
     payer.publicKey.toString(),
     signedVaa,
     10
   );
-}
+}*/
 
 export function signAndEncodeVaa(
   timestamp: number,
   nonce: number,
   emitterChainId: number,
-  emitterAddress: string,
+  emitterAddress: Buffer,
   sequence: number,
   data: Buffer
 ): Buffer {
-  if (Buffer.from(emitterAddress, "hex").length != 32) {
+  if (emitterAddress.length != 32) {
     throw Error("emitterAddress != 32 bytes");
   }
 
@@ -56,7 +60,7 @@ export function signAndEncodeVaa(
   vm.writeUInt32BE(timestamp, bodyStart);
   vm.writeUInt32BE(nonce, bodyStart + 4);
   vm.writeUInt16BE(emitterChainId, bodyStart + 8);
-  vm.write(emitterAddress, bodyStart + 10, "hex");
+  vm.write(emitterAddress.toString("hex"), bodyStart + 10, "hex");
   vm.writeBigUInt64BE(BigInt(sequence), bodyStart + 42);
   vm.writeUInt8(consistencyLevel, bodyStart + 50);
   vm.write(data.toString("hex"), bodyStart + bodyHeaderLength, "hex");
@@ -75,7 +79,6 @@ export function signAndEncodeVaa(
     vm.write(signature.r.toString(16).padStart(64, "0"), start + 1, "hex");
     vm.write(signature.s.toString(16).padStart(64, "0"), start + 33, "hex");
     vm.writeUInt8(signature.recoveryParam, start + 65);
-    //console.log("  beta signature", vm.subarray(start, start + 66).toString("hex"));
   }
 
   return vm;

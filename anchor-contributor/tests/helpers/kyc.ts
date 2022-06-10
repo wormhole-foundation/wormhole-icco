@@ -1,18 +1,19 @@
 import { CHAIN_ID_SOLANA, tryNativeToHexString } from "@certusone/wormhole-sdk";
 import { web3, BN } from "@project-serum/anchor";
 import { soliditySha3 } from "web3-utils";
-import { CONDUCTOR_ADDRESS } from "./consts";
 import { IccoContributor } from "./contributor";
 import { toBigNumberHex } from "./utils";
 
 const elliptic = require("elliptic");
 
 export class KycAuthority {
-  privateKey = Buffer.from("b0057716d5917badaf911b193b12b910811c1497b5bada8d7711f758981c3773", "hex");
-
+  privateKey: Buffer;
+  conductorAddress: string;
   contributor: IccoContributor;
 
-  constructor(contributor: IccoContributor) {
+  constructor(privateKey: string, conductorAddress: string, contributor: IccoContributor) {
+    this.privateKey = Buffer.from(privateKey, "hex");
+    this.conductorAddress = conductorAddress;
     this.contributor = contributor;
   }
 
@@ -48,7 +49,7 @@ export class KycAuthority {
     const totalContribution = await this.fetchBuyerTotalContribution(saleId, tokenIndex, buyer);
 
     const body = Buffer.alloc(6 * 32, 0);
-    body.write(Buffer.from(CONDUCTOR_ADDRESS).toString("hex"), 0, "hex");
+    body.write(this.conductorAddress, 0, "hex");
     body.write(saleId.toString("hex"), 32, "hex");
     body.write(toBigNumberHex(tokenIndex, 32), 2 * 32, "hex");
     body.write(toBigNumberHex(amount.toString(), 32), 3 * 32, "hex");

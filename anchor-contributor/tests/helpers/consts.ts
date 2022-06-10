@@ -6,5 +6,8 @@ export const CORE_BRIDGE_ADDRESS = new web3.PublicKey("Bridge1p5gheXUvJ6jGWGeCsg
 
 // contributor
 export const CONDUCTOR_CHAIN: number = parseInt(process.env.CONDUCTOR_CHAIN);
-export const CONDUCTOR_ADDRESS: Uint8Array = hexToUint8Array(process.env.CONDUCTOR_ADDRESS);
+export const CONDUCTOR_ADDRESS: string = process.env.CONDUCTOR_ADDRESS;
 export const GLOBAL_KYC_AUTHORITY: Uint8Array = hexToUint8Array(process.env.GLOBAL_KYC_AUTHORITY);
+
+// kyc
+export const KYC_PRIVATE: string = "b0057716d5917badaf911b193b12b910811c1497b5bada8d7711f758981c3773";

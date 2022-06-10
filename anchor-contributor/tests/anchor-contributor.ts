@@ -5,7 +5,7 @@ import { readFileSync } from "fs";
 import { CHAIN_ID_SOLANA, setDefaultWasm, tryHexToNativeString, tryNativeToHexString } from "@certusone/wormhole-sdk";
 import { getOrCreateAssociatedTokenAccount, mintTo, Account as AssociatedTokenAccount } from "@solana/spl-token";
 
-import { DummyConductor, MAX_ACCEPTED_TOKENS } from "./helpers/conductor";
+import { DummyConductor } from "./helpers/conductor";
 import { IccoContributor } from "./helpers/contributor";
 import {
   getBlockTime,
@@ -17,8 +17,11 @@ import {
 } from "./helpers/utils";
 import { BigNumber } from "ethers";
 import { KycAuthority } from "./helpers/kyc";
-import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey";
 import { findAttestContributionsMsgAccount } from "./helpers/accounts";
+import { CONDUCTOR_ADDRESS, CONDUCTOR_CHAIN, CORE_BRIDGE_ADDRESS, KYC_PRIVATE } from "./helpers/consts";
+
+// be careful where you import this
+import { postVaaSolanaWithRetry } from "@certusone/wormhole-sdk";
 
 setDefaultWasm("node");
 
@@ -37,13 +40,13 @@ describe("anchor-contributor", () => {
   );
 
   // dummy conductor to generate vaas
-  const dummyConductor = new DummyConductor();
+  const dummyConductor = new DummyConductor(CONDUCTOR_CHAIN, CONDUCTOR_ADDRESS);
 
   // our contributor
-  const contributor = new IccoContributor(program);
+  const contributor = new IccoContributor(program, CORE_BRIDGE_ADDRESS, postVaaSolanaWithRetry);
 
   // kyc for signing contributions
-  const kyc = new KycAuthority(contributor);
+  const kyc = new KycAuthority(KYC_PRIVATE, CONDUCTOR_ADDRESS, contributor);
 
   before("Airdrop SOL", async () => {
     await connection.requestAirdrop(buyer.publicKey, 8000000000); // 8,000,000,000 lamports

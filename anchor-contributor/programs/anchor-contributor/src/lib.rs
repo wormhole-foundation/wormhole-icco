@@ -315,11 +315,11 @@ pub mod anchor_contributor {
         // token bridge transfer this amount over to conductor_address on conductor_chain to recipient
         let custody_ata = &ctx.accounts.custody_ata;
         let mut token_account_data: &[u8] = &ctx.accounts.mint_token_account.data.borrow();
-        let token_acc: token::TokenAccount =
-            token::TokenAccount::try_deserialize(&mut token_account_data)?;
+        let token_acc: token::TokenAccount = token::TokenAccount::try_deserialize(&mut token_account_data)?;
         let wrapped_meta_key = &ctx.accounts.wrapped_meta_key;
-
+        msg!("Get to If Statement!");
         if token_acc.mint == ctx.accounts.token_mint_signer.key() {
+            msg!("Wrapped Token!");
             //Wrapped Token
             let send_wrapped_ix = Instruction {
                 program_id: ctx.accounts.token_bridge.key(),
@@ -388,6 +388,7 @@ pub mod anchor_contributor {
             )?;
         } else {
             //Native Token
+            msg!("Native Token!");
             let send_native_ix = Instruction {
                 program_id: ctx.accounts.token_bridge.key(),
                 accounts: vec![

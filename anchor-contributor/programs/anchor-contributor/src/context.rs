@@ -283,9 +283,6 @@ pub struct BridgeSealedContribution<'info> {
     )]
     pub sale: Account<'info, Sale>,
 
-    #[account(
-        constraint = custody_ata.owner == &AssociatedToken::id()
-    )]
     /// CHECK: Check if owned by ATA Program
     pub custody_ata: AccountInfo<'info>,
 

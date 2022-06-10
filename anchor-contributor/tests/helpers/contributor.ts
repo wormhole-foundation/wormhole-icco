@@ -209,18 +209,18 @@ export class IccoContributor {
     };
 
     for (let token of acceptedTokens) {
-      let wrappedMintKey = new web3.PublicKey("");
-      let wrappedMetaKey = new web3.PublicKey(""); //Null for Native Transfer
-      let tokenInfo = await getOriginalAssetSol(program.provider.connection, TokenBridge.toString(), token.address);
+      let wrappedMintKey = web3.Keypair.generate().publicKey;
+      let wrappedMetaKey = web3.Keypair.generate().publicKey; //Null for Native Transfer
+      let tokenInfo = await getOriginalAssetSol(program.provider.connection, TokenBridge.toString(), tryHexToNativeString(token.address, "solana"));
 
-      let custodyKey = new web3.PublicKey("");
+      let custodyKey = web3.Keypair.generate().publicKey;
       let custodySignerKey = findProgramAddressSync([Buffer.from("custody_signer")], TokenBridge)[0];
-      console.log("Custody Signer: ", custodySignerKey);
+      console.log("Custody Signer: ", custodySignerKey.toString());
 
-      if (isTokenWrapped(new web3.PublicKey(token.address))) {
+      if (isTokenWrapped(new web3.PublicKey(tryHexToNativeString(token.address, "solana")))) {
         //First derive the Wrapped Mint Key
         wrappedMintKey = findProgramAddressSync(
-          [Buffer.from("wrapped"), serializeUint16(tokenInfo.chainId), new web3.PublicKey(token.address).toBytes()],
+          [Buffer.from("wrapped"), serializeUint16(tokenInfo.chainId), new web3.PublicKey(tryHexToNativeString(token.address, "solana")).toBytes()],
           TokenBridge
         )[0];
         //Then derive the Wrapped Meta Key
@@ -229,7 +229,7 @@ export class IccoContributor {
         custodyKey = findProgramAddressSync([tokenInfo.assetAddress], TokenBridge)[0];
       }
 
-      const coreConfig = findProgramAddressSync([Buffer.from("config")], CORE_BRIDGE_ADDRESS)[0];
+      const coreConfig = findProgramAddressSync([Buffer.from("Bridge")], CORE_BRIDGE_ADDRESS)[0];
 
       const feeCollector = findProgramAddressSync([Buffer.from("fee_collector")], CORE_BRIDGE_ADDRESS)[0];
 
@@ -265,13 +265,14 @@ export class IccoContributor {
           wormholeFeeCollector: feeCollector,
           wormholeDerivedEmitter: programEmitter,
           wormholeSequence: sequence,
-          wormholeMessageKey: msgKey,
-          payer: payer,
+          wormholeMessageKey: msgKey.publicKey,
+          payer: payer.publicKey,
           clock: web3.SYSVAR_CLOCK_PUBKEY,
           rent: web3.SYSVAR_RENT_PUBKEY,
           tokenProgram: TOKEN_PROGRAM_ID,
         })
-        .rpc();
+        .signers([payer, msgKey])
+        .rpc({skipPreflight: true});
     }
   }
 

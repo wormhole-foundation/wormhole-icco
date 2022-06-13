@@ -182,6 +182,30 @@ export async function createCustodianATAs(
   }
 }
 
+export async function createCustodianATAForSaleToken(
+  program: Program<AnchorContributor>,
+  saleTokenAddress: string
+) {
+  // fetch custodian account
+  const custodianAccount = findCustodianAccount(program.programId);
+
+  // fetch mint
+  const mint = new web3.PublicKey(
+    tryHexToNativeString(saleTokenAddress, CHAIN_ID_SOLANA)
+  );
+
+  console.log(mint);
+
+  const allowOwnerOffCurve = true;
+  await getOrCreateAssociatedTokenAccount(
+    program.provider.connection,
+    initiatorKeyPair(),
+    mint,
+    custodianAccount.key,
+    allowOwnerOffCurve
+  );
+}
+
 export async function initializeSaleOnSolanaContributor(
   program: Program<AnchorContributor>,
   initSaleVaa: Buffer

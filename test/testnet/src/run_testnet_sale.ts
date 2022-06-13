@@ -49,6 +49,7 @@ import {
   prepareAndExecuteContributionOnSolana,
   initiatorKeyPair,
   attestAndCollectContributionsOnSolana,
+  createCustodianATAForSaleToken,
 } from "./solana_utils";
 import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey";
 
@@ -60,6 +61,14 @@ async function main() {
 
   // setup sale variables
   const raiseParams: saleParams = SALE_CONFIG["raiseParams"];
+
+  // create the sale token ATA
+  // TO-DO: need to init sale with the sale token account
+  /*const saleTokenAta = await createCustodianATAForSaleToken(
+    program,
+    raiseParams.solanaTokenAccount
+  );
+  console.log(saleTokenAta);*/
 
   // build the accepted token list
   const acceptedTokens = await buildAcceptedTokens(
@@ -214,7 +223,7 @@ async function main() {
     console.log("Allocation", i, "was claimed successfully:", successful);
   }
 
-  // redeem VAAs for conductor
+  // redeem transfer VAAs for conductor
   for (let [chainId, receipt] of saleSealedResults[1]) {
     await redeemCrossChainContributions(receipt, chainId);
   }*/

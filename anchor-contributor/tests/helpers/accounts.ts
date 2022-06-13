@@ -16,6 +16,10 @@ export function findKeyBump(seeds: (Buffer | Uint8Array)[], program: web3.Public
   };
 }
 
+export function deriveAddress(seeds: (Buffer | Uint8Array)[], program: web3.PublicKey): web3.PublicKey {
+  return findKeyBump(seeds, program).key;
+}
+
 export function findCustodianAccount(programId: web3.PublicKey): KeyBump {
   return findKeyBump([Buffer.from("icco-custodian")], programId);
 }

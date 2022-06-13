@@ -284,27 +284,20 @@ pub struct BridgeSealedContribution<'info> {
     pub sale: Account<'info, Sale>,
 
     /// CHECK: Check if owned by ATA Program
-    #[account(mut)]
-    pub custody_ata: Box<Account<'info, TokenAccount>>,
-
-    /*
     #[account(
-        constraint = mint_token_account.owner == &ID
+        mut,
+        constraint = custodian_token_acct.owner == custodian.key(),
+        constraint = custodian_token_acct.mint == accepted_mint.key()
     )]
-    */
+    pub custodian_token_acct: Box<Account<'info, TokenAccount>>,
+
     #[account(mut)]
-    /// CHECK: Check if owned by SPL Account
-    pub mint_token_account: Box<Account<'info, Mint>>,
+    /// CHECK: Check if owned by SPL Account. Why does token bridge need this mutable?
+    pub accepted_mint: Box<Account<'info, Mint>>,
 
-    /// CHECK: Nullable account
-    pub wrapped_meta_key: AccountInfo<'info>,
-
-    /// CHECK: Nullable account
     #[account(mut)]
-    pub custody_key: AccountInfo<'info>,
-    /// CHECK: Only for native assets. TODO: Check that the owner of this key is the Token Bridge
-    pub custody_signer_key: AccountInfo<'info>,
-
+    pub payer: Signer<'info>,
+    pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
 
     #[account(
@@ -312,6 +305,17 @@ pub struct BridgeSealedContribution<'info> {
     )]
     /// CHECK: Checked in account constraints
     pub token_bridge: AccountInfo<'info>,
+
+    #[account(mut)]
+    /// CHECK: can be token bridge custody account or wrapped meta account
+    pub custody_or_wrapped_meta: AccountInfo<'info>,
+
+    // #[account(
+    //     constraint = *custody_signer_key.owner == token_bridge.key()
+    // )]
+    /// CHECK: Only for native assets.
+    pub custody_signer_key: AccountInfo<'info>,
+
     #[account(
         seeds=[b"mint_signer"],
         bump,
@@ -326,44 +330,47 @@ pub struct BridgeSealedContribution<'info> {
         seeds::program = token_bridge.key()
     )]
     /// CHECK: Token Bridge Authority Signer
-    pub token_bridge_authority_signer: AccountInfo<'info>,
+    pub authority_signer: AccountInfo<'info>,
 
     #[account(
+        mut,
         seeds = [
             b"config".as_ref()
         ],
         bump,
-        seeds::program = Custodian::token_bridge()?,
-        mut
+        seeds::program = Custodian::token_bridge()?
     )]
     /// CHECK: If someone passes in the wrong account, Guardians won't read the message
-    pub token_config: AccountInfo<'info>,
+    pub token_bridge_config: AccountInfo<'info>,
 
     #[account(
-        constraint = core_bridge.key() == Custodian::wormhole()?
+        constraint = wormhole.key() == Custodian::wormhole()?
     )]
     /// CHECK: If someone passes in the wrong account, Guardians won't read the message
-    pub core_bridge: AccountInfo<'info>,
+    pub wormhole: AccountInfo<'info>,
+
     #[account(
+        mut,
         seeds = [
             b"Bridge".as_ref()
         ],
         bump,
-        seeds::program = Custodian::wormhole()?,
-        mut
+        seeds::program = Custodian::wormhole()?
     )]
     /// CHECK: If someone passes in the wrong account, Guardians won't read the message
     pub wormhole_config: AccountInfo<'info>,
+
     #[account(
+        mut,
         seeds = [
             b"fee_collector".as_ref()
         ],
         bump,
-        seeds::program = Custodian::wormhole()?,
-        mut
+        seeds::program = Custodian::wormhole()?
     )]
     /// CHECK: If someone passes in the wrong account, Guardians won't read the message
     pub wormhole_fee_collector: AccountInfo<'info>,
+
     #[account(
         mut,
         seeds = [
@@ -373,34 +380,43 @@ pub struct BridgeSealedContribution<'info> {
         seeds::program = Custodian::token_bridge()?
     )]
     /// CHECK: If someone passes in the wrong account, Guardians won't read the message
-    pub wormhole_derived_emitter: AccountInfo<'info>,
+    pub wormhole_emitter: AccountInfo<'info>,
+
     #[account(
+        mut,
         seeds = [
             b"Sequence".as_ref(),
-            wormhole_derived_emitter.key().to_bytes().as_ref()
+            wormhole_emitter.key().as_ref()
         ],
         bump,
-        seeds::program = Custodian::wormhole()?,
-        mut
+        seeds::program = Custodian::wormhole()?
     )]
     /// CHECK: If someone passes in the wrong account, Guardians won't read the message
     pub wormhole_sequence: AccountInfo<'info>,
-    #[account(mut)]
-    pub wormhole_message_key: Signer<'info>,
-    #[account(mut)]
-    pub payer: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [
+            b"bridge-sealed".as_ref(),
+            &sale.id,
+            &accepted_mint.key().as_ref(),
+        ],
+        bump,
+    )]
+    /// CHECK: If someone passes in the wrong account, Guardians won't read the message
+    pub vaa_msg_acct: AccountInfo<'info>,
+
     #[account(
         constraint = clock.key() == clock::id()
     )]
     /// CHECK: The account constraint will make sure it's the right clock var
     pub clock: AccountInfo<'info>,
+
     #[account(
         constraint = rent.key() == rent::id()
     )]
     /// CHECK: The account constraint will make sure it's the right rent var
     pub rent: AccountInfo<'info>,
-
-    pub token_program: Program<'info, Token>,
 }
 
 /// Context provides all accounts required for someone to abort a sale

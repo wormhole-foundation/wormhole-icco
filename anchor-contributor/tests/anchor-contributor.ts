@@ -2,8 +2,23 @@ import { AnchorProvider, workspace, web3, Program, setProvider, BN } from "@proj
 import { AnchorContributor } from "../target/types/anchor_contributor";
 import { expect } from "chai";
 import { readFileSync } from "fs";
-import { CHAIN_ID_SOLANA, setDefaultWasm, tryHexToNativeString, tryNativeToHexString } from "@certusone/wormhole-sdk";
-import { getOrCreateAssociatedTokenAccount, mintTo, Account as AssociatedTokenAccount } from "@solana/spl-token";
+import {
+  CHAIN_ID_SOLANA,
+  setDefaultWasm,
+  tryHexToNativeString,
+  tryNativeToHexString,
+  transferFromSolana,
+  tryUint8ArrayToNative,
+  importCoreWasm,
+} from "@certusone/wormhole-sdk";
+import { sendAndConfirmTransaction } from "@solana/web3.js";
+import {
+  getOrCreateAssociatedTokenAccount,
+  mintTo,
+  Account as AssociatedTokenAccount,
+  getAssociatedTokenAddress,
+  getAccount,
+} from "@solana/spl-token";
 
 import { DummyConductor } from "./helpers/conductor";
 import { IccoContributor } from "./helpers/contributor";
@@ -18,7 +33,13 @@ import {
 import { BigNumber } from "ethers";
 import { KycAuthority } from "./helpers/kyc";
 import { findAttestContributionsMsgAccount } from "./helpers/accounts";
-import { CONDUCTOR_ADDRESS, CONDUCTOR_CHAIN, CORE_BRIDGE_ADDRESS, KYC_PRIVATE } from "./helpers/consts";
+import {
+  CONDUCTOR_ADDRESS,
+  CONDUCTOR_CHAIN,
+  CORE_BRIDGE_ADDRESS,
+  KYC_PRIVATE,
+  TOKEN_BRIDGE_ADDRESS,
+} from "./helpers/consts";
 
 // be careful where you import this
 import { postVaaSolanaWithRetry } from "@certusone/wormhole-sdk";
@@ -63,12 +84,42 @@ describe("anchor-contributor", () => {
       await dummyConductor.attestSaleToken(connection, orchestrator);
     });
 
+    it("Bridge Sale Token To Null Recipient", async () => {
+      // we need to simulate attesting the sale token on Solana.
+      // this allows us to "redeem" the sale token prior to sealing the sale
+      // (which in the case of this test means minting it on the contributor program's ATA)
+      //ait dummyConductor.attestSaleToken(connection, orchestrator);
+
+      const saleTokenMint = dummyConductor.getSaleTokenOnSolana();
+      const tokenAccount = await getOrCreateAssociatedTokenAccount(
+        connection,
+        orchestrator,
+        dummyConductor.getSaleTokenOnSolana(),
+        orchestrator.publicKey
+      );
+      await mintTo(connection, orchestrator, saleTokenMint, tokenAccount.address, orchestrator, 1n);
+
+      const transaction = await transferFromSolana(
+        connection,
+        CORE_BRIDGE_ADDRESS.toString(),
+        TOKEN_BRIDGE_ADDRESS.toString(),
+        orchestrator.publicKey.toString(),
+        tokenAccount.address.toString(),
+        saleTokenMint.toString(),
+        1n,
+        new Uint8Array(32), // null address
+        "ethereum"
+      );
+      transaction.partialSign(orchestrator);
+      const txid = await connection.sendRawTransaction(transaction.serialize());
+    });
+
     it("Mint Accepted SPL Tokens to Buyer", async () => {
       // first create them and add them to the accepted tokens list
       const acceptedTokens = await dummyConductor.createAcceptedTokens(connection, orchestrator);
 
       for (const token of acceptedTokens) {
-        const mint = new web3.PublicKey(tryHexToNativeString(token.address, CHAIN_ID_SOLANA));
+        const mint = hexToPublicKey(token.address);
 
         // create ata for buyer
         const tokenAccount = await getOrCreateAssociatedTokenAccount(connection, buyer, mint, buyer.publicKey);
@@ -506,7 +557,11 @@ describe("anchor-contributor", () => {
     it("Orchestrator Bridges Contributions to Conductor", async () => {
       const saleId = dummyConductor.getSaleId();
       const acceptedTokens = dummyConductor.acceptedTokens;
-      const tx = await contributor.sendContributions(orchestrator, saleId, acceptedTokens);
+      const tx = await contributor.bridgeSealedContribution(
+        orchestrator,
+        saleId,
+        hexToPublicKey(acceptedTokens[0].address)
+      );
     });
 
     // TODO

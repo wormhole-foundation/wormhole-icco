@@ -2,10 +2,7 @@ use anchor_lang::{
     prelude::*,
     solana_program::sysvar::{clock, rent},
 };
-use anchor_spl::{
-    associated_token::AssociatedToken,
-    token::{Mint, Token, TokenAccount, ID},
-};
+use anchor_spl::token::{Mint, Token, TokenAccount};
 
 use crate::{
     constants::*,
@@ -18,12 +15,12 @@ use crate::{
 ///
 /// Mutable
 /// * `custodian`
-/// * `owner` (signer)
+/// * `payer` (signer)
 #[derive(Accounts)]
 pub struct CreateCustodian<'info> {
     #[account(
         init,
-        payer = owner,
+        payer = payer,
         seeds = [
             SEED_PREFIX_CUSTODIAN.as_bytes(),
         ],
@@ -33,7 +30,7 @@ pub struct CreateCustodian<'info> {
     pub custodian: Account<'info, Custodian>,
 
     #[account(mut)]
-    pub owner: Signer<'info>,
+    pub payer: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -50,7 +47,7 @@ pub struct CreateCustodian<'info> {
 ///
 /// Mutable
 /// * `sale`
-/// * `owner` (signer)
+/// * `payer` (signer)
 #[derive(Accounts)]
 pub struct InitSale<'info> {
     #[account(
@@ -67,7 +64,7 @@ pub struct InitSale<'info> {
             SEED_PREFIX_SALE.as_bytes(),
             &Custodian::get_sale_id_from_vaa(&core_bridge_vaa)?,
         ],
-        payer = owner,
+        payer = payer,
         bump,
         space = 8 + Sale::MAXIMUM_SIZE
     )]
@@ -89,7 +86,7 @@ pub struct InitSale<'info> {
     pub custodian_sale_token_acct: Account<'info, TokenAccount>,
 
     #[account(mut)]
-    pub owner: Signer<'info>,
+    pub payer: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -170,10 +167,10 @@ pub struct Contribute<'info> {
 /// Mutable
 /// * `wormhole_config`
 /// * `wormhole_fee_collector`
-/// * `wormhole_derived_emitter`
+/// * `wormhole_emitter`
 /// * `wormhole_sequence`
-/// * `wormhole_message_key`
-/// * `owner` (signer)
+/// * `wormhole_message`
+/// * `payer` (signer)
 #[derive(Accounts)]
 pub struct AttestContributions<'info> {
     #[account(
@@ -186,10 +183,10 @@ pub struct AttestContributions<'info> {
     pub sale: Account<'info, Sale>,
 
     #[account(
-        constraint = core_bridge.key() == Custodian::wormhole()?
+        constraint = wormhole.key() == Custodian::wormhole()?
     )]
-    /// CHECK: If someone passes in the wrong account, Guardians won't read the message
-    pub core_bridge: AccountInfo<'info>,
+    /// CHECK: Wormhole Program
+    pub wormhole: AccountInfo<'info>,
 
     #[account(
         mut,
@@ -199,7 +196,7 @@ pub struct AttestContributions<'info> {
         bump,
         seeds::program =  Custodian::wormhole()?
     )]
-    /// CHECK: If someone passes in the wrong account, Guardians won't read the message
+    /// CHECK: Wormhole Config
     pub wormhole_config: AccountInfo<'info>,
 
     #[account(
@@ -210,7 +207,7 @@ pub struct AttestContributions<'info> {
         bump,
         seeds::program = Custodian::wormhole()?
     )]
-    /// CHECK: If someone passes in the wrong account, Guardians won't read the message
+    /// CHECK: Wormhole Fee Collector
     pub wormhole_fee_collector: AccountInfo<'info>,
 
     #[account(
@@ -220,19 +217,19 @@ pub struct AttestContributions<'info> {
         ],
         bump
     )]
-    /// CHECK: If someone passes in the wrong account, Guardians won't read the message
-    pub wormhole_derived_emitter: AccountInfo<'info>,
+    /// CHECK: Wormhole Emitter is this program
+    pub wormhole_emitter: AccountInfo<'info>,
 
     #[account(
         mut,
         seeds = [
             b"Sequence".as_ref(),
-            wormhole_derived_emitter.key().to_bytes().as_ref()
+            wormhole_emitter.key().as_ref()
         ],
         bump,
         seeds::program = Custodian::wormhole()?
     )]
-    /// CHECK: If someone passes in the wrong account, Guardians won't read the message
+    /// CHECK: Wormhole Sequence Number
     pub wormhole_sequence: AccountInfo<'info>,
 
     #[account(
@@ -243,26 +240,51 @@ pub struct AttestContributions<'info> {
         ],
         bump,
     )]
-    /// CHECK: If someone passes in the wrong account, Guardians won't read the message
-    pub vaa_msg_acct: AccountInfo<'info>,
+    /// CHECK: Wormhole Message Storage
+    pub wormhole_message: AccountInfo<'info>,
 
     #[account(
         constraint = clock.key() == clock::id()
     )]
-    /// CHECK: The account constraint will make sure it's the right clock var
+    /// CHECK: Clock
     pub clock: AccountInfo<'info>,
 
     #[account(
         constraint = rent.key() == rent::id()
     )]
-    /// CHECK: The account constraint will make sure it's the right rent var
+    /// CHECK: Rent
     pub rent: AccountInfo<'info>,
 
     #[account(mut)]
-    pub owner: Signer<'info>,
+    pub payer: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
+/// Context provides all accounts required to bridge tokens to recipient.
+/// See `bridge_sealed_contribution` instruction in lib.rs.
+///
+/// Immutable
+/// * `custodian`
+/// * `wormhole`
+/// * `token_bridge`
+/// * `custody_signer`
+/// * `token_mint_signer`
+/// * `token_bridge_config`
+/// * `clock`
+/// * `rent`
+///
+/// Mutable
+/// * `sale`
+/// * `custodian_token_acct`
+/// * `accepted_mint`
+/// * `custody_or_wrapped_meta`
+/// * `authority_signer`
+/// * `wormhole_config`
+/// * `wormhole_fee_collector`
+/// * `wormhole_emitter`
+/// * `wormhole_sequence`
+/// * `wormhole_message`
+/// * `payer` (signer)
 #[derive(Accounts)]
 pub struct BridgeSealedContribution<'info> {
     #[account(
@@ -292,7 +314,7 @@ pub struct BridgeSealedContribution<'info> {
     pub custodian_token_acct: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
-    /// CHECK: Check if owned by SPL Account. Why does token bridge need this mutable?
+    /// CHECK: Check if owned by SPL Account. Token Bridge needs this to be mutable
     pub accepted_mint: Box<Account<'info, Mint>>,
 
     #[account(mut)]
@@ -303,18 +325,20 @@ pub struct BridgeSealedContribution<'info> {
     #[account(
         constraint = token_bridge.key() == Custodian::token_bridge()?
     )]
-    /// CHECK: Checked in account constraints
+    /// CHECK: Token Bridge Program
     pub token_bridge: AccountInfo<'info>,
 
     #[account(mut)]
-    /// CHECK: can be token bridge custody account or wrapped meta account
+    /// CHECK: Will either be token bridge custody account or wrapped meta account
     pub custody_or_wrapped_meta: AccountInfo<'info>,
 
-    // #[account(
-    //     constraint = *custody_signer_key.owner == token_bridge.key()
-    // )]
-    /// CHECK: Only for native assets.
-    pub custody_signer_key: AccountInfo<'info>,
+    #[account(
+        seeds=[b"custody_signer"],
+        bump,
+        seeds::program = token_bridge.key()
+    )]
+    /// CHECK: Only used for bridging assets native to Solana.
+    pub custody_signer: AccountInfo<'info>,
 
     #[account(
         seeds=[b"mint_signer"],
@@ -329,7 +353,7 @@ pub struct BridgeSealedContribution<'info> {
         bump,
         seeds::program = token_bridge.key()
     )]
-    /// CHECK: Token Bridge Authority Signer
+    /// CHECK: Token Bridge Authority Signer, delegated approval for transfer
     pub authority_signer: AccountInfo<'info>,
 
     #[account(
@@ -340,13 +364,13 @@ pub struct BridgeSealedContribution<'info> {
         bump,
         seeds::program = Custodian::token_bridge()?
     )]
-    /// CHECK: If someone passes in the wrong account, Guardians won't read the message
+    /// CHECK: Token Bridge Config
     pub token_bridge_config: AccountInfo<'info>,
 
     #[account(
         constraint = wormhole.key() == Custodian::wormhole()?
     )]
-    /// CHECK: If someone passes in the wrong account, Guardians won't read the message
+    /// CHECK: Wormhole Program
     pub wormhole: AccountInfo<'info>,
 
     #[account(
@@ -357,7 +381,7 @@ pub struct BridgeSealedContribution<'info> {
         bump,
         seeds::program = Custodian::wormhole()?
     )]
-    /// CHECK: If someone passes in the wrong account, Guardians won't read the message
+    /// CHECK: Wormhole Config
     pub wormhole_config: AccountInfo<'info>,
 
     #[account(
@@ -368,7 +392,7 @@ pub struct BridgeSealedContribution<'info> {
         bump,
         seeds::program = Custodian::wormhole()?
     )]
-    /// CHECK: If someone passes in the wrong account, Guardians won't read the message
+    /// CHECK: Wormhole Fee Collector
     pub wormhole_fee_collector: AccountInfo<'info>,
 
     #[account(
@@ -379,7 +403,7 @@ pub struct BridgeSealedContribution<'info> {
         bump,
         seeds::program = Custodian::token_bridge()?
     )]
-    /// CHECK: If someone passes in the wrong account, Guardians won't read the message
+    /// CHECK: Wormhole Emitter is the Token Bridge Program
     pub wormhole_emitter: AccountInfo<'info>,
 
     #[account(
@@ -391,7 +415,7 @@ pub struct BridgeSealedContribution<'info> {
         bump,
         seeds::program = Custodian::wormhole()?
     )]
-    /// CHECK: If someone passes in the wrong account, Guardians won't read the message
+    /// CHECK: Wormhole Sequence Number
     pub wormhole_sequence: AccountInfo<'info>,
 
     #[account(
@@ -403,19 +427,19 @@ pub struct BridgeSealedContribution<'info> {
         ],
         bump,
     )]
-    /// CHECK: If someone passes in the wrong account, Guardians won't read the message
-    pub vaa_msg_acct: AccountInfo<'info>,
+    /// CHECK: Wormhole Message Storage
+    pub wormhole_message: AccountInfo<'info>,
 
     #[account(
         constraint = clock.key() == clock::id()
     )]
-    /// CHECK: The account constraint will make sure it's the right clock var
+    /// CHECK: Clock
     pub clock: AccountInfo<'info>,
 
     #[account(
         constraint = rent.key() == rent::id()
     )]
-    /// CHECK: The account constraint will make sure it's the right rent var
+    /// CHECK: Rent
     pub rent: AccountInfo<'info>,
 }
 
@@ -456,8 +480,6 @@ pub struct AbortSale<'info> {
     /// CHECK: This account is owned by Core Bridge so we trust it
     pub core_bridge_vaa: AccountInfo<'info>,
 
-    #[account(mut)]
-    pub owner: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -505,8 +527,6 @@ pub struct SealSale<'info> {
     )]
     pub custodian_sale_token_acct: Account<'info, TokenAccount>,
 
-    #[account(mut)]
-    pub owner: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 

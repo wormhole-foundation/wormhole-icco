@@ -1,4 +1,5 @@
 import { web3, BN } from "@project-serum/anchor";
+import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey";
 import { getAssociatedTokenAddress, getAccount } from "@solana/spl-token";
 import { tryHexToNativeString, CHAIN_ID_SOLANA } from "@certusone/wormhole-sdk";
 import { BigNumber, BigNumberish } from "ethers";
@@ -45,4 +46,16 @@ export function makeWritableAccountMeta(pubkey: web3.PublicKey): web3.AccountMet
     isWritable: true,
     isSigner: false,
   };
+}
+
+export function makeReadOnlyAccountMeta(pubkey: web3.PublicKey): web3.AccountMeta {
+  return {
+    pubkey,
+    isWritable: false,
+    isSigner: false,
+  };
+}
+
+export function deriveAddress(seeds: (Buffer | Uint8Array)[], program: web3.PublicKey): web3.PublicKey {
+  return findProgramAddressSync(seeds, program)[0];
 }

@@ -91,4 +91,7 @@ pub enum ContributorError {
 
     #[msg("TooManyAcceptedTokens")]
     TooManyAcceptedTokens,
+
+    #[msg("TransferNotAllowed")]
+    TransferNotAllowed,
 }

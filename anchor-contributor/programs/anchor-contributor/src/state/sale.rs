@@ -9,13 +9,24 @@ use crate::{
     error::ContributorError, state::custodian::Custodian,
 };
 
-#[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, Default, PartialEq, Eq, Debug)]
+#[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
 pub struct AssetTotal {
     pub token_index: u8,           // 1
     pub mint: Pubkey,              // 32
     pub contributions: u64,        // 8
     pub allocations: u64,          // 8
     pub excess_contributions: u64, // 8
+    pub status: AssetStatus,       // 1
+}
+
+#[derive(
+    AnchorSerialize, AnchorDeserialize, FromPrimitive, ToPrimitive, Copy, Clone, PartialEq, Eq,
+)]
+pub enum AssetStatus {
+    Active,
+    NothingToTransfer,
+    ReadyForTransfer,
+    TransferredToConductor,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
@@ -51,20 +62,39 @@ pub struct Sale {
 }
 
 impl AssetTotal {
-    pub const MAXIMUM_SIZE: usize = 1 + 32 + 8 + 8 + 8;
+    pub const MAXIMUM_SIZE: usize = 1 + 32 + 8 + 8 + 8 + 1;
 
     pub fn make_from_slice(bytes: &[u8]) -> Result<Self> {
         require!(
             bytes.len() == INDEX_ACCEPTED_TOKEN_END,
             ContributorError::InvalidAcceptedTokenPayload
         );
-        Ok(AssetTotal {
+        Ok(Self {
             token_index: bytes[INDEX_ACCEPTED_TOKEN_INDEX],
             mint: Pubkey::new(&bytes[INDEX_ACCEPTED_TOKEN_ADDRESS..INDEX_ACCEPTED_TOKEN_END]),
             contributions: 0,
             allocations: 0,
             excess_contributions: 0,
+            status: AssetStatus::Active,
         })
+    }
+
+    pub fn prepare_for_transfer(&mut self) {
+        self.status = {
+            if self.contributions == 0 {
+                AssetStatus::NothingToTransfer
+            } else {
+                AssetStatus::ReadyForTransfer
+            }
+        };
+    }
+
+    pub fn is_ready_for_transfer(&self) -> bool {
+        self.status == AssetStatus::ReadyForTransfer
+    }
+
+    pub fn set_transferred(&mut self) {
+        self.status = AssetStatus::TransferredToConductor;
     }
 }
 

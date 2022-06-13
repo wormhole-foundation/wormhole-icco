@@ -12,8 +12,7 @@ use std::str::FromStr;
 #[account]
 #[derive(Default)]
 pub struct Custodian {
-    pub owner: Pubkey, // 32
-    pub nonce: u32,    // 4
+    pub nonce: u32, // 4
 }
 
 impl Custodian {
@@ -48,8 +47,7 @@ impl Custodian {
         Ok(pubkey)
     }
 
-    pub fn new(&mut self, owner: &Pubkey) -> Result<()> {
-        self.owner = owner.clone(); // owner doesn't actually do anything
+    pub fn new(&mut self) -> Result<()> {
         self.nonce = 0;
         Ok(())
     }

@@ -14,8 +14,6 @@ To deploy the Conductor and Contributor smart contracts to testnet, follow the p
 
 - `conductorChainId` - the network that the `Conductor` contract is (or will be) deployed to
 - `contributorChainId` - the network that `Contributor` contract will be deployed to
-- `authority` - the public key of the KYC authority for the contributor
-  - This value does not have to be set when deploying the `Conductor` contract.
 - `consistencyLevel` - number of confirmations
 - `wormhole`- the wormhole coreBridge address
 - `tokenBridge` -the wormhole tokenBridge address

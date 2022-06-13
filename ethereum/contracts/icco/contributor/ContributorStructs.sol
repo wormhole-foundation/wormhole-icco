@@ -13,12 +13,6 @@ contract ContributorStructs {
         uint16 tokenChain;
         /// token decimals
         uint8 tokenDecimals;
-        /// token amount being sold
-        uint256 tokenAmount;
-        /// min raise amount
-        uint256 minRaise;
-        /// max raise amount
-        uint256 maxRaise;
         /// timestamp raise start
         uint256 saleStart;
         /// timestamp raise end
@@ -29,13 +23,11 @@ contract ContributorStructs {
         bytes32[] acceptedTokensAddresses;
         uint128[] acceptedTokensConversionRates;
 
-        /// sale token ATA for Solana
-        bytes32 solanaTokenAccount;
-
         /// recipient of proceeds
         bytes32 recipient;
-        /// refund recipient in case the sale is aborted
-        bytes32 refundRecipient;
+
+        /// KYC authority public key
+        address authority;
 
         bool isSealed;
         bool isAborted;

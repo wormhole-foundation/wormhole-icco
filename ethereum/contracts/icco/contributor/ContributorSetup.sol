@@ -14,14 +14,11 @@ contract ContributorSetup is ContributorSetters, ERC1967Upgrade {
         uint16 chainId,
         uint16 conductorChainId,
         bytes32 conductorContract,
-        address authority,
         address wormhole,
         address tokenBridge,
         uint8 consistencyLevel
     ) public {
         setOwner(_msgSender());
-
-        setAuthority(authority);
 
         setChainId(chainId);
 

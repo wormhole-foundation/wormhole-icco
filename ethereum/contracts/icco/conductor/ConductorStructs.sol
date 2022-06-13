@@ -41,6 +41,8 @@ contract ConductorStructs {
         bytes32 recipient;
         /// refund recipient in case the sale is aborted
         bytes32 refundRecipient;
+        /// public key of kyc authority 
+        address authority;
         bool isSealed;
         bool isAborted;
         bool refundIsClaimed;

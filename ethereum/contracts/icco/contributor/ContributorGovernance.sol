@@ -18,7 +18,6 @@ import "../../interfaces/IWormhole.sol";
 contract ContributorGovernance is ContributorGetters, ContributorSetters, ERC1967Upgrade {
     event ContractUpgraded(address indexed oldContract, address indexed newContract);
     event ConsistencyLevelUpdated(uint8 indexed oldLevel, uint8 indexed newLevel);
-    event AuthorityUpdated(address indexed oldAuthority, address indexed newAuthority);
     event OwnershipTransfered(address indexed oldOwner, address indexed newOwner);
 
 
@@ -48,18 +47,6 @@ contract ContributorGovernance is ContributorGetters, ContributorSetters, ERC196
         setConsistencyLevel(newConsistencyLevel);    
 
         emit ConsistencyLevelUpdated(currentConsistencyLevel, newConsistencyLevel);
-    }
-
-    /// @dev updateAuthority serves to change the KYC authority public key
-    function updateAuthority(uint16 contributorChainId, address newAuthority) public onlyOwner {
-        require(contributorChainId == chainId(), "wrong chain id");
-
-        address currentAuthority = authority();
-
-        // allow zero address to disable kyc
-        setAuthority(newAuthority);
-
-        emit AuthorityUpdated(currentAuthority, newAuthority);
     }
 
     /// @dev transferOwnership serves to change the ownership of the Contributor contract

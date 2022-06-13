@@ -19,8 +19,6 @@ contract ContributorStorage {
 
         /// deployer of the contracts
         address owner;
-        /// kyc public key
-        address authority;
         /// number of confirmations for wormhole messages
         uint8 consistencyLevel;
 

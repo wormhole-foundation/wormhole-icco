@@ -140,6 +140,8 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
             initiator : msg.sender, 
             recipient : bytes32(uint256(uint160(raise.recipient))),
             refundRecipient : bytes32(uint256(uint160(raise.refundRecipient))),
+            /// public key of kyc authority 
+            authority: raise.authority,
             /// sale identifiers
             isSealed :  false,
             isAborted : false,
@@ -187,24 +189,16 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
             tokenChain : raise.tokenChain,
             /// token decimals
             tokenDecimals: localTokenDecimals,
-            /// token amount being sold
-            tokenAmount : raise.tokenAmount,
-            /// min raise amount
-            minRaise: raise.minRaise,
-            /// max raise amount
-            maxRaise: raise.maxRaise,
             /// timestamp raise start
             saleStart : raise.saleStart,
             /// timestamp raise end
             saleEnd : raise.saleEnd,
             /// accepted Tokens
             acceptedTokens : acceptedTokens,
-            /// sale token ATA for Solana
-            solanaTokenAccount: raise.solanaTokenAccount,
             /// recipient of proceeds
             recipient : bytes32(uint256(uint160(raise.recipient))),
-            /// refund recipient in case the sale is aborted
-            refundRecipient : bytes32(uint256(uint160(raise.refundRecipient)))
+            /// public key of kyc authority 
+            authority: raise.authority
         }); 
 
         /// @dev send encoded SaleInit struct to Contributors via wormhole.        
@@ -232,7 +226,9 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
                 /// accepted Tokens
                 acceptedTokens : solanaAcceptedTokens,
                 /// recipient of proceeds
-                recipient : bytes32(uint256(uint160(raise.recipient)))
+                recipient : bytes32(uint256(uint160(raise.recipient))),
+                /// public key of kyc authority 
+                authority: raise.authority
             });
 
             /// @dev send encoded SolanaSaleInit struct to the solana Contributor

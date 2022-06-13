@@ -46,6 +46,7 @@ To create a sale, a user invokes the `createSale()` method on the sale conductor
   - The address that can claim the proceeds of the sale
   - The address that should receive the offered tokens in case the minimum raise amount is not met
   - The ATA on the Solana contributor where offered tokens will be sent
+  - The KYC authority public key
 - An array of accepted tokens on each chain + the USD conversion rate which they are accepted at
 
 The `createSale()` method deposits the offered tokens, assigns an ID which identifies the sale and attests a `SaleInit` packet over the wormhole. This packet contains all the information from above. It will also attest a `SolanaSaleInit` packet over the wormhole if any Solana tokens are accepted as collateral in the sale.
@@ -106,7 +107,7 @@ Owner Only:
 **TokenSaleContributor**:
 
 - `initSale(vaa SaleInit)`
-- `verifySignature(bytes memory encodedHashData, bytes memory sig)`
+- `verifySignature(bytes memory encodedHashData, bytes memory sig, address authority)`
 - `contribute(uint saleId, uint tokenIndex, uint amount, bytes memory sig)`
 - `attestContributions(uint saleId)`
 - `saleSealed(vaa SaleSealed)`
@@ -119,7 +120,6 @@ Owner Only:
 
 - `upgrade(uint16 contributorChainId, address newImplementation)`
 - `updateConsistencyLevel(uint16 contributorChainId, uint8 newConsistencyLevel)`
-- `updateAuthority(uint16 contributorChainId, address newAuthority)`
 - `transferOwnership(uint16 contributorChainId, address newOwner)`
 
 ---
@@ -157,6 +157,7 @@ Owner Only:
   - address recipient (recipient of sale proceeds)
   - address refundRecipient (refund recipient in case the sale is aborted)
   - bytes32 solanaTokenAccount (sale token ATA for Solana)
+  - address authority (KYC authority public key)
 
 ---
 
@@ -176,12 +177,6 @@ uint16 tokenChain;
 // sale token decimals
 uint8 tokenDecimals;
 // token amount being sold
-uint256 tokenAmount;
-// min raise amount
-uint256 minRaise;
-// max raise amount;
-uint256 maxRaise;
-// timestamp raise start
 uint256 saleStart;
 // timestamp raise end
 uint256 saleEnd;
@@ -196,12 +191,10 @@ uint8 tokensLen;
   // conversion rate for the token
   uint256 conversionRate;
 
-// sale token ATA for Solana
-bytes32 solanaTokenAccount;
 // recipient of proceeds
 bytes32 recipient;
-// refund recipient in case the sale is aborted
-bytes32 refundRecipient;
+// KYC authority public key
+address authority;
 ```
 
 ContributionsSealed:
@@ -281,4 +274,6 @@ uint8 tokensLen;
 
 // recipient of proceeds
 bytes32 recipient;
+// KYC authority public key
+address authority;
 ```

@@ -55,6 +55,8 @@ library ICCOStructs {
         address refundRecipient;
         /// sale token ATA for Solana
         bytes32 solanaTokenAccount;
+        /// public key of kyc authority 
+        address authority;
     }
 
     struct SaleInit {
@@ -68,24 +70,16 @@ library ICCOStructs {
         uint16 tokenChain;
         /// token decimals 
         uint8 tokenDecimals;
-        /// token amount being sold
-        uint256 tokenAmount;
-        /// min raise amount
-        uint256 minRaise;
-        /// max raise amount
-        uint256 maxRaise;
         /// timestamp raise start
         uint256 saleStart;
         /// timestamp raise end
         uint256 saleEnd;
         /// accepted Tokens
         Token[] acceptedTokens;
-        /// sale token ATA for solana
-        bytes32 solanaTokenAccount;
         /// recipient of proceeds
         bytes32 recipient;
-        /// refund recipient in case the sale is aborted
-        bytes32 refundRecipient;
+        /// public key of kyc authority 
+        address authority;
     }
 
     struct SolanaSaleInit {
@@ -107,6 +101,8 @@ library ICCOStructs {
         SolanaToken[] acceptedTokens;  
         /// recipient of proceeds
         bytes32 recipient;
+        /// public key of kyc authority 
+        address authority;
     }
 
     struct ContributionsSealed {
@@ -157,15 +153,11 @@ library ICCOStructs {
             saleInit.tokenAddress,
             saleInit.tokenChain,
             saleInit.tokenDecimals,
-            saleInit.tokenAmount,
-            saleInit.minRaise,
-            saleInit.maxRaise,
             saleInit.saleStart,
             saleInit.saleEnd,
             encodeTokens(saleInit.acceptedTokens),
-            saleInit.solanaTokenAccount,
             saleInit.recipient,
-            saleInit.refundRecipient
+            saleInit.authority
         );
     }
 
@@ -179,7 +171,8 @@ library ICCOStructs {
             solanaSaleInit.saleStart,
             solanaSaleInit.saleEnd,
             encodeSolanaTokens(solanaSaleInit.acceptedTokens),
-            solanaSaleInit.recipient
+            solanaSaleInit.recipient,
+            solanaSaleInit.authority
         );
     }
 
@@ -203,15 +196,6 @@ library ICCOStructs {
         saleInit.tokenDecimals = encoded.toUint8(index);
         index += 1;
 
-        saleInit.tokenAmount = encoded.toUint256(index);
-        index += 32;
-
-        saleInit.minRaise = encoded.toUint256(index);
-        index += 32;
-
-        saleInit.maxRaise = encoded.toUint256(index);
-        index += 32;
-
         saleInit.saleStart = encoded.toUint256(index);
         index += 32;
 
@@ -222,14 +206,11 @@ library ICCOStructs {
         saleInit.acceptedTokens = parseTokens(encoded.slice(index, len));
         index += len;
 
-        saleInit.solanaTokenAccount = encoded.toBytes32(index);
-        index += 32;
-
         saleInit.recipient = encoded.toBytes32(index);
         index += 32;
 
-        saleInit.refundRecipient = encoded.toBytes32(index);
-        index += 32;
+        saleInit.authority = encoded.toAddress(index);
+        index += 20;
 
         require(encoded.length == index, "invalid SaleInit");
     }

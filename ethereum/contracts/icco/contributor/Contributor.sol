@@ -52,17 +52,13 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
             tokenAddress : saleInit.tokenAddress,
             tokenChain : saleInit.tokenChain,
             tokenDecimals: saleInit.tokenDecimals,
-            tokenAmount : saleInit.tokenAmount,
-            minRaise : saleInit.minRaise,
-            maxRaise : saleInit.maxRaise,
             saleStart : saleInit.saleStart,
             saleEnd : saleInit.saleEnd,
             acceptedTokensChains : new uint16[](saleInit.acceptedTokens.length),
             acceptedTokensAddresses : new bytes32[](saleInit.acceptedTokens.length),
             acceptedTokensConversionRates : new uint128[](saleInit.acceptedTokens.length),
-            solanaTokenAccount: saleInit.solanaTokenAccount,
             recipient : saleInit.recipient,
-            refundRecipient : saleInit.refundRecipient,
+            authority : saleInit.authority,
             isSealed : false,
             isAborted : false,
             allocations : new uint256[](saleInit.acceptedTokens.length),
@@ -96,7 +92,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
      * - it computes the keccak256 hash of data passed by the client
      * - it recovers the KYC authority key from the hashed data and signature
      */ 
-    function verifySignature(bytes memory encodedHashData, bytes memory sig) public view returns (bool) {
+    function verifySignature(bytes memory encodedHashData, bytes memory sig, address authority) public view returns (bool) {
         require(sig.length == 65, "incorrect signature length"); 
         require(encodedHashData.length > 0, "no hash data");
 
@@ -118,7 +114,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
         address key = ecrecover(hash_, v, r, s);
 
         /// confirm that the recovered key is the authority
-        if (key == authority()) {
+        if (key == authority) {
             return true;
         } else {
             return false;
@@ -163,7 +159,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
                 msg.sender, 
                 getSaleContribution(saleId, tokenIndex, msg.sender)
             ); 
-            require(verifySignature(encodedHashData, sig), "unauthorized contributor");
+            require(verifySignature(encodedHashData, sig, authority(saleId)), "unauthorized contributor");
         }
 
         /// query own token balance before transfer

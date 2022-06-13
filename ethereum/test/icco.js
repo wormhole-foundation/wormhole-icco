@@ -59,7 +59,7 @@ contract("ICCO", function(accounts) {
   );
   const CONDUCTOR_BYTES32_ADDRESS =
     "0x000000000000000000000000" + TokenSaleConductor.address.substr(2);
-
+  const KYC_AUTHORITY = "0x1dF62f291b2E969fB0849d99D9Ce41e2F137006e";
   const WORMHOLE_FEE = 1000;
 
   it("should set wormhole fee", async function() {
@@ -392,74 +392,6 @@ contract("ICCO", function(accounts) {
       .call();
 
     assert.ok(isUpgraded);
-  });
-
-  it("contributor should should the allow owner to update authority correctly", async function() {
-    // test variables
-    const currentAuthority = config.authority; // initalized value for authority
-    const newAuthority = accounts[3];
-
-    const initialized = new web3.eth.Contract(
-      ContributorImplementationFullABI,
-      TokenSaleContributor.address
-    );
-
-    // update the kyc authority
-    const updateTx = await initialized.methods
-      .updateAuthority(TEST_CHAIN_ID, newAuthority)
-      .send({
-        value: "0",
-        from: accounts[0], // contract owner
-        gasLimit: GAS_LIMIT,
-      });
-
-    // check getters after the action
-    const contributorAuthorityAfterUpdate = await initialized.methods
-      .authority()
-      .call();
-
-    assert.equal(contributorAuthorityAfterUpdate, newAuthority);
-
-    // confirm that the AuthorityUpdated event is emitted
-    let eventOutput = updateTx["events"]["AuthorityUpdated"]["returnValues"];
-
-    assert.equal(
-      eventOutput["oldAuthority"].toLowerCase(),
-      currentAuthority.toLowerCase()
-    );
-    assert.equal(
-      eventOutput["newAuthority"].toLowerCase(),
-      newAuthority.toLowerCase()
-    );
-
-    // make sure only the Contributor owner can change authority
-    let failed = false;
-    try {
-      await initialized.methods
-        .updateAuthority(TEST_CHAIN_ID, currentAuthority)
-        .send({
-          value: "0",
-          from: accounts[1], // different account
-          gasLimit: GAS_LIMIT,
-        });
-    } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert caller is not the owner"
-      );
-      failed = true;
-    }
-
-    assert.ok(failed);
-
-    // revert the autority change
-    await initialized.methods
-      .updateAuthority(TEST_CHAIN_ID, currentAuthority)
-      .send({
-        value: "0",
-        from: accounts[0], // contract owner
-        gasLimit: GAS_LIMIT,
-      });
   });
 
   it("conductor and contributor should allow the owner to update consistencyLevel", async function() {
@@ -830,6 +762,7 @@ contract("ICCO", function(accounts) {
       saleRecipient,
       refundRecipient,
       SOLD_TOKEN_BYTES32_ADDRESS,
+      KYC_AUTHORITY,
     ];
 
     // create accepted tokens array
@@ -908,27 +841,6 @@ contract("ICCO", function(accounts) {
     );
     index += 2;
 
-    // token amount
-    assert.equal(
-      parseInt(log.payload.substr(index, 64), 16),
-      parseInt(saleTokenAmount)
-    );
-    index += 64;
-
-    // min raise amount
-    assert.equal(
-      parseInt(log.payload.substr(index, 64), 16),
-      parseInt(minimumTokenRaise)
-    );
-    index += 64;
-
-    // max raise amount
-    assert.equal(
-      parseInt(log.payload.substr(index, 64), 16),
-      parseInt(maximumTokenRaise)
-    );
-    index += 64;
-
     // timestamp start
     assert.equal(parseInt(log.payload.substr(index, 64), 16), SALE_START);
     index += 64;
@@ -994,18 +906,6 @@ contract("ICCO", function(accounts) {
     );
     index += 32;
 
-    // solana ATA
-    assert.equal(
-      log.payload.substr(index, 64),
-      web3.eth.abi
-        .encodeParameter(
-          "address",
-          "0x" + SOLD_TOKEN_BYTES32_ADDRESS.substring(26)
-        )
-        .substring(2)
-    );
-    index += 64;
-
     // recipient of proceeds
     assert.equal(
       log.payload.substr(index, 64),
@@ -1013,12 +913,12 @@ contract("ICCO", function(accounts) {
     );
     index += 64;
 
-    // refund recipient in case the sale is aborted
+    // KYC authority public key
     assert.equal(
       log.payload.substr(index, 64),
-      web3.eth.abi.encodeParameter("address", refundRecipient).substring(2)
+      web3.eth.abi.encodeParameter("address", KYC_AUTHORITY).substring(26)
     );
-    index += 64;
+    index += 40;
 
     assert.equal(log.payload.length, index);
     SALE_INIT_PAYLOAD = log.payload.toString();
@@ -1041,13 +941,9 @@ contract("ICCO", function(accounts) {
 
   it("should init a sale in the contributor", async function() {
     // test variables
-    const saleTokenAmount = "1000";
-    const minimumTokenRaise = "2000";
-    const maximumTokenRaise = "30000";
     const tokenOneConversionRate = "1000000000000000000";
     const tokenTwoConversionRate = "2000000000000000000";
     const saleRecipient = accounts[0];
-    const refundRecipient = accounts[0];
 
     const initialized = new web3.eth.Contract(
       ContributorImplementationFullABI,
@@ -1084,9 +980,6 @@ contract("ICCO", function(accounts) {
       web3.eth.abi.encodeParameter("address", SOLD_TOKEN.address).substring(2)
     );
     assert.equal(sale.tokenChain, TEST_CHAIN_ID);
-    assert.equal(sale.tokenAmount, parseInt(saleTokenAmount));
-    assert.equal(sale.minRaise, parseInt(minimumTokenRaise));
-    assert.equal(sale.maxRaise, parseInt(maximumTokenRaise));
     assert.equal(sale.saleStart, SALE_START);
     assert.equal(sale.saleEnd, SALE_END);
     assert.equal(
@@ -1112,22 +1005,10 @@ contract("ICCO", function(accounts) {
       parseInt(tokenTwoConversionRate)
     );
     assert.equal(
-      sale.solanaTokenAccount.substring(2),
-      web3.eth.abi
-        .encodeParameter(
-          "address",
-          "0x" + SOLD_TOKEN_BYTES32_ADDRESS.substring(26)
-        )
-        .substring(2)
-    );
-    assert.equal(
       sale.recipient.substring(2),
       web3.eth.abi.encodeParameter("address", saleRecipient).substring(2)
     );
-    assert.equal(
-      sale.refundRecipient.substring(2),
-      web3.eth.abi.encodeParameter("address", refundRecipient).substring(2)
-    );
+    assert.equal(sale.authority.substring(2), KYC_AUTHORITY.substring(2));
     assert.equal(sale.allocations[TOKEN_ONE_INDEX], 0);
     assert.equal(sale.allocations[TOKEN_TWO_INDEX], 0);
     assert.equal(sale.excessContributions[TOKEN_ONE_INDEX], 0);
@@ -2034,6 +1915,7 @@ contract("ICCO", function(accounts) {
       saleRecipient,
       refundRecipient,
       SOLD_TOKEN_BYTES32_ADDRESS,
+      KYC_AUTHORITY,
     ];
 
     // create accepted tokens array
@@ -2097,27 +1979,6 @@ contract("ICCO", function(accounts) {
       SOLD_TOKEN_DECIMALS
     );
     index += 2;
-
-    // token amount
-    assert.equal(
-      parseInt(log.payload.substr(index, 64), 16),
-      parseInt(saleTokenAmount)
-    );
-    index += 64;
-
-    // min raise amount
-    assert.equal(
-      parseInt(log.payload.substr(index, 64), 16),
-      parseInt(minimumTokenRaise)
-    );
-    index += 64;
-
-    // max raise amount
-    assert.equal(
-      parseInt(log.payload.substr(index, 64), 16),
-      parseInt(maximumTokenRaise)
-    );
-    index += 64;
 
     // timestamp start
     assert.equal(parseInt(log.payload.substr(index, 64), 16), SALE_2_START);
@@ -2184,18 +2045,6 @@ contract("ICCO", function(accounts) {
     );
     index += 32;
 
-    // solana ATA
-    assert.equal(
-      log.payload.substr(index, 64),
-      web3.eth.abi
-        .encodeParameter(
-          "address",
-          "0x" + SOLD_TOKEN_BYTES32_ADDRESS.substring(26)
-        )
-        .substring(2)
-    );
-    index += 64;
-
     // recipient of proceeds
     assert.equal(
       log.payload.substr(index, 64),
@@ -2203,12 +2052,12 @@ contract("ICCO", function(accounts) {
     );
     index += 64;
 
-    // refund recipient in case the sale is aborted
+    // KYC authority public key
     assert.equal(
       log.payload.substr(index, 64),
-      web3.eth.abi.encodeParameter("address", refundRecipient).substring(2)
+      web3.eth.abi.encodeParameter("address", KYC_AUTHORITY).substring(26)
     );
-    index += 64;
+    index += 40;
 
     assert.equal(log.payload.length, index);
     SALE_2_INIT_PAYLOAD = log.payload.toString();
@@ -2226,13 +2075,9 @@ contract("ICCO", function(accounts) {
 
   it("should init a second sale in the contributor", async function() {
     // test variables
-    const saleTokenAmount = "1000";
-    const minimumTokenRaise = "2000";
-    const maximumTokenRaise = "30000";
     const tokenOneConversionRate = "1000000000000000000";
     const tokenTwoConversionRate = "2000000000000000000";
     const saleRecipient = accounts[0];
-    const refundRecipient = SALE_2_REFUND_RECIPIENT;
 
     const initialized = new web3.eth.Contract(
       ContributorImplementationFullABI,
@@ -2266,9 +2111,6 @@ contract("ICCO", function(accounts) {
       web3.eth.abi.encodeParameter("address", SOLD_TOKEN.address).substring(2)
     );
     assert.equal(sale.tokenChain, TEST_CHAIN_ID);
-    assert.equal(sale.tokenAmount, saleTokenAmount);
-    assert.equal(sale.minRaise, minimumTokenRaise);
-    assert.equal(sale.maxRaise, parseInt(maximumTokenRaise));
     assert.equal(sale.saleStart, SALE_2_START);
     assert.equal(sale.saleEnd, SALE_2_END);
     assert.equal(
@@ -2294,22 +2136,10 @@ contract("ICCO", function(accounts) {
       tokenTwoConversionRate
     );
     assert.equal(
-      sale.solanaTokenAccount.substring(2),
-      web3.eth.abi
-        .encodeParameter(
-          "address",
-          "0x" + SOLD_TOKEN_BYTES32_ADDRESS.substring(26)
-        )
-        .substring(2)
-    );
-    assert.equal(
       sale.recipient.substring(2),
       web3.eth.abi.encodeParameter("address", saleRecipient).substring(2)
     );
-    assert.equal(
-      sale.refundRecipient.substring(2),
-      web3.eth.abi.encodeParameter("address", refundRecipient).substring(2)
-    );
+    assert.equal(sale.authority.substring(2), KYC_AUTHORITY.substring(2));
     assert.equal(sale.allocations[TOKEN_ONE_INDEX], 0);
     assert.equal(sale.allocations[TOKEN_TWO_INDEX], 0);
     assert.equal(sale.excessContributions[TOKEN_ONE_INDEX], 0);
@@ -3072,6 +2902,7 @@ contract("ICCO", function(accounts) {
       saleRecipient,
       refundRecipient,
       SOLD_TOKEN_BYTES32_ADDRESS,
+      KYC_AUTHORITY,
     ];
 
     // create accepted tokens array
@@ -3135,27 +2966,6 @@ contract("ICCO", function(accounts) {
       SOLD_TOKEN_DECIMALS
     );
     index += 2;
-
-    // token amount
-    assert.equal(
-      parseInt(log.payload.substr(index, 64), 16),
-      parseInt(saleTokenAmount)
-    );
-    index += 64;
-
-    // min raise amount
-    assert.equal(
-      parseInt(log.payload.substr(index, 64), 16),
-      parseInt(minimumTokenRaise)
-    );
-    index += 64;
-
-    // max raise amount
-    assert.equal(
-      parseInt(log.payload.substr(index, 64), 16),
-      parseInt(maximumTokenRaise)
-    );
-    index += 64;
 
     // timestamp start
     assert.equal(parseInt(log.payload.substr(index, 64), 16), SALE_3_START);
@@ -3222,18 +3032,6 @@ contract("ICCO", function(accounts) {
     );
     index += 32;
 
-    // solana ATA
-    assert.equal(
-      log.payload.substr(index, 64),
-      web3.eth.abi
-        .encodeParameter(
-          "address",
-          "0x" + SOLD_TOKEN_BYTES32_ADDRESS.substring(26)
-        )
-        .substring(2)
-    );
-    index += 64;
-
     // recipient of proceeds
     assert.equal(
       log.payload.substr(index, 64),
@@ -3241,12 +3039,12 @@ contract("ICCO", function(accounts) {
     );
     index += 64;
 
-    // refund recipient in case the sale is aborted
+    // KYC authority public key
     assert.equal(
       log.payload.substr(index, 64),
-      web3.eth.abi.encodeParameter("address", refundRecipient).substring(2)
+      web3.eth.abi.encodeParameter("address", KYC_AUTHORITY).substring(26)
     );
-    index += 64;
+    index += 40;
 
     assert.equal(log.payload.length, index);
     SALE_3_INIT_PAYLOAD = log.payload.toString();
@@ -3264,13 +3062,9 @@ contract("ICCO", function(accounts) {
 
   it("should init a third sale in the contributor", async function() {
     // test variables
-    const saleTokenAmount = "1000";
-    const minimumTokenRaise = "2000";
-    const maximumTokenRaise = "30000";
     const tokenOneConversionRate = "1000000000000000000";
     const tokenTwoConversionRate = "2000000000000000000";
     const saleRecipient = accounts[0];
-    const refundRecipient = accounts[0];
 
     const initialized = new web3.eth.Contract(
       ContributorImplementationFullABI,
@@ -3304,9 +3098,6 @@ contract("ICCO", function(accounts) {
       web3.eth.abi.encodeParameter("address", SOLD_TOKEN.address).substring(2)
     );
     assert.equal(sale.tokenChain, TEST_CHAIN_ID);
-    assert.equal(sale.tokenAmount, saleTokenAmount);
-    assert.equal(sale.minRaise, minimumTokenRaise);
-    assert.equal(sale.maxRaise, parseInt(maximumTokenRaise));
     assert.equal(sale.saleStart, SALE_3_START);
     assert.equal(sale.saleEnd, SALE_3_END);
     assert.equal(
@@ -3332,22 +3123,10 @@ contract("ICCO", function(accounts) {
       tokenTwoConversionRate
     );
     assert.equal(
-      sale.solanaTokenAccount.substring(2),
-      web3.eth.abi
-        .encodeParameter(
-          "address",
-          "0x" + SOLD_TOKEN_BYTES32_ADDRESS.substring(26)
-        )
-        .substring(2)
-    );
-    assert.equal(
       sale.recipient.substring(2),
       web3.eth.abi.encodeParameter("address", saleRecipient).substring(2)
     );
-    assert.equal(
-      sale.refundRecipient.substring(2),
-      web3.eth.abi.encodeParameter("address", refundRecipient).substring(2)
-    );
+    assert.equal(sale.authority.substring(2), KYC_AUTHORITY.substring(2));
     assert.equal(sale.allocations[TOKEN_ONE_INDEX], 0);
     assert.equal(sale.allocations[TOKEN_TWO_INDEX], 0);
     assert.equal(sale.excessContributions[TOKEN_ONE_INDEX], 0);
@@ -3878,6 +3657,7 @@ contract("ICCO", function(accounts) {
       saleRecipient,
       refundRecipient,
       SOLD_TOKEN_BYTES32_ADDRESS,
+      KYC_AUTHORITY,
     ];
 
     // create accepted tokens array
@@ -3944,27 +3724,6 @@ contract("ICCO", function(accounts) {
     );
     index += 2;
 
-    // token amount
-    assert.equal(
-      parseInt(log.payload.substr(index, 64), 16),
-      parseInt(saleTokenAmount)
-    );
-    index += 64;
-
-    // min raise amount
-    assert.equal(
-      parseInt(log.payload.substr(index, 64), 16),
-      parseInt(minimumTokenRaise)
-    );
-    index += 64;
-
-    // max raise amount
-    assert.equal(
-      parseInt(log.payload.substr(index, 64), 16),
-      parseInt(maximumTokenRaise)
-    );
-    index += 64;
-
     // timestamp start
     assert.equal(parseInt(log.payload.substr(index, 64), 16), SALE_4_START);
     index += 64;
@@ -4030,18 +3789,6 @@ contract("ICCO", function(accounts) {
     );
     index += 32;
 
-    // solana ATA
-    assert.equal(
-      log.payload.substr(index, 64),
-      web3.eth.abi
-        .encodeParameter(
-          "address",
-          "0x" + SOLD_TOKEN_BYTES32_ADDRESS.substring(26)
-        )
-        .substring(2)
-    );
-    index += 64;
-
     // recipient of proceeds
     assert.equal(
       log.payload.substr(index, 64),
@@ -4049,12 +3796,12 @@ contract("ICCO", function(accounts) {
     );
     index += 64;
 
-    // refund recipient in case the sale is aborted
+    // KYC authority public key
     assert.equal(
       log.payload.substr(index, 64),
-      web3.eth.abi.encodeParameter("address", refundRecipient).substring(2)
+      web3.eth.abi.encodeParameter("address", KYC_AUTHORITY).substring(26)
     );
-    index += 64;
+    index += 40;
 
     assert.equal(log.payload.length, index);
     SALE_4_INIT_PAYLOAD = log.payload.toString();
@@ -4072,13 +3819,9 @@ contract("ICCO", function(accounts) {
 
   it("should init a fourth sale in the contributor", async function() {
     // test variables
-    const saleTokenAmount = "1000";
-    const minimumTokenRaise = "2000";
-    const maximumTokenRaise = "6000";
     const tokenOneConversionRate = "1000000000000000000";
     const tokenTwoConversionRate = "4000000000000000000";
     const saleRecipient = accounts[0];
-    const refundRecipient = accounts[0];
 
     const initialized = new web3.eth.Contract(
       ContributorImplementationFullABI,
@@ -4112,9 +3855,6 @@ contract("ICCO", function(accounts) {
       web3.eth.abi.encodeParameter("address", SOLD_TOKEN.address).substring(2)
     );
     assert.equal(sale.tokenChain, TEST_CHAIN_ID);
-    assert.equal(sale.tokenAmount, saleTokenAmount);
-    assert.equal(sale.minRaise, minimumTokenRaise);
-    assert.equal(sale.maxRaise, parseInt(maximumTokenRaise));
     assert.equal(sale.saleStart, SALE_4_START);
     assert.equal(sale.saleEnd, SALE_4_END);
     assert.equal(
@@ -4140,22 +3880,10 @@ contract("ICCO", function(accounts) {
       tokenTwoConversionRate
     );
     assert.equal(
-      sale.solanaTokenAccount.substring(2),
-      web3.eth.abi
-        .encodeParameter(
-          "address",
-          "0x" + SOLD_TOKEN_BYTES32_ADDRESS.substring(26)
-        )
-        .substring(2)
-    );
-    assert.equal(
       sale.recipient.substring(2),
       web3.eth.abi.encodeParameter("address", saleRecipient).substring(2)
     );
-    assert.equal(
-      sale.refundRecipient.substring(2),
-      web3.eth.abi.encodeParameter("address", refundRecipient).substring(2)
-    );
+    assert.equal(sale.authority.substring(2), KYC_AUTHORITY.substring(2));
     assert.equal(sale.allocations[TOKEN_ONE_INDEX], 0);
     assert.equal(sale.allocations[TOKEN_TWO_INDEX], 0);
     assert.equal(sale.excessContributions[TOKEN_ONE_INDEX], 0);
@@ -4873,6 +4601,7 @@ contract("ICCO", function(accounts) {
       saleRecipient,
       refundRecipient,
       SOLD_TOKEN_BYTES32_ADDRESS,
+      KYC_AUTHORITY,
     ];
 
     // make sure createSale fails when trying to pass more than 8 tokens
@@ -5031,6 +4760,13 @@ contract("ICCO", function(accounts) {
       web3.eth.abi.encodeParameter("address", saleRecipient).substring(2)
     );
     index += 64;
+
+    // KYC authority public key
+    assert.equal(
+      log.payload.substr(index, 64),
+      web3.eth.abi.encodeParameter("address", KYC_AUTHORITY).substring(26)
+    );
+    index += 40;
 
     assert.equal(log.payload.length, index);
 
@@ -5367,6 +5103,7 @@ contract("ICCO", function(accounts) {
       saleRecipient,
       refundRecipient,
       SOLD_TOKEN_BYTES32_ADDRESS,
+      KYC_AUTHORITY,
     ];
 
     // create accepted tokens array
@@ -5470,6 +5207,7 @@ contract("ICCO", function(accounts) {
       saleRecipient,
       refundRecipient,
       SOLD_TOKEN_BYTES32_ADDRESS,
+      KYC_AUTHORITY,
     ];
 
     // create accepted tokens array with a bad token address (non-ERC20)
@@ -5588,6 +5326,7 @@ contract("ICCO", function(accounts) {
       saleRecipient,
       refundRecipient,
       SOLD_TOKEN_BYTES32_ADDRESS,
+      KYC_AUTHORITY,
     ];
 
     // create accepted tokens array
@@ -5676,6 +5415,7 @@ contract("ICCO", function(accounts) {
       saleRecipient,
       refundRecipient,
       SOLD_TOKEN_BYTES32_ADDRESS,
+      KYC_AUTHORITY,
     ];
 
     // create accepted tokens array
@@ -5773,6 +5513,7 @@ contract("ICCO", function(accounts) {
       saleRecipient,
       refundRecipient,
       SOLD_TOKEN_BYTES32_ADDRESS,
+      KYC_AUTHORITY,
     ];
 
     // create accepted tokens array
@@ -6160,9 +5901,7 @@ const signContribution = async function(
     web3.eth.abi.encodeParameter("uint256", saleId).substring(2),
     web3.eth.abi.encodeParameter("uint256", tokenIndex).substring(2),
     web3.eth.abi.encodeParameter("uint256", amount).substring(2),
-    web3.eth.abi
-      .encodeParameter("address", buyerAddress)
-      .substring(2), // we actually want 32 bytes
+    web3.eth.abi.encodeParameter("address", buyerAddress).substring(2), // we actually want 32 bytes
     web3.eth.abi.encodeParameter("uint256", totalContribution).substring(2),
   ];
 

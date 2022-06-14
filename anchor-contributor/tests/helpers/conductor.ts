@@ -22,6 +22,7 @@ export class DummyConductor {
 
   saleStart: number;
   saleEnd: number;
+  saleUnlock: number;
 
   initSaleVaa: Buffer;
 
@@ -38,6 +39,7 @@ export class DummyConductor {
 
     this.saleStart = 0;
     this.saleEnd = 0;
+    this.saleUnlock = 0;
 
     this.acceptedTokens = [];
     this.allocations = [];
@@ -88,7 +90,12 @@ export class DummyConductor {
     return Buffer.from(toBigNumberHex(this.saleId, 32), "hex");
   }
 
-  createSale(startTime: number, duration: number, associatedSaleTokenAddress: web3.PublicKey): Buffer {
+  createSale(
+    startTime: number,
+    duration: number,
+    associatedSaleTokenAddress: web3.PublicKey,
+    lockPeriod: number
+  ): Buffer {
     // uptick saleId for every new sale
     ++this.saleId;
     ++this.wormholeSequence;
@@ -96,6 +103,7 @@ export class DummyConductor {
     // set up sale time based on block time
     this.saleStart = startTime;
     this.saleEnd = this.saleStart + duration;
+    this.saleUnlock = this.saleEnd + lockPeriod;
 
     this.initSaleVaa = signAndEncodeVaa(
       startTime,
@@ -111,7 +119,9 @@ export class DummyConductor {
         this.saleStart,
         this.saleEnd,
         this.acceptedTokens,
-        this.recipient
+        this.recipient,
+        this.kycAuthority,
+        this.saleUnlock
       )
     );
     return this.initSaleVaa;
@@ -173,6 +183,7 @@ export class DummyConductor {
   tokenDecimals = 18;
   nativeTokenDecimals = 7;
   recipient = tryNativeToHexString("0x22d491bde2303f2f43325b2108d26f1eaba1e32b", CHAIN_ID_ETH);
+  kycAuthority = "1df62f291b2e969fb0849d99d9ce41e2f137006e";
 
   // we won't use all of these, but these are purely to verify decimal shift
   expectedAllocations = [
@@ -218,10 +229,12 @@ export function encodeSaleInit(
   saleStart: number,
   saleEnd: number,
   acceptedTokens: SolanaAcceptedToken[], // 33 * n_tokens
-  recipient: string // 32 bytes
+  recipient: string, // 32 bytes
+  kycAuthority: string, // 20 bytes (ethereum address)
+  saleUnlock: number
 ): Buffer {
   const numTokens = acceptedTokens.length;
-  const encoded = Buffer.alloc(165 + numTokens * NUM_BYTES_ACCEPTED_TOKEN);
+  const encoded = Buffer.alloc(217 + numTokens * NUM_BYTES_ACCEPTED_TOKEN);
 
   encoded.writeUInt8(5, 0); // initSale payload for solana = 5
   encoded.write(toBigNumberHex(saleId, 32), 1, "hex");
@@ -235,6 +248,8 @@ export function encodeSaleInit(
 
   const recipientIndex = 133 + numTokens * NUM_BYTES_ACCEPTED_TOKEN;
   encoded.write(recipient, recipientIndex, "hex");
+  encoded.write(kycAuthority, recipientIndex + 32, "hex");
+  encoded.write(toBigNumberHex(saleUnlock, 32), recipientIndex + 52, "hex");
   return encoded;
 }
 

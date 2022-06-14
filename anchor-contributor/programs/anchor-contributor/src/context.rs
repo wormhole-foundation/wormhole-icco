@@ -543,9 +543,6 @@ pub struct SealSale<'info> {
 /// * `custodian_sale_token_acct`
 /// * `buyer_sale_token_acct`
 /// * `owner` (signer)
-///
-/// NOTE: With `claim_allocation`, remaining accounts are passed in
-/// depending on however many accepted tokens there are for a given sale.
 #[derive(Accounts)]
 pub struct ClaimAllocation<'info> {
     #[account(
@@ -612,6 +609,56 @@ pub struct ClaimAllocation<'info> {
 /// depending on however many accepted tokens there are for a given sale.
 #[derive(Accounts)]
 pub struct ClaimRefunds<'info> {
+    #[account(
+        seeds = [
+            SEED_PREFIX_CUSTODIAN.as_bytes(),
+        ],
+        bump,
+    )]
+    pub custodian: Account<'info, Custodian>,
+
+    #[account(
+        seeds = [
+            SEED_PREFIX_SALE.as_bytes(),
+            &sale.id,
+        ],
+        bump,
+    )]
+    pub sale: Account<'info, Sale>,
+
+    #[account(
+        mut,
+        seeds = [
+            SEED_PREFIX_BUYER.as_bytes(),
+            &sale.id,
+            &owner.key().as_ref(),
+        ],
+        bump,
+    )]
+    pub buyer: Account<'info, Buyer>,
+
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+}
+
+/// Context provides all accounts required for user to claim any excess
+/// contributions after the sale has been sealed. See `claim_excesses`
+/// instruction in lib.rs.
+///
+/// /// Immutable
+/// * `custodian`
+/// * `sale`
+///
+/// Mutable
+/// * `buyer`
+/// * `owner` (signer)
+///
+/// NOTE: With `claim_excesses`, remaining accounts are passed in
+/// depending on however many accepted tokens there are for a given sale.
+#[derive(Accounts)]
+pub struct ClaimExcesses<'info> {
     #[account(
         seeds = [
             SEED_PREFIX_CUSTODIAN.as_bytes(),

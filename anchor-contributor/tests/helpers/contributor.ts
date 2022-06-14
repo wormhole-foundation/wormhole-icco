@@ -42,7 +42,7 @@ export class IccoContributor {
     return program.methods
       .createCustodian()
       .accounts({
-        owner: payer.publicKey,
+        payer: payer.publicKey,
         custodian: this.custodian,
         systemProgram: web3.SystemProgram.programId,
       })
@@ -320,7 +320,6 @@ export class IccoContributor {
     const custodianTokenAccounts = await Promise.all(
       mints.map(async (mint) => getPdaAssociatedTokenAddress(mint, custodian))
     );
-    //    console.log("!!! Mints len: ", mints.length);
     remainingAccounts.push(
       ...custodianTokenAccounts.map((acct) => {
         return makeWritableAccountMeta(acct);
@@ -355,9 +354,6 @@ export class IccoContributor {
     const saleState = await this.getSale(saleId);
     const saleTokenMint = saleState.saleTokenMint;
 
-    const totals: any = saleState.totals;
-    const mints = totals.map((total) => total.mint);
-
     const program = this.program;
 
     const custodian = this.custodian;
@@ -373,6 +369,33 @@ export class IccoContributor {
     );
     const buyerSaleTokenAcct = buyerTokenAccount.address;
     const custodianSaleTokenAcct = await getPdaAssociatedTokenAddress(saleTokenMint, custodian);
+
+    return program.methods
+      .claimAllocation()
+      .accounts({
+        custodian,
+        sale,
+        buyer,
+        buyerSaleTokenAcct,
+        custodianSaleTokenAcct,
+        owner: payer.publicKey,
+        systemProgram: web3.SystemProgram.programId,
+      })
+      .signers([payer])
+      .rpc();
+  }
+
+  async claimExcesses(payer: web3.Keypair, saleId: Buffer): Promise<string> {
+    const saleState = await this.getSale(saleId);
+    const totals: any = saleState.totals;
+    const mints = totals.map((total) => total.mint);
+
+    const program = this.program;
+
+    const custodian = this.custodian;
+
+    const buyer = this.deriveBuyerAccount(saleId, payer.publicKey);
+    const sale = this.deriveSaleAccount(saleId);
 
     const remainingAccounts: web3.AccountMeta[] = [];
 
@@ -397,13 +420,11 @@ export class IccoContributor {
     );
 
     return program.methods
-      .claimAllocation()
+      .claimExcesses()
       .accounts({
         custodian,
         sale,
         buyer,
-        buyerSaleTokenAcct,
-        custodianSaleTokenAcct,
         owner: payer.publicKey,
         systemProgram: web3.SystemProgram.programId,
       })

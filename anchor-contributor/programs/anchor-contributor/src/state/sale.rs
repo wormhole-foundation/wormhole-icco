@@ -5,8 +5,8 @@ use num_derive::*;
 use std::{mem::size_of_val, u64};
 
 use crate::{
-    constants::*, cryptography::ethereum_ecrecover, env::GLOBAL_KYC_AUTHORITY,
-    error::ContributorError, state::custodian::Custodian,
+    constants::*, cryptography::ethereum_ecrecover, error::ContributorError,
+    state::custodian::Custodian,
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
@@ -31,8 +31,9 @@ pub enum AssetStatus {
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
 pub struct SaleTimes {
-    pub start: u64,
-    pub end: u64,
+    pub start: u64,             // 8
+    pub end: u64,               // 8
+    pub unlock_allocation: u64, // 8
 }
 
 #[derive(
@@ -50,19 +51,23 @@ pub struct Sale {
     pub associated_sale_token_address: Pubkey, // 32
     pub token_chain: u16,                      // 2
     pub token_decimals: u8,                    // 1
-    pub times: SaleTimes,                      // 8 + 8
+    pub times: SaleTimes,                      // SaleStatus::LEN
     pub recipient: [u8; 32],                   // 32
     pub status: SaleStatus,                    // 1
     pub kyc_authority: [u8; 20],               // 20 (this is an evm pubkey)
     pub initialized: bool,                     // 1
 
-    pub totals: Vec<AssetTotal>, // 4 + AssetTotal::MAXIMUM_SIZE * ACCEPTED_TOKENS_MAX
+    pub totals: Vec<AssetTotal>, // 4 + AssetTotal::LEN * ACCEPTED_TOKENS_MAX
     pub native_token_decimals: u8, // 1
     pub sale_token_mint: Pubkey, // 32
 }
 
+impl SaleTimes {
+    pub const LEN: usize = 8 + 8 + 8;
+}
+
 impl AssetTotal {
-    pub const MAXIMUM_SIZE: usize = 1 + 32 + 8 + 8 + 8 + 1;
+    pub const LEN: usize = 1 + 32 + 8 + 8 + 8 + 1;
 
     pub fn make_from_slice(bytes: &[u8]) -> Result<Self> {
         require!(
@@ -103,12 +108,12 @@ impl Sale {
         + 32
         + 2
         + 1
-        + (8 + 8)
+        + SaleTimes::LEN
         + 32
         + 1
         + 20
         + 1
-        + (4 + AssetTotal::MAXIMUM_SIZE * ACCEPTED_TOKENS_MAX)
+        + (4 + AssetTotal::LEN * ACCEPTED_TOKENS_MAX)
         + 1
         + 32;
 
@@ -133,7 +138,7 @@ impl Sale {
         for i in 0..num_accepted {
             let start = INDEX_SALE_INIT_ACCEPTED_TOKENS_START + 1 + ACCEPTED_TOKEN_NUM_BYTES * i;
             self.totals.push(AssetTotal::make_from_slice(
-                &payload[start..start + ACCEPTED_TOKEN_NUM_BYTES],
+                &payload[start..(start + ACCEPTED_TOKEN_NUM_BYTES)],
             )?);
         }
 
@@ -142,7 +147,7 @@ impl Sale {
         // deserialize other things
         let mut addr = [0u8; 32];
         addr.copy_from_slice(
-            &payload[INDEX_SALE_INIT_TOKEN_ADDRESS..INDEX_SALE_INIT_TOKEN_ADDRESS + 32],
+            &payload[INDEX_SALE_INIT_TOKEN_ADDRESS..(INDEX_SALE_INIT_TOKEN_ADDRESS + 32)],
         );
         self.associated_sale_token_address = Pubkey::new(&addr);
         self.token_chain = to_u16_be(payload, INDEX_SALE_INIT_TOKEN_CHAIN);
@@ -158,14 +163,15 @@ impl Sale {
             INDEX_SALE_INIT_ACCEPTED_TOKENS_START + 1 + ACCEPTED_TOKEN_NUM_BYTES * num_accepted;
         //self.recipient = to_bytes32(payload, recipient_idx);
         self.recipient
-            .copy_from_slice(&payload[recipient_idx..recipient_idx + 32]);
+            .copy_from_slice(&payload[recipient_idx..(recipient_idx + 32)]);
 
-        // we may need to deserialize kyc authority in sale init in the future.
-        // but for now, just use global
-        self.kyc_authority.copy_from_slice(
-            &hex::decode(GLOBAL_KYC_AUTHORITY)
-                .map_err(|_| ContributorError::InvalidKycAuthority)?,
-        );
+        // each sale has its own kyc authority
+        self.kyc_authority
+            .copy_from_slice(&payload[(recipient_idx + 32)..(recipient_idx + 52)]);
+
+        // when to unlock sale allocation if the sale is sealed
+        self.times.unlock_allocation = to_u64_be(payload, recipient_idx + 52 + 24);
+
         // finally set the status to active
         self.status = SaleStatus::Active;
 
@@ -279,7 +285,7 @@ impl Sale {
 
             // convert allocation to u64 based on decimal difference and save
             let raw_allocation = BigUint::from_bytes_be(
-                &payload[start + INDEX_ALLOCATIONS_AMOUNT..start + INDEX_ALLOCATIONS_EXCESS],
+                &payload[(start + INDEX_ALLOCATIONS_AMOUNT)..(start + INDEX_ALLOCATIONS_EXCESS)],
             );
             total.allocations = (raw_allocation / pow10_divider.clone())
                 .to_u64()
@@ -287,7 +293,7 @@ impl Sale {
 
             // and save excess contribution
             total.excess_contributions = BigUint::from_bytes_be(
-                &payload[start + INDEX_ALLOCATIONS_EXCESS..start + INDEX_ALLOCATIONS_END],
+                &payload[(start + INDEX_ALLOCATIONS_EXCESS)..(start + INDEX_ALLOCATIONS_END)],
             )
             .to_u64()
             .ok_or(ContributorError::AmountTooLarge)?;
@@ -390,18 +396,22 @@ impl Sale {
         Ok(result.unwrap())
     }
 
+    pub fn allocation_unlocked(&self, block_time: i64) -> bool {
+        block_time as u64 >= self.times.unlock_allocation
+    }
+
     fn get_id(payload: &[u8]) -> [u8; 32] {
         let mut output = [0u8; 32];
-        output.copy_from_slice(&payload[INDEX_SALE_ID..INDEX_SALE_ID + 32]);
+        output.copy_from_slice(&payload[INDEX_SALE_ID..(INDEX_SALE_ID + 32)]);
         output
     }
 }
 
 // assuming all slices are the correct sizes...
 fn to_u16_be(bytes: &[u8], index: usize) -> u16 {
-    u16::from_be_bytes(bytes[index..index + 2].try_into().unwrap())
+    u16::from_be_bytes(bytes[index..(index + 2)].try_into().unwrap())
 }
 
 fn to_u64_be(bytes: &[u8], index: usize) -> u64 {
-    u64::from_be_bytes(bytes[index..index + 8].try_into().unwrap())
+    u64::from_be_bytes(bytes[index..(index + 8)].try_into().unwrap())
 }

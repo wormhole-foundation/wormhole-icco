@@ -590,12 +590,9 @@ pub mod anchor_contributor {
     ///
     /// The buyer account will determine the total allocations reserved for the buyer based on
     /// how much he has contributed to the sale (relative to the total contributions found in
-    /// the sale account) and mark its allocation as claimed. The same calculation is used to
-    /// determine how much excess of each contribution the buyer is allowed. It will also mark
-    /// the state of each contribution as ExcessClaimed.
+    /// the sale account) and mark its allocation as claimed.
     ///
-    /// There is one transfer for the total allocation and n transfers for the excess
-    /// contributions, depending on however many tokens a user has contributed to the sale.
+    /// There is one transfer for the total allocation.
     pub fn claim_allocation<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, ClaimAllocation<'info>>,
     ) -> Result<()> {
@@ -604,7 +601,12 @@ pub mod anchor_contributor {
         let sale = &ctx.accounts.sale;
         require!(sale.is_sealed(), ContributorError::SaleNotSealed);
 
-        // first deal with the allocation
+        let clock = Clock::get()?;
+        require!(
+            sale.allocation_unlocked(clock.unix_timestamp),
+            ContributorError::AllocationsLocked
+        );
+
         let custodian_sale_token_acct = &ctx.accounts.custodian_sale_token_acct;
         let buyer_sale_token_acct = &ctx.accounts.buyer_sale_token_acct;
 
@@ -615,7 +617,6 @@ pub mod anchor_contributor {
 
         // spl transfer allocation
         let transfer_authority = &ctx.accounts.custodian;
-        let custodian_bump = ctx.bumps["custodian"];
         token::transfer(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
@@ -624,7 +625,7 @@ pub mod anchor_contributor {
                     to: buyer_sale_token_acct.to_account_info(),
                     authority: transfer_authority.to_account_info(),
                 },
-                &[&[SEED_PREFIX_CUSTODIAN.as_bytes(), &[custodian_bump]]],
+                &[&[SEED_PREFIX_CUSTODIAN.as_bytes(), &[ctx.bumps["custodian"]]]],
             ),
             allocation,
         )?;
@@ -646,10 +647,33 @@ pub mod anchor_contributor {
         //     &[&[&SEED_PREFIX_CUSTODIAN.as_bytes(), &[custodian_bump]]],
         // )?;
 
+        // Finish instruction.
+        Ok(())
+    }
+
+    /// Instruction to claim refunds from an aborted sale. Only the buyer account needs to
+    /// be mutable so we can change its state.
+    ///
+    /// The buyer account will determine how much excess of each contribution the buyer is
+    /// allowed based on how much he has contributed to the sale (relative to the total
+    /// contributions found in the sale account). It will also mark the state of each
+    /// contribution as ExcessClaimed.
+    ///
+    /// There are n transfers for the excesses, depending on however many tokens a user has
+    /// contributed to the sale.
+    pub fn claim_excesses<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, ClaimExcesses<'info>>,
+    ) -> Result<()> {
+        // We need to make sure that the sale is actually aborted in order to use this
+        // instruction. If it isn't, we cannot continue.
+        let sale = &ctx.accounts.sale;
+        require!(sale.is_sealed(), ContributorError::SaleNotSealed);
+
         // We pass as an extra argument remaining accounts. The first n accounts are
         // the custodian's associated token accounts for each accepted token for the sale.
         // The second n accounts are the buyer's respective associated token accounts.
         // We need to verify that this context has the correct number of ATAs.
+        let totals = &sale.totals;
         let num_accepted = totals.len();
         let token_accts = &ctx.remaining_accounts;
         require!(
@@ -707,7 +731,7 @@ pub mod anchor_contributor {
                         to: buyer_token_acct.to_account_info(),
                         authority: transfer_authority.to_account_info(),
                     },
-                    &[&[SEED_PREFIX_CUSTODIAN.as_bytes(), &[custodian_bump]]],
+                    &[&[SEED_PREFIX_CUSTODIAN.as_bytes(), &[ctx.bumps["custodian"]]]],
                 ),
                 excess,
             )?;

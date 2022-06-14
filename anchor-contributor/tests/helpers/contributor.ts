@@ -42,7 +42,7 @@ export class IccoContributor {
     return program.methods
       .createCustodian()
       .accounts({
-        owner: payer.publicKey,
+        payer: payer.publicKey,
         custodian: this.custodian,
         systemProgram: web3.SystemProgram.programId,
       })

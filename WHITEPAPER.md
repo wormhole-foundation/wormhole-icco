@@ -36,11 +36,13 @@ There are two programs needed to model this.
 To create a sale, a user invokes the `createSale()` method on the sale conductor. It takes the following set or arguments:
 
 - A `Raise` struct with the following arguments:
+  - Boolean to determine if the sale is a fixed-price sale
   - Offered token native address
   - Offered token native chain
   - Offered token amount
   - A start time for when contributions can be accepted
   - An end time for when contributions will no loner be accepted
+  - A time for when allocations can be distributed to contributors
   - A minimum USD amount to raise
   - A maximum USD amount to raise
   - The address that can claim the proceeds of the sale
@@ -70,18 +72,19 @@ The method evaluates whether the minimum raise amount has been met using the con
     Each contributor receives excess contributions proportional to their contribution amount (individualContribution / totalContributions \* totalExcessContributions)
 - Emits a `SaleSealed` packet - indicated to the Contributor contracts that the sale was successful
 - Emits another `SaleSealed` packet if the sale accepts Solana tokens as collateral. The message is in the same format as the original `SaleSealed` packet, but only contains information regarding Solana token allocations. This is necessary due to VAA size contraints on Solana.
-- Bridges the relevant share of offered tokens to the Contributor contracts
+- Bridges the relevant share of offered tokens to the Contributor contracts.
+- Refunds the `refundRecipient` sale tokens during a fixed-price sale if the maxRaise parameter is not exceeded.
 
 Or in case the goal was not met, it:
 
 - Emits a `SaleAborted` packet.
-- Allows a permissionless method `claimRefund` to be called for the `refundRecipient`
+- Refunds the sale tokens to the `refundRecipient`
 
 The Contributor contracts has two functions to consume the relevant attestations:
 
 - `saleSealed()`
   - Starts to accept claims of users acquired tokens via `claimAllocation()`
-    - Also pays out excess contributions
+  - Starts to accept claims of users excess contributions via `claimExcessContribution()`
   - Bridges the raised funds over to the recipient
 - `saleAborted()`
   - Starts to accept refund claims via `claimRefund()`
@@ -94,7 +97,6 @@ The Contributor contracts has two functions to consume the relevant attestations
 - `collectContributions(vaa Contributions)`
 - `abortSaleBeforeStartTime(uint saleId)`
 - `sealSale(uint saleId)`
-- `claimRefund(uint saleId)`
 - `saleExists(uint saleId)`
 
 Owner Only:
@@ -113,6 +115,7 @@ Owner Only:
 - `saleSealed(vaa SaleSealed)`
 - `saleAborted(vaa SaleAborted)`
 - `claimAllocation(uint saleId, uint tokenIndex)`
+- `claimExcessContribution(uint saleId, uint tokenIndex)`
 - `claimRefund(uint saleId, uint tokenIndex)`
 - `saleExists(uint saleId)`
 
@@ -147,6 +150,7 @@ Owner Only:
   - uint256 excessContribution (excess contributions refunded to contributors on this chain)
 
 - Raise
+  - bool isFixedPrice (fixed-price sale boolean which determines the sale type)
   - bytes32 token (sale token native address)
   - uint16 tokenChain (sale token native chainId)
   - uint256 tokenAmount (token amount being sold)
@@ -154,6 +158,7 @@ Owner Only:
   - uint256 maxRaise (max raise amount)
   - uint256 saleStart (timestamp raise start)
   - uint256 saleEnd (timestamp raise end)
+  - uint256 unlockTimestamp (timestamp that determines when sale tokens can be claimed)
   - address recipient (recipient of sale proceeds)
   - address refundRecipient (refund recipient in case the sale is aborted)
   - bytes32 solanaTokenAccount (sale token ATA for Solana)
@@ -195,6 +200,8 @@ uint8 tokensLen;
 bytes32 recipient;
 // KYC authority public key
 address authority;
+// unlock timestamp (when tokens can be claimed)
+uint256 unlockTimestamp
 ```
 
 ContributionsSealed:
@@ -276,4 +283,6 @@ uint8 tokensLen;
 bytes32 recipient;
 // KYC authority public key
 address authority;
+// unlock timestamp (when tokens can be claimed)
+uint256 unlockTimestamp
 ```

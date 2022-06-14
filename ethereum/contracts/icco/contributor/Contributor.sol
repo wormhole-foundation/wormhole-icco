@@ -26,7 +26,7 @@ import "../shared/ICCOStructs.sol";
  * to disseminate information about the collected contributions to the
  * Conductor contract.
  */ 
-contract Contributor is ContributorGovernance, ReentrancyGuard {
+contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuard {
     using BytesLib for bytes;
 
     /**
@@ -52,17 +52,14 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
             tokenAddress : saleInit.tokenAddress,
             tokenChain : saleInit.tokenChain,
             tokenDecimals: saleInit.tokenDecimals,
-            tokenAmount : saleInit.tokenAmount,
-            minRaise : saleInit.minRaise,
-            maxRaise : saleInit.maxRaise,
             saleStart : saleInit.saleStart,
             saleEnd : saleInit.saleEnd,
+            unlockTimestamp : saleInit.unlockTimestamp,
             acceptedTokensChains : new uint16[](saleInit.acceptedTokens.length),
             acceptedTokensAddresses : new bytes32[](saleInit.acceptedTokens.length),
             acceptedTokensConversionRates : new uint128[](saleInit.acceptedTokens.length),
-            solanaTokenAccount: saleInit.solanaTokenAccount,
             recipient : saleInit.recipient,
-            refundRecipient : saleInit.refundRecipient,
+            authority : saleInit.authority,
             isSealed : false,
             isAborted : false,
             allocations : new uint256[](saleInit.acceptedTokens.length),
@@ -89,6 +86,9 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
 
         /// save the sale in contract storage
         setSale(saleInit.saleID, sale);
+
+        /// emit EventContribute event.
+        emit EventSaleInit(saleInit.saleID);
     }
 
     /**
@@ -96,7 +96,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
      * - it computes the keccak256 hash of data passed by the client
      * - it recovers the KYC authority key from the hashed data and signature
      */ 
-    function verifySignature(bytes memory encodedHashData, bytes memory sig) public view returns (bool) {
+    function verifySignature(bytes memory encodedHashData, bytes memory sig, address authority) public pure returns (bool) {
         require(sig.length == 65, "incorrect signature length"); 
         require(encodedHashData.length > 0, "no hash data");
 
@@ -118,7 +118,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
         address key = ecrecover(hash_, v, r, s);
 
         /// confirm that the recovered key is the authority
-        if (key == authority()) {
+        if (key == authority) {
             return true;
         } else {
             return false;
@@ -141,7 +141,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
 
             require(!isAborted, "sale was aborted");
 
-            (uint256 start, uint256 end) = getSaleTimeframe(saleId);
+            (uint256 start, uint256 end, ) = getSaleTimeframe(saleId);
 
             require(block.timestamp >= start, "sale not yet started");
             require(block.timestamp <= end, "sale has ended");
@@ -163,7 +163,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
                 msg.sender, 
                 getSaleContribution(saleId, tokenIndex, msg.sender)
             ); 
-            require(verifySignature(encodedHashData, sig), "unauthorized contributor");
+            require(verifySignature(encodedHashData, sig, authority(saleId)), "unauthorized contributor");
         }
 
         /// query own token balance before transfer
@@ -193,6 +193,9 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
 
         /// @dev store contribution information
         setSaleContribution(saleId, msg.sender, tokenIndex, amount);
+
+        /// emit EventContribute event.
+        emit EventContribute(saleId, tokenIndex, amount);
     }
 
     /**
@@ -240,6 +243,9 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
         wormholeSequence = wormhole().publishMessage{
             value : msg.value
         }(0, ICCOStructs.encodeContributionsSealed(consSealed), consistencyLevel());
+
+        /// emit EventAttestContribution event.
+        emit EventAttestContribution(saleId);
     }
 
     /**
@@ -374,6 +380,9 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
                 }
             }
         }
+
+        /// emit EventSealSale event.
+        emit EventSaleSealed(sale.saleID);
     }
 
     /// @dev saleAborted serves to mark the sale unnsuccessful or canceled 
@@ -390,22 +399,25 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
     }
 
     /**
-     * @dev claimAllocation serves to send contributors a preallocated amount of sale tokens
-     * and a refund for any excessContributions.
+     * @dev claimAllocation serves to send contributors a preallocated amount of sale tokens.
      * - it confirms that the sale was sealed
      * - it transfers sale tokens to the contributor's wallet
-     * - it transfer any excessContributions to the contributor's wallet
      * - it marks the allocation as claimed to prevent multiple claims for the same allocation
+     * - it only distributes tokens once the unlock period has ended
      */
     function claimAllocation(uint256 saleId, uint256 tokenIndex) public {
         require(saleExists(saleId), "sale not initiated");
 
         /// make sure the sale is sealed and not aborted
         (bool isSealed, bool isAborted) = getSaleStatus(saleId);
+        (, , uint256 unlockTimestamp) = getSaleTimeframe(saleId);
 
         require(!isAborted, "token sale is aborted");
-        require(isSealed, "token sale is not yet sealed"); 
-        require(!allocationIsClaimed(saleId, tokenIndex, msg.sender), "allocation already claimed");
+        require(isSealed, "token sale is not yet sealed");
+        require(!allocationIsClaimed(saleId, tokenIndex, msg.sender), "allocation already claimed"); 
+
+        /// @dev contributors can only claim after the unlock timestamp
+        require(block.timestamp >= unlockTimestamp, "tokens have not been unlocked");
 
         /// make sure the contributor is claiming on the right chain
         (uint16 contributedTokenChainId, , ) = getSaleAcceptedTokenInfo(saleId, tokenIndex);
@@ -415,7 +427,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
         /// set the allocation claimed - also serves as reentrancy protection
         setAllocationClaimed(saleId, tokenIndex, msg.sender);
 
-        ContributorStructs.Sale memory sale = sales(saleId);
+        ContributorStructs.Sale memory sale = sales(saleId); 
 
         /**
          * @dev Cache contribution variables since they're used to calculate
@@ -435,22 +447,47 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
             /// identify wormhole token bridge wrapper
             tokenAddress = tokenBridge().wrappedAsset(sale.tokenChain, sale.tokenAddress);
         }
-        SafeERC20.safeTransfer(IERC20(tokenAddress), msg.sender, thisAllocation);
+        SafeERC20.safeTransfer(IERC20(tokenAddress), msg.sender, thisAllocation); 
+
+        /// emit EventClaimAllocation event.
+        emit EventClaimAllocation(saleId, tokenIndex);
+    }
+
+    /**
+     * @dev claimExcessContribution serves to send contributors a refund for any excessContributions.
+     * - it confirms that the sale was sealed
+     * - it calculates the excessContribution owed to the contributor
+     * - it marks the excessContribution as claimed to prevent multiple claims for the same refund
+     * - it transfers the excessContribution to the contributor's wallet
+     */
+    function claimExcessContribution(uint256 saleId, uint256 tokenIndex) public {
+        require(saleExists(saleId), "sale not initiated");
 
         /// return any excess contributions 
         uint256 excessContribution = getSaleExcessContribution(saleId, tokenIndex);
-        if (excessContribution > 0){
-            /// calculate how much excess to refund
-            uint256 thisExcessContribution = (excessContribution * thisContribution) / totalContribution;
 
-            /// grab the contributed token address  
-            (, bytes32 tokenAddressBytes, ) = getSaleAcceptedTokenInfo(saleId, tokenIndex);
-            SafeERC20.safeTransfer(
-                IERC20(address(uint160(uint256(tokenAddressBytes)))), 
-                msg.sender, 
-                thisExcessContribution
-            );
-        }
+        require(excessContribution > 0, "no excess contributions for this token");
+
+        (bool isSealed, ) = getSaleStatus(saleId);
+
+        require(isSealed, "token sale is not sealed");
+        require(!excessContributionIsClaimed(saleId, tokenIndex, msg.sender), "excess contribution already claimed");
+
+        setExcessContributionClaimed(saleId, tokenIndex, msg.sender);
+
+        /// calculate how much excess to refund
+        uint256 thisExcessContribution = (excessContribution * getSaleContribution(saleId, tokenIndex, msg.sender)) / getSaleTotalContribution(saleId, tokenIndex);
+
+        /// grab the contributed token address  
+        (, bytes32 tokenAddressBytes, ) = getSaleAcceptedTokenInfo(saleId, tokenIndex);
+        SafeERC20.safeTransfer(
+            IERC20(address(uint160(uint256(tokenAddressBytes)))), 
+            msg.sender, 
+            thisExcessContribution
+        );
+
+        /// emit EventClaimExcessContribution event.
+        emit EventClaimExcessContribution(saleId, tokenIndex);
     }
 
     /**
@@ -479,6 +516,9 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
             msg.sender, 
             getSaleContribution(saleId, tokenIndex, msg.sender)
         );
+
+        /// emit EventClaimRefund event.
+        emit EventClaimRefund(saleId, tokenIndex);
     }
 
     // @dev verifyConductorVM serves to validate VMs by checking against the known Conductor contract 

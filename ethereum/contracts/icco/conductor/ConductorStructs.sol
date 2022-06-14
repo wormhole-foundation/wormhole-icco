@@ -27,6 +27,8 @@ contract ConductorStructs {
         uint256 saleStart;
         /// timestamp raise end
         uint256 saleEnd;
+        /// lock timestamp (when tokens can be claimed)
+        uint256 unlockTimestamp;
         /// accepted Tokens
         uint16[] acceptedTokensChains;
         bytes32[] acceptedTokensAddresses;
@@ -41,9 +43,11 @@ contract ConductorStructs {
         bytes32 recipient;
         /// refund recipient in case the sale is aborted
         bytes32 refundRecipient;
+        /// public key of kyc authority 
+        address authority;
         bool isSealed;
         bool isAborted;
-        bool refundIsClaimed;
+        bool isFixedPrice;
     }
 
     struct InternalAccounting {
@@ -53,7 +57,8 @@ contract ConductorStructs {
         /// token allocation
         uint256 totalContribution;
         uint256 totalAllocated;
-        uint256 dust;
+        uint256 adjustedSaleTokenAmount;
+        uint256 saleTokenRefund; 
         uint256 totalExcessContribution;
     }
 }

@@ -15,10 +15,6 @@ contract ContributorSetters is ContributorState, Context {
         _state.owner = owner_;
     }
 
-    function setAuthority(address authority) internal {
-        _state.authority = authority;
-    }
-
     function setChainId(uint16 chainId) internal {
         _state.provider.chainId = chainId;
     }
@@ -66,6 +62,10 @@ contract ContributorSetters is ContributorState, Context {
 
     function setAllocationClaimed(uint256 saleId, uint256 tokenIndex, address contributor) internal {
         _state.allocationIsClaimed[saleId][tokenIndex][contributor] = true;
+    }
+
+    function setExcessContributionClaimed(uint256 saleId, uint256 tokenIndex, address contributor) internal {
+        _state.excessContributionIsClaimed[saleId][tokenIndex][contributor] = true;
     }
 
     function setSaleAllocation(uint256 saleId, uint256 tokenIndex, uint256 allocation) internal {

@@ -94,4 +94,7 @@ pub enum ContributorError {
 
     #[msg("TransferNotAllowed")]
     TransferNotAllowed,
+
+    #[msg("AllocationsLocked")]
+    AllocationsLocked,
 }

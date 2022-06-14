@@ -68,7 +68,6 @@ module.exports = async function(deployer, network) {
         config.contributorChainId,
         config.conductorChainId,
         conductorAddr,
-        config.authority,
         config.wormhole,
         config.tokenBridge,
         config.consistencyLevel

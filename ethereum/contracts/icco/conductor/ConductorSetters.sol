@@ -52,10 +52,6 @@ contract ConductorSetters is ConductorState, Context {
         _state.sales[saleId].isAborted = true;
     }
 
-    function setRefundClaimed(uint256 saleId) internal {
-        _state.sales[saleId].refundIsClaimed = true;
-    }   
-
     function setNextSaleId(uint256 nextSaleId) internal {
         _state.nextSaleId = nextSaleId;
     }

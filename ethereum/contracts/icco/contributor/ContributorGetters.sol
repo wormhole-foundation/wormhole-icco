@@ -15,8 +15,8 @@ contract ContributorGetters is ContributorState {
         return _state.owner;
     }
 
-    function authority() public view returns (address) {
-        return _state.authority;
+    function authority(uint256 saleId_) public view returns (address) {
+        return _state.sales[saleId_].authority;
     }
 
     function isInitialized(address impl) public view returns (bool) {
@@ -59,10 +59,11 @@ contract ContributorGetters is ContributorState {
         );
     }
 
-    function getSaleTimeframe(uint256 saleId_) public view returns (uint256 start, uint256 end){
+    function getSaleTimeframe(uint256 saleId_) public view returns (uint256 start, uint256 end, uint256 unlockTimestamp){
         return (
             _state.sales[saleId_].saleStart,
-            _state.sales[saleId_].saleEnd
+            _state.sales[saleId_].saleEnd,
+            _state.sales[saleId_].unlockTimestamp
         );
     }
 
@@ -99,5 +100,9 @@ contract ContributorGetters is ContributorState {
 
     function allocationIsClaimed(uint256 saleId, uint256 tokenIndex, address contributor) public view returns (bool){
         return _state.allocationIsClaimed[saleId][tokenIndex][contributor];
+    }
+
+    function excessContributionIsClaimed(uint256 saleId, uint256 tokenIndex, address contributor) public view returns (bool){
+        return _state.excessContributionIsClaimed[saleId][tokenIndex][contributor];
     }
 }

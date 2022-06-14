@@ -5,6 +5,25 @@ pragma solidity ^0.8.0;
 
 import "./ConductorStructs.sol";
 
+contract ConductorEvents {
+    event EventCreateSale (
+        uint256 saleId,
+        address creatorAddress
+    );
+
+    event EventAbortSaleBeforeStart (
+        uint256 saleId
+    );
+
+    event EventSealSale (
+        uint256 saleId
+    );
+
+    event EventAbortSale (
+        uint256 saleId
+    );
+}
+
 contract ConductorStorage {
     struct Provider {
         uint16 chainId;

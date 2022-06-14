@@ -186,8 +186,9 @@ describe("anchor-contributor", () => {
 
     it("Orchestrator Initialize Sale with Signed VAA", async () => {
       const startTime = 8 + (await getBlockTime(connection));
-      const duration = 8; // seconds
-      const initSaleVaa = dummyConductor.createSale(startTime, duration, saleTokenAccount.address);
+      const duration = 8; // seconds after sale starts
+      const lockPeriod = 12; // seconds after sale ended
+      const initSaleVaa = dummyConductor.createSale(startTime, duration, saleTokenAccount.address, lockPeriod);
       const tx = await contributor.initSale(orchestrator, initSaleVaa, dummyConductor.getSaleTokenOnSolana());
 
       {
@@ -197,12 +198,14 @@ describe("anchor-contributor", () => {
 
         // verify
         expect(Uint8Array.from(saleState.id)).to.deep.equal(saleId);
-        //expect(Uint8Array.from(saleState.tokenAddress)).to.deep.equal(Buffer.from(dummyConductor.tokenAddress, "hex"));
+        expect(saleState.saleTokenMint.toString()).to.equal(dummyConductor.saleTokenOnSolana);
         expect(saleState.tokenChain).to.equal(dummyConductor.tokenChain);
         expect(saleState.tokenDecimals).to.equal(dummyConductor.tokenDecimals);
         expect(saleState.times.start.toString()).to.equal(dummyConductor.saleStart.toString());
         expect(saleState.times.end.toString()).to.equal(dummyConductor.saleEnd.toString());
+        expect(saleState.times.unlockAllocation.toString()).to.equal(dummyConductor.saleUnlock.toString());
         expect(Uint8Array.from(saleState.recipient)).to.deep.equal(Buffer.from(dummyConductor.recipient, "hex"));
+        expect(Uint8Array.from(saleState.kycAuthority)).to.deep.equal(Buffer.from(dummyConductor.kycAuthority, "hex"));
         expect(saleState.status).has.key("active");
 
         // check totals
@@ -407,9 +410,10 @@ describe("anchor-contributor", () => {
     });
 
     it("Orchestrator Attests Contributions", async () => {
+      const saleId = dummyConductor.getSaleId();
+
       // wait for sale to end here
       const saleEnd = dummyConductor.saleEnd;
-      const saleId = dummyConductor.getSaleId();
       await waitUntilBlock(connection, saleEnd);
       const tx = await contributor.attestContributions(orchestrator, saleId);
 
@@ -678,7 +682,7 @@ describe("anchor-contributor", () => {
       }
     });
 
-    it("User Claims Allocations From Sale", async () => {
+    it("User Claims Contribution Excess From Sale", async () => {
       const saleId = dummyConductor.getSaleId();
       const sale = await contributor.getSale(saleId);
       const assets: any = sale.totals;
@@ -694,7 +698,7 @@ describe("anchor-contributor", () => {
         })
       );
 
-      const tx = await contributor.claimAllocation(buyer, saleId);
+      const tx = await contributor.claimExcesses(buyer, saleId);
 
       const endingBalanceBuyer = await Promise.all(
         assets.map(async (asset) => {
@@ -707,20 +711,11 @@ describe("anchor-contributor", () => {
         })
       );
 
-      // get state
-      const buyerState = await contributor.getBuyer(saleId, buyer.publicKey);
-      expect(buyerState.allocation.claimed).to.be.true;
-
-      const allocationDivisor = new BN(dummyConductor.getAllocationMultiplier());
-      const expectedAllocation = dummyConductor.allocations
-        .map((item) => new BN(item.allocation))
-        .reduce((prev, curr) => prev.add(curr))
-        .div(allocationDivisor);
-      expect(buyerState.allocation.amount.toString()).to.equal(expectedAllocation.toString());
-
+      // verify excesses
       const expectedExcessAmounts = dummyConductor.allocations.map((item) => new BN(item.excessContribution));
       const numExpected = expectedExcessAmounts.length;
 
+      const buyerState = await contributor.getBuyer(saleId, buyer.publicKey);
       const totals: any = buyerState.contributions;
       expect(totals.length).to.equal(numExpected);
 
@@ -737,7 +732,59 @@ describe("anchor-contributor", () => {
       }
     });
 
-    // TODO
+    it("User Cannot Claim Excess Again", async () => {
+      const saleId = dummyConductor.getSaleId();
+
+      let caughtError = false;
+      try {
+        const tx = await contributor.claimExcesses(buyer, saleId);
+        throw Error(`should not happen: ${tx}`);
+      } catch (e) {
+        caughtError = verifyErrorMsg(e, "AlreadyClaimed");
+      }
+
+      if (!caughtError) {
+        throw Error("did not catch expected error");
+      }
+    });
+
+    it("User Cannot Claim Allocations Before Sale Unlock", async () => {
+      const saleId = dummyConductor.getSaleId();
+
+      let caughtError = false;
+      try {
+        const tx = await contributor.claimAllocation(buyer, saleId);
+        throw Error(`should not happen: ${tx}`);
+      } catch (e) {
+        caughtError = verifyErrorMsg(e, "AllocationsLocked");
+      }
+
+      if (!caughtError) {
+        throw Error("did not catch expected error");
+      }
+    });
+
+    it("User Claims Allocations From Sale", async () => {
+      const saleId = dummyConductor.getSaleId();
+
+      // wait until unlock
+      const saleUnlock = dummyConductor.saleUnlock;
+      await waitUntilBlock(connection, saleUnlock);
+
+      const tx = await contributor.claimAllocation(buyer, saleId);
+
+      // get state
+      const buyerState = await contributor.getBuyer(saleId, buyer.publicKey);
+      expect(buyerState.allocation.claimed).to.be.true;
+
+      const allocationDivisor = new BN(dummyConductor.getAllocationMultiplier());
+      const expectedAllocation = dummyConductor.allocations
+        .map((item) => new BN(item.allocation))
+        .reduce((prev, curr) => prev.add(curr))
+        .div(allocationDivisor);
+      expect(buyerState.allocation.amount.toString()).to.equal(expectedAllocation.toString());
+    });
+
     it("User Cannot Claim Allocations Again", async () => {
       const saleId = dummyConductor.getSaleId();
 
@@ -776,8 +823,9 @@ describe("anchor-contributor", () => {
 
     it("Orchestrator Initialize Sale with Signed VAA", async () => {
       const startTime = 8 + (await getBlockTime(connection));
-      const duration = 8; // seconds
-      const initSaleVaa = dummyConductor.createSale(startTime, duration, saleTokenAccount.address);
+      const duration = 8; // seconds after sale starts
+      const lockPeriod = 12; // seconds after sale ended
+      const initSaleVaa = dummyConductor.createSale(startTime, duration, saleTokenAccount.address, lockPeriod);
       const tx = await contributor.initSale(orchestrator, initSaleVaa, dummyConductor.getSaleTokenOnSolana());
 
       {
@@ -786,13 +834,15 @@ describe("anchor-contributor", () => {
 
         // verify
         expect(Uint8Array.from(saleState.id)).to.deep.equal(saleId);
-        //expect(Uint8Array.from(saleState.tokenAddress)).to.deep.equal(Buffer.from(dummyConductor.tokenAddress, "hex"));
+        expect(saleState.saleTokenMint.toString()).to.equal(dummyConductor.saleTokenOnSolana);
         expect(saleState.tokenChain).to.equal(dummyConductor.tokenChain);
         expect(saleState.tokenDecimals).to.equal(dummyConductor.tokenDecimals);
         expect(saleState.nativeTokenDecimals).to.equal(dummyConductor.nativeTokenDecimals);
         expect(saleState.times.start.toString()).to.equal(dummyConductor.saleStart.toString());
         expect(saleState.times.end.toString()).to.equal(dummyConductor.saleEnd.toString());
+        expect(saleState.times.unlockAllocation.toString()).to.equal(dummyConductor.saleUnlock.toString());
         expect(Uint8Array.from(saleState.recipient)).to.deep.equal(Buffer.from(dummyConductor.recipient, "hex"));
+        expect(Uint8Array.from(saleState.kycAuthority)).to.deep.equal(Buffer.from(dummyConductor.kycAuthority, "hex"));
         expect(saleState.status).has.key("active");
 
         // check totals
@@ -950,9 +1000,9 @@ describe("anchor-contributor", () => {
   });
 });
 
-async function waitUntilBlock(connection: web3.Connection, saleEnd: number) {
+async function waitUntilBlock(connection: web3.Connection, expiration: number) {
   let blockTime = await getBlockTime(connection);
-  while (blockTime <= saleEnd) {
+  while (blockTime <= expiration) {
     await wait(1);
     blockTime = await getBlockTime(connection);
   }

@@ -198,7 +198,7 @@ describe("anchor-contributor", () => {
 
         // verify
         expect(Uint8Array.from(saleState.id)).to.deep.equal(saleId);
-        //expect(Uint8Array.from(saleState.tokenAddress)).to.deep.equal(Buffer.from(dummyConductor.tokenAddress, "hex"));
+        expect(saleState.saleTokenMint.toString()).to.equal(dummyConductor.saleTokenOnSolana);
         expect(saleState.tokenChain).to.equal(dummyConductor.tokenChain);
         expect(saleState.tokenDecimals).to.equal(dummyConductor.tokenDecimals);
         expect(saleState.times.start.toString()).to.equal(dummyConductor.saleStart.toString());
@@ -834,7 +834,7 @@ describe("anchor-contributor", () => {
 
         // verify
         expect(Uint8Array.from(saleState.id)).to.deep.equal(saleId);
-        //expect(Uint8Array.from(saleState.tokenAddress)).to.deep.equal(Buffer.from(dummyConductor.tokenAddress, "hex"));
+        expect(saleState.saleTokenMint.toString()).to.equal(dummyConductor.saleTokenOnSolana);
         expect(saleState.tokenChain).to.equal(dummyConductor.tokenChain);
         expect(saleState.tokenDecimals).to.equal(dummyConductor.tokenDecimals);
         expect(saleState.nativeTokenDecimals).to.equal(dummyConductor.nativeTokenDecimals);

@@ -563,7 +563,7 @@ function parseSaleId(iccoVaa: Buffer): Buffer {
   return getVaaBody(iccoVaa).subarray(1, 33);
 }
 
-function hashVaaPayload(signedVaa: Buffer): Buffer {
+export function hashVaaPayload(signedVaa: Buffer): Buffer {
   const sigStart = 6;
   const numSigners = signedVaa[5];
   const sigLength = 66;

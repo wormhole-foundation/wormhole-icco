@@ -64,7 +64,7 @@ module.exports = async function(deployer, network) {
   }
 
   // testnet deployments
-  if (network == "goerli") {
+  if (network == "goerli" || network == "fuji") {
     const fp = `${ethereumRootPath}/../testnet.json`;
 
     const contents = fs.existsSync(fp) ? JSON.parse(fs.readFileSync(fp, "utf8")) : {};

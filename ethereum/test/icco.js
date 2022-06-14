@@ -742,6 +742,7 @@ contract("ICCO", function(accounts) {
     const payloadIdType1 = "01";
     const solanaChainId = "1";
     const numAcceptedSolanaTokens = "0";
+    const isFixedPriceSale = false;
 
     const initialized = new web3.eth.Contract(
       ConductorImplementationFullABI,
@@ -752,6 +753,7 @@ contract("ICCO", function(accounts) {
 
     // create array (struct) for sale params
     const saleParams = [
+      isFixedPriceSale,
       SOLD_TOKEN_BYTES32_ADDRESS,
       TEST_CHAIN_ID,
       saleTokenAmount,
@@ -759,6 +761,7 @@ contract("ICCO", function(accounts) {
       maximumTokenRaise,
       SALE_START,
       SALE_END,
+      SALE_END, // unlock timestamp
       saleRecipient,
       refundRecipient,
       SOLD_TOKEN_BYTES32_ADDRESS,
@@ -915,10 +918,14 @@ contract("ICCO", function(accounts) {
 
     // KYC authority public key
     assert.equal(
-      log.payload.substr(index, 64),
+      log.payload.substr(index, 40),
       web3.eth.abi.encodeParameter("address", KYC_AUTHORITY).substring(26)
     );
     index += 40;
+
+    // unlock timestamp
+    assert.equal(parseInt(log.payload.substr(index, 64), 16), SALE_END);
+    index += 64;
 
     assert.equal(log.payload.length, index);
     SALE_INIT_PAYLOAD = log.payload.toString();
@@ -982,6 +989,7 @@ contract("ICCO", function(accounts) {
     assert.equal(sale.tokenChain, TEST_CHAIN_ID);
     assert.equal(sale.saleStart, SALE_START);
     assert.equal(sale.saleEnd, SALE_END);
+    assert.equal(sale.unlockTimestamp, SALE_END);
     assert.equal(
       sale.acceptedTokensAddresses[TOKEN_ONE_INDEX].substring(2),
       web3.eth.abi
@@ -1048,6 +1056,7 @@ contract("ICCO", function(accounts) {
 
     assert.equal(saleTimeframe.start, SALE_START);
     assert.equal(saleTimeframe.end, SALE_END);
+    assert.equal(saleTimeframe.unlockTimestamp, SALE_END);
 
     // verify getSaleStatus getter
     const saleStatus = await initialized.methods.getSaleStatus(SALE_ID).call();
@@ -1895,6 +1904,7 @@ contract("ICCO", function(accounts) {
     const refundRecipient = SALE_2_REFUND_RECIPIENT;
     const acceptedTokenLength = 2;
     const payloadIdType1 = "01";
+    const isFixedPriceSale = false;
 
     const initialized = new web3.eth.Contract(
       ConductorImplementationFullABI,
@@ -1905,6 +1915,7 @@ contract("ICCO", function(accounts) {
 
     // create array (struct) for sale params
     const saleParams = [
+      isFixedPriceSale,
       SOLD_TOKEN_BYTES32_ADDRESS,
       TEST_CHAIN_ID,
       saleTokenAmount,
@@ -1912,6 +1923,7 @@ contract("ICCO", function(accounts) {
       maximumTokenRaise,
       SALE_2_START,
       SALE_2_END,
+      SALE_2_END, // unlock timestamp
       saleRecipient,
       refundRecipient,
       SOLD_TOKEN_BYTES32_ADDRESS,
@@ -2054,10 +2066,14 @@ contract("ICCO", function(accounts) {
 
     // KYC authority public key
     assert.equal(
-      log.payload.substr(index, 64),
+      log.payload.substr(index, 40),
       web3.eth.abi.encodeParameter("address", KYC_AUTHORITY).substring(26)
     );
     index += 40;
+
+    // unlock timestamp
+    assert.equal(parseInt(log.payload.substr(index, 64), 16), SALE_2_END);
+    index += 64;
 
     assert.equal(log.payload.length, index);
     SALE_2_INIT_PAYLOAD = log.payload.toString();
@@ -2113,6 +2129,7 @@ contract("ICCO", function(accounts) {
     assert.equal(sale.tokenChain, TEST_CHAIN_ID);
     assert.equal(sale.saleStart, SALE_2_START);
     assert.equal(sale.saleEnd, SALE_2_END);
+    assert.equal(sale.unlockTimestamp, SALE_2_END);
     assert.equal(
       sale.acceptedTokensAddresses[TOKEN_ONE_INDEX].substring(2),
       web3.eth.abi
@@ -2179,6 +2196,7 @@ contract("ICCO", function(accounts) {
 
     assert.equal(saleTimeframe.start, SALE_2_START);
     assert.equal(saleTimeframe.end, SALE_2_END);
+    assert.equal(saleTimeframe.unlockTimestamp, SALE_2_END);
 
     // verify getSaleStatus getter
     const saleStatus = await initialized.methods
@@ -2497,10 +2515,12 @@ contract("ICCO", function(accounts) {
 
   let SALE_SEALED_PAYLOAD_2;
 
-  it("conductor should abort the second sale correctly", async function() {
+  it("conductor should abort the second sale and refund sale tokens correctly", async function() {
     // test variables
     const expectedContributorBalance = "600";
-    const expectedConductorBalance = "1000";
+    const expectedConductorBalanceBefore = "1000";
+    const expectedConductorBalanceAfter = "0";
+    const expectedRefundRecipientBalanceChange = "1000";
     const payloadIdType4 = "04";
 
     const initialized = new web3.eth.Contract(
@@ -2514,6 +2534,9 @@ contract("ICCO", function(accounts) {
     const actualConductorBalanceBefore = await SOLD_TOKEN.balanceOf(
       TokenSaleConductor.address
     );
+    const refundRecipientBalanceBefore = await SOLD_TOKEN.balanceOf(
+      SALE_2_REFUND_RECIPIENT
+    );
 
     // confirm that the sale is not aborted yet
     const saleBefore = await initialized.methods.sales(SALE_2_ID).call();
@@ -2523,7 +2546,7 @@ contract("ICCO", function(accounts) {
     // contributor balance is 500 before because of the reverted transaction
     // in "allocation should only be claimable once"
     assert.equal(actualContributorBalanceBefore, expectedContributorBalance);
-    assert.equal(actualConductorBalanceBefore, expectedConductorBalance);
+    assert.equal(actualConductorBalanceBefore, expectedConductorBalanceBefore);
 
     await initialized.methods.sealSale(SALE_2_ID).send({
       from: SELLER,
@@ -2537,10 +2560,23 @@ contract("ICCO", function(accounts) {
     const actualConductorBalanceAfter = await SOLD_TOKEN.balanceOf(
       TokenSaleConductor.address
     );
+    const refundRecipientBalanceAfter = await SOLD_TOKEN.balanceOf(
+      SALE_2_REFUND_RECIPIENT
+    );
 
-    // make sure balances haven't changed
+    // check balances after sealing the sale
     assert.equal(actualContributorBalanceAfter, expectedContributorBalance);
-    assert.equal(actualConductorBalanceAfter, expectedConductorBalance);
+    assert.equal(actualConductorBalanceAfter, expectedConductorBalanceAfter);
+    assert.equal(
+      parseInt(refundRecipientBalanceAfter) -
+        parseInt(refundRecipientBalanceBefore),
+      expectedRefundRecipientBalanceChange
+    );
+
+    // confirm that the sale is aborted
+    const saleAfter = await initialized.methods.sales(SALE_2_ID).call();
+
+    assert.ok(saleAfter.isAborted);
 
     const log = (
       await WORMHOLE.getPastEvents("LogMessagePublished", {
@@ -2563,10 +2599,15 @@ contract("ICCO", function(accounts) {
     );
     index += 64;
 
-    // confirm that the sale is aborted
-    const saleAfter = await initialized.methods.sales(SALE_2_ID).call();
-
-    assert.ok(saleAfter.isAborted);
+    // send refunded tokens back to SELLER account
+    await SOLD_TOKEN.approve(SELLER, expectedRefundRecipientBalanceChange, {
+      from: SALE_2_REFUND_RECIPIENT,
+    });
+    await SOLD_TOKEN.transferFrom(
+      SALE_2_REFUND_RECIPIENT,
+      SELLER,
+      expectedRefundRecipientBalanceChange
+    );
   });
 
   it("contributor should abort second sale correctly", async function() {
@@ -2608,67 +2649,6 @@ contract("ICCO", function(accounts) {
 
     assert.ok(statusAfter.isAborted);
     assert.ok(!statusAfter.isSealed);
-  });
-
-  it("conductor should distribute refund to refundRecipient correctly", async function() {
-    // test variables
-    const expectedConductorBalanceBefore = "1000";
-    const expectedSellerBalanceBefore = "0";
-    const expectedConductorBalanceAfter = "0";
-    const expectedSellerBalanceAfter = "1000";
-
-    const initialized = new web3.eth.Contract(
-      ConductorImplementationFullABI,
-      TokenSaleConductor.address
-    );
-
-    // confirm that refundIsClaimed is false
-    const saleBefore = await initialized.methods.sales(SALE_2_ID).call();
-
-    assert.ok(!saleBefore.refundIsClaimed);
-
-    // check starting balances
-    const actualConductorBalanceBefore = await SOLD_TOKEN.balanceOf(
-      TokenSaleConductor.address
-    );
-    const actualSellerBalanceBefore = await SOLD_TOKEN.balanceOf(
-      SALE_2_REFUND_RECIPIENT
-    );
-
-    assert.equal(actualConductorBalanceBefore, expectedConductorBalanceBefore);
-    assert.equal(actualSellerBalanceBefore, expectedSellerBalanceBefore);
-
-    // claim the sale token refund
-    await initialized.methods.claimRefund(SALE_2_ID).send({
-      from: BUYER_ONE, // confirm that it's permissionless
-      gasLimit: GAS_LIMIT,
-    });
-
-    // make sure new balances are correct
-    const actualConductorBalanceAfter = await SOLD_TOKEN.balanceOf(
-      TokenSaleConductor.address
-    );
-    const actualSellerBalanceAfter = await SOLD_TOKEN.balanceOf(
-      SALE_2_REFUND_RECIPIENT
-    );
-
-    assert.equal(actualConductorBalanceAfter, expectedConductorBalanceAfter);
-    assert.equal(actualSellerBalanceAfter, expectedSellerBalanceAfter);
-
-    // confirm that refundClaimed was set to true
-    const saleAfter = await initialized.methods.sales(SALE_2_ID).call();
-
-    assert.ok(saleAfter.refundIsClaimed);
-
-    // send refunded tokens back to SELLER account
-    await SOLD_TOKEN.approve(SELLER, actualSellerBalanceAfter, {
-      from: SALE_2_REFUND_RECIPIENT,
-    });
-    await SOLD_TOKEN.transferFrom(
-      SALE_2_REFUND_RECIPIENT,
-      SELLER,
-      actualSellerBalanceAfter
-    );
   });
 
   let ONE_REFUND_SNAPSHOT;
@@ -2835,30 +2815,6 @@ contract("ICCO", function(accounts) {
     assert.ok(failed);
   });
 
-  it("refund should only be claimable once in conductor", async function() {
-    const initialized = new web3.eth.Contract(
-      ConductorImplementationFullABI,
-      TokenSaleConductor.address
-    );
-
-    let failed = false;
-    try {
-      // claim the sale token refund
-      await initialized.methods.claimRefund(SALE_2_ID).send({
-        from: SELLER,
-        gasLimit: GAS_LIMIT,
-      });
-    } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert already claimed"
-      );
-      failed = true;
-    }
-
-    assert.ok(failed);
-  });
-
   let SALE_3_START;
   let SALE_3_END;
   let SALE_3_INIT_PAYLOAD;
@@ -2882,6 +2838,7 @@ contract("ICCO", function(accounts) {
     const refundRecipient = accounts[0];
     const acceptedTokenLength = 2;
     const payloadIdType1 = "01";
+    const isFixedPriceSale = false;
 
     const initialized = new web3.eth.Contract(
       ConductorImplementationFullABI,
@@ -2892,6 +2849,7 @@ contract("ICCO", function(accounts) {
 
     // create array (solidity struct) for sale params
     const saleParams = [
+      isFixedPriceSale,
       SOLD_TOKEN_BYTES32_ADDRESS,
       TEST_CHAIN_ID,
       saleTokenAmount,
@@ -2899,6 +2857,7 @@ contract("ICCO", function(accounts) {
       maximumTokenRaise,
       SALE_3_START,
       SALE_3_END,
+      SALE_3_END, // unlock timestamp
       saleRecipient,
       refundRecipient,
       SOLD_TOKEN_BYTES32_ADDRESS,
@@ -3041,10 +3000,14 @@ contract("ICCO", function(accounts) {
 
     // KYC authority public key
     assert.equal(
-      log.payload.substr(index, 64),
+      log.payload.substr(index, 40),
       web3.eth.abi.encodeParameter("address", KYC_AUTHORITY).substring(26)
     );
     index += 40;
+
+    // unlock timestamp
+    assert.equal(parseInt(log.payload.substr(index, 64), 16), SALE_3_END);
+    index += 64;
 
     assert.equal(log.payload.length, index);
     SALE_3_INIT_PAYLOAD = log.payload.toString();
@@ -3100,6 +3063,7 @@ contract("ICCO", function(accounts) {
     assert.equal(sale.tokenChain, TEST_CHAIN_ID);
     assert.equal(sale.saleStart, SALE_3_START);
     assert.equal(sale.saleEnd, SALE_3_END);
+    assert.equal(sale.unlockTimestamp, SALE_3_END);
     assert.equal(
       sale.acceptedTokensAddresses[TOKEN_ONE_INDEX].substring(2),
       web3.eth.abi
@@ -3166,6 +3130,7 @@ contract("ICCO", function(accounts) {
 
     assert.equal(saleTimeframe.start, SALE_3_START);
     assert.equal(saleTimeframe.end, SALE_3_END);
+    assert.equal(saleTimeframe.unlockTimestamp, SALE_3_END);
 
     // verify getSaleStatus getter
     const saleStatus = await initialized.methods
@@ -3178,9 +3143,11 @@ contract("ICCO", function(accounts) {
 
   let SALE_SEALED_PAYLOAD_3;
 
-  it("conductor should abort sale before the third sale starts", async function() {
+  it("conductor should abort sale before the third sale starts and refund the refundRecipient", async function() {
     // test variables
     const payloadIdType4 = "04";
+    const refundRecipient = accounts[0];
+    const expectedRefundRecipientBalanceChange = "1000";
 
     const initialized = new web3.eth.Contract(
       ConductorImplementationFullABI,
@@ -3211,12 +3178,35 @@ contract("ICCO", function(accounts) {
 
     assert.ok(failed);
 
+    // balance check before aborting the sale
+    const refundRecipientBalanceBefore = await SOLD_TOKEN.balanceOf(
+      refundRecipient
+    );
+
     // abort the sale
     await initialized.methods.abortSaleBeforeStartTime(SALE_3_ID).send({
       from: SELLER, // must be the sale initiator (msg.sender in createSale())
       value: WORMHOLE_FEE,
       gasLimit: GAS_LIMIT,
     });
+
+    // balance check after aborting the sale
+    const refundRecipientBalanceAfter = await SOLD_TOKEN.balanceOf(
+      refundRecipient
+    );
+
+    // confirm that the refundRecipient recieved the sale tokens
+    assert.equal(
+      parseInt(refundRecipientBalanceAfter) -
+        parseInt(refundRecipientBalanceBefore),
+      expectedRefundRecipientBalanceChange
+    );
+
+    // verify getSaleStatus getter after aborting
+    const saleStatusAfter = await initialized.methods.sales(SALE_3_ID).call();
+
+    assert.ok(!saleStatusAfter.isSealed);
+    assert.ok(saleStatusAfter.isAborted);
 
     // grab VAA so contributor can abort the sale
     const log = (
@@ -3239,12 +3229,6 @@ contract("ICCO", function(accounts) {
       SALE_3_ID
     );
     index += 64;
-
-    // verify getSaleStatus getter after aborting
-    const saleStatusAfter = await initialized.methods.sales(SALE_3_ID).call();
-
-    assert.ok(!saleStatusAfter.isSealed);
-    assert.ok(saleStatusAfter.isAborted);
   });
 
   it("should accept contributions after sale period starts and before aborting the sale (block timestamps out of sync test)", async function() {
@@ -3462,53 +3446,6 @@ contract("ICCO", function(accounts) {
     assert.ok(failed);
   });
 
-  it("conductor should distribute refund to refundRecipient correctly after sale is aborted early", async function() {
-    // test variables
-    const expectedConductorBalanceBefore = "1000";
-    const expectedSellerBalanceBefore = "0";
-    const expectedConductorBalanceAfter = "0";
-    const expectedSellerBalanceAfter = "1000";
-
-    const initialized = new web3.eth.Contract(
-      ConductorImplementationFullABI,
-      TokenSaleConductor.address
-    );
-
-    // confirm that refundIsClaimed is false
-    const saleBefore = await initialized.methods.sales(SALE_3_ID).call();
-
-    assert.ok(!saleBefore.refundIsClaimed);
-
-    // check starting balances
-    const actualConductorBalanceBefore = await SOLD_TOKEN.balanceOf(
-      TokenSaleConductor.address
-    );
-    const actualSellerBalanceBefore = await SOLD_TOKEN.balanceOf(SELLER);
-
-    assert.equal(actualConductorBalanceBefore, expectedConductorBalanceBefore);
-    assert.equal(actualSellerBalanceBefore, expectedSellerBalanceBefore);
-
-    // claim the sale token refund
-    await initialized.methods.claimRefund(SALE_3_ID).send({
-      from: SELLER,
-      gasLimit: GAS_LIMIT,
-    });
-
-    // make sure new balances are correct
-    const actualConductorBalanceAfter = await SOLD_TOKEN.balanceOf(
-      TokenSaleConductor.address
-    );
-    const actualSellerBalanceAfter = await SOLD_TOKEN.balanceOf(SELLER);
-
-    assert.equal(actualConductorBalanceAfter, expectedConductorBalanceAfter);
-    assert.equal(actualSellerBalanceAfter, expectedSellerBalanceAfter);
-
-    // confirm that refundClaimed was set to true
-    const saleAfter = await initialized.methods.sales(SALE_3_ID).call();
-
-    assert.ok(saleAfter.refundIsClaimed);
-  });
-
   it("contributor should distribute refunds to contributors correctly after sale is aborted early", async function() {
     // test variables
     const expectedContributorTokenOneBalanceBefore = "100"; // 100 contributed
@@ -3635,6 +3572,7 @@ contract("ICCO", function(accounts) {
     const acceptedTokenLength = 2;
     const payloadIdType1 = "01";
     const saleTokenMintAmount = "2000";
+    const isFixedPriceSale = true;
 
     // mint some more sale tokens
     await SOLD_TOKEN.mint(SELLER, saleTokenMintAmount);
@@ -3647,6 +3585,7 @@ contract("ICCO", function(accounts) {
 
     // create array (struct) for sale params
     const saleParams = [
+      isFixedPriceSale, // set this to true for fun (shouldn't affect the sale outcome)
       SOLD_TOKEN_BYTES32_ADDRESS,
       TEST_CHAIN_ID,
       saleTokenAmount,
@@ -3654,6 +3593,7 @@ contract("ICCO", function(accounts) {
       maximumTokenRaise,
       SALE_4_START,
       SALE_4_END,
+      SALE_4_END, // unlock timestamp
       saleRecipient,
       refundRecipient,
       SOLD_TOKEN_BYTES32_ADDRESS,
@@ -3798,10 +3738,14 @@ contract("ICCO", function(accounts) {
 
     // KYC authority public key
     assert.equal(
-      log.payload.substr(index, 64),
+      log.payload.substr(index, 40),
       web3.eth.abi.encodeParameter("address", KYC_AUTHORITY).substring(26)
     );
     index += 40;
+
+    // unlock timestamp
+    assert.equal(parseInt(log.payload.substr(index, 64), 16), SALE_4_END);
+    index += 64;
 
     assert.equal(log.payload.length, index);
     SALE_4_INIT_PAYLOAD = log.payload.toString();
@@ -3857,6 +3801,7 @@ contract("ICCO", function(accounts) {
     assert.equal(sale.tokenChain, TEST_CHAIN_ID);
     assert.equal(sale.saleStart, SALE_4_START);
     assert.equal(sale.saleEnd, SALE_4_END);
+    assert.equal(sale.unlockTimestamp, SALE_4_END);
     assert.equal(
       sale.acceptedTokensAddresses[TOKEN_ONE_INDEX].substring(2),
       web3.eth.abi
@@ -3923,6 +3868,7 @@ contract("ICCO", function(accounts) {
 
     assert.equal(saleTimeframe.start, SALE_4_START);
     assert.equal(saleTimeframe.end, SALE_4_END);
+    assert.equal(saleTimeframe.unlockTimestamp, SALE_4_END);
 
     // verify getSaleStatus getter
     const saleStatus = await initialized.methods
@@ -4563,6 +4509,7 @@ contract("ICCO", function(accounts) {
     const saleRecipient = accounts[0];
     const refundRecipient = accounts[0];
     const payloadIdType5 = "05";
+    const isFixedPriceSale = false;
     const solanaAcceptedTokensLength = 2;
     SOLANA_TOKEN_INDEX_ONE = "01";
     SOLANA_TOKEN_INDEX_TWO = "02";
@@ -4591,6 +4538,7 @@ contract("ICCO", function(accounts) {
 
     // create array (struct) for sale params
     const saleParams = [
+      isFixedPriceSale,
       SOLD_TOKEN_BYTES32_ADDRESS,
       TEST_CHAIN_ID,
       saleTokenAmount,
@@ -4598,6 +4546,7 @@ contract("ICCO", function(accounts) {
       maximumTokenRaise,
       SALE_5_START,
       SALE_5_END,
+      SALE_5_END, // unlock timestamp
       saleRecipient,
       refundRecipient,
       SOLD_TOKEN_BYTES32_ADDRESS,
@@ -4763,10 +4712,14 @@ contract("ICCO", function(accounts) {
 
     // KYC authority public key
     assert.equal(
-      log.payload.substr(index, 64),
+      log.payload.substr(index, 40),
       web3.eth.abi.encodeParameter("address", KYC_AUTHORITY).substring(26)
     );
     index += 40;
+
+    // unlock timestamp
+    assert.equal(parseInt(log.payload.substr(index, 64), 16), SALE_5_END);
+    index += 64;
 
     assert.equal(log.payload.length, index);
 
@@ -5067,6 +5020,406 @@ contract("ICCO", function(accounts) {
     ethereumIndex += 64;
   });
 
+  // more global sale test variables
+  let SALE_6_START;
+  let SALE_6_END;
+  let SALE_6_ID;
+  let SALE_6_REFUND_RECIPIENT;
+
+  it("create and init sixth sale correctly", async function() {
+    console.log(
+      "\n       -------------------------- Sale Test #6 (Successful Fixed Price Sale With Locked Allocations) --------------------------"
+    );
+
+    // test variables
+    const current_block = await web3.eth.getBlock("latest");
+    SALE_6_START = current_block.timestamp + 5;
+    SALE_6_END = SALE_6_START + 8;
+    SALE_6_UNLOCK_TIMESTAMP = SALE_6_END + 30; // time when tokens can be claimed by contributors
+    SALE_6_REFUND_RECIPIENT = accounts[1];
+    const saleTokenAmount = "10000";
+    const minimumTokenRaise = "2000";
+    const maximumTokenRaise = "10000";
+    const tokenOneConversionRate = "1000000000000000000";
+    const tokenTwoConversionRate = "2000000000000000000";
+    const saleRecipient = accounts[0];
+    const isFixedPriceSale = true;
+
+    // mint some more sale tokens
+    await SOLD_TOKEN.mint(SELLER, saleTokenAmount);
+    await SOLD_TOKEN.approve(TokenSaleConductor.address, saleTokenAmount);
+
+    const initializedConductor = new web3.eth.Contract(
+      ConductorImplementationFullABI,
+      TokenSaleConductor.address
+    );
+    const initializedContributor = new web3.eth.Contract(
+      ContributorImplementationFullABI,
+      TokenSaleContributor.address
+    );
+
+    // create array (struct) for sale params
+    const saleParams = [
+      isFixedPriceSale,
+      SOLD_TOKEN_BYTES32_ADDRESS,
+      TEST_CHAIN_ID,
+      saleTokenAmount,
+      minimumTokenRaise,
+      maximumTokenRaise,
+      SALE_6_START,
+      SALE_6_END,
+      SALE_6_UNLOCK_TIMESTAMP,
+      saleRecipient,
+      SALE_6_REFUND_RECIPIENT,
+      SOLD_TOKEN_BYTES32_ADDRESS,
+      KYC_AUTHORITY,
+    ];
+
+    // create accepted tokens array
+    const acceptedTokens = [
+      [
+        TEST_CHAIN_ID,
+        "0x000000000000000000000000" + CONTRIBUTED_TOKEN_ONE.address.substr(2),
+        tokenOneConversionRate,
+      ],
+      [
+        TEST_CHAIN_ID,
+        "0x000000000000000000000000" + CONTRIBUTED_TOKEN_TWO.address.substr(2),
+        tokenTwoConversionRate,
+      ],
+    ];
+
+    // create the sale
+    await initializedConductor.methods
+      .createSale(saleParams, acceptedTokens)
+      .send({
+        value: WORMHOLE_FEE * 1,
+        from: SELLER,
+        gasLimit: GAS_LIMIT,
+      });
+
+    SALE_6_ID = SALE_5_ID + 1;
+
+    const log = (
+      await WORMHOLE.getPastEvents("LogMessagePublished", {
+        fromBlock: "latest",
+      })
+    )[0].returnValues;
+
+    // create initSale VM
+    const vm = await signAndEncodeVM(
+      1,
+      1,
+      TEST_CHAIN_ID,
+      "0x000000000000000000000000" + TokenSaleConductor.address.substr(2),
+      0,
+      log.payload.toString(),
+      [testSigner1PK],
+      0,
+      0
+    );
+
+    // init the sale
+    await initializedContributor.methods.initSale("0x" + vm).send({
+      from: SELLER,
+      gasLimit: GAS_LIMIT,
+    });
+
+    // verify getSaleTimeFrame getter
+    const saleTimeframe = await initializedContributor.methods
+      .getSaleTimeframe(SALE_6_ID)
+      .call();
+
+    assert.equal(saleTimeframe.start, SALE_6_START);
+    assert.equal(saleTimeframe.end, SALE_6_END);
+    assert.equal(saleTimeframe.unlockTimestamp, SALE_6_UNLOCK_TIMESTAMP);
+  });
+
+  it("should accept contributions in the contributor during the sixth sale timeframe", async function() {
+    await wait(5);
+
+    // test variables
+    const tokenOneContributionAmount = "6000";
+    const tokenTwoContributionAmount = "1000";
+
+    const initialized = new web3.eth.Contract(
+      ContributorImplementationFullABI,
+      TokenSaleContributor.address
+    );
+
+    // approve contribution amounts
+    await CONTRIBUTED_TOKEN_ONE.approve(
+      TokenSaleContributor.address,
+      tokenOneContributionAmount,
+      {
+        from: BUYER_ONE,
+      }
+    );
+    await CONTRIBUTED_TOKEN_TWO.approve(
+      TokenSaleContributor.address,
+      tokenTwoContributionAmount,
+      {
+        from: BUYER_TWO,
+      }
+    );
+
+    // perform "kyc" and contribute to the token sale for BUYER_ONE
+    const kycSig1 = await signContribution(
+      CONDUCTOR_BYTES32_ADDRESS,
+      SALE_6_ID,
+      TOKEN_ONE_INDEX,
+      tokenOneContributionAmount,
+      BUYER_ONE,
+      kycSignerPK
+    );
+    await initialized.methods
+      .contribute(
+        SALE_6_ID,
+        TOKEN_ONE_INDEX,
+        tokenOneContributionAmount,
+        kycSig1
+      )
+      .send({
+        from: BUYER_ONE,
+        gasLimit: GAS_LIMIT,
+      });
+
+    const kycSig2 = await signContribution(
+      CONDUCTOR_BYTES32_ADDRESS,
+      SALE_6_ID,
+      TOKEN_TWO_INDEX,
+      tokenTwoContributionAmount,
+      BUYER_TWO,
+      kycSignerPK
+    );
+    await initialized.methods
+      .contribute(
+        SALE_6_ID,
+        TOKEN_TWO_INDEX,
+        tokenTwoContributionAmount,
+        kycSig2
+      )
+      .send({
+        from: BUYER_TWO,
+        gasLimit: GAS_LIMIT,
+      });
+  });
+
+  it("conductor and contributor should attest contributions and seal the sixth sale correctly", async function() {
+    await wait(10);
+
+    // test variables
+    const expectedTokenOneAllocation = "6000"; // 75% of what is allocated
+    const expectedTokenTwoAllocation = "2000"; // 25% of what is allocated
+    const expectedExcessContributions = "0"; // for both tokens
+    const expectedSaleTokenRefund = "2000"; // sale token refund to refundRecipient
+    const tokenOneContributionAmount = "6000";
+    const tokenTwoContributionAmount = "1000";
+
+    const initializedConductor = new web3.eth.Contract(
+      ConductorImplementationFullABI,
+      TokenSaleConductor.address
+    );
+    const initializedContributor = new web3.eth.Contract(
+      ContributorImplementationFullABI,
+      TokenSaleContributor.address
+    );
+
+    // fetch the sale token balance of the refund recipient before sealing the sale
+    const refundRecipientSaleTokenBalanceBefore = await SOLD_TOKEN.balanceOf(
+      SALE_6_REFUND_RECIPIENT
+    );
+    const recipientTokenOneBalanceBefore = await CONTRIBUTED_TOKEN_ONE.balanceOf(
+      SELLER
+    );
+    const recipientTokenTwoBalanceBefore = await CONTRIBUTED_TOKEN_TWO.balanceOf(
+      SELLER
+    );
+
+    // attest contributions
+    await initializedContributor.methods.attestContributions(SALE_6_ID).send({
+      from: BUYER_ONE,
+      value: WORMHOLE_FEE,
+      gasLimit: GAS_LIMIT,
+    });
+
+    // grab the message generated by the conductor
+    const log = (
+      await WORMHOLE.getPastEvents("LogMessagePublished", {
+        fromBlock: "latest",
+      })
+    )[0].returnValues;
+
+    // create the vaa to initialize the sale
+    const vm = await signAndEncodeVM(
+      1,
+      1,
+      TEST_CHAIN_ID,
+      "0x000000000000000000000000" + TokenSaleContributor.address.substr(2),
+      0,
+      log.payload.toString(),
+      [testSigner1PK],
+      0,
+      0
+    );
+
+    // attest contributions
+    await initializedConductor.methods.collectContribution("0x" + vm).send({
+      from: BUYER_ONE,
+      gasLimit: GAS_LIMIT,
+    });
+
+    // seal the sale in the conductor and check allocation details
+    await initializedConductor.methods.sealSale(SALE_6_ID).send({
+      from: SELLER,
+      value: WORMHOLE_FEE,
+      gasLimit: GAS_LIMIT,
+    });
+
+    // grab the message generated by the conductor
+    const log2 = (
+      await WORMHOLE.getPastEvents("LogMessagePublished", {
+        fromBlock: "latest",
+      })
+    )[0].returnValues;
+
+    // create the vaa to initialize the sale
+    const vm2 = await signAndEncodeVM(
+      1,
+      1,
+      TEST_CHAIN_ID,
+      "0x000000000000000000000000" + TokenSaleConductor.address.substr(2),
+      0,
+      log2.payload.toString(),
+      [testSigner1PK],
+      0,
+      0
+    );
+
+    // seal the sale in the contributor
+    await initializedContributor.methods.saleSealed("0x" + vm2).send({
+      from: SELLER,
+      gasLimit: GAS_LIMIT,
+    });
+
+    // verify that the saleRecipient received the sale token refund
+    // fetch the sale token balance of the refund recipient after sealing the sale
+    const refundRecipientSaleTokenBalanceAfter = await SOLD_TOKEN.balanceOf(
+      SALE_6_REFUND_RECIPIENT
+    );
+
+    assert.equal(
+      parseInt(refundRecipientSaleTokenBalanceAfter) -
+        parseInt(refundRecipientSaleTokenBalanceBefore),
+      expectedSaleTokenRefund
+    );
+
+    // verify that the allocations/excessContributions are correct based on the fixedPrice calculations
+    const tokenOneAllocation = await initializedContributor.methods
+      .getSaleAllocation(SALE_6_ID, TOKEN_ONE_INDEX)
+      .call();
+    const tokenTwoAllocation = await initializedContributor.methods
+      .getSaleAllocation(SALE_6_ID, TOKEN_TWO_INDEX)
+      .call();
+
+    const tokenOneExcessContribution = await initializedContributor.methods
+      .getSaleExcessContribution(SALE_6_ID, TOKEN_ONE_INDEX)
+      .call();
+    const tokenTwoExcessContribution = await initializedContributor.methods
+      .getSaleExcessContribution(SALE_6_ID, TOKEN_TWO_INDEX)
+      .call();
+
+    assert.equal(tokenOneAllocation, expectedTokenOneAllocation);
+    assert.equal(tokenTwoAllocation, expectedTokenTwoAllocation);
+    assert.equal(tokenOneExcessContribution, expectedExcessContributions);
+    assert.equal(tokenTwoExcessContribution, expectedExcessContributions);
+
+    // confirm that the sale recipient received the contributed tokens
+    const recipientTokenOneBalanceAfter = await CONTRIBUTED_TOKEN_ONE.balanceOf(
+      SELLER
+    );
+    const recipientTokenTwoBalanceAfter = await CONTRIBUTED_TOKEN_TWO.balanceOf(
+      SELLER
+    );
+
+    assert.equal(
+      parseInt(recipientTokenOneBalanceAfter) -
+        parseInt(recipientTokenOneBalanceBefore),
+      tokenOneContributionAmount
+    );
+    assert.equal(
+      parseInt(recipientTokenTwoBalanceAfter) -
+        parseInt(recipientTokenTwoBalanceBefore),
+      tokenTwoContributionAmount
+    );
+  });
+
+  it("contributor should not distribute tokens before the unlock time", async function() {
+    const initialized = new web3.eth.Contract(
+      ContributorImplementationFullABI,
+      TokenSaleContributor.address
+    );
+
+    let failed = false;
+    try {
+      await initialized.methods
+        .claimAllocation(SALE_6_ID, TOKEN_TWO_INDEX)
+        .send({
+          from: BUYER_TWO,
+          gasLimit: GAS_LIMIT,
+        });
+    } catch (e) {
+      assert.equal(
+        e.message,
+        "Returned error: VM Exception while processing transaction: revert tokens have not been unlocked"
+      );
+      failed = true;
+    }
+
+    assert.ok(failed);
+  });
+
+  it("contributor should distribute tokens after the unlock time", async function() {
+    // wait for tokens to unlock
+    await wait(30);
+
+    // test variables
+    const expectedBuyerOneAllocation = "6000"; // 75% of what is allocated
+    const expectedBuyerTwoAllocation = "2000"; // 25% of what is allocated
+
+    const initialized = new web3.eth.Contract(
+      ContributorImplementationFullABI,
+      TokenSaleContributor.address
+    );
+
+    // check balances before claiming tokens
+    const buyerOneBalanceBefore = await SOLD_TOKEN.balanceOf(BUYER_ONE);
+    const buyerTwoBalanceBefore = await SOLD_TOKEN.balanceOf(BUYER_TWO);
+
+    // claim both allocations
+    await initialized.methods.claimAllocation(SALE_6_ID, TOKEN_ONE_INDEX).send({
+      from: BUYER_ONE,
+      gasLimit: GAS_LIMIT,
+    });
+    await initialized.methods.claimAllocation(SALE_6_ID, TOKEN_TWO_INDEX).send({
+      from: BUYER_TWO,
+      gasLimit: GAS_LIMIT,
+    });
+
+    // check balances after claiming tokens and make sure allocations are distributed correctly
+    const buyerOneBalanceAfter = await SOLD_TOKEN.balanceOf(BUYER_ONE);
+    const buyerTwoBalanceAfter = await SOLD_TOKEN.balanceOf(BUYER_TWO);
+
+    assert.equal(
+      parseInt(buyerOneBalanceAfter) - parseInt(buyerOneBalanceBefore),
+      expectedBuyerOneAllocation
+    );
+    assert.equal(
+      parseInt(buyerTwoBalanceAfter) - parseInt(buyerTwoBalanceBefore),
+      expectedBuyerTwoAllocation
+    );
+  });
+
   it("conductor should not allow a sale to abort after the sale start time", async function() {
     console.log(
       "\n       -------------------------- Other Tests --------------------------"
@@ -5082,23 +5435,27 @@ contract("ICCO", function(accounts) {
     const tokenTwoConversionRate = "2000000000000000000";
     const saleRecipient = accounts[0];
     const refundRecipient = accounts[0];
-    const saleId = 5;
+    const isFixedPriceSale = false;
 
     const initialized = new web3.eth.Contract(
       ConductorImplementationFullABI,
       TokenSaleConductor.address
     );
 
+    const saleId = await initialized.methods.getNextSaleId().call();
+
     await SOLD_TOKEN.approve(TokenSaleConductor.address, saleTokenAmount);
 
     // create array (solidity struct) for sale params
     const saleParams = [
+      isFixedPriceSale,
       SOLD_TOKEN_BYTES32_ADDRESS,
       TEST_CHAIN_ID,
       saleTokenAmount,
       minimumTokenRaise,
       maximumTokenRaise,
       saleStart,
+      saleEnd,
       saleEnd,
       saleRecipient,
       refundRecipient,
@@ -5165,6 +5522,7 @@ contract("ICCO", function(accounts) {
     const tokenSequence = 0; // set to 0 for the test
     const tokenChainId = 0; // set to 0 for the test
     const nativeContractAddress = "0x00"; // set to 0 for the test
+    const isFixedPriceSale = false;
 
     const initializedConductor = new web3.eth.Contract(
       ConductorImplementationFullABI,
@@ -5197,12 +5555,14 @@ contract("ICCO", function(accounts) {
 
     // create array (solidity struct) for sale params
     const saleParams = [
+      isFixedPriceSale,
       soldTokenBytes32,
       TEST_CHAIN_ID,
       saleTokenAmount,
       minimumTokenRaise,
       maximumTokenRaise,
       saleStart,
+      saleEnd,
       saleEnd,
       saleRecipient,
       refundRecipient,
@@ -5288,6 +5648,7 @@ contract("ICCO", function(accounts) {
     const tokenSequence = 0; // set to 0 for the test
     const tokenChainId = 0; // set to 0 for the test
     const nativeContractAddress = "0x00"; // set to 0 for the test
+    const isFixedPriceSale = false;
 
     const initialized = new web3.eth.Contract(
       ConductorImplementationFullABI,
@@ -5316,12 +5677,14 @@ contract("ICCO", function(accounts) {
 
     // create array (solidity struct) for sale params
     const saleParams = [
+      isFixedPriceSale,
       soldTokenBytes32,
       TEST_CHAIN_ID,
       saleTokenAmount,
       minimumTokenRaise,
       maximumTokenRaise,
       saleStart,
+      saleEnd,
       saleEnd,
       saleRecipient,
       refundRecipient,
@@ -5377,6 +5740,7 @@ contract("ICCO", function(accounts) {
     const tokenSequence = 0; // set to 0 for the test
     const tokenChainId = 0; // set to 0 for the test
     const nativeContractAddress = "0x00"; // set to 0 for the test
+    const isFixedPriceSale = false;
 
     const initialized = new web3.eth.Contract(
       ConductorImplementationFullABI,
@@ -5405,12 +5769,14 @@ contract("ICCO", function(accounts) {
 
     // create array (solidity struct) for sale params
     const saleParams = [
+      isFixedPriceSale,
       soldTokenBytes32,
       TEST_CHAIN_ID,
       saleTokenAmount,
       minimumTokenRaise,
       maximumTokenRaise,
       saleStart,
+      saleEnd,
       saleEnd,
       saleRecipient,
       refundRecipient,
@@ -5462,6 +5828,7 @@ contract("ICCO", function(accounts) {
     const tokenSequence = 0; // set to 0 for the test
     const tokenChainId = 0; // set to 0 for the test
     const nativeContractAddress = "0x00"; // set to 0 for the test
+    const isFixedPriceSale = false;
 
     // expected output
     const expectedAllocation = saleTokenAmount;
@@ -5503,12 +5870,14 @@ contract("ICCO", function(accounts) {
 
     // create array (solidity struct) for sale params
     const saleParams = [
+      isFixedPriceSale,
       soldTokenBytes32,
       TEST_CHAIN_ID,
       saleTokenAmount,
       minimumTokenRaise,
       maximumTokenRaise,
       saleStart,
+      saleEnd,
       saleEnd,
       saleRecipient,
       refundRecipient,
@@ -5571,6 +5940,9 @@ contract("ICCO", function(accounts) {
         from: BUYER_ONE,
       }
     );
+
+    // mint some more tokens to contribute with
+    await CONTRIBUTED_TOKEN_ONE.mint(BUYER_ONE, maximumTokenRaise);
 
     // perform "kyc" and contribute tokens to the sale for BUYER_ONE
     const kycSig1 = await signContribution(

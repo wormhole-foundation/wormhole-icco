@@ -35,6 +35,8 @@ library ICCOStructs {
     }
 
     struct Raise {
+        /// fixed-price sale boolean
+        bool isFixedPrice;
         /// sale token address
         bytes32 token;
         /// sale token chainId
@@ -49,6 +51,8 @@ library ICCOStructs {
         uint256 saleStart;
         /// timestamp raise end
         uint256 saleEnd;
+        /// unlock timestamp (when tokens can be claimed)
+        uint256 unlockTimestamp;
         /// recipient of proceeds
         address recipient;
         /// refund recipient in cse the sale is aborted
@@ -56,7 +60,7 @@ library ICCOStructs {
         /// sale token ATA for Solana
         bytes32 solanaTokenAccount;
         /// public key of kyc authority 
-        address authority;
+        address authority; 
     }
 
     struct SaleInit {
@@ -80,6 +84,8 @@ library ICCOStructs {
         bytes32 recipient;
         /// public key of kyc authority 
         address authority;
+        /// unlock timestamp (when tokens can be claimed)
+        uint256 unlockTimestamp;
     }
 
     struct SolanaSaleInit {
@@ -103,6 +109,8 @@ library ICCOStructs {
         bytes32 recipient;
         /// public key of kyc authority 
         address authority;
+        /// unlock timestamp (when tokens can be claimed)
+        uint256 unlockTimestamp;
     }
 
     struct ContributionsSealed {
@@ -157,7 +165,8 @@ library ICCOStructs {
             saleInit.saleEnd,
             encodeTokens(saleInit.acceptedTokens),
             saleInit.recipient,
-            saleInit.authority
+            saleInit.authority,
+            saleInit.unlockTimestamp
         );
     }
 
@@ -172,7 +181,8 @@ library ICCOStructs {
             solanaSaleInit.saleEnd,
             encodeSolanaTokens(solanaSaleInit.acceptedTokens),
             solanaSaleInit.recipient,
-            solanaSaleInit.authority
+            solanaSaleInit.authority,
+            solanaSaleInit.unlockTimestamp
         );
     }
 
@@ -211,6 +221,9 @@ library ICCOStructs {
 
         saleInit.authority = encoded.toAddress(index);
         index += 20;
+
+        saleInit.unlockTimestamp = encoded.toUint256(index);
+        index += 32;
 
         require(encoded.length == index, "invalid SaleInit");
     }

@@ -54,6 +54,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
             tokenDecimals: saleInit.tokenDecimals,
             saleStart : saleInit.saleStart,
             saleEnd : saleInit.saleEnd,
+            unlockTimestamp : saleInit.unlockTimestamp,
             acceptedTokensChains : new uint16[](saleInit.acceptedTokens.length),
             acceptedTokensAddresses : new bytes32[](saleInit.acceptedTokens.length),
             acceptedTokensConversionRates : new uint128[](saleInit.acceptedTokens.length),
@@ -92,7 +93,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
      * - it computes the keccak256 hash of data passed by the client
      * - it recovers the KYC authority key from the hashed data and signature
      */ 
-    function verifySignature(bytes memory encodedHashData, bytes memory sig, address authority) public view returns (bool) {
+    function verifySignature(bytes memory encodedHashData, bytes memory sig, address authority) public pure returns (bool) {
         require(sig.length == 65, "incorrect signature length"); 
         require(encodedHashData.length > 0, "no hash data");
 
@@ -137,7 +138,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
 
             require(!isAborted, "sale was aborted");
 
-            (uint256 start, uint256 end) = getSaleTimeframe(saleId);
+            (uint256 start, uint256 end, ) = getSaleTimeframe(saleId);
 
             require(block.timestamp >= start, "sale not yet started");
             require(block.timestamp <= end, "sale has ended");
@@ -392,16 +393,21 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
      * - it transfers sale tokens to the contributor's wallet
      * - it transfer any excessContributions to the contributor's wallet
      * - it marks the allocation as claimed to prevent multiple claims for the same allocation
+     * - it only distributes tokens once the unlock period has ended
      */
     function claimAllocation(uint256 saleId, uint256 tokenIndex) public {
         require(saleExists(saleId), "sale not initiated");
 
         /// make sure the sale is sealed and not aborted
         (bool isSealed, bool isAborted) = getSaleStatus(saleId);
+        (, , uint256 unlockTimestamp) = getSaleTimeframe(saleId);
 
         require(!isAborted, "token sale is aborted");
-        require(isSealed, "token sale is not yet sealed"); 
-        require(!allocationIsClaimed(saleId, tokenIndex, msg.sender), "allocation already claimed");
+        require(isSealed, "token sale is not yet sealed");
+        require(!allocationIsClaimed(saleId, tokenIndex, msg.sender), "allocation already claimed"); 
+
+        /// @dev contributors can only claim after the unlock timestamp
+        require(block.timestamp >= unlockTimestamp, "tokens have not been unlocked");
 
         /// make sure the contributor is claiming on the right chain
         (uint16 contributedTokenChainId, , ) = getSaleAcceptedTokenInfo(saleId, tokenIndex);
@@ -411,7 +417,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
         /// set the allocation claimed - also serves as reentrancy protection
         setAllocationClaimed(saleId, tokenIndex, msg.sender);
 
-        ContributorStructs.Sale memory sale = sales(saleId);
+        ContributorStructs.Sale memory sale = sales(saleId); 
 
         /**
          * @dev Cache contribution variables since they're used to calculate

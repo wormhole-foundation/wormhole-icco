@@ -104,6 +104,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
         /// validate sale parameters from client
         require(block.timestamp < raise.saleStart, "sale start must be in the future");
         require(raise.saleStart < raise.saleEnd, "sale end must be after sale start");
+        require(raise.unlockTimestamp >= raise.saleEnd, "unlock timestamp should be >= saleEnd");
         /// set timestamp cap for non-evm Contributor contracts
         require(raise.saleStart <= 2**63-1, "saleStart too far in the future");
         require(raise.tokenAmount > 0, "amount must be > 0");
@@ -129,6 +130,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
             maxRaise: raise.maxRaise,
             saleStart : raise.saleStart,
             saleEnd : raise.saleEnd,
+            unlockTimestamp : raise.unlockTimestamp,
             /// save accepted token info
             acceptedTokensChains : new uint16[](acceptedTokens.length),
             acceptedTokensAddresses : new bytes32[](acceptedTokens.length),
@@ -145,7 +147,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
             /// sale identifiers
             isSealed :  false,
             isAborted : false,
-            refundIsClaimed : false
+            isFixedPrice : raise.isFixedPrice
         });
 
         /// populate the accepted token arrays
@@ -198,7 +200,9 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
             /// recipient of proceeds
             recipient : bytes32(uint256(uint160(raise.recipient))),
             /// public key of kyc authority 
-            authority: raise.authority
+            authority : raise.authority,
+            /// lock timestamp (when tokens can be claimed)
+            unlockTimestamp : raise.unlockTimestamp
         }); 
 
         /// @dev send encoded SaleInit struct to Contributors via wormhole.        
@@ -228,7 +232,9 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
                 /// recipient of proceeds
                 recipient : bytes32(uint256(uint160(raise.recipient))),
                 /// public key of kyc authority 
-                authority: raise.authority
+                authority: raise.authority,
+                /// lock timestamp (when tokens can be claimed)
+                unlockTimestamp : raise.unlockTimestamp
             });
 
             /// @dev send encoded SolanaSaleInit struct to the solana Contributor
@@ -247,6 +253,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
      * - it confirms that the sale has not started
      * - it only allows the sale initiator to invoke the method
      * - it encodes and disseminates a saleAborted message to the Contributor contracts
+     * - it refunds the sale tokens to the refundRecipient
      */    
     function abortSaleBeforeStartTime(uint256 saleId) public payable returns (uint256 wormholeSequence) {
         require(saleExists(saleId), "sale not initiated");
@@ -271,6 +278,13 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
             payloadID : 4,
             saleID : saleId
         })), consistencyLevel());
+
+        /// @dev refund the sale tokens to refund recipient
+        SafeERC20.safeTransfer(
+            IERC20(sale.localTokenAddress), 
+            address(uint160(uint256(sale.refundRecipient))), 
+            sale.tokenAmount 
+        );
     }
 
     /**
@@ -346,16 +360,22 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
 
             /// set the messageFee and valueSent values 
             accounting.messageFee = wormhole.messageFee();
-            accounting.valueSent = msg.value;    
+            accounting.valueSent = msg.value;   
 
             /**
-             * @dev This determines if contributors qualify for refund payments.
+             * @dev This determines if contributors (or the sale initiator) qualify for refund payments.
              * - the default value for accounting.excessContribution is zero
-             * - the difference between maxRaise and totalContribution is the total
-             * reward due to contributors. 
+             * - if totalContribution > maxRaise, the difference between maxRaise and totalContribution 
+             * is the total reward due to contributors
+             * - if the totalContribution < maxRaise or the isFixedPrice flag is set to true, 
+             * the saleRecipient will receive a partial refund of the sale token
              */
+
+            accounting.adjustedSaleTokenAmount = sale.tokenAmount; 
             if (accounting.totalContribution > sale.maxRaise) {
                 accounting.totalExcessContribution = accounting.totalContribution - sale.maxRaise;
+            } else if (sale.isFixedPrice) {
+                accounting.adjustedSaleTokenAmount = sale.tokenAmount * accounting.totalContribution / sale.maxRaise;
             }
 
             /// @dev This is a successful sale struct that saves sale token allocation information
@@ -367,7 +387,7 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
 
             /// calculate allocations and excessContributions for each accepted token 
             for (uint256 i = 0; i < sale.acceptedTokensAddresses.length; i++) {
-                uint256 allocation = sale.tokenAmount * (sale.contributions[i] * sale.acceptedTokensConversionRates[i] / 1e18) / accounting.totalContribution;
+                uint256 allocation = accounting.adjustedSaleTokenAmount * (sale.contributions[i] * sale.acceptedTokensConversionRates[i] / 1e18) / accounting.totalContribution;
                 uint256 excessContribution = accounting.totalExcessContribution * sale.contributions[i] / accounting.totalContribution;
 
                 if (allocation > 0) {
@@ -419,13 +439,14 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
                 });
             }
 
-            /// transfer dust back to refund recipient
-            accounting.dust = sale.tokenAmount - accounting.totalAllocated;
-            if (accounting.dust > 0) {
+            /// @dev transfer dust partial refund (if applicable) back to refund recipient
+            accounting.saleTokenRefund = sale.tokenAmount - accounting.totalAllocated;
+
+            if (accounting.saleTokenRefund > 0) {
                 SafeERC20.safeTransfer(
                     IERC20(sale.localTokenAddress), 
                     address(uint160(uint256(sale.refundRecipient))), 
-                    accounting.dust
+                    accounting.saleTokenRefund
                 );
             }
 
@@ -477,31 +498,15 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
                 payloadID : 4,
                 saleID : saleId
             })), consistencyLevel());
+
+            /// @dev refund the sale tokens to refund recipient
+            SafeERC20.safeTransfer(
+                IERC20(sale.localTokenAddress), 
+                address(uint160(uint256(sale.refundRecipient))), 
+                sale.tokenAmount 
+            );
         }
-    }
-
-    /**
-     * @dev claimRefund serves to refund the refundRecipient when a sale is unsuccessful. 
-     * - it confirms that the sale was aborted
-     * - it transfers the sale tokens to the refundRecipient
-     */
-    function claimRefund(uint256 saleId) public {
-        require(saleExists(saleId), "sale not initiated");
-
-        ConductorStructs.Sale memory sale = sales(saleId);
-        require(sale.isAborted, "token sale is not aborted");
-        require(!sale.refundIsClaimed, "already claimed");
-
-        /// set the refund claimed 
-        setRefundClaimed(saleId);
-
-        /// simple token transfer to refundRecipient
-        SafeERC20.safeTransfer(
-            IERC20(sale.localTokenAddress), 
-            address(uint160(uint256(sale.refundRecipient))), 
-            sale.tokenAmount
-        );
-    }
+    } 
  
     /// @dev useSaleId serves to update the current saleId in the Conductor state
     function useSaleId() internal returns(uint256 saleId) {

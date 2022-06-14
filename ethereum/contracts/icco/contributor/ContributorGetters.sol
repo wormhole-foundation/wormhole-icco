@@ -59,10 +59,11 @@ contract ContributorGetters is ContributorState {
         );
     }
 
-    function getSaleTimeframe(uint256 saleId_) public view returns (uint256 start, uint256 end){
+    function getSaleTimeframe(uint256 saleId_) public view returns (uint256 start, uint256 end, uint256 unlockTimestamp){
         return (
             _state.sales[saleId_].saleStart,
-            _state.sales[saleId_].saleEnd
+            _state.sales[saleId_].saleEnd,
+            _state.sales[saleId_].unlockTimestamp
         );
     }
 

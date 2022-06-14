@@ -17,7 +17,8 @@ contract ContributorStructs {
         uint256 saleStart;
         /// timestamp raise end
         uint256 saleEnd;
-
+        /// unlock timestamp (when tokens can be claimed)
+        uint256 unlockTimestamp;        
         /// accepted Tokens
         uint16[] acceptedTokensChains;
         bytes32[] acceptedTokensAddresses;

@@ -1923,6 +1923,31 @@ contract("ICCO", function(accounts) {
     assert.ok(failed);
   });
 
+  it("excess contribution should not be claimable when maxRaise is not exceeded", async function() {
+    const initialized = new web3.eth.Contract(
+      ContributorImplementationFullABI,
+      TokenSaleContributor.address
+    );
+
+    let failed = false;
+    try {
+      await initialized.methods
+        .claimExcessContribution(SALE_ID, TOKEN_ONE_INDEX)
+        .send({
+          from: BUYER_ONE,
+          gasLimit: GAS_LIMIT,
+        });
+    } catch (e) {
+      assert.equal(
+        e.message,
+        "Returned error: VM Exception while processing transaction: revert no excess contributions for this token"
+      );
+      failed = true;
+    }
+
+    assert.ok(failed);
+  });
+
   let SALE_2_START;
   let SALE_2_END;
   let SALE_2_INIT_PAYLOAD;
@@ -4421,17 +4446,11 @@ contract("ICCO", function(accounts) {
     );
   });
 
-  it("contributor should distribute tokens correctly and excess contributions correctly", async function() {
+  it("contributor should distribute tokens correctly", async function() {
     // test variables
     const expectedContributorSaleTokenBalanceChange = "1000";
     const expectedBuyerOneSaleTokenBalanceChange = "800"; // 80% of total contribution (2000 * 1 + 4000 * 1 + 500 * 4 = 8000)
     const expectedBuyerTwoSaleTokenBalanceChange = "200"; // 20% of total contribution (500 * 4 = 2000)
-
-    // expected refunds from excess contributions
-    // 10k contributions - 6k maxRaise = 4k in refunds (multiplier applied)
-    const expectedBuyerOneTokenOneRefund = "2400"; // .6 * 4k / 1 (multiplier)
-    const expectedBuyerOneTokenTwoRefund = "200"; // .2 * 4k / 4 (multiplier)
-    const expectedBuyerTwoTokenTwoRefund = "200"; // .2 * 4k / 4 (multiplier)
 
     const initialized = new web3.eth.Contract(
       ContributorImplementationFullABI,
@@ -4446,16 +4465,6 @@ contract("ICCO", function(accounts) {
       BUYER_ONE
     );
     const buyerTwoSaleTokenBalanceBefore = await SOLD_TOKEN.balanceOf(
-      BUYER_TWO
-    );
-
-    const buyerOneTokenOneBalanceBefore = await CONTRIBUTED_TOKEN_ONE.balanceOf(
-      BUYER_ONE
-    );
-    const buyerOneTokenTwoBalanceBefore = await CONTRIBUTED_TOKEN_TWO.balanceOf(
-      BUYER_ONE
-    );
-    const buyerTwoTokenTwoBalanceBefore = await CONTRIBUTED_TOKEN_TWO.balanceOf(
       BUYER_TWO
     );
 
@@ -4510,6 +4519,93 @@ contract("ICCO", function(accounts) {
       expectedBuyerTwoSaleTokenBalanceChange
     );
 
+    // verify allocationIsClaimed before claiming allocation
+    const isAllocationClaimedBuyerOneTokenOneAfter = await initialized.methods
+      .allocationIsClaimed(SALE_4_ID, TOKEN_ONE_INDEX, BUYER_ONE)
+      .call();
+    const isAllocationClaimedBuyerOneTokenTwoAfter = await initialized.methods
+      .allocationIsClaimed(SALE_4_ID, TOKEN_TWO_INDEX, BUYER_ONE)
+      .call();
+    const isAllocationClaimedBuyerTwoAfter = await initialized.methods
+      .allocationIsClaimed(SALE_4_ID, TOKEN_TWO_INDEX, BUYER_TWO)
+      .call();
+
+    assert.ok(isAllocationClaimedBuyerOneTokenOneAfter);
+    assert.ok(isAllocationClaimedBuyerOneTokenTwoAfter);
+    assert.ok(isAllocationClaimedBuyerTwoAfter);
+  });
+
+  let ONE_EXCESS_REFUND_SNAPSHOT;
+
+  it("contributor should distribute excess contributions correctly", async function() {
+    // expected refunds from excess contributions
+    // 10k contributions - 6k maxRaise = 4k in refunds (multiplier applied)
+    const expectedBuyerOneTokenOneRefund = "2400"; // .6 * 4k / 1 (multiplier)
+    const expectedBuyerOneTokenTwoRefund = "200"; // .2 * 4k / 4 (multiplier)
+    const expectedBuyerTwoTokenTwoRefund = "200"; // .2 * 4k / 4 (multiplier)
+
+    const initialized = new web3.eth.Contract(
+      ContributorImplementationFullABI,
+      TokenSaleContributor.address
+    );
+
+    // balances of contributed tokens
+    const buyerOneTokenOneBalanceBefore = await CONTRIBUTED_TOKEN_ONE.balanceOf(
+      BUYER_ONE
+    );
+    const buyerOneTokenTwoBalanceBefore = await CONTRIBUTED_TOKEN_TWO.balanceOf(
+      BUYER_ONE
+    );
+    const buyerTwoTokenTwoBalanceBefore = await CONTRIBUTED_TOKEN_TWO.balanceOf(
+      BUYER_TWO
+    );
+
+    // verify excessContributionIsClaimed before claiming excessContributions
+    const isExcessClaimedBuyerOneTokenOneBefore = await initialized.methods
+      .excessContributionIsClaimed(SALE_4_ID, TOKEN_ONE_INDEX, BUYER_ONE)
+      .call();
+    const isExcessClaimedBuyerOneTokenTwoBefore = await initialized.methods
+      .excessContributionIsClaimed(SALE_4_ID, TOKEN_TWO_INDEX, BUYER_ONE)
+      .call();
+    const isExcessClaimedBuyerTwoBefore = await initialized.methods
+      .excessContributionIsClaimed(SALE_4_ID, TOKEN_TWO_INDEX, BUYER_TWO)
+      .call();
+
+    assert.ok(!isExcessClaimedBuyerOneTokenOneBefore);
+    assert.ok(!isExcessClaimedBuyerOneTokenTwoBefore);
+    assert.ok(!isExcessClaimedBuyerTwoBefore);
+
+    // claim excess refunds here
+    // claim allocations for both tokens
+    await initialized.methods
+      .claimExcessContribution(SALE_4_ID, TOKEN_ONE_INDEX)
+      .send({
+        from: BUYER_ONE,
+        gasLimit: GAS_LIMIT,
+      });
+
+    ONE_EXCESS_REFUND_SNAPSHOT = await snapshot();
+
+    await initialized.methods
+      .claimExcessContribution(SALE_4_ID, TOKEN_TWO_INDEX)
+      .send({
+        from: BUYER_ONE,
+        gasLimit: GAS_LIMIT,
+      });
+
+    const claimExcessTx = await initialized.methods
+      .claimExcessContribution(SALE_4_ID, TOKEN_TWO_INDEX)
+      .send({
+        from: BUYER_TWO,
+        gasLimit: GAS_LIMIT,
+      });
+
+    // confirm that the EventClaimExcessContribution event was emitted
+    const eventClaimExcess =
+      claimExcessTx["events"]["EventClaimExcessContribution"]["returnValues"];
+    assert.equal(eventClaimExcess["saleId"], SALE_4_ID);
+    assert.equal(eventClaimExcess["tokenIndex"], TOKEN_TWO_INDEX);
+
     // check that excess contributions were distributed correctly
     const buyerOneTokenOneBalanceAfter = await CONTRIBUTED_TOKEN_ONE.balanceOf(
       BUYER_ONE
@@ -4534,20 +4630,48 @@ contract("ICCO", function(accounts) {
       expectedBuyerTwoTokenTwoRefund
     );
 
-    // verify allocationIsClaimed before claiming allocation
-    const isAllocationClaimedBuyerOneTokenOneAfter = await initialized.methods
-      .allocationIsClaimed(SALE_4_ID, TOKEN_ONE_INDEX, BUYER_ONE)
+    // verify excessContributionIsClaimed after claiming excessContributions
+    const isExcessClaimedBuyerOneTokenOneAfter = await initialized.methods
+      .excessContributionIsClaimed(SALE_4_ID, TOKEN_ONE_INDEX, BUYER_ONE)
       .call();
-    const isAllocationClaimedBuyerOneTokenTwoAfter = await initialized.methods
-      .allocationIsClaimed(SALE_4_ID, TOKEN_TWO_INDEX, BUYER_ONE)
+    const isExcessClaimedBuyerOneTokenTwoAfter = await initialized.methods
+      .excessContributionIsClaimed(SALE_4_ID, TOKEN_TWO_INDEX, BUYER_ONE)
       .call();
-    const isAllocationClaimedBuyerTwoAfter = await initialized.methods
-      .allocationIsClaimed(SALE_4_ID, TOKEN_TWO_INDEX, BUYER_TWO)
+    const isExcessClaimedBuyerTwoAfter = await initialized.methods
+      .excessContributionIsClaimed(SALE_4_ID, TOKEN_TWO_INDEX, BUYER_TWO)
       .call();
 
-    assert.ok(isAllocationClaimedBuyerOneTokenOneAfter);
-    assert.ok(isAllocationClaimedBuyerOneTokenTwoAfter);
-    assert.ok(isAllocationClaimedBuyerTwoAfter);
+    assert.ok(isExcessClaimedBuyerOneTokenOneAfter);
+    assert.ok(isExcessClaimedBuyerOneTokenTwoAfter);
+    assert.ok(isExcessClaimedBuyerTwoAfter);
+  });
+
+  it("excess contribution should only be claimable once", async function() {
+    // revert first excessContribution claim
+    await revert(ONE_EXCESS_REFUND_SNAPSHOT);
+
+    const initialized = new web3.eth.Contract(
+      ContributorImplementationFullABI,
+      TokenSaleContributor.address
+    );
+
+    let failed = false;
+    try {
+      await initialized.methods
+        .claimExcessContribution(SALE_4_ID, TOKEN_ONE_INDEX)
+        .send({
+          from: BUYER_ONE,
+          gasLimit: GAS_LIMIT,
+        });
+    } catch (e) {
+      assert.equal(
+        e.message,
+        "Returned error: VM Exception while processing transaction: revert excess contribution already claimed"
+      );
+      failed = true;
+    }
+
+    assert.ok(failed);
   });
 
   // more global sale test variables

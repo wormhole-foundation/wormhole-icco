@@ -64,6 +64,10 @@ contract ContributorSetters is ContributorState, Context {
         _state.allocationIsClaimed[saleId][tokenIndex][contributor] = true;
     }
 
+    function setExcessContributionClaimed(uint256 saleId, uint256 tokenIndex, address contributor) internal {
+        _state.excessContributionIsClaimed[saleId][tokenIndex][contributor] = true;
+    }
+
     function setSaleAllocation(uint256 saleId, uint256 tokenIndex, uint256 allocation) internal {
         _state.sales[saleId].allocations[tokenIndex] = allocation;
     }

@@ -399,11 +399,9 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
     }
 
     /**
-     * @dev claimAllocation serves to send contributors a preallocated amount of sale tokens
-     * and a refund for any excessContributions.
+     * @dev claimAllocation serves to send contributors a preallocated amount of sale tokens.
      * - it confirms that the sale was sealed
      * - it transfers sale tokens to the contributor's wallet
-     * - it transfer any excessContributions to the contributor's wallet
      * - it marks the allocation as claimed to prevent multiple claims for the same allocation
      * - it only distributes tokens once the unlock period has ended
      */
@@ -449,25 +447,47 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
             /// identify wormhole token bridge wrapper
             tokenAddress = tokenBridge().wrappedAsset(sale.tokenChain, sale.tokenAddress);
         }
-        SafeERC20.safeTransfer(IERC20(tokenAddress), msg.sender, thisAllocation);
-
-        /// return any excess contributions 
-        uint256 excessContribution = getSaleExcessContribution(saleId, tokenIndex);
-        if (excessContribution > 0){
-            /// calculate how much excess to refund
-            uint256 thisExcessContribution = (excessContribution * thisContribution) / totalContribution;
-
-            /// grab the contributed token address  
-            (, bytes32 tokenAddressBytes, ) = getSaleAcceptedTokenInfo(saleId, tokenIndex);
-            SafeERC20.safeTransfer(
-                IERC20(address(uint160(uint256(tokenAddressBytes)))), 
-                msg.sender, 
-                thisExcessContribution
-            );
-        }
+        SafeERC20.safeTransfer(IERC20(tokenAddress), msg.sender, thisAllocation); 
 
         /// emit EventClaimAllocation event.
         emit EventClaimAllocation(saleId, tokenIndex);
+    }
+
+    /**
+     * @dev claimExcessContribution serves to send contributors a refund for any excessContributions.
+     * - it confirms that the sale was sealed
+     * - it calculates the excessContribution owed to the contributor
+     * - it marks the excessContribution as claimed to prevent multiple claims for the same refund
+     * - it transfers the excessContribution to the contributor's wallet
+     */
+    function claimExcessContribution(uint256 saleId, uint256 tokenIndex) public {
+        require(saleExists(saleId), "sale not initiated");
+
+        /// return any excess contributions 
+        uint256 excessContribution = getSaleExcessContribution(saleId, tokenIndex);
+
+        require(excessContribution > 0, "no excess contributions for this token");
+
+        (bool isSealed, ) = getSaleStatus(saleId);
+
+        require(isSealed, "token sale is not sealed");
+        require(!excessContributionIsClaimed(saleId, tokenIndex, msg.sender), "excess contribution already claimed");
+
+        setExcessContributionClaimed(saleId, tokenIndex, msg.sender);
+
+        /// calculate how much excess to refund
+        uint256 thisExcessContribution = (excessContribution * getSaleContribution(saleId, tokenIndex, msg.sender)) / getSaleTotalContribution(saleId, tokenIndex);
+
+        /// grab the contributed token address  
+        (, bytes32 tokenAddressBytes, ) = getSaleAcceptedTokenInfo(saleId, tokenIndex);
+        SafeERC20.safeTransfer(
+            IERC20(address(uint160(uint256(tokenAddressBytes)))), 
+            msg.sender, 
+            thisExcessContribution
+        );
+
+        /// emit EventClaimExcessContribution event.
+        emit EventClaimExcessContribution(saleId, tokenIndex);
     }
 
     /**

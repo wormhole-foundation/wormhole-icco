@@ -33,6 +33,11 @@ contract ContributorEvents {
         uint256 saleId,
         uint256 tokenIndex
     );
+
+    event EventClaimExcessContribution (
+        uint256 saleId,
+        uint256 tokenIndex
+    );
 }
 
 contract ContributorStorage {
@@ -69,6 +74,9 @@ contract ContributorStorage {
 
         /// sale id > [token id > contributor > isClaimed
         mapping(uint256 => mapping(uint256 => mapping(address => bool))) refundIsClaimed;
+
+        /// sale id > [token id > contributor > isClaimed
+        mapping(uint256 => mapping(uint256 => mapping(address => bool))) excessContributionIsClaimed;
     }
 }
 

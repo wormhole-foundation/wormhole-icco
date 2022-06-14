@@ -53,3 +53,43 @@ export interface SaleSealed {
   saleId: ethers.BigNumberish;
   allocations: Allocation[];
 }
+
+export interface AcceptedToken {
+  tokenAddress: ethers.BytesLike;
+  tokenChain: ethers.BigNumberish;
+  conversionRate: ethers.BigNumberish;
+}
+
+export interface SaleInit {
+  payloadId: number;
+  saleId: ethers.BigNumberish;
+  tokenAddress: string;
+  tokenChain: number;
+  tokenDecimals: number;
+  tokenAmount: ethers.BigNumberish;
+  minRaise: ethers.BigNumberish;
+  maxRaise: ethers.BigNumberish;
+  saleStart: ethers.BigNumberish;
+  saleEnd: ethers.BigNumberish;
+  acceptedTokens: AcceptedToken[];
+  solanaTokenAccount: ethers.BytesLike;
+  recipient: string;
+  refundRecipient: string;
+}
+
+export interface SolanaToken {
+  tokenIndex: number;
+  tokenAddress: ethers.BytesLike;
+}
+
+export interface SolanaSaleInit {
+  payloadId: number;
+  saleId: ethers.BigNumberish;
+  solanaTokenAccount: ethers.BytesLike;
+  tokenChain: number;
+  tokenDecimals: number;
+  saleStart: ethers.BigNumberish;
+  saleEnd: ethers.BigNumberish;
+  acceptedTokens: SolanaToken[];
+  recipient: string;
+}

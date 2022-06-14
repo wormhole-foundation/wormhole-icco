@@ -9,8 +9,8 @@ export async function registerChainOnEth(
   contributorAddress: Uint8Array,
   wallet: ethers.Wallet
 ): Promise<ethers.ContractReceipt> {
-  const contributor = Conductor__factory.connect(conductorAddress, wallet);
-  const tx = await contributor.registerChain(
+  const conductor = Conductor__factory.connect(conductorAddress, wallet);
+  const tx = await conductor.registerChain(
     contributorChain,
     contributorAddress
   );

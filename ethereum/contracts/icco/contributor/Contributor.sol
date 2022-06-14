@@ -159,6 +159,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
                 saleId, 
                 tokenIndex, 
                 amount, 
+                bytes12(0x0),
                 msg.sender, 
                 getSaleContribution(saleId, tokenIndex, msg.sender)
             ); 
@@ -190,7 +191,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
         /// revert if token has fee
         require(amount == balanceAfter - balanceBefore, "fee-on-transfer tokens are not supported");
 
-        /// store contribution information
+        /// @dev store contribution information
         setSaleContribution(saleId, msg.sender, tokenIndex, amount);
     }
 
@@ -309,7 +310,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
 
         /**
          * @dev Cache the conductorChainId from storage to save on gas.
-         * We will check each accpetedToken to see if its from this chain.
+         * We will check each acceptedToken to see if it's from this chain.
          */
         uint16 conductorChainId = conductorChainId();
         for (uint256 i = 0; i < sale.acceptedTokensAddresses.length; i++) {
@@ -324,7 +325,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
 
                     /// check to see if this contributor is on the same chain as conductor
                     if (thisChainId == conductorChainId) {
-                        // send contributions to recipient on this chain
+                        /// send contributions to recipient on this chain
                         SafeERC20.safeTransfer(
                             IERC20(acceptedTokenAddress),
                             address(uint160(uint256(sale.recipient))),
@@ -375,7 +376,7 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
         }
     }
 
-    /// @dev saleAborted serves to mark the sale unnsuccessful or canceled. 
+    /// @dev saleAborted serves to mark the sale unnsuccessful or canceled 
     function saleAborted(bytes memory saleAbortedVaa) public {
         (IWormhole.VM memory vm, bool valid, string memory reason) = wormhole().parseAndVerifyVM(saleAbortedVaa);
 
@@ -389,11 +390,11 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
     }
 
     /**
-     * @dev claimAllocation serves to send contributors an preallocated amount of sale tokens
-     * and a refund for any excessContributions
+     * @dev claimAllocation serves to send contributors a preallocated amount of sale tokens
+     * and a refund for any excessContributions.
      * - it confirms that the sale was sealed
-     * - it transfers sale tokens to the contributors wallet
-     * - it transfer any excessContributions to the contributors wallet
+     * - it transfers sale tokens to the contributor's wallet
+     * - it transfer any excessContributions to the contributor's wallet
      * - it marks the allocation as claimed to prevent multiple claims for the same allocation
      */
     function claimAllocation(uint256 saleId, uint256 tokenIndex) public {

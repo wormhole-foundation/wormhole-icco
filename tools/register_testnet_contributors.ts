@@ -1,10 +1,13 @@
 import yargs from "yargs";
 import { registerChainOnEth, nativeToUint8Array } from "wormhole-icco-sdk";
+import { tryNativeToUint8Array } from "@certusone/wormhole-sdk";
 import { ethers } from "ethers";
+import { web3 } from "@project-serum/anchor";
+import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey";
 
 const fs = require("fs");
 const DeploymentConfig = require("../../ethereum/icco_deployment_config.js");
-const ConductorRpc = DeploymentConfig["conductor"].rpc;
+const ConductorConfig = DeploymentConfig["conductor"];
 
 function parseArgs(): string[] {
   const parsed = yargs(process.argv.slice(2))
@@ -24,24 +27,36 @@ async function main() {
   const networks = parseArgs();
 
   for (let i = 0; i < networks.length; i++) {
-    const config = DeploymentConfig[networks[i]];
+    let config;
+    if (networks[i] == "solana_emitter") {
+      // we're registering the solana contributor emitter address
+      // but this doesn't have a key in the Deployment config
+      config = DeploymentConfig["solana_testnet"];
+    } else {
+      config = DeploymentConfig[networks[i]];
+    }
     if (!config) {
       throw Error("deployment config undefined");
     }
 
-    const testnet = JSON.parse(
-      fs.readFileSync(`${__dirname}/../../testnet.json`, "utf8")
-    );
+    const testnet = JSON.parse(fs.readFileSync(`${__dirname}/../../testnet.json`, "utf8"));
 
     // create wallet to call sdk method with
-    const provider = new ethers.providers.JsonRpcProvider(ConductorRpc);
-    const wallet: ethers.Wallet = new ethers.Wallet(config.mnemonic, provider);
+    const provider = new ethers.providers.JsonRpcProvider(ConductorConfig.rpc);
+    const wallet: ethers.Wallet = new ethers.Wallet(ConductorConfig.mnemonic, provider);
 
-    // convert contributor address to bytes
-    const contributorAddressBytes: Uint8Array = nativeToUint8Array(
-      testnet[networks[i]],
-      config.contributorChainId
-    );
+    // if it's a solana registration - create 32 byte address
+    let contributorAddressBytes: Uint8Array;
+    if (config.contributorChainId == 1) {
+      contributorAddressBytes = tryNativeToUint8Array(testnet[networks[i]], "solana");
+      const solanaProgId = new web3.PublicKey(contributorAddressBytes);
+      const [key, bump] = findProgramAddressSync([Buffer.from("emitter")], solanaProgId);
+      contributorAddressBytes = key.toBuffer();
+      console.log("solana contributorEmitter address: ", key.toBase58());
+    } else {
+      // convert contributor address to bytes
+      contributorAddressBytes = nativeToUint8Array(testnet[networks[i]], config.contributorChainId);
+    }
 
     try {
       // need to fix this to add custody account addr
@@ -54,12 +69,7 @@ async function main() {
       );
 
       // output hash
-      console.info(
-        "Registering contributor on network:",
-        networks[i],
-        "txHash:",
-        tx.transactionHash
-      );
+      console.info("Registering contributor on network:", networks[i], "txHash:", tx.transactionHash);
     } catch (error: any) {
       const errorMsg = error.toString();
       if (errorMsg.includes("chain already registered")) {

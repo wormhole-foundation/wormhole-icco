@@ -6162,7 +6162,7 @@ const signContribution = async function(
     web3.eth.abi.encodeParameter("uint256", amount).substring(2),
     web3.eth.abi
       .encodeParameter("address", buyerAddress)
-      .substring(2 + (64 - 40)),
+      .substring(2), // we actually want 32 bytes
     web3.eth.abi.encodeParameter("uint256", totalContribution).substring(2),
   ];
 

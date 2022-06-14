@@ -37,7 +37,7 @@ import {
   abortSaleBeforeStartOnEth,
   saleAbortedOnEth,
   getSaleIdFromIccoVaa,
-} from "wormhole-icco-sdk";
+} from "../../src";
 import {
   WORMHOLE_ADDRESSES,
   CONDUCTOR_NETWORK,
@@ -50,21 +50,11 @@ import {
   CONDUCTOR_CHAIN_ID,
   RETRY_TIMEOUT_SECONDS,
 } from "./consts";
-import {
-  TokenConfig,
-  Contribution,
-  SealSaleResult,
-  saleParams,
-  SaleSealed,
-  AcceptedToken,
-  SaleInit,
-} from "./structs";
+import { TokenConfig, Contribution, SealSaleResult, saleParams, SaleSealed, AcceptedToken, SaleInit } from "./structs";
 import { signContribution } from "./kyc";
 import { assert } from "console";
 
-export async function extractVaaPayload(
-  signedVaa: Uint8Array
-): Promise<Uint8Array> {
+export async function extractVaaPayload(signedVaa: Uint8Array): Promise<Uint8Array> {
   const { parse_vaa } = await importCoreWasm();
   const { payload: payload } = parse_vaa(signedVaa);
   return payload;
@@ -92,10 +82,7 @@ export function testProvider(network: string): ethers.providers.Provider {
 export function initiatorWallet(network: string): ethers.Wallet {
   // several wallets owned by the "sale" initiator
   const provider = testProvider(network);
-  const wallet: ethers.Wallet = new ethers.Wallet(
-    SALE_CONFIG["initiatorWallet"][network].key,
-    provider
-  );
+  const wallet: ethers.Wallet = new ethers.Wallet(SALE_CONFIG["initiatorWallet"][network].key, provider);
   return wallet;
 }
 
@@ -105,9 +92,7 @@ export function contributorWallet(contribution: Contribution): ethers.Wallet {
   return wallet;
 }
 
-export async function buildAcceptedTokens(
-  tokenConfig: TokenConfig[]
-): Promise<AcceptedToken[]> {
+export async function buildAcceptedTokens(tokenConfig: TokenConfig[]): Promise<AcceptedToken[]> {
   const acceptedTokens: AcceptedToken[] = [];
 
   for (const config of tokenConfig) {
@@ -121,9 +106,7 @@ export async function buildAcceptedTokens(
       if (config.address == "5Dmmc5CC6ZpKif8iN5DSY9qNYrWJvEKcX2JrxGESqRMu") {
         tokenDecimals = 6; // should look these up on solana
         acceptedTokenDecimalsOnConductor = 6; // should look these
-      } else if (
-        config.address == "3Ftc5hTz9sG4huk79onufGiebJNDMZNL8HYgdMJ9E7JR"
-      ) {
+      } else if (config.address == "3Ftc5hTz9sG4huk79onufGiebJNDMZNL8HYgdMJ9E7JR") {
         tokenDecimals = 8; // should look these up on solana
         acceptedTokenDecimalsOnConductor = 18; // should look these
       }
@@ -132,17 +115,16 @@ export async function buildAcceptedTokens(
       tokenDecimals = await token.decimals();
 
       // compute the normalized conversionRate
-      acceptedTokenDecimalsOnConductor =
-        await getAcceptedTokenDecimalsOnConductor(
-          config.chainId,
-          CONDUCTOR_CHAIN_ID,
-          WORMHOLE_ADDRESSES[network].tokenBridge,
-          WORMHOLE_ADDRESSES[CONDUCTOR_NETWORK].tokenBridge,
-          testProvider(network),
-          testProvider(CONDUCTOR_NETWORK),
-          config.address,
-          tokenDecimals
-        );
+      acceptedTokenDecimalsOnConductor = await getAcceptedTokenDecimalsOnConductor(
+        config.chainId,
+        CONDUCTOR_CHAIN_ID,
+        WORMHOLE_ADDRESSES[network].tokenBridge,
+        WORMHOLE_ADDRESSES[CONDUCTOR_NETWORK].tokenBridge,
+        testProvider(network),
+        testProvider(CONDUCTOR_NETWORK),
+        config.address,
+        tokenDecimals
+      );
     }
 
     // normalize the conversion rate and then push the accepted token
@@ -152,25 +134,13 @@ export async function buildAcceptedTokens(
       config.conversionRate,
       acceptedTokenDecimalsOnConductor
     );
-    acceptedTokens.push(
-      makeAcceptedToken(
-        config.chainId,
-        config.address,
-        normalizedConversionRate
-      )
-    );
+    acceptedTokens.push(makeAcceptedToken(config.chainId, config.address, normalizedConversionRate));
   }
   return acceptedTokens;
 }
 
-export function parseSequencesFromEthReceipt(
-  receipt: ethers.ContractReceipt,
-  network: string
-): string[] {
-  return parseSequencesFromLogEth(
-    receipt,
-    WORMHOLE_ADDRESSES[network].wormhole
-  );
+export function parseSequencesFromEthReceipt(receipt: ethers.ContractReceipt, network: string): string[] {
+  return parseSequencesFromLogEth(receipt, WORMHOLE_ADDRESSES[network].wormhole);
 }
 
 export async function getSignedVaaFromSequence(
@@ -205,11 +175,7 @@ export async function getSignedVaaFromReceiptOnEth(
     throw Error("more than one sequence found in log");
   }
 
-  return getSignedVaaFromSequence(
-    chainId,
-    getEmitterAddressEth(contractAddress),
-    sequences[0]
-  );
+  return getSignedVaaFromSequence(chainId, getEmitterAddressEth(contractAddress), sequences[0]);
 }
 
 export async function createSaleOnEthAndGetVaa(
@@ -248,10 +214,7 @@ export async function createSaleOnEthAndGetVaa(
   );
 
   // fetch sequences from receipt
-  const sequences = parseSequencesFromLogEth(
-    receipt,
-    WORMHOLE_ADDRESSES[CONDUCTOR_NETWORK].wormhole
-  );
+  const sequences = parseSequencesFromLogEth(receipt, WORMHOLE_ADDRESSES[CONDUCTOR_NETWORK].wormhole);
 
   const saleInitSequence = sequences[sequences.length - 1];
   if (saleInitSequence === undefined) {
@@ -279,10 +242,7 @@ export async function createSaleOnEthAndInit(
   acceptedTokens: AcceptedToken[]
 ): Promise<Uint8Array[]> {
   // fetch localToken decimals
-  const decimals = await getErc20Decimals(
-    testProvider(CONDUCTOR_NETWORK),
-    raiseParams.localTokenAddress
-  );
+  const decimals = await getErc20Decimals(testProvider(CONDUCTOR_NETWORK), raiseParams.localTokenAddress);
 
   // set up sale token contract to interact with
   const saleStart = getCurrentTime() + raiseParams.saleStartTimer;
@@ -303,14 +263,8 @@ export async function createSaleOnEthAndInit(
     raiseParams.token,
     raiseParams.tokenChain,
     ethers.utils.parseUnits(raiseParams.tokenAmount, decimals),
-    ethers.utils.parseUnits(
-      raiseParams.minRaise,
-      SALE_CONFIG.denominationDecimals
-    ),
-    ethers.utils.parseUnits(
-      raiseParams.maxRaise,
-      SALE_CONFIG.denominationDecimals
-    ),
+    ethers.utils.parseUnits(raiseParams.minRaise, SALE_CONFIG.denominationDecimals),
+    ethers.utils.parseUnits(raiseParams.maxRaise, SALE_CONFIG.denominationDecimals),
     saleStart,
     saleEnd,
     raiseParams.recipient,
@@ -321,9 +275,7 @@ export async function createSaleOnEthAndInit(
   return saleInitVaas;
 }
 
-export async function initializeSaleOnEthContributors(
-  saleInitVaa: Uint8Array
-): Promise<SaleInit> {
+export async function initializeSaleOnEthContributors(saleInitVaa: Uint8Array): Promise<SaleInit> {
   // parse the sale init payload for return value
   const saleInitPayload = await extractVaaPayload(saleInitVaa);
   const saleInit = await parseSaleInit(saleInitPayload);
@@ -332,11 +284,7 @@ export async function initializeSaleOnEthContributors(
     const receipts = await Promise.all(
       CONTRIBUTOR_NETWORKS.filter((ntwrk) => ntwrk != "solana_testnet").map(
         async (network): Promise<ethers.ContractReceipt> => {
-          return initSaleOnEth(
-            TESTNET_ADDRESSES[network],
-            saleInitVaa,
-            initiatorWallet(network)
-          );
+          return initSaleOnEth(TESTNET_ADDRESSES[network], saleInitVaa, initiatorWallet(network));
         }
       )
     );
@@ -394,16 +342,10 @@ export async function waitForSaleToEnd(
   return;
 }
 
-export async function getTokenIndexFromConfig(
-  chainId: ChainId,
-  address: string
-): Promise<[boolean, number]> {
+export async function getTokenIndexFromConfig(chainId: ChainId, address: string): Promise<[boolean, number]> {
   const acceptedTokens: TokenConfig[] = SALE_CONFIG["acceptedTokens"];
   for (let i = 0; i < acceptedTokens.length; i++) {
-    if (
-      chainId === acceptedTokens[i].chainId &&
-      address === acceptedTokens[i].address
-    ) {
+    if (chainId === acceptedTokens[i].chainId && address === acceptedTokens[i].address) {
       return [true, i];
     }
   }
@@ -411,10 +353,7 @@ export async function getTokenIndexFromConfig(
   return [false, 0];
 }
 
-export async function parseUnits(
-  contribution: Contribution,
-  wallet: ethers.Wallet
-): Promise<ethers.BigNumberish> {
+export async function parseUnits(contribution: Contribution, wallet: ethers.Wallet): Promise<ethers.BigNumberish> {
   // convert the contribution amount from string to big number
   const token = ERC20__factory.connect(contribution.address, wallet);
   const decimals = await token.decimals();
@@ -430,10 +369,7 @@ export async function prepareAndExecuteContribution(
   // make sure contribution is for an accepted token
   let tokenIndex = 0;
 
-  const indexInfo = await getTokenIndexFromConfig(
-    contribution.chainId,
-    contribution.address
-  );
+  const indexInfo = await getTokenIndexFromConfig(contribution.chainId, contribution.address);
 
   if (indexInfo[0]) {
     tokenIndex = indexInfo[1];
@@ -490,29 +426,21 @@ export async function prepareAndExecuteContribution(
   return true;
 }
 
-export async function attestAndCollectContributionsOnEth(
-  saleInit: SaleInit
-): Promise<void> {
+export async function attestAndCollectContributionsOnEth(saleInit: SaleInit): Promise<void> {
   const saleId = saleInit.saleId;
 
   const signedVaas = await Promise.all(
-    CONTRIBUTOR_NETWORKS.filter((ntwrk) => ntwrk != "solana_testnet").map(
-      async (network): Promise<Uint8Array> => {
-        const receipt = await attestContributionsOnEth(
-          TESTNET_ADDRESSES[network],
-          saleId,
-          initiatorWallet(network)
-        );
-        console.log("Attested contribution for", network);
+    CONTRIBUTOR_NETWORKS.filter((ntwrk) => ntwrk != "solana_testnet").map(async (network): Promise<Uint8Array> => {
+      const receipt = await attestContributionsOnEth(TESTNET_ADDRESSES[network], saleId, initiatorWallet(network));
+      console.log("Attested contribution for", network);
 
-        return getSignedVaaFromReceiptOnEth(
-          WORMHOLE_ADDRESSES[network].chainId,
-          TESTNET_ADDRESSES[network],
-          receipt,
-          network
-        );
-      }
-    )
+      return getSignedVaaFromReceiptOnEth(
+        WORMHOLE_ADDRESSES[network].chainId,
+        TESTNET_ADDRESSES[network],
+        receipt,
+        network
+      );
+    })
   );
 
   console.info("Finished attesting contributions.");
@@ -524,29 +452,16 @@ export async function collectContributionsOnConductor(
   signedVaas: Uint8Array[],
   saleId: ethers.BigNumberish
 ): Promise<void> {
-  const receipts = await collectContributionsOnEth(
-    CONDUCTOR_ADDRESS,
-    signedVaas,
-    initiatorWallet(CONDUCTOR_NETWORK)
-  );
+  const receipts = await collectContributionsOnEth(CONDUCTOR_ADDRESS, signedVaas, initiatorWallet(CONDUCTOR_NETWORK));
   assert(receipts.length == signedVaas.length);
 
   console.info("Finished collecting contributions.");
 
   // confirm that all contributions were actually collected
-  const conductorSale = await getSaleFromConductorOnEth(
-    CONDUCTOR_ADDRESS,
-    testProvider(CONDUCTOR_NETWORK),
-    saleId
-  );
+  const conductorSale = await getSaleFromConductorOnEth(CONDUCTOR_ADDRESS, testProvider(CONDUCTOR_NETWORK), saleId);
 
   for (let i = 0; i < conductorSale.contributionsCollected.length; i++) {
-    console.log(
-      "Contribution",
-      i,
-      "was accepted:",
-      conductorSale.contributionsCollected[i]
-    );
+    console.log("Contribution", i, "was accepted:", conductorSale.contributionsCollected[i]);
   }
 }
 
@@ -560,11 +475,7 @@ export async function sealSaleAndParseReceiptOnEth(
   const receipt = await sealSaleOnEth(conductorAddress, saleId, wallet);
   console.log("Finished sealing the sale on the Conductor.");
 
-  const sale = await getSaleFromConductorOnEth(
-    conductorAddress,
-    wallet.provider,
-    saleId
-  );
+  const sale = await getSaleFromConductorOnEth(conductorAddress, wallet.provider, saleId);
   const emitterChain = CONDUCTOR_CHAIN_ID as ChainId;
 
   const sequences = parseSequencesFromLogEth(receipt, coreBridgeAddress);
@@ -609,9 +520,7 @@ export async function sealSaleAndParseReceiptOnEth(
   };
 }
 
-export async function sealOrAbortSaleOnEth(
-  saleInit: SaleInit
-): Promise<SealSaleResult> {
+export async function sealOrAbortSaleOnEth(saleInit: SaleInit): Promise<SealSaleResult> {
   const saleId = saleInit.saleId;
   console.log("Attempting to seal sale:", saleId);
   return sealSaleAndParseReceiptOnEth(
@@ -623,33 +532,23 @@ export async function sealOrAbortSaleOnEth(
   );
 }
 
-export async function redeemCrossChainAllocations(
-  saleResult: SealSaleResult
-): Promise<ethers.ContractReceipt[][]> {
+export async function redeemCrossChainAllocations(saleResult: SealSaleResult): Promise<ethers.ContractReceipt[][]> {
   // redeem transfers before calling saleSealed
   const transferVaas = saleResult.transferVaas;
 
   return Promise.all(
-    CONTRIBUTOR_NETWORKS.map(
-      async (network): Promise<ethers.ContractReceipt[]> => {
-        const signedVaas = transferVaas.get(
-          WORMHOLE_ADDRESSES[network].chainId
-        );
-        if (signedVaas === undefined) {
-          return [];
-        }
-        const receipts: ethers.ContractReceipt[] = [];
-        for (const signedVaa of signedVaas) {
-          const receipt = await redeemOnEth(
-            WORMHOLE_ADDRESSES[network].tokenBridge,
-            initiatorWallet(network),
-            signedVaa
-          );
-          receipts.push(receipt);
-        }
-        return receipts;
+    CONTRIBUTOR_NETWORKS.map(async (network): Promise<ethers.ContractReceipt[]> => {
+      const signedVaas = transferVaas.get(WORMHOLE_ADDRESSES[network].chainId);
+      if (signedVaas === undefined) {
+        return [];
       }
-    )
+      const receipts: ethers.ContractReceipt[] = [];
+      for (const signedVaa of signedVaas) {
+        const receipt = await redeemOnEth(WORMHOLE_ADDRESSES[network].tokenBridge, initiatorWallet(network), signedVaa);
+        receipts.push(receipt);
+      }
+      return receipts;
+    })
   );
 }
 
@@ -689,10 +588,7 @@ export async function claimContributorAllocationOnEth(
   const network = CHAIN_ID_TO_NETWORK.get(contribution.chainId);
   const saleId = saleSealed.saleId;
   const wallet = contributorWallet(contribution);
-  const tokenIndex = await getTokenIndexFromConfig(
-    contribution.chainId,
-    contribution.address
-  );
+  const tokenIndex = await getTokenIndexFromConfig(contribution.chainId, contribution.address);
 
   if (!tokenIndex[0]) {
     return false;
@@ -700,12 +596,7 @@ export async function claimContributorAllocationOnEth(
 
   let receipt;
   try {
-    receipt = await claimAllocationOnEth(
-      TESTNET_ADDRESSES[network],
-      saleId,
-      tokenIndex[1],
-      wallet
-    );
+    receipt = await claimAllocationOnEth(TESTNET_ADDRESSES[network], saleId, tokenIndex[1], wallet);
   } catch (error) {
     if (error.message.includes("allocation already claimed")) {
       return false;
@@ -741,21 +632,14 @@ export async function redeemCrossChainContributions(
   for (const sequence of sequences) {
     const signedVaa = await getSignedVaaFromSequence(
       emitterChain,
-      getEmitterAddressEth(
-        WORMHOLE_ADDRESSES[CHAIN_ID_TO_NETWORK.get(emitterChain)].tokenBridge
-      ),
+      getEmitterAddressEth(WORMHOLE_ADDRESSES[CHAIN_ID_TO_NETWORK.get(emitterChain)].tokenBridge),
       sequence
     );
     const vaaPayload = await extractVaaPayload(signedVaa);
     const chainId = await getTargetChainIdFromTransferVaa(vaaPayload);
     const targetNetwork = CHAIN_ID_TO_NETWORK.get(chainId);
 
-    console.log(
-      "Redeeming cross-chain transfer",
-      sequence,
-      "to recipient on chainId:",
-      chainId
-    );
+    console.log("Redeeming cross-chain transfer", sequence, "to recipient on chainId:", chainId);
 
     // redeem it on conductor chain
     const receipt = await redeemOnEth(
@@ -767,9 +651,7 @@ export async function redeemCrossChainContributions(
   return true;
 }
 
-export async function abortSaleEarlyAtConductor(
-  saleInit: SaleInit
-): Promise<ethers.ContractReceipt> {
+export async function abortSaleEarlyAtConductor(saleInit: SaleInit): Promise<ethers.ContractReceipt> {
   const receipt = await abortSaleBeforeStartOnEth(
     CONDUCTOR_ADDRESS,
     saleInit.saleId,
@@ -778,10 +660,7 @@ export async function abortSaleEarlyAtConductor(
   return receipt;
 }
 
-export async function abortSaleEarlyAtContributor(
-  saleInit: SaleInit,
-  abortEarlyReceipt: ethers.ContractReceipt
-) {
+export async function abortSaleEarlyAtContributor(saleInit: SaleInit, abortEarlyReceipt: ethers.ContractReceipt) {
   const saleAbortedVaa = await getSignedVaaFromReceiptOnEth(
     CONDUCTOR_CHAIN_ID,
     CONDUCTOR_ADDRESS,
@@ -793,12 +672,7 @@ export async function abortSaleEarlyAtContributor(
   {
     const receipts = await Promise.all(
       CONTRIBUTOR_NETWORKS.map(async (network) => {
-        return saleAbortedOnEth(
-          TESTNET_ADDRESSES[network],
-          saleAbortedVaa,
-          initiatorWallet(network),
-          saleInit.saleId
-        );
+        return saleAbortedOnEth(TESTNET_ADDRESSES[network], saleAbortedVaa, initiatorWallet(network), saleInit.saleId);
       })
     );
   }
@@ -813,16 +687,9 @@ export async function abortSaleAtContributors(saleResult: SealSaleResult) {
 
   {
     const receipts = await Promise.all(
-      CONTRIBUTOR_NETWORKS.map(
-        async (network): Promise<ethers.ContractReceipt> => {
-          return saleAbortedOnEth(
-            TESTNET_ADDRESSES[network],
-            signedVaa,
-            initiatorWallet(network),
-            saleId
-          );
-        }
-      )
+      CONTRIBUTOR_NETWORKS.map(async (network): Promise<ethers.ContractReceipt> => {
+        return saleAbortedOnEth(TESTNET_ADDRESSES[network], signedVaa, initiatorWallet(network), saleId);
+      })
     );
   }
 

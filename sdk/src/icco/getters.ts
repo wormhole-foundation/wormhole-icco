@@ -37,7 +37,6 @@ export async function getSaleFromConductorOnEth(
     contributionsCollected: sale.contributionsCollected,
     isSealed: sale.isSealed,
     isAborted: sale.isAborted,
-    refundIsClaimed: sale.refundIsClaimed,
   };
 }
 
@@ -46,10 +45,7 @@ export async function getSaleFromContributorOnEth(
   provider: ethers.providers.Provider,
   saleId: ethers.BigNumberish
 ): Promise<ContributorSale> {
-  const contributor = Contributor__factory.connect(
-    contributorAddress,
-    provider
-  );
+  const contributor = Contributor__factory.connect(contributorAddress, provider);
 
   const sale = await contributor.sales(saleId);
 
@@ -57,18 +53,13 @@ export async function getSaleFromContributorOnEth(
     saleId: sale.saleID,
     tokenAddress: sale.tokenAddress,
     tokenChain: sale.tokenChain,
-    tokenAmount: sale.tokenAmount,
     tokenDecimals: sale.tokenDecimals,
-    minRaise: sale.minRaise,
-    maxRaise: sale.maxRaise,
     saleStart: sale.saleStart,
     saleEnd: sale.saleEnd,
     recipient: sale.recipient,
-    refundRecipient: sale.refundRecipient,
     acceptedTokensChains: sale.acceptedTokensChains,
     acceptedTokensAddresses: sale.acceptedTokensAddresses,
     acceptedTokensConversionRates: sale.acceptedTokensConversionRates,
-    solanaTokenAccount: sale.solanaTokenAccount,
     isSealed: sale.isSealed,
     isAborted: sale.isAborted,
     allocations: sale.allocations,
@@ -83,10 +74,7 @@ export async function getAllocationIsClaimedOnEth(
   tokenIndex: number,
   walletAddress: string
 ): Promise<boolean> {
-  const contributor = Contributor__factory.connect(
-    contributorAddress,
-    provider
-  );
+  const contributor = Contributor__factory.connect(contributorAddress, provider);
   return contributor.allocationIsClaimed(saleId, tokenIndex, walletAddress);
 }
 
@@ -107,10 +95,7 @@ export async function getRefundIsClaimedOnEth(
   tokenIndex: number,
   walletAddress: string
 ): Promise<boolean> {
-  const contributor = Contributor__factory.connect(
-    contributorAddress,
-    provider
-  );
+  const contributor = Contributor__factory.connect(contributorAddress, provider);
   return contributor.refundIsClaimed(saleId, tokenIndex, walletAddress);
 }
 
@@ -120,10 +105,7 @@ export async function getSaleTotalContributionOnEth(
   saleId: ethers.BigNumberish,
   tokenIndex: number
 ): Promise<ethers.BigNumber> {
-  const contributor = Contributor__factory.connect(
-    contributorAddress,
-    provider
-  );
+  const contributor = Contributor__factory.connect(contributorAddress, provider);
   return contributor.getSaleTotalContribution(saleId, tokenIndex);
 }
 
@@ -134,10 +116,7 @@ export async function getSaleContributionOnEth(
   tokenIndex: number,
   walletAddress: string
 ): Promise<ethers.BigNumber> {
-  const contributor = Contributor__factory.connect(
-    contributorAddress,
-    provider
-  );
+  const contributor = Contributor__factory.connect(contributorAddress, provider);
   return contributor.getSaleContribution(saleId, tokenIndex, walletAddress);
 }
 
@@ -147,10 +126,7 @@ export async function getSaleAllocationOnEth(
   saleId: ethers.BigNumberish,
   tokenIndex: number
 ): Promise<ethers.BigNumber> {
-  const contributor = Contributor__factory.connect(
-    contributorAddress,
-    provider
-  );
+  const contributor = Contributor__factory.connect(contributorAddress, provider);
   return contributor.getSaleAllocation(saleId, tokenIndex);
 }
 
@@ -161,23 +137,10 @@ export async function getSaleWalletAllocationOnEth(
   tokenIndex: number,
   walletAddress: string
 ): Promise<ethers.BigNumber> {
-  const [allocation, walletContribution, totalContribution] = await Promise.all(
-    [
-      getSaleAllocationOnEth(contributorAddress, provider, saleId, tokenIndex),
-      getSaleContributionOnEth(
-        contributorAddress,
-        provider,
-        saleId,
-        tokenIndex,
-        walletAddress
-      ),
-      getSaleTotalContributionOnEth(
-        contributorAddress,
-        provider,
-        saleId,
-        tokenIndex
-      ),
-    ]
-  );
+  const [allocation, walletContribution, totalContribution] = await Promise.all([
+    getSaleAllocationOnEth(contributorAddress, provider, saleId, tokenIndex),
+    getSaleContributionOnEth(contributorAddress, provider, saleId, tokenIndex, walletAddress),
+    getSaleTotalContributionOnEth(contributorAddress, provider, saleId, tokenIndex),
+  ]);
   return allocation.mul(walletContribution).div(totalContribution);
 }

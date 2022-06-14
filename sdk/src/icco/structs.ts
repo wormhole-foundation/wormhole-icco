@@ -45,12 +45,25 @@ export interface ConductorSale extends Sale {
   solanaAcceptedTokensCount: number;
   contributions: ethers.BigNumberish[];
   contributionsCollected: boolean[];
-  refundIsClaimed: boolean;
 }
 
-export interface ContributorSale extends Sale {
+export interface ContributorSale {
+  // sale init
+  saleId: ethers.BigNumberish;
+  tokenAddress: ethers.BytesLike;
+  tokenChain: number;
+  saleStart: ethers.BigNumberish;
+  saleEnd: ethers.BigNumberish;
+  recipient: ethers.BytesLike;
+  // accepted tokens
+  acceptedTokensChains: number[];
+  acceptedTokensAddresses: ethers.BytesLike[];
+  acceptedTokensConversionRates: ethers.BigNumberish[];
+  // state
+  isSealed: boolean;
+  isAborted: boolean;
+  // yep
   tokenDecimals: number;
-  solanaTokenAccount: ethers.BytesLike;
   allocations: ethers.BigNumberish[];
   excessContributions: ethers.BigNumberish[];
 }
@@ -107,11 +120,7 @@ export interface SaleSealed {
   allocations: Allocation[];
 }
 
-export function makeAcceptedToken(
-  chainId: ChainId,
-  address: string,
-  conversion: ethers.BigNumberish
-): AcceptedToken {
+export function makeAcceptedToken(chainId: ChainId, address: string, conversion: ethers.BigNumberish): AcceptedToken {
   return {
     tokenChain: chainId,
     tokenAddress: nativeToUint8Array(address, chainId),

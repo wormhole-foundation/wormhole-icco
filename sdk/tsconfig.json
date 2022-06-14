@@ -1,22 +1,20 @@
 {
   "compilerOptions": {
-    "target": "es5",
-    "module": "esnext",
+    "types": ["mocha", "chai"],
+    "typeRoots": ["./node_modules/@types"],
+    "module": "commonjs",
+    "target": "es2020",
     "moduleResolution": "node",
     "declaration": true,
     "outDir": "./lib/esm",
     "strict": true,
     "esModuleInterop": true,
     "downlevelIteration": true,
-    "allowJs": true,
     "resolveJsonModule": true,
-    "lib": ["dom", "es5", "scripthost", "es2020.bigint"]
+    "lib": ["es2020.bigint"]
   },
-  "include": ["src", "types"],
+  "include": ["src"],
   "exclude": [
     "node_modules",
-    "**/__tests__/*",
-    "**/__icco_tests__/*",
-    "**/__tests__wip/*"
   ]
 }

@@ -1,4 +1,4 @@
-import { ConductorSale } from "wormhole-icco-sdk";
+import { ConductorSale } from "../../src";
 import { ChainId } from "@certusone/wormhole-sdk";
 import { ethers } from "ethers";
 

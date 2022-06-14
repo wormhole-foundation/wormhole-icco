@@ -42,14 +42,13 @@ import {
   getSaleFromConductorOnEth,
   getSaleFromContributorOnEth,
   parseSolanaSaleInit,
-} from "wormhole-icco-sdk";
+} from "../../src";
 import {
   initializeSaleOnSolanaContributor,
   createContributorProgram,
   prepareAndExecuteContributionOnSolana,
   initiatorKeyPair,
   attestAndCollectContributionsOnSolana,
-  createCustodianATAForSaleToken,
 } from "./solana_utils";
 import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey";
 
@@ -62,18 +61,8 @@ async function main() {
   // setup sale variables
   const raiseParams: saleParams = SALE_CONFIG["raiseParams"];
 
-  // create the sale token ATA
-  // TO-DO: need to init sale with the sale token account
-  /*const saleTokenAta = await createCustodianATAForSaleToken(
-    program,
-    raiseParams.solanaTokenAccount
-  );
-  console.log(saleTokenAta);*/
-
   // build the accepted token list
-  const acceptedTokens = await buildAcceptedTokens(
-    SALE_CONFIG["acceptedTokens"]
-  );
+  const acceptedTokens = await buildAcceptedTokens(SALE_CONFIG["acceptedTokens"]);
 
   // create and initialize the sale
   const saleInitArray = await createSaleOnEthAndInit(
@@ -88,25 +77,14 @@ async function main() {
   const saleInit = await initializeSaleOnEthContributors(saleInitArray[0]);
 
   console.log(saleInit);
-  console.info(
-    "Sale",
-    saleInit.saleId,
-    "has been initialized on the EVM contributors."
-  );
+  console.info("Sale", saleInit.saleId, "has been initialized on the EVM contributors.");
 
   // initialize the sale on solana contributor if accepting solana tokens
   let solanaSaleInit;
   if (saleInitArray.length > 1) {
-    solanaSaleInit = await initializeSaleOnSolanaContributor(
-      program,
-      Buffer.from(saleInitArray[1])
-    );
+    solanaSaleInit = await initializeSaleOnSolanaContributor(program, Buffer.from(saleInitArray[1]));
     console.log(solanaSaleInit);
-    console.info(
-      "Sale",
-      solanaSaleInit.saleId,
-      "has been initialized on the Solana contributor."
-    );
+    console.info("Sale", solanaSaleInit.saleId, "has been initialized on the Solana contributor.");
   }
 
   // test aborting the sale early
@@ -146,11 +124,7 @@ async function main() {
           contributions[i]
         );
       } else {
-        successful = await prepareAndExecuteContribution(
-          saleInit.saleId,
-          raiseParams.token,
-          contributions[i]
-        );
+        successful = await prepareAndExecuteContribution(saleInit.saleId, raiseParams.token, contributions[i]);
       }
       if (successful) {
         console.info("Contribution successful for contribution:", i);
@@ -166,11 +140,7 @@ async function main() {
 
     // attest and collect contributions on EVM
     await attestAndCollectContributionsOnEth(saleInit);
-    await attestAndCollectContributionsOnSolana(
-      program,
-      Buffer.from(saleInitArray[1]),
-      solanaSaleInit
-    );
+    await attestAndCollectContributionsOnSolana(program, Buffer.from(saleInitArray[1]), solanaSaleInit);
 
     /*// seal the sale on the conductor contract
     saleResult = await sealOrAbortSaleOnEth(saleInit);
@@ -223,7 +193,7 @@ async function main() {
     console.log("Allocation", i, "was claimed successfully:", successful);
   }
 
-  // redeem transfer VAAs for conductor
+  // redeem VAAs for conductor
   for (let [chainId, receipt] of saleSealedResults[1]) {
     await redeemCrossChainContributions(receipt, chainId);
   }*/

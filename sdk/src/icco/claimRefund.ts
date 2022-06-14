@@ -1,6 +1,6 @@
 import { ethers } from "ethers";
 
-import { Conductor__factory, Contributor__factory } from "../ethers-contracts";
+import { Contributor__factory } from "../ethers-contracts";
 import { getRefundIsClaimedOnEth } from "./getters";
 
 export async function claimContributorRefundOnEth(
@@ -23,16 +23,5 @@ export async function claimContributorRefundOnEth(
   }
 
   const tx = await contributor.claimRefund(saleId, tokenIndex);
-  return tx.wait();
-}
-
-export async function claimConductorRefundOnEth(
-  conductorAddress: string,
-  saleId: ethers.BigNumberish,
-  wallet: ethers.Wallet
-): Promise<ethers.ContractReceipt> {
-  const conductor = Conductor__factory.connect(conductorAddress, wallet);
-
-  const tx = await conductor.claimRefund(saleId);
   return tx.wait();
 }

@@ -18,19 +18,10 @@ import { AnchorProvider, web3, Program, BN } from "@project-serum/anchor";
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
 import { SolanaSaleInit, Contribution } from "./structs";
 import keccak256 from "keccak256";
-import {
-  extractVaaPayload,
-  getSignedVaaFromSequence,
-  collectContributionsOnConductor,
-  parseVaaPayload,
-} from "./utils";
-import { parseSolanaSaleInit, SolanaToken } from "wormhole-icco-sdk";
+import { extractVaaPayload, getSignedVaaFromSequence, collectContributionsOnConductor, parseVaaPayload } from "./utils";
+import { parseSolanaSaleInit, SolanaToken } from "../../src";
 import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey";
-import {
-  importCoreWasm,
-  CHAIN_ID_SOLANA,
-  tryHexToNativeString,
-} from "@certusone/wormhole-sdk";
+import { importCoreWasm, CHAIN_ID_SOLANA, tryHexToNativeString } from "@certusone/wormhole-sdk";
 import {
   getOrCreateAssociatedTokenAccount,
   createMint,
@@ -56,28 +47,15 @@ export function findCustodianAccount(programId: web3.PublicKey): KeyBump {
   return findKeyBump([Buffer.from("icco-custodian")], programId);
 }
 
-export function findBuyerAccount(
-  programId: web3.PublicKey,
-  saleId: Buffer,
-  buyer: web3.PublicKey
-): KeyBump {
-  return findKeyBump(
-    [Buffer.from("icco-buyer"), saleId, buyer.toBuffer()],
-    programId
-  );
+export function findBuyerAccount(programId: web3.PublicKey, saleId: Buffer, buyer: web3.PublicKey): KeyBump {
+  return findKeyBump([Buffer.from("icco-buyer"), saleId, buyer.toBuffer()], programId);
 }
 
-export function findSaleAccount(
-  programId: web3.PublicKey,
-  saleId: Buffer
-): KeyBump {
+export function findSaleAccount(programId: web3.PublicKey, saleId: Buffer): KeyBump {
   return findKeyBump([Buffer.from("icco-sale"), saleId], programId);
 }
 
-export async function getPdaAssociatedTokenAddress(
-  mint: web3.PublicKey,
-  pda: web3.PublicKey
-): Promise<web3.PublicKey> {
+export async function getPdaAssociatedTokenAddress(mint: web3.PublicKey, pda: web3.PublicKey): Promise<web3.PublicKey> {
   return getAssociatedTokenAddress(mint, pda, true);
 }
 
@@ -89,10 +67,7 @@ export function hashVaaPayload(signedVaa: Buffer): Buffer {
   return keccak256(signedVaa.subarray(bodyStart));
 }
 
-function findKeyBump(
-  seeds: (Buffer | Uint8Array)[],
-  program: web3.PublicKey
-): KeyBump {
+function findKeyBump(seeds: (Buffer | Uint8Array)[], program: web3.PublicKey): KeyBump {
   const [key, bump] = findProgramAddressSync(seeds, program);
   return {
     key,
@@ -102,30 +77,19 @@ function findKeyBump(
 
 export function findSignedVaaAccount(signedVaa: Buffer): KeyBump {
   const hash = hashVaaPayload(signedVaa);
-  return findKeyBump(
-    [Buffer.from("PostedVAA"), hash],
-    SOLANA_CORE_BRIDGE_ADDRESS
-  );
+  return findKeyBump([Buffer.from("PostedVAA"), hash], SOLANA_CORE_BRIDGE_ADDRESS);
 }
 
 export function createContributorProgram(): Program<AnchorContributor> {
   const program = new Program<AnchorContributor>(
     SOLANA_IDL,
     TESTNET_ADDRESSES["solana_testnet"],
-    new AnchorProvider(
-      new web3.Connection(SOLANA_RPC),
-      new NodeWallet(initiatorKeyPair()),
-      {}
-    )
+    new AnchorProvider(new web3.Connection(SOLANA_RPC), new NodeWallet(initiatorKeyPair()), {})
   );
   return program;
 }
 
-export async function postVaa(
-  connection: web3.Connection,
-  payer: web3.Keypair,
-  signedVaa: Buffer
-): Promise<void> {
+export async function postVaa(connection: web3.Connection, payer: web3.Keypair, signedVaa: Buffer): Promise<void> {
   await postVaaSolanaWithRetry(
     connection,
     async (tx) => {
@@ -146,10 +110,7 @@ export function initiatorKeyPair(): web3.Keypair {
   return keypair;
 }
 
-export async function createCustodian(
-  payer: web3.Keypair,
-  program: Program<AnchorContributor>
-) {
+export async function createCustodian(payer: web3.Keypair, program: Program<AnchorContributor>) {
   const custodianAccount = findCustodianAccount(program.programId);
   await program.methods
     .createCustodian()
@@ -167,9 +128,7 @@ export async function createCustodianATAs(
   acceptedTokens: SolanaToken[]
 ) {
   for (const token of acceptedTokens) {
-    const mint = new web3.PublicKey(
-      tryHexToNativeString(token.tokenAddress.toString(), CHAIN_ID_SOLANA)
-    );
+    const mint = new web3.PublicKey(tryHexToNativeString(token.tokenAddress.toString(), CHAIN_ID_SOLANA));
 
     const allowOwnerOffCurve = true;
     await getOrCreateAssociatedTokenAccount(
@@ -182,17 +141,12 @@ export async function createCustodianATAs(
   }
 }
 
-export async function createCustodianATAForSaleToken(
-  program: Program<AnchorContributor>,
-  saleTokenAddress: string
-) {
+export async function createCustodianATAForSaleToken(program: Program<AnchorContributor>, saleTokenAddress: string) {
   // fetch custodian account
   const custodianAccount = findCustodianAccount(program.programId);
 
   // fetch mint
-  const mint = new web3.PublicKey(
-    tryHexToNativeString(saleTokenAddress, CHAIN_ID_SOLANA)
-  );
+  const mint = new web3.PublicKey(tryHexToNativeString(saleTokenAddress, CHAIN_ID_SOLANA));
 
   console.log(mint);
 
@@ -217,9 +171,7 @@ export async function initializeSaleOnSolanaContributor(
   const custodianAccount = findCustodianAccount(program.programId);
   let custodianCheck;
   try {
-    custodianCheck = await program.account.custodian.fetch(
-      custodianAccount.key
-    );
+    custodianCheck = await program.account.custodian.fetch(custodianAccount.key);
   } catch {
     custodianCheck = null;
   }
@@ -234,11 +186,7 @@ export async function initializeSaleOnSolanaContributor(
   const solanaSaleInit = await parseSolanaSaleInit(saleInitPayload);
 
   // create ATA for solana tokens
-  await createCustodianATAs(
-    program,
-    custodianAccount,
-    solanaSaleInit.acceptedTokens
-  );
+  await createCustodianATAs(program, custodianAccount, solanaSaleInit.acceptedTokens);
 
   // first post signed vaa to wormhole
   await postVaa(program.provider.connection, payer, initSaleVaa);
@@ -270,11 +218,7 @@ async function contribute(
 ): Promise<string> {
   const custodian = custodianAccount.key;
 
-  const buyerAccount = findBuyerAccount(
-    program.programId,
-    saleId,
-    payer.publicKey
-  );
+  const buyerAccount = findBuyerAccount(program.programId, saleId, payer.publicKey);
   const saleAccount = findSaleAccount(program.programId, saleId);
   const buyerAta = await getAssociatedTokenAddress(mint, payer.publicKey);
   const custodianAta = await getPdaAssociatedTokenAddress(mint, custodian);
@@ -310,9 +254,7 @@ export async function prepareAndExecuteContributionOnSolana(
   // fetch the token decimals and format the amount
   const mintContract = await getMint(program.provider.connection, mint);
   const decimals = await mintContract.decimals;
-  const amount = new BN(
-    ethers.utils.parseUnits(contribution.amount, decimals).toString()
-  );
+  const amount = new BN(ethers.utils.parseUnits(contribution.amount, decimals).toString());
 
   // grab the saleId from the initSale Vaa
   const saleId = await parseSaleId(initSaleVaa);
@@ -326,32 +268,14 @@ export async function prepareAndExecuteContributionOnSolana(
   }
 }
 
-async function attestContributions(
-  program: Program<AnchorContributor>,
-  payer: web3.Keypair,
-  saleId: Buffer
-) {
+async function attestContributions(program: Program<AnchorContributor>, payer: web3.Keypair, saleId: Buffer) {
   // Accounts
   const saleAcc = findSaleAccount(program.programId, saleId).key;
-  const whCoreBridge = new web3.PublicKey(
-    WORMHOLE_ADDRESSES["solana_testnet"].wormhole
-  );
-  const whConfig = findProgramAddressSync(
-    [Buffer.from("Bridge")],
-    whCoreBridge
-  )[0];
-  const whFeeCollector = findProgramAddressSync(
-    [Buffer.from("fee_collector")],
-    whCoreBridge
-  )[0];
-  const whDerivedEmitter = findProgramAddressSync(
-    [Buffer.from("emitter")],
-    program.programId
-  )[0];
-  const whSequence = findProgramAddressSync(
-    [Buffer.from("Sequence"), whDerivedEmitter.toBytes()],
-    whCoreBridge
-  )[0];
+  const whCoreBridge = new web3.PublicKey(WORMHOLE_ADDRESSES["solana_testnet"].wormhole);
+  const whConfig = findProgramAddressSync([Buffer.from("Bridge")], whCoreBridge)[0];
+  const whFeeCollector = findProgramAddressSync([Buffer.from("fee_collector")], whCoreBridge)[0];
+  const whDerivedEmitter = findProgramAddressSync([Buffer.from("emitter")], program.programId)[0];
+  const whSequence = findProgramAddressSync([Buffer.from("Sequence"), whDerivedEmitter.toBytes()], whCoreBridge)[0];
   const whMessageKey = web3.Keypair.generate();
 
   return program.methods
@@ -381,21 +305,13 @@ export async function attestAndCollectContributionsOnSolana(
   // grab the saleId from the initSale Vaa
   const saleId = await parseSaleId(initSaleVaa);
   const tx = await attestContributions(program, initiatorKeyPair(), saleId);
-  const seq = parseSequenceFromLogSolana(
-    await program.provider.connection.getTransaction(tx)
-  );
+  const seq = parseSequenceFromLogSolana(await program.provider.connection.getTransaction(tx));
   console.log("Sequence: ", seq);
-  const emitterAddress = await getEmitterAddressSolana(
-    program.programId.toString()
-  );
+  const emitterAddress = await getEmitterAddressSolana(program.programId.toString());
   console.log("Emitter Addresss: ", emitterAddress);
 
   // fetch the signedVaa
-  const signedVaa = await getSignedVaaFromSequence(
-    CHAIN_ID_SOLANA,
-    emitterAddress,
-    seq
-  );
+  const signedVaa = await getSignedVaaFromSequence(CHAIN_ID_SOLANA, emitterAddress, seq);
 
   // collect the contribution on the conductor
   const vaa = await parseVaaPayload(signedVaa);

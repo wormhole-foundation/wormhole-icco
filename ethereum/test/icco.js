@@ -783,11 +783,19 @@ contract("ICCO", function(accounts) {
     ];
 
     // create the sale
-    await initialized.methods.createSale(saleParams, acceptedTokens).send({
-      value: WORMHOLE_FEE,
-      from: SELLER,
-      gasLimit: GAS_LIMIT,
-    });
+    const createSaleTx = await initialized.methods
+      .createSale(saleParams, acceptedTokens)
+      .send({
+        value: WORMHOLE_FEE,
+        from: SELLER,
+        gasLimit: GAS_LIMIT,
+      });
+
+    // confirm that the EventCreateSale event was emitted
+    let eventCreateSale =
+      createSaleTx["events"]["EventCreateSale"]["returnValues"];
+    assert.equal(eventCreateSale["saleId"], SALE_ID);
+    assert.equal(eventCreateSale["creatorAddress"], SELLER);
 
     // verify contributorWallets getter
     const solanaWallet = await initialized.methods
@@ -970,13 +978,16 @@ contract("ICCO", function(accounts) {
       0
     );
 
-    // init the sale
-    await initialized.methods.initSale("0x" + vm).send({
+    let initTx = await initialized.methods.initSale("0x" + vm).send({
       from: SELLER,
       gasLimit: GAS_LIMIT,
     });
 
     INIT_SALE_VM = vm;
+
+    // confirm that the EventSaleInit event was emitted
+    let eventOutput = initTx["events"]["EventSaleInit"]["returnValues"];
+    assert.equal(eventOutput["saleId"], SALE_ID);
 
     // verify sale getter
     const sale = await initialized.methods.sales(SALE_ID).call();
@@ -1133,7 +1144,7 @@ contract("ICCO", function(accounts) {
       BUYER_ONE,
       kycSignerPK
     );
-    await initialized.methods
+    let contributeTx1 = await initialized.methods
       .contribute(
         SALE_ID,
         TOKEN_ONE_INDEX,
@@ -1205,6 +1216,16 @@ contract("ICCO", function(accounts) {
         from: BUYER_TWO,
         gasLimit: GAS_LIMIT,
       });
+
+    // confirm that the EventContribute event was emitted
+    let eventOutput1 =
+      contributeTx1["events"]["EventContribute"]["returnValues"];
+    assert.equal(eventOutput1["saleId"], SALE_ID);
+    assert.equal(eventOutput1["tokenIndex"], TOKEN_ONE_INDEX);
+    assert.equal(
+      eventOutput1["amount"],
+      parseInt(tokenOneContributionAmount[0])
+    );
 
     // verify getSaleTotalContribution after contributing
     const totalContributionsTokenOne = await initialized.methods
@@ -1398,11 +1419,18 @@ contract("ICCO", function(accounts) {
     );
 
     // attest contributions
-    await initialized.methods.attestContributions(SALE_ID).send({
-      from: BUYER_ONE,
-      value: WORMHOLE_FEE,
-      gasLimit: GAS_LIMIT,
-    });
+    const attestTx = await initialized.methods
+      .attestContributions(SALE_ID)
+      .send({
+        from: BUYER_ONE,
+        value: WORMHOLE_FEE,
+        gasLimit: GAS_LIMIT,
+      });
+
+    // confirm that the EventAttestContribution event was emitted
+    let eventOutput =
+      attestTx["events"]["EventAttestContribution"]["returnValues"];
+    assert.equal(eventOutput["saleId"], SALE_ID);
 
     const log = (
       await WORMHOLE.getPastEvents("LogMessagePublished", {
@@ -1624,11 +1652,15 @@ contract("ICCO", function(accounts) {
     assert.ok(!saleBefore.isSealed);
 
     // seal the sale
-    await initialized.methods.sealSale(SALE_ID).send({
+    const sealSaleTx = await initialized.methods.sealSale(SALE_ID).send({
       value: WORMHOLE_FEE,
       from: SELLER,
       gasLimit: GAS_LIMIT,
     });
+
+    // confirm that the EventSealSale event was emitted
+    let eventSeal = sealSaleTx["events"]["EventSealSale"]["returnValues"];
+    assert.equal(eventSeal["saleId"], SALE_ID);
 
     // balance check after sealing the sale
     const actualContributorBalanceAfter = await SOLD_TOKEN.balanceOf(
@@ -1711,10 +1743,14 @@ contract("ICCO", function(accounts) {
     );
 
     // seal the sale
-    await initialized.methods.saleSealed("0x" + vm).send({
+    const saleSealedTx = await initialized.methods.saleSealed("0x" + vm).send({
       from: BUYER_ONE,
       gasLimit: GAS_LIMIT,
     });
+
+    // confirm that the EventSealSale event was emitted
+    let eventSeal = saleSealedTx["events"]["EventSaleSealed"]["returnValues"];
+    assert.equal(eventSeal["saleId"], SALE_ID);
 
     // confirm that the sale was sealed
     const saleAfter = await initialized.methods.sales(SALE_ID).call();
@@ -1807,10 +1843,17 @@ contract("ICCO", function(accounts) {
     assert.ok(!isAllocationClaimedTokenTwoBefore);
 
     // claim allocations for both tokens
-    await initialized.methods.claimAllocation(SALE_ID, TOKEN_TWO_INDEX).send({
-      from: BUYER_TWO,
-      gasLimit: GAS_LIMIT,
-    });
+    const claimTx1 = await initialized.methods
+      .claimAllocation(SALE_ID, TOKEN_TWO_INDEX)
+      .send({
+        from: BUYER_TWO,
+        gasLimit: GAS_LIMIT,
+      });
+
+    // confirm that the EventClaimAllocation event was emitted
+    let eventClaim = claimTx1["events"]["EventClaimAllocation"]["returnValues"];
+    assert.equal(eventClaim["saleId"], SALE_ID);
+    assert.equal(eventClaim["tokenIndex"], TOKEN_TWO_INDEX);
 
     ONE_CLAIM_SNAPSHOT = await snapshot();
 
@@ -2548,11 +2591,16 @@ contract("ICCO", function(accounts) {
     assert.equal(actualContributorBalanceBefore, expectedContributorBalance);
     assert.equal(actualConductorBalanceBefore, expectedConductorBalanceBefore);
 
-    await initialized.methods.sealSale(SALE_2_ID).send({
+    const sealAbortTx = await initialized.methods.sealSale(SALE_2_ID).send({
       from: SELLER,
       value: WORMHOLE_FEE,
       gasLimit: GAS_LIMIT,
     });
+
+    // confirm that the EventAbortSale event was emitted
+    const eventSealAbort =
+      sealAbortTx["events"]["EventAbortSale"]["returnValues"];
+    assert.equal(eventSealAbort["saleId"], SALE_2_ID);
 
     const actualContributorBalanceAfter = await SOLD_TOKEN.balanceOf(
       TokenSaleContributor.address
@@ -2721,10 +2769,17 @@ contract("ICCO", function(accounts) {
     assert.equal(actualBuyerTwoBalanceBefore, expectedBuyerTwoBalanceBefore);
 
     // BUYER_ONE/BUYER_TWO claims refunds
-    await initialized.methods.claimRefund(SALE_2_ID, TOKEN_ONE_INDEX).send({
-      from: BUYER_ONE,
-      gasLimit: GAS_LIMIT,
-    });
+    const refundTx1 = await initialized.methods
+      .claimRefund(SALE_2_ID, TOKEN_ONE_INDEX)
+      .send({
+        from: BUYER_ONE,
+        gasLimit: GAS_LIMIT,
+      });
+
+    // confirm that the EventClaimRefund event was emitted
+    let eventClaim = refundTx1["events"]["EventClaimRefund"]["returnValues"];
+    assert.equal(eventClaim["saleId"], SALE_2_ID);
+    assert.equal(eventClaim["tokenIndex"], TOKEN_ONE_INDEX);
 
     // snapshot to test trying to claim refund 2x
     ONE_REFUND_SNAPSHOT = await snapshot();
@@ -3184,11 +3239,18 @@ contract("ICCO", function(accounts) {
     );
 
     // abort the sale
-    await initialized.methods.abortSaleBeforeStartTime(SALE_3_ID).send({
-      from: SELLER, // must be the sale initiator (msg.sender in createSale())
-      value: WORMHOLE_FEE,
-      gasLimit: GAS_LIMIT,
-    });
+    const abortTx = await initialized.methods
+      .abortSaleBeforeStartTime(SALE_3_ID)
+      .send({
+        from: SELLER, // must be the sale initiator (msg.sender in createSale())
+        value: WORMHOLE_FEE,
+        gasLimit: GAS_LIMIT,
+      });
+
+    // confirm that the EventAbortSaleBeforeStart event was emitted
+    const eventAbort =
+      abortTx["events"]["EventAbortSaleBeforeStart"]["returnValues"];
+    assert.equal(eventAbort["saleId"], SALE_3_ID);
 
     // balance check after aborting the sale
     const refundRecipientBalanceAfter = await SOLD_TOKEN.balanceOf(
@@ -4218,12 +4280,17 @@ contract("ICCO", function(accounts) {
     assert.ok(!saleBefore.isSealed);
 
     // seal the sale
-    await initialized.methods.sealSale(SALE_4_ID).send({
+    const sealSuccessTx = await initialized.methods.sealSale(SALE_4_ID).send({
       from: SELLER,
       value: WORMHOLE_FEE,
       gasLimit: GAS_LIMIT,
     });
 
+    // confirm that the EventSealSale event was emitted
+    const eventSeal = sealSuccessTx["events"]["EventSealSale"]["returnValues"];
+    assert.equal(eventSeal["saleId"], SALE_4_ID);
+
+    // balance check
     const actualContributorBalanceAfter = await SOLD_TOKEN.balanceOf(
       TokenSaleContributor.address
     );

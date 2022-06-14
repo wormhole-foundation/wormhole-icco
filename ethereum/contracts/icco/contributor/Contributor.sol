@@ -26,7 +26,7 @@ import "../shared/ICCOStructs.sol";
  * to disseminate information about the collected contributions to the
  * Conductor contract.
  */ 
-contract Contributor is ContributorGovernance, ReentrancyGuard {
+contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuard {
     using BytesLib for bytes;
 
     /**
@@ -86,6 +86,9 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
 
         /// save the sale in contract storage
         setSale(saleInit.saleID, sale);
+
+        /// emit EventContribute event.
+        emit EventSaleInit(saleInit.saleID);
     }
 
     /**
@@ -190,6 +193,9 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
 
         /// @dev store contribution information
         setSaleContribution(saleId, msg.sender, tokenIndex, amount);
+
+        /// emit EventContribute event.
+        emit EventContribute(saleId, tokenIndex, amount);
     }
 
     /**
@@ -237,6 +243,9 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
         wormholeSequence = wormhole().publishMessage{
             value : msg.value
         }(0, ICCOStructs.encodeContributionsSealed(consSealed), consistencyLevel());
+
+        /// emit EventAttestContribution event.
+        emit EventAttestContribution(saleId);
     }
 
     /**
@@ -371,6 +380,9 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
                 }
             }
         }
+
+        /// emit EventSealSale event.
+        emit EventSaleSealed(sale.saleID);
     }
 
     /// @dev saleAborted serves to mark the sale unnsuccessful or canceled 
@@ -453,6 +465,9 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
                 thisExcessContribution
             );
         }
+
+        /// emit EventClaimAllocation event.
+        emit EventClaimAllocation(saleId, tokenIndex);
     }
 
     /**
@@ -481,6 +496,9 @@ contract Contributor is ContributorGovernance, ReentrancyGuard {
             msg.sender, 
             getSaleContribution(saleId, tokenIndex, msg.sender)
         );
+
+        /// emit EventClaimRefund event.
+        emit EventClaimRefund(saleId, tokenIndex);
     }
 
     // @dev verifyConductorVM serves to validate VMs by checking against the known Conductor contract 

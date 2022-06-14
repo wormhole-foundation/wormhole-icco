@@ -25,7 +25,7 @@ import "../shared/ICCOStructs.sol";
  * For unsuccessful sales, this contract will return the sale tokens to a 
  * specified recipient address.
  */ 
-contract Conductor is ConductorGovernance, ReentrancyGuard {
+contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
     /// @dev create dynamic storage for accepted solana tokens
     ICCOStructs.SolanaToken[] solanaAcceptedTokens;
 
@@ -245,6 +245,9 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
             /// @dev garbage collection to save on gas fees
             delete solanaAcceptedTokens;
         }
+
+        /// emit EventCreateSale event.
+        emit EventCreateSale(saleInit.saleID, msg.sender);
     }
 
     /**
@@ -285,6 +288,9 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
             address(uint160(uint256(sale.refundRecipient))), 
             sale.tokenAmount 
         );
+
+        /// emit EventAbortSaleBeforeStart event.
+        emit EventAbortSaleBeforeStart(saleId);
     }
 
     /**
@@ -486,7 +492,10 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
                         value : accounting.messageFee
                     }(0, ICCOStructs.encodeSaleSealed(saleSealed), consistencyLevel());
                 }
-            } 
+            }
+
+            /// emit EventSealSale event.
+            emit EventSealSale(saleId); 
         } else {
             /// set saleAborted
             setSaleAborted(sale.saleID);
@@ -505,6 +514,9 @@ contract Conductor is ConductorGovernance, ReentrancyGuard {
                 address(uint160(uint256(sale.refundRecipient))), 
                 sale.tokenAmount 
             );
+
+            /// emit EventAbortSale event.
+            emit EventAbortSale(saleId);
         }
     } 
  

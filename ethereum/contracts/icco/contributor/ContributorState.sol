@@ -5,6 +5,36 @@ pragma solidity ^0.8.0;
 
 import "./ContributorStructs.sol";
 
+contract ContributorEvents {
+    event EventSaleInit (
+        uint256 saleId
+    );
+
+    event EventContribute (
+        uint256 saleId,
+        uint256 tokenIndex,
+        uint256 amount
+    );
+
+    event EventAttestContribution (
+        uint256 saleId
+    );
+
+    event EventSaleSealed (
+        uint256 saleId
+    );
+
+    event EventClaimAllocation (
+        uint256 saleId,
+        uint256 tokenIndex
+    );
+
+    event EventClaimRefund (
+        uint256 saleId,
+        uint256 tokenIndex
+    );
+}
+
 contract ContributorStorage {
     struct Provider {
         uint16 chainId;

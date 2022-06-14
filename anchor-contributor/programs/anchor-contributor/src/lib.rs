@@ -651,8 +651,8 @@ pub mod anchor_contributor {
         Ok(())
     }
 
-    /// Instruction to claim refunds from an aborted sale. Only the buyer account needs to
-    /// be mutable so we can change its state.
+    /// Instruction to claim excess contributions from a sealed sale. Only the buyer
+    /// account needs to be mutable so we can change its state.
     ///
     /// The buyer account will determine how much excess of each contribution the buyer is
     /// allowed based on how much he has contributed to the sale (relative to the total

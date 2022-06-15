@@ -45,11 +45,7 @@ contract ConductorGetters is ConductorState {
 
     function contributorWallets(uint256 saleId_, uint16 chainId_) public view returns (bytes32) {
         /// @dev Solana chainID == 1
-        if (chainId_ == 1) {
-            return solanaWallet(saleId_); 
-        } else {
-            return contributorContracts(chainId_);
-        }
+        return chainId_ == 1? solanaWallet(saleId_): contributorContracts(chainId_);
     }
 
     function sales(uint256 saleId_) public view returns (ConductorStructs.Sale memory sale) {

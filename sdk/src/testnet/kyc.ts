@@ -1,9 +1,10 @@
+import { tryNativeToHexString } from "@certusone/wormhole-sdk";
 import { ethers } from "ethers";
-import Web3 from "web3";
+import { soliditySha3 } from "web3-utils";
+
 const elliptic = require("elliptic");
 
-export async function signContribution(
-  rpc: string,
+export function signContributionEth(
   conductorAddress: string,
   saleId: ethers.BigNumberish,
   tokenIndex: number,
@@ -11,44 +12,34 @@ export async function signContribution(
   buyerAddress: string,
   totalContribution: ethers.BigNumberish,
   signer: string
-): Promise<ethers.BytesLike> {
-  const web3 = new Web3(rpc);
+): Buffer {
+  const body = Buffer.alloc(6 * 32, 0);
+  body.write(conductorAddress, 0, "hex");
+  body.write(toBigNumberHex(saleId.toString(), 32), 32, "hex");
+  body.write(toBigNumberHex(tokenIndex, 32), 2 * 32, "hex");
+  body.write(toBigNumberHex(amount.toString(), 32), 3 * 32, "hex");
+  body.write(tryNativeToHexString(buyerAddress, "ethereum"), 4 * 32, "hex");
+  body.write(toBigNumberHex(totalContribution.toString(), 32), 5 * 32, "hex");
 
-  const body = [
-    web3.eth.abi
-      .encodeParameter("bytes32", "0x" + conductorAddress)
-      .substring(2),
-    web3.eth.abi.encodeParameter("uint256", saleId).substring(2),
-    web3.eth.abi.encodeParameter("uint256", tokenIndex).substring(2),
-    web3.eth.abi.encodeParameter("uint256", amount).substring(2),
-    web3.eth.abi
-      .encodeParameter("address", buyerAddress)
-      .substring(2), // we actually want 32 bytes
-    web3.eth.abi.encodeParameter("uint256", totalContribution).substring(2),
-  ];
-
-  // compute the hash
-  const msg = Buffer.from("0x" + body.join(""));
-  const hash = web3.utils.soliditySha3(msg.toString());
+  const hash = soliditySha3("0x" + body.toString("hex"));
+  if (hash == null) {
+    throw "hash == null";
+  }
 
   const ec = new elliptic.ec("secp256k1");
-  const key = ec.keyFromPrivate(signer.substring(2));
-  const signature = key.sign(hash?.substring(2), { canonical: true });
+  const key = ec.keyFromPrivate(signer);
+  const signature = key.sign(hash.substring(2), { canonical: true });
 
-  const packSig = [
-    zeroPadBytes(signature.r.toString(16), 32),
-    zeroPadBytes(signature.s.toString(16), 32),
-    web3.eth.abi
-      .encodeParameter("uint8", signature.recoveryParam)
-      .substr(2 + (64 - 2)),
-  ];
-
-  return "0x" + packSig.join("");
+  const packed = Buffer.alloc(65);
+  packed.write(signature.r.toString(16).padStart(64, "0"), 0, "hex");
+  packed.write(signature.s.toString(16).padStart(64, "0"), 32, "hex");
+  packed.writeUInt8(signature.recoveryParam, 64);
+  return packed;
 }
 
-function zeroPadBytes(value: string, length: number) {
-  while (value.length < 2 * length) {
-    value = "0" + value;
-  }
-  return value;
+export function toBigNumberHex(value: ethers.BigNumberish, numBytes: number): string {
+  return ethers.BigNumber.from(value)
+    .toHexString()
+    .substring(2)
+    .padStart(numBytes * 2, "0");
 }

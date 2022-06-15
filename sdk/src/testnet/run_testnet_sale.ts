@@ -1,5 +1,4 @@
 import { expect } from "chai";
-/*
 import {
   buildAcceptedTokens,
   createSaleOnEthAndInit,
@@ -22,14 +21,14 @@ import {
   parseVaaPayload,
   collectContributionsOnConductor,
 } from "./utils";
-import {
-  SALE_CONFIG,
-  TESTNET_ADDRESSES,
-  CONDUCTOR_NETWORK,
-  CONTRIBUTOR_INFO,
-  CONTRIBUTOR_NETWORKS,
-  CONDUCTOR_ADDRESS,
-} from "./consts";
+// import {
+//   SALE_CONFIG,
+//   TESTNET_ADDRESSES,
+//   CONDUCTOR_NETWORK,
+//   CONTRIBUTOR_INFO,
+//   CONTRIBUTOR_NETWORKS,
+//   CONDUCTOR_ADDRESS,
+// } from "./consts";
 import { Contribution, saleParams, SealSaleResult } from "./structs";
 import {
   setDefaultWasm,
@@ -45,18 +44,9 @@ import {
   getSaleFromContributorOnEth,
   parseSolanaSaleInit,
 } from "../../src";
-import {
-  initializeSaleOnSolanaContributor,
-  createContributorProgram,
-  prepareAndExecuteContributionOnSolana,
-  initiatorKeyPair,
-  attestAndCollectContributionsOnSolana,
-  createCustodianATAForSaleToken,
-} from "./solana_utils";
 import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey";
 
 setDefaultWasm("node");
-*/
 
 describe("Testnet ICCO Successful Sale", () => {
   it("test", async () => {

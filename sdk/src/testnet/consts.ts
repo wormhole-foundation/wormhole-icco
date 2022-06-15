@@ -37,11 +37,12 @@ export const WORMHOLE_ADDRESSES = {
 };
 
 const REPO_ROOT = `${__dirname}/../../..`;
+const TESTNET_CFG = `${REPO_ROOT}/sdk/cfg/testnet`;
 
 export const TESTNET_ADDRESSES = JSON.parse(fs.readFileSync(`${REPO_ROOT}/testnet.json`, "utf8"));
-export const SALE_CONFIG = JSON.parse(fs.readFileSync(`${__dirname}/../cfg/saleConfig.json`, "utf8"));
-export const CONTRIBUTOR_INFO = JSON.parse(fs.readFileSync(`${__dirname}/../cfg/contributors.json`, "utf8"));
-export const SOLANA_IDL = JSON.parse(fs.readFileSync(`${__dirname}/../solana/anchor_contributor.json`, "utf8"));
+export const SALE_CONFIG = JSON.parse(fs.readFileSync(`${TESTNET_CFG}/saleConfig.json`, "utf8"));
+export const CONTRIBUTOR_INFO = JSON.parse(fs.readFileSync(`${TESTNET_CFG}/contributors.json`, "utf8"));
+//export const SOLANA_IDL = JSON.parse(fs.readFileSync(`${__dirname}/../solana/anchor_contributor.json`, "utf8"));
 
 // VAA fetching params
 export const RETRY_TIMEOUT_SECONDS = 180;

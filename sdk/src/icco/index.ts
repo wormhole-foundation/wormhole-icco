@@ -1,4 +1,4 @@
-/*export * from "./abortSaleBeforeStartTime";
+export * from "./abortSaleBeforeStartTime";
 export * from "./attestContributions";
 export * from "./claimAllocation";
 export * from "./claimRefund";
@@ -8,12 +8,9 @@ export * from "./createSale";
 export * from "./getters";
 export * from "./initSale";
 export * from "./misc";
-*/
 export * from "./registerChain";
-/*
 export * from "./saleAborted";
 export * from "./saleSealed";
 export * from "./sealSale";
 export * from "./signedVaa";
 export * from "./structs";
-*/

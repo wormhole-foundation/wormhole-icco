@@ -1,9 +1,5 @@
 import { ethers } from "ethers";
-import {
-  ChainId,
-  ERC20__factory,
-  getForeignAssetEth,
-} from "@certusone/wormhole-sdk";
+import { ChainId, ERC20__factory, getForeignAssetEth } from "@certusone/wormhole-sdk";
 import { nativeToUint8Array } from "./misc";
 import { Conductor__factory } from "../ethers-contracts";
 import { AcceptedToken, SaleInit, makeAcceptedToken, Raise } from "./structs";
@@ -23,12 +19,7 @@ export async function makeAcceptedWrappedTokenEth(
   }
 
   const originAsset = nativeToUint8Array(originTokenAddress, originChainId);
-  const foreignTokenAddress = await getForeignAssetEth(
-    tokenBridgeAddress,
-    provider,
-    originChainId,
-    originAsset
-  );
+  const foreignTokenAddress = await getForeignAssetEth(tokenBridgeAddress, provider, originChainId, originAsset);
   if (foreignTokenAddress === null) {
     throw Error("cannot find foreign asset");
   }
@@ -38,6 +29,7 @@ export async function makeAcceptedWrappedTokenEth(
 
 export async function createSaleOnEth(
   conductorAddress: string,
+  isFixedPrice: boolean,
   localTokenAddress: string,
   tokenAddress: string,
   tokenChain: ChainId,
@@ -46,10 +38,12 @@ export async function createSaleOnEth(
   maxRaise: ethers.BigNumberish,
   saleStart: ethers.BigNumberish,
   saleEnd: ethers.BigNumberish,
+  unlockTimestamp: ethers.BigNumberish,
   acceptedTokens: AcceptedToken[],
   solanaTokenAccount: ethers.BytesLike,
   recipientAddress: string,
   refundRecipientAddress: string,
+  authority: string, // kyc
   wallet: ethers.Wallet
 ): Promise<ethers.ContractReceipt> {
   // approve first
@@ -64,6 +58,7 @@ export async function createSaleOnEth(
 
   // create a struct to pass to createSale
   const raise: Raise = {
+    isFixedPrice: isFixedPrice,
     token: tokenAddressBytes32,
     tokenChain: tokenChain,
     tokenAmount: amount,
@@ -71,9 +66,11 @@ export async function createSaleOnEth(
     maxRaise: maxRaise,
     saleStart: ethers.BigNumber.from(saleStart),
     saleEnd: ethers.BigNumber.from(saleEnd),
+    unlockTimestamp: ethers.BigNumber.from(unlockTimestamp),
     recipient: recipientAddress,
     refundRecipient: refundRecipientAddress,
     solanaTokenAccount: solanaTokenAccount,
+    authority: authority,
   };
 
   // now create

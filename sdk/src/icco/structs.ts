@@ -4,6 +4,7 @@ import { ChainId } from "@certusone/wormhole-sdk";
 import { nativeToUint8Array } from "./misc";
 
 export interface Raise {
+  isFixedPrice: boolean;
   token: ethers.BytesLike;
   tokenChain: ChainId;
   tokenAmount: ethers.BigNumberish;
@@ -11,9 +12,11 @@ export interface Raise {
   maxRaise: ethers.BigNumberish;
   saleStart: ethers.BigNumberish;
   saleEnd: ethers.BigNumberish;
+  unlockTimestamp: ethers.BigNumberish;
   recipient: string;
   refundRecipient: string;
   solanaTokenAccount: ethers.BytesLike;
+  authority: string;
 }
 
 export interface Sale {
@@ -80,15 +83,12 @@ export interface SaleInit {
   tokenAddress: string;
   tokenChain: number;
   tokenDecimals: number;
-  tokenAmount: ethers.BigNumberish;
-  minRaise: ethers.BigNumberish;
-  maxRaise: ethers.BigNumberish;
   saleStart: ethers.BigNumberish;
   saleEnd: ethers.BigNumberish;
   acceptedTokens: AcceptedToken[];
-  solanaTokenAccount: ethers.BytesLike;
   recipient: string;
-  refundRecipient: string;
+  authority: string;
+  unlockTimestamp: ethers.BigNumberish;
 }
 
 export interface SolanaToken {

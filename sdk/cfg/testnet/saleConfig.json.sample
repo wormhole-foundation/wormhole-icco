@@ -1,8 +1,9 @@
 {
-  "conductorNetwork": "goerli",
+  "conductorNetwork": "fuji",
   "authority": "ADD AUTHORITY PRIVATE KEY",
   "denominationDecimals": 6,
   "raiseParams": {
+    "isFixedPrice": true,
     "token": "uusd",
     "localTokenAddress": "0x36Ed51Afc79619b299b238898E72ce482600568a",
     "tokenChain": 3,
@@ -12,7 +13,9 @@
     "recipient": "ADD RECIPIENT PUBLIC KEY",
     "refundRecipient": "ADD REFUND RECIPIENT PUBLIC KEY",
     "saleDurationSeconds": 120,
-    "saleStartTimer": 90
+    "lockUpDurationSeconds": 100,
+    "saleStartTimer": 90,
+    "authority": "ADD KYC AUTHORITY PUBLIC KEY"
   },
   "acceptedTokens": [
     {

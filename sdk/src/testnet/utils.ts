@@ -37,7 +37,7 @@ import {
   abortSaleBeforeStartOnEth,
   saleAbortedOnEth,
   getSaleIdFromIccoVaa,
-} from "../../src";
+} from "../";
 import {
   WORMHOLE_ADDRESSES,
   CONDUCTOR_NETWORK,
@@ -51,7 +51,7 @@ import {
   RETRY_TIMEOUT_SECONDS,
 } from "./consts";
 import { TokenConfig, Contribution, SealSaleResult, saleParams, SaleSealed, AcceptedToken, SaleInit } from "./structs";
-import { signContribution } from "./kyc";
+import { signContributionEth } from "./kyc";
 import { assert } from "console";
 
 export async function extractVaaPayload(signedVaa: Uint8Array): Promise<Uint8Array> {
@@ -96,7 +96,6 @@ export async function buildAcceptedTokens(tokenConfig: TokenConfig[]): Promise<A
   const acceptedTokens: AcceptedToken[] = [];
 
   for (const config of tokenConfig) {
-    const wallet = initiatorWallet(CHAIN_ID_TO_NETWORK.get(config.chainId));
     const network = CHAIN_ID_TO_NETWORK.get(config.chainId);
 
     let tokenDecimals;
@@ -111,6 +110,7 @@ export async function buildAcceptedTokens(tokenConfig: TokenConfig[]): Promise<A
         acceptedTokenDecimalsOnConductor = 18; // should look these
       }
     } else {
+      const wallet = initiatorWallet(network);
       const token = ERC20__factory.connect(config.address, wallet);
       tokenDecimals = await token.decimals();
 
@@ -181,7 +181,7 @@ export async function getSignedVaaFromReceiptOnEth(
 export async function createSaleOnEthAndGetVaa(
   seller: ethers.Wallet,
   conductorAddress: string,
-  chainId: ChainId,
+  isFixedPrice: boolean,
   localTokenAddress: string,
   saleTokenAddress: string,
   saleTokenChain: ChainId,
@@ -190,14 +190,17 @@ export async function createSaleOnEthAndGetVaa(
   maxRaise: ethers.BigNumberish,
   saleStart: ethers.BigNumberish,
   saleEnd: ethers.BigNumberish,
-  recipientAddress,
-  refundRecipientAddress,
+  unlockTimestamp: ethers.BigNumberish,
+  recipientAddress: string,
+  refundRecipientAddress: string,
+  authority: string,
   acceptedTokens: AcceptedToken[],
   solanaTokenAccount: ethers.BytesLike
 ): Promise<Uint8Array[]> {
   // create the sale on the conductor
   const receipt = await createSaleOnEth(
     conductorAddress,
+    isFixedPrice,
     localTokenAddress,
     saleTokenAddress,
     saleTokenChain,
@@ -206,10 +209,12 @@ export async function createSaleOnEthAndGetVaa(
     maxRaise,
     saleStart,
     saleEnd,
+    unlockTimestamp,
     acceptedTokens,
     solanaTokenAccount,
     recipientAddress,
     refundRecipientAddress,
+    authority,
     seller
   );
 
@@ -234,10 +239,9 @@ export async function createSaleOnEthAndGetVaa(
   return signedVaas;
 }
 
-export async function createSaleOnEthAndInit(
+export async function createSaleOnEthConductor(
   initiatorConductorWallet: ethers.Wallet,
   conductorAddress: string,
-  conductorChainId: ChainId,
   raiseParams: saleParams,
   acceptedTokens: AcceptedToken[]
 ): Promise<Uint8Array[]> {
@@ -247,6 +251,7 @@ export async function createSaleOnEthAndInit(
   // set up sale token contract to interact with
   const saleStart = getCurrentTime() + raiseParams.saleStartTimer;
   const saleEnd = saleStart + raiseParams.saleDurationSeconds;
+  const unlockTimestamp = saleEnd + raiseParams.lockUpDurationSeconds;
 
   // create fake solana ATA
   const solanaTokenAccount = nativeToUint8Array(
@@ -258,7 +263,7 @@ export async function createSaleOnEthAndInit(
   const saleInitVaas = await createSaleOnEthAndGetVaa(
     initiatorConductorWallet,
     conductorAddress,
-    conductorChainId,
+    raiseParams.isFixedPrice,
     raiseParams.localTokenAddress,
     raiseParams.token,
     raiseParams.tokenChain,
@@ -267,8 +272,10 @@ export async function createSaleOnEthAndInit(
     ethers.utils.parseUnits(raiseParams.maxRaise, SALE_CONFIG.denominationDecimals),
     saleStart,
     saleEnd,
+    unlockTimestamp,
     raiseParams.recipient,
     raiseParams.refundRecipient,
+    raiseParams.authority,
     acceptedTokens,
     solanaTokenAccount
   );
@@ -293,7 +300,7 @@ export async function initializeSaleOnEthContributors(saleInitVaa: Uint8Array): 
   return saleInit;
 }
 
-export async function getLatestBlockTime(isMax = true): Promise<number> {
+/*export async function getLatestBlockTime(isMax = true): Promise<number> {
   const currentBlocks = await Promise.all(
     CONTRIBUTOR_NETWORKS.filter((ntwrk) => ntwrk != "solana_testnet").map(
       (network): Promise<ethers.providers.Block> => {
@@ -694,4 +701,4 @@ export async function abortSaleAtContributors(saleResult: SealSaleResult) {
   }
 
   return;
-}
+}*/

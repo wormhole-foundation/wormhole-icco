@@ -3,6 +3,7 @@ import { ChainId } from "@certusone/wormhole-sdk";
 import { ethers } from "ethers";
 
 export interface saleParams {
+  isFixedPrice: boolean;
   token: string;
   localTokenAddress: string;
   tokenAmount: string;
@@ -13,8 +14,10 @@ export interface saleParams {
   recipient: string;
   refundRecipient: string;
   saleDurationSeconds: number;
+  lockUpDurationSeconds: number;
   saleStartTimer: number;
   solanaTokenAccount: string;
+  authority: string;
 }
 
 export interface TokenConfig {
@@ -66,15 +69,12 @@ export interface SaleInit {
   tokenAddress: string;
   tokenChain: number;
   tokenDecimals: number;
-  tokenAmount: ethers.BigNumberish;
-  minRaise: ethers.BigNumberish;
-  maxRaise: ethers.BigNumberish;
   saleStart: ethers.BigNumberish;
   saleEnd: ethers.BigNumberish;
   acceptedTokens: AcceptedToken[];
-  solanaTokenAccount: ethers.BytesLike;
   recipient: string;
-  refundRecipient: string;
+  authority: string;
+  unlockTimestamp: ethers.BigNumberish;
 }
 
 export interface SolanaToken {

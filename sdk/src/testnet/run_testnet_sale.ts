@@ -1,8 +1,6 @@
 import { expect } from "chai";
 import {
-  buildAcceptedTokens,
-  createSaleOnEthAndInit,
-  initiatorWallet,
+  /*,
   waitForSaleToStart,
   prepareAndExecuteContribution,
   waitForSaleToEnd,
@@ -19,16 +17,20 @@ import {
   initializeSaleOnEthContributors,
   extractVaaPayload,
   parseVaaPayload,
-  collectContributionsOnConductor,
+  collectContributionsOnConductor,*/
+  initiatorWallet,
+  buildAcceptedTokens,
+  createSaleOnEthConductor,
 } from "./utils";
-// import {
-//   SALE_CONFIG,
-//   TESTNET_ADDRESSES,
-//   CONDUCTOR_NETWORK,
-//   CONTRIBUTOR_INFO,
-//   CONTRIBUTOR_NETWORKS,
-//   CONDUCTOR_ADDRESS,
-// } from "./consts";
+import {
+  SALE_CONFIG,
+  TESTNET_ADDRESSES,
+  CONDUCTOR_NETWORK,
+  CONTRIBUTOR_INFO,
+  CONTRIBUTOR_NETWORKS,
+  CONDUCTOR_ADDRESS,
+  CHAIN_ID_TO_NETWORK,
+} from "./consts";
 import { Contribution, saleParams, SealSaleResult } from "./structs";
 import {
   setDefaultWasm,
@@ -38,38 +40,37 @@ import {
   tryHexToNativeString,
   getEmitterAddressSolana,
 } from "@certusone/wormhole-sdk";
-import {
-  Conductor__factory,
-  getSaleFromConductorOnEth,
-  getSaleFromContributorOnEth,
-  parseSolanaSaleInit,
-} from "../../src";
+import { Conductor__factory, getSaleFromConductorOnEth, getSaleFromContributorOnEth, parseSolanaSaleInit } from "../";
 import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey";
 
 setDefaultWasm("node");
 
-describe("Testnet ICCO Successful Sale", () => {
-  it("test", async () => {
+describe("Testnet ICCO Successful Sales", () => {
+  it("Fixedprice With Lock Up", async () => {
     // const program = createContributorProgram();
-    // // setup sale variables
-    // const raiseParams: saleParams = SALE_CONFIG["raiseParams"];
-    // // create the sale token ATA
-    // // TO-DO: need to init sale with the sale token account
-    // /*const saleTokenAta = await createCustodianATAForSaleToken(
-    //       program,
-    //       raiseParams.solanaTokenAccount
-    //     );
-    //     console.log(saleTokenAta);*/
-    // // build the accepted token list
-    // const acceptedTokens = await buildAcceptedTokens(SALE_CONFIG["acceptedTokens"]);
-    // // create and initialize the sale
-    // const saleInitArray = await createSaleOnEthAndInit(
-    //   initiatorWallet(CONDUCTOR_NETWORK),
-    //   TESTNET_ADDRESSES.conductorAddress,
-    //   TESTNET_ADDRESSES.conductorChain,
-    //   raiseParams,
-    //   acceptedTokens
-    // );
+
+    // setup sale variables
+    const raiseParams: saleParams = SALE_CONFIG["raiseParams"];
+
+    // create the sale token ATA
+    // TO-DO: need to init sale with the sale token account
+    /*const saleTokenAta = await createCustodianATAForSaleToken(
+          program,
+          raiseParams.solanaTokenAccount
+        );
+        console.log(saleTokenAta);*/
+
+    // build the accepted token list
+    const acceptedTokens = await buildAcceptedTokens(SALE_CONFIG["acceptedTokens"]);
+
+    // create and initialize the sale
+    const saleInitArray = await createSaleOnEthConductor(
+      initiatorWallet(CONDUCTOR_NETWORK),
+      TESTNET_ADDRESSES.conductorAddress,
+      raiseParams,
+      acceptedTokens
+    );
+
     // // initialize the sale on the contributors
     // const saleInit = await initializeSaleOnEthContributors(saleInitArray[0]);
     // console.log(saleInit);

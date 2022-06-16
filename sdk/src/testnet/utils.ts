@@ -148,7 +148,6 @@ export async function getSignedVaaFromSequence(
   emitterAddress: string,
   sequence: string
 ): Promise<Uint8Array> {
-  console.log("Searching for VAA with sequence:", sequence);
   const result = await getSignedVAAWithRetry(
     WORMHOLE_ADDRESSES.guardianRpc,
     chainId,
@@ -159,7 +158,6 @@ export async function getSignedVaaFromSequence(
     },
     RETRY_TIMEOUT_SECONDS
   );
-  console.log("Found VAA for sequence:", sequence);
   return result.vaaBytes;
 }
 
@@ -339,8 +337,6 @@ export async function waitForSaleToEnd(
   extraTime: number // seconds
 ): Promise<void> {
   const timeNow = await getLatestBlockTime(false);
-  console.log("Earliest block timestamp:", timeNow);
-  console.log("SaleInit endTime:", saleInit.saleEnd);
   const timeLeftForSale = Number(saleInit.saleEnd) - timeNow;
   if (timeLeftForSale > 0) {
     console.log("Sleeping for", timeLeftForSale + extraTime, "seconds");
@@ -425,13 +421,12 @@ export async function prepareAndExecuteContribution(
       signature
     );
   } catch (error: any) {
-    console.error(error);
     return false;
   }
   return true;
 }
 
-/*export async function attestAndCollectContributionsOnEth(saleInit: SaleInit): Promise<void> {
+export async function attestContributionsOnContributor(saleInit: SaleInit): Promise<Uint8Array[]> {
   const saleId = saleInit.saleId;
 
   const signedVaas = await Promise.all(
@@ -448,26 +443,26 @@ export async function prepareAndExecuteContribution(
     })
   );
 
-  console.info("Finished attesting contributions.");
-  console.info("Collecting contributions from EVM.");
-  await collectContributionsOnConductor(signedVaas, saleInit.saleId);
+  return signedVaas;
 }
 
 export async function collectContributionsOnConductor(
   signedVaas: Uint8Array[],
   saleId: ethers.BigNumberish
-): Promise<void> {
+): Promise<boolean[]> {
   const receipts = await collectContributionsOnEth(CONDUCTOR_ADDRESS, signedVaas, initiatorWallet(CONDUCTOR_NETWORK));
-  assert(receipts.length == signedVaas.length);
-
-  console.info("Finished collecting contributions.");
+  if (receipts.length != signedVaas.length) {
+    throw Error("missing contribution attestation VAA");
+  }
 
   // confirm that all contributions were actually collected
   const conductorSale = await getSaleFromConductorOnEth(CONDUCTOR_ADDRESS, testProvider(CONDUCTOR_NETWORK), saleId);
 
+  const isCollected: boolean[] = [];
   for (let i = 0; i < conductorSale.contributionsCollected.length; i++) {
-    console.log("Contribution", i, "was accepted:", conductorSale.contributionsCollected[i]);
+    isCollected.push(conductorSale.contributionsCollected[i]);
   }
+  return isCollected;
 }
 
 export async function sealSaleAndParseReceiptOnEth(
@@ -495,7 +490,6 @@ export async function sealSaleAndParseReceiptOnEth(
     getEmitterAddressEth(conductorAddress),
     sealSaleSequence
   );
-  console.log("Found the sealSale VAA emitted from the Conductor.");
 
   // search for allocations
   // doing it serially for ease of putting into the map
@@ -699,4 +693,4 @@ export async function abortSaleAtContributors(saleResult: SealSaleResult) {
   }
 
   return;
-}*/
+}

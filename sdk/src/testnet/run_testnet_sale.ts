@@ -1,8 +1,12 @@
 import { expect } from "chai";
 import {
-  /*, 
+  initiatorWallet,
+  buildAcceptedTokens,
+  createSaleOnEthConductor,
+  initializeSaleOnEthContributors,
+  waitForSaleToStart,
+  prepareAndExecuteContribution,
   waitForSaleToEnd,
-  attestAndCollectContributionsOnEth,
   sealOrAbortSaleOnEth,
   sealSaleAtContributors,
   redeemCrossChainAllocations,
@@ -14,13 +18,8 @@ import {
   abortSaleAtContributors,
   extractVaaPayload,
   parseVaaPayload,
-  collectContributionsOnConductor,*/
-  initiatorWallet,
-  buildAcceptedTokens,
-  createSaleOnEthConductor,
-  initializeSaleOnEthContributors,
-  waitForSaleToStart,
-  prepareAndExecuteContribution,
+  collectContributionsOnConductor,
+  attestContributionsOnContributor,
 } from "./utils";
 import {
   SALE_CONFIG,
@@ -84,16 +83,14 @@ describe("Testnet ICCO Successful Sales", () => {
       console.info("Sale", solanaSaleInit.saleId, "has been initialized on the Solana contributor.");
     }*/
 
-    // continue with the sale if it wasn't aborted early
-    let successfulContributions: Contribution[] = [];
-
     // wait for the sale to start before contributing
-    console.info("Waiting for the sale to start...");
+    console.info("Waiting for the sale to start.");
     const extraTime: number = 5; // wait an extra 5 seconds
     await waitForSaleToStart(saleInit, extraTime);
 
     // loop through contributors and safe contribute one by one
     const contributions: Contribution[] = CONTRIBUTOR_INFO["contributions"];
+    console.log("Making contributions to the sale.");
     for (const contribution of contributions) {
       let successful = false;
       // check if we're contributing a solana token
@@ -106,24 +103,27 @@ describe("Testnet ICCO Successful Sales", () => {
       } else {
         successful = await prepareAndExecuteContribution(saleInit.saleId, raiseParams.token, contribution);
       }
-
-      if (successful) {
-        successfulContributions.push(contribution);
-      } else {
-        console.log("Contribution failed for token:", contribution.address);
-      }
+      expect(successful, "Contribution failed").to.be.true;
     }
-    console.log(successfulContributions.length, "successful contributions recorded.");
 
-    /*// wait for sale to end
-    console.log("Waiting for the sale to end...");
+    // wait for sale to end
+    console.log("Waiting for the sale to end.");
     await waitForSaleToEnd(saleInit, 10);
+
     // attest and collect contributions on EVM
-    await attestAndCollectContributionsOnEth(saleInit);
+    const attestVaas: Uint8Array[] = await attestContributionsOnContributor(saleInit);
+    console.log("Successfully attested contributions on", attestVaas.length, "chains.");
+
+    // collect contributions on the conductor
+    const collectionResults = await collectContributionsOnConductor(attestVaas, saleInit.saleId);
+    for (const result of collectionResults) {
+      expect(result, "Failed to collect all contributions on the conductor.").to.be.true;
+    }
+    console.log("Successfully collected contributions on the conductor.");
 
     // seal the sale on the conductor contract
     const saleResult: SealSaleResult = await sealOrAbortSaleOnEth(saleInit);
-    console.log("Sale results have been finalized.");*/
+    expect(saleResult.sale.isSealed, "Sale was not sealed").to.be.true;
 
     /*// check to see if the sale failed, abort and refund folks if so
         const conductorSale = await getSaleFromConductorOnEth(

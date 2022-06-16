@@ -2,7 +2,10 @@ use anchor_lang::{
     prelude::*,
     solana_program::sysvar::{clock, rent},
 };
-use anchor_spl::token::{Mint, Token, TokenAccount};
+use anchor_spl::{
+    associated_token::AssociatedToken,
+    token::{Mint, Token, TokenAccount},
+};
 
 use crate::{
     constants::*,
@@ -77,17 +80,17 @@ pub struct InitSale<'info> {
     pub core_bridge_vaa: AccountInfo<'info>,
     pub sale_token_mint: Account<'info, Mint>,
 
-    #[
-        account(
-            constraint = custodian_sale_token_acct.mint == sale_token_mint.key(),
-            constraint = custodian_sale_token_acct.owner == custodian.key(),
-        )
-    ]
+    #[account(
+        associated_token::mint = sale_token_mint,
+        associated_token::authority = custodian,
+    )]
+    /// This must be an associated token account
     pub custodian_sale_token_acct: Account<'info, TokenAccount>,
 
     #[account(mut)]
     pub payer: Signer<'info>,
     pub system_program: Program<'info, System>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
 /// Context provides all accounts required for user to send contribution
@@ -145,14 +148,17 @@ pub struct Contribute<'info> {
 
     #[account(
         mut,
-        constraint = custodian_token_acct.owner == custodian.key(),
+        associated_token::mint = buyer_token_acct.mint,
+        associated_token::authority = custodian,
     )]
+    /// This must be an associated token account
     pub custodian_token_acct: Account<'info, TokenAccount>,
 
     #[account(mut)]
     pub owner: Signer<'info>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
 /// Context provides all accounts required to attest contributions.
@@ -308,9 +314,10 @@ pub struct BridgeSealedContribution<'info> {
     /// CHECK: Check if owned by ATA Program
     #[account(
         mut,
-        constraint = custodian_token_acct.owner == custodian.key(),
-        constraint = custodian_token_acct.mint == accepted_mint.key()
+        associated_token::mint = accepted_mint,
+        associated_token::authority = custodian,
     )]
+    /// This must be an associated token account
     pub custodian_token_acct: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
@@ -321,6 +328,7 @@ pub struct BridgeSealedContribution<'info> {
     pub payer: Signer<'info>,
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
 
     #[account(
         constraint = token_bridge.key() == Custodian::token_bridge()?
@@ -522,12 +530,14 @@ pub struct SealSale<'info> {
     pub core_bridge_vaa: AccountInfo<'info>,
 
     #[account(
-        constraint = custodian_sale_token_acct.mint == sale.sale_token_mint,
-        constraint = custodian_sale_token_acct.owner == custodian.key(),
+        associated_token::mint = sale.sale_token_mint,
+        associated_token::authority = custodian,
     )]
+    /// This must be an associated token account
     pub custodian_sale_token_acct: Account<'info, TokenAccount>,
 
     pub system_program: Program<'info, System>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
 /// Context provides all accounts required for user to claim his allocation
@@ -575,9 +585,10 @@ pub struct ClaimAllocation<'info> {
 
     #[account(
         mut,
-        constraint = custodian_sale_token_acct.mint == sale.sale_token_mint,
-        constraint = custodian_sale_token_acct.owner == custodian.key(),
+        associated_token::mint = sale.sale_token_mint,
+        associated_token::authority = custodian,
     )]
+    /// This must be an associated token account
     pub custodian_sale_token_acct: Account<'info, TokenAccount>,
 
     #[account(
@@ -591,6 +602,7 @@ pub struct ClaimAllocation<'info> {
     pub owner: Signer<'info>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
 /// Context provides all accounts required for user to claim his refunds

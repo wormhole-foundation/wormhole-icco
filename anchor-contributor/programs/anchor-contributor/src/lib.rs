@@ -99,49 +99,67 @@ pub mod anchor_contributor {
     /// contribution amount and the contribution will be transferred from the buyer's
     /// associated token account to the custodian's associated token account.
     pub fn contribute(ctx: Context<Contribute>, amount: u64, kyc_signature: Vec<u8>) -> Result<()> {
-        // We need to use the buyer's associated token account to help us find the token index
-        // for this particular mint he wishes to contribute.
-        let sale = &ctx.accounts.sale;
+        // buyer's token account -> custodian's associated token account
+        // These references will be used throughout the instruction
         let buyer_token_acct = &ctx.accounts.buyer_token_acct;
-        let (idx, asset) = sale.get_total_info(&buyer_token_acct.mint)?;
-        let token_index = asset.token_index;
+        let custodian_token_acct = &ctx.accounts.custodian_token_acct;
 
-        // If the buyer account wasn't initialized before, we will do so here. This initializes
-        // the state for all of this buyer's contributions.
-        let buyer = &mut ctx.accounts.buyer;
-        if !buyer.initialized {
-            buyer.initialize(sale.totals.len());
-        }
-
-        // We verify the KYC signature by encoding specific details of this contribution the
-        // same way the KYC entity signed for the transaction. If we cannot recover the KYC's
-        // public key using ecdsa recovery, we cannot allow the contribution to continue.
-        //
-        // We also refer to the buyer (owner) of this instruction as the transfer_authority
+        // We refer to the buyer (owner) of this instruction as the transfer_authority
         // for the SPL transfer that will happen at the end of all the accounting processing.
         let transfer_authority = &ctx.accounts.owner;
-        sale.verify_kyc_authority(
-            token_index,
-            amount,
-            &transfer_authority.key(),
-            buyer.contributions[idx].amount,
-            &kyc_signature,
-        )?;
+
+        // Find indices used for contribution accounting
+        let (idx, token_index) = {
+            let sale = &ctx.accounts.sale;
+
+            // We need to use the buyer's associated token account to help us find the token index
+            // for this particular mint he wishes to contribute.
+            let (idx, asset) = sale.get_total_info(&buyer_token_acct.mint)?;
+
+            // is this overkill to check given anchor constraints?
+            asset.verify_ata(
+                &custodian_token_acct.to_account_info(),
+                &ctx.accounts.custodian.key(),
+            )?;
+
+            // If the buyer account wasn't initialized before, we will do so here. This initializes
+            // the state for all of this buyer's contributions.
+            let buyer = &mut ctx.accounts.buyer;
+            if !buyer.initialized {
+                buyer.initialize(sale.totals.len());
+            }
+
+            let token_index = asset.token_index;
+
+            // We verify the KYC signature by encoding specific details of this contribution the
+            // same way the KYC entity signed for the transaction. If we cannot recover the KYC's
+            // public key using ecdsa recovery, we cannot allow the contribution to continue.
+            sale.verify_kyc_authority(
+                token_index,
+                amount,
+                &transfer_authority.key(),
+                buyer.contributions[idx].amount,
+                &kyc_signature,
+            )?;
+
+            (idx, token_index)
+        };
 
         // We need to grab the current block's timestamp and verify that the buyer is allowed
         // to contribute now. A user cannot contribute before the sale has started. If all the
         // sale checks pass, the Sale's total contributions uptick to reflect this buyer's
         // contribution.
         let clock = Clock::get()?;
-        let sale = &mut ctx.accounts.sale;
-        sale.update_total_contributions(clock.unix_timestamp, token_index, amount)?;
+        ctx.accounts
+            .sale
+            .update_total_contributions(clock.unix_timestamp, token_index, amount)?;
 
         // And we do the same with the Buyer account.
-        buyer.contribute(idx, amount)?;
+        ctx.accounts.buyer.contribute(idx, amount)?;
 
         // Finally transfer SPL tokens from the buyer's associated token account to the
-        // custodian's associated token account.
-        let custodian_token_acct = &ctx.accounts.custodian_token_acct;
+        // custodian's associated token account. Verify the custodian's associated
+        // token account
         token::transfer(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
@@ -295,27 +313,16 @@ pub mod anchor_contributor {
         );
 
         // We will mutate the buyer's accounting and state for each contributed mint.
-        for (total, custodian_token_acct) in izip!(totals, custodian_token_accts) {
-            // Verify the authority of the custodian's associated token account
+        for (asset, custodian_token_acct) in izip!(totals, custodian_token_accts) {
+            // re-derive custodian_token_acct address and check it.
+            // Verifies the authority and mint of the custodian's associated token account
+            let ata = asset.verify_ata(custodian_token_acct, &custodian.key())?;
             require!(
-                token::accessor::authority(&custodian_token_acct)? == custodian.key(),
-                ContributorError::InvalidAccount
-            );
-
-            // We need to verify that the mints are the same between the two
-            // associated token accounts. After which, we will use the sale account
-            // to find the correct index to reference in the buyer account.
-            require!(
-                token::accessor::mint(&custodian_token_acct)? == total.mint,
-                ContributorError::InvalidAccount
-            );
-            // verify custodian ata has enough funds after conductor accounting
-            require!(
-                token::accessor::amount(&custodian_token_acct)? >= total.contributions,
+                ata.amount >= asset.contributions,
                 ContributorError::InsufficientFunds
             );
 
-            total.prepare_for_transfer();
+            asset.prepare_for_transfer();
         }
 
         // Finish instruction.
@@ -338,8 +345,16 @@ pub mod anchor_contributor {
         require!(sale.is_sealed(), ContributorError::SaleNotSealed);
 
         let custodian_token_acct = &ctx.accounts.custodian_token_acct;
+
         let accepted_mint = &ctx.accounts.accepted_mint;
         let (idx, asset) = sale.get_total_info(&accepted_mint.key())?;
+
+        let custodian = &ctx.accounts.custodian;
+
+        // is this overkill to check given anchor constraints?
+        asset.verify_ata(&custodian_token_acct.to_account_info(), &custodian.key())?;
+
+        // check if asset is in the correct state after sealing the sale
         require!(
             asset.is_ready_for_transfer(),
             ContributorError::TransferNotAllowed
@@ -353,7 +368,7 @@ pub mod anchor_contributor {
                 token::Approve {
                     to: custodian_token_acct.to_account_info(),
                     delegate: authority_signer.to_account_info(),
-                    authority: ctx.accounts.custodian.to_account_info(),
+                    authority: custodian.to_account_info(),
                 },
                 &[&[SEED_PREFIX_CUSTODIAN.as_bytes(), &[ctx.bumps["custodian"]]]],
             ),
@@ -384,7 +399,7 @@ pub mod anchor_contributor {
                         AccountMeta::new(ctx.accounts.payer.key(), true),
                         AccountMeta::new_readonly(ctx.accounts.token_bridge_config.key(), false),
                         AccountMeta::new(custodian_token_acct.key(), false),
-                        AccountMeta::new_readonly(ctx.accounts.custodian.key(), true),
+                        AccountMeta::new_readonly(custodian.key(), true),
                         AccountMeta::new(accepted_mint.key(), false),
                         AccountMeta::new_readonly(wrapped_meta.key(), false),
                         AccountMeta::new_readonly(authority_signer.key(), false),
@@ -522,27 +537,14 @@ pub mod anchor_contributor {
 
         // We will mutate the buyer's accounting and state for each contributed mint.
         let buyer = &mut ctx.accounts.buyer;
-        for (idx, (total, custodian_token_acct, buyer_token_acct)) in
+        for (idx, (asset, custodian_token_acct, buyer_token_acct)) in
             izip!(totals, custodian_token_accts, buyer_token_accts).enumerate()
         {
             // Verify the custodian's associated token account
-            require!(
-                token::accessor::authority(&custodian_token_acct)? == transfer_authority.key(),
-                ContributorError::InvalidAccount
-            );
-            require!(
-                token::accessor::mint(&custodian_token_acct)? == total.mint,
-                ContributorError::InvalidAccount
-            );
-            // And verify the buyer's associated token account
-            require!(
-                token::accessor::authority(&buyer_token_acct)? == owner.key(),
-                ContributorError::InvalidAccount
-            );
-            require!(
-                token::accessor::mint(&buyer_token_acct)? == total.mint,
-                ContributorError::InvalidAccount
-            );
+            asset.verify_ata(custodian_token_acct, &ctx.accounts.custodian.key())?;
+
+            // And verify the buyer's token account
+            asset.verify_token_account(buyer_token_acct, &owner.key())?;
 
             // Now calculate the refund and transfer to the buyer's associated
             // token account if there is any amount to refund.
@@ -695,31 +697,18 @@ pub mod anchor_contributor {
 
         // We will mutate the buyer's accounting and state for each contributed mint.
         let buyer = &mut ctx.accounts.buyer;
-        for (idx, (total, custodian_token_acct, buyer_token_acct)) in
+        for (idx, (asset, custodian_token_acct, buyer_token_acct)) in
             izip!(totals, custodian_token_accts, buyer_token_accts).enumerate()
         {
             // Verify the custodian's associated token account
-            require!(
-                token::accessor::authority(&custodian_token_acct)? == transfer_authority.key(),
-                ContributorError::InvalidAccount
-            );
-            require!(
-                token::accessor::mint(&custodian_token_acct)? == total.mint,
-                ContributorError::InvalidAccount
-            );
-            // And verify the buyer's associated token account
-            require!(
-                token::accessor::authority(&buyer_token_acct)? == owner.key(),
-                ContributorError::InvalidAccount
-            );
-            require!(
-                token::accessor::mint(&buyer_token_acct)? == total.mint,
-                ContributorError::InvalidAccount
-            );
+            asset.verify_ata(custodian_token_acct, &ctx.accounts.custodian.key())?;
+
+            // And verify the buyer's token account
+            asset.verify_token_account(buyer_token_acct, &owner.key())?;
 
             // Now calculate the excess contribution and transfer to the
             // buyer's associated token account if there is any amount calculated.
-            let excess = buyer.claim_excess(idx, total)?;
+            let excess = buyer.claim_excess(idx, asset)?;
             if excess == 0 {
                 continue;
             }

@@ -1,8 +1,6 @@
 import { expect } from "chai";
 import {
-  /*,
-  waitForSaleToStart,
-  prepareAndExecuteContribution,
+  /*, 
   waitForSaleToEnd,
   attestAndCollectContributionsOnEth,
   sealOrAbortSaleOnEth,
@@ -14,13 +12,15 @@ import {
   abortSaleEarlyAtContributor,
   testProvider,
   abortSaleAtContributors,
-  initializeSaleOnEthContributors,
   extractVaaPayload,
   parseVaaPayload,
   collectContributionsOnConductor,*/
   initiatorWallet,
   buildAcceptedTokens,
   createSaleOnEthConductor,
+  initializeSaleOnEthContributors,
+  waitForSaleToStart,
+  prepareAndExecuteContribution,
 } from "./utils";
 import {
   SALE_CONFIG,
@@ -72,67 +72,59 @@ describe("Testnet ICCO Successful Sales", () => {
     );
 
     // // initialize the sale on the contributors
-    // const saleInit = await initializeSaleOnEthContributors(saleInitArray[0]);
-    // console.log(saleInit);
-    // console.info("Sale", saleInit.saleId, "has been initialized on the EVM contributors.");
-    // // initialize the sale on solana contributor if accepting solana tokens
-    // let solanaSaleInit;
-    // if (saleInitArray.length > 1) {
-    //   solanaSaleInit = await initializeSaleOnSolanaContributor(program, Buffer.from(saleInitArray[1]));
-    //   console.log(solanaSaleInit);
-    //   console.info("Sale", solanaSaleInit.saleId, "has been initialized on the Solana contributor.");
-    // }
-    // // test aborting the sale early
-    // let saleTerminatedEarly = false;
-    // if (SALE_CONFIG["testParams"].abortSaleEarly) {
-    //   console.log("Aborting sale early on the Conductor.");
-    //   // abort the sale early in the conductor
-    //   const abortEarlyReceipt = await abortSaleEarlyAtConductor(saleInit);
-    //   console.log("Aborting sale early on the Contributors.");
-    //   await abortSaleEarlyAtContributor(saleInit, abortEarlyReceipt);
-    //   saleTerminatedEarly = true;
-    // }
-    // // continue with the sale if it wasn't aborted early
-    // let saleResult: SealSaleResult;
-    // let successfulContributions: Contribution[] = [];
-    // if (!saleTerminatedEarly) {
-    //   // wait for the sale to start before contributing
-    //   console.info("Waiting for the sale to start...");
-    //   const extraTime: number = 5; // wait an extra 5 seconds
-    //   await waitForSaleToStart(saleInit, extraTime);
-    //   // loop through contributors and safe contribute one by one
-    //   const contributions: Contribution[] = CONTRIBUTOR_INFO["contributions"];
-    //   for (let i = 0; i < contributions.length; i++) {
-    //     let successful = false;
-    //     // check if we're contributing a solana token
-    //     if (contributions[i].chainId == CHAIN_ID_SOLANA) {
-    //       successful = await prepareAndExecuteContributionOnSolana(
-    //         program,
-    //         Buffer.from(saleInitArray[1]),
-    //         contributions[i]
-    //       );
-    //     } else {
-    //       successful = await prepareAndExecuteContribution(saleInit.saleId, raiseParams.token, contributions[i]);
-    //     }
-    //     if (successful) {
-    //       console.info("Contribution successful for contribution:", i);
-    //       successfulContributions.push(contributions[i]);
-    //     } else {
-    //       console.log("Contribution failed for contribution:", i);
-    //     }
-    //   }
-    //   // wait for sale to end
-    //   console.log("Waiting for the sale to end...");
-    //   await waitForSaleToEnd(saleInit, 10);
-    //   // attest and collect contributions on EVM
-    //   await attestAndCollectContributionsOnEth(saleInit);
-    //   await attestAndCollectContributionsOnSolana(program, Buffer.from(saleInitArray[1]), solanaSaleInit);
-    //   /*// seal the sale on the conductor contract
-    //       saleResult = await sealOrAbortSaleOnEth(saleInit);
-    //       console.log("Sale results have been finalized.");*/
-    // } else {
-    //   console.log("Skipping contributions, the sale was aborted early!");
-    // }
+    const saleInit = await initializeSaleOnEthContributors(saleInitArray[0]);
+    console.log(saleInit);
+    console.info("Sale", saleInit.saleId, "has been initialized on the EVM contributors.");
+
+    // initialize the sale on solana contributor if accepting solana tokens
+    /*let solanaSaleInit;
+    if (saleInitArray.length > 1) {
+      solanaSaleInit = await initializeSaleOnSolanaContributor(program, Buffer.from(saleInitArray[1]));
+      console.log(solanaSaleInit);
+      console.info("Sale", solanaSaleInit.saleId, "has been initialized on the Solana contributor.");
+    }*/
+
+    // continue with the sale if it wasn't aborted early
+    let successfulContributions: Contribution[] = [];
+
+    // wait for the sale to start before contributing
+    console.info("Waiting for the sale to start...");
+    const extraTime: number = 5; // wait an extra 5 seconds
+    await waitForSaleToStart(saleInit, extraTime);
+
+    // loop through contributors and safe contribute one by one
+    const contributions: Contribution[] = CONTRIBUTOR_INFO["contributions"];
+    for (const contribution of contributions) {
+      let successful = false;
+      // check if we're contributing a solana token
+      if (contribution.chainId == CHAIN_ID_SOLANA) {
+        /*successful = await prepareAndExecuteContributionOnSolana(
+          program,
+          Buffer.from(saleInitArray[1]),
+          contributions[i]
+        );*/
+      } else {
+        successful = await prepareAndExecuteContribution(saleInit.saleId, raiseParams.token, contribution);
+      }
+
+      if (successful) {
+        successfulContributions.push(contribution);
+      } else {
+        console.log("Contribution failed for token:", contribution.address);
+      }
+    }
+    console.log(successfulContributions.length, "successful contributions recorded.");
+
+    /*// wait for sale to end
+    console.log("Waiting for the sale to end...");
+    await waitForSaleToEnd(saleInit, 10);
+    // attest and collect contributions on EVM
+    await attestAndCollectContributionsOnEth(saleInit);
+
+    // seal the sale on the conductor contract
+    const saleResult: SealSaleResult = await sealOrAbortSaleOnEth(saleInit);
+    console.log("Sale results have been finalized.");*/
+
     /*// check to see if the sale failed, abort and refund folks if so
         const conductorSale = await getSaleFromConductorOnEth(
           CONDUCTOR_ADDRESS,

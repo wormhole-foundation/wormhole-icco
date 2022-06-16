@@ -51,7 +51,7 @@ import {
   RETRY_TIMEOUT_SECONDS,
 } from "./consts";
 import { TokenConfig, Contribution, SealSaleResult, saleParams, SaleSealed, AcceptedToken, SaleInit } from "./structs";
-import { signContributionEth } from "./kyc";
+import { signContributionOnEth } from "./kyc";
 import { assert } from "console";
 
 export async function extractVaaPayload(signedVaa: Uint8Array): Promise<Uint8Array> {
@@ -300,7 +300,7 @@ export async function initializeSaleOnEthContributors(saleInitVaa: Uint8Array): 
   return saleInit;
 }
 
-/*export async function getLatestBlockTime(isMax = true): Promise<number> {
+export async function getLatestBlockTime(isMax = true): Promise<number> {
   const currentBlocks = await Promise.all(
     CONTRIBUTOR_NETWORKS.filter((ntwrk) => ntwrk != "solana_testnet").map(
       (network): Promise<ethers.providers.Block> => {
@@ -392,7 +392,6 @@ export async function prepareAndExecuteContribution(
 
   // format amount
   const amount: ethers.BigNumberish = await parseUnits(contribution, wallet);
-  console.log("Contributing this amount:", amount.toString());
 
   // get total contributed amount for kyc authority
   const totalContribution = await getSaleContributionOnEth(
@@ -404,8 +403,7 @@ export async function prepareAndExecuteContribution(
   );
 
   // get KYC signature
-  const signature = await signContribution(
-    testRpc(CHAIN_ID_TO_NETWORK.get(contribution.chainId)),
+  const signature = await signContributionOnEth(
     tryNativeToHexString(CONDUCTOR_ADDRESS, contribution.chainId)!,
     saleId,
     tokenIndex,
@@ -433,7 +431,7 @@ export async function prepareAndExecuteContribution(
   return true;
 }
 
-export async function attestAndCollectContributionsOnEth(saleInit: SaleInit): Promise<void> {
+/*export async function attestAndCollectContributionsOnEth(saleInit: SaleInit): Promise<void> {
   const saleId = saleInit.saleId;
 
   const signedVaas = await Promise.all(

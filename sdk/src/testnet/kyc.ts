@@ -4,7 +4,7 @@ import { soliditySha3 } from "web3-utils";
 
 const elliptic = require("elliptic");
 
-export function signContributionEth(
+export function signContributionOnEth(
   conductorAddress: string,
   saleId: ethers.BigNumberish,
   tokenIndex: number,

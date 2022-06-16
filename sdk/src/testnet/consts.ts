@@ -2,6 +2,9 @@ const fs = require("fs");
 import { web3 } from "@project-serum/anchor";
 import { ChainId, CHAIN_ID_ETH, CHAIN_ID_AVAX, CHAIN_ID_SOLANA } from "@certusone/wormhole-sdk";
 
+export const REPO_PATH = `${__dirname}/../../..`;
+export const SDK_PATH = `${REPO_PATH}/sdk`;
+
 export const WORMHOLE_ADDRESSES = {
   guardianRpc: ["https://wormhole-v2-testnet-api.certus.one"],
   solana_devnet: {
@@ -48,8 +51,6 @@ export const CONTRIBUTOR_INFO = JSON.parse(fs.readFileSync(`${TESTNET_CFG}/contr
 export const RETRY_TIMEOUT_SECONDS = 180;
 
 // deployment info for the sale
-export const SOLANA_RPC = SALE_CONFIG["initiatorWallet"]["solana_devnet"].rpc;
-export const SOLANA_CORE_BRIDGE_ADDRESS = new web3.PublicKey(WORMHOLE_ADDRESSES.solana_devnet.wormhole);
 export const CONDUCTOR_ADDRESS = TESTNET_ADDRESSES.conductorAddress;
 export const CONDUCTOR_CHAIN_ID = TESTNET_ADDRESSES.conductorChain;
 export const CONDUCTOR_NETWORK = SALE_CONFIG["conductorNetwork"];
@@ -59,3 +60,8 @@ export const CHAIN_ID_TO_NETWORK = new Map<ChainId, string>();
 CHAIN_ID_TO_NETWORK.set(CHAIN_ID_ETH, CONTRIBUTOR_NETWORKS[0]);
 CHAIN_ID_TO_NETWORK.set(CHAIN_ID_AVAX, CONTRIBUTOR_NETWORKS[1]);
 CHAIN_ID_TO_NETWORK.set(CHAIN_ID_SOLANA, CONTRIBUTOR_NETWORKS[2]);
+
+// solana
+export const SOLANA_RPC = "https://api.devnet.solana.com";
+export const SOLANA_CORE_BRIDGE_ADDRESS = new web3.PublicKey("3u8hJUVTA4jH1wYAyUur7FFZVQ8H635K3tSHHF4ssjQ5");
+export const SOLANA_TOKEN_BRIDGE_ADDRESS = new web3.PublicKey("DZnkkTmCiFWfYTfT41X3Rd1kDgozqzxWaHqsw6W4x2oe");

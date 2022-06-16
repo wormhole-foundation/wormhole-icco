@@ -1,6 +1,7 @@
 node_modules
 evm-contracts
-solana-idl
+target
 src/ethers-contracts
+src/anchor
 cfg/testnet/contributors.json
 cfg/testnet/saleConfig.json

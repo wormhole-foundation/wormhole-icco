@@ -8,11 +8,11 @@ import {
   getOrCreateAssociatedTokenAccount,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
+import { serializeUint16 } from "byteify";
+import keccak256 from "keccak256";
 
 import { deriveAddress, getPdaAssociatedTokenAddress, makeReadOnlyAccountMeta, makeWritableAccountMeta } from "./utils";
 import { PostVaaMethod } from "./types";
-import { serializeUint16 } from "byteify";
-import { hashVaaPayload } from "./wormhole";
 
 export class IccoContributor {
   program: Program<AnchorContributor>;
@@ -491,4 +491,12 @@ async function parseSaleId(iccoVaa: Buffer): Promise<Buffer> {
   const numSigners = iccoVaa[5];
   const payloadStart = 57 + 66 * numSigners;
   return iccoVaa.subarray(payloadStart + 1, payloadStart + 33);
+}
+
+export function hashVaaPayload(signedVaa: Buffer): Buffer {
+  const sigStart = 6;
+  const numSigners = signedVaa[5];
+  const sigLength = 66;
+  const bodyStart = sigStart + sigLength * numSigners;
+  return keccak256(signedVaa.subarray(bodyStart));
 }

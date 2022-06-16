@@ -83,11 +83,3 @@ export function signAndEncodeVaa(
 
   return vm;
 }
-
-export function hashVaaPayload(signedVaa: Buffer): Buffer {
-  const sigStart = 6;
-  const numSigners = signedVaa[5];
-  const sigLength = 66;
-  const bodyStart = sigStart + sigLength * numSigners;
-  return keccak256(signedVaa.subarray(bodyStart));
-}

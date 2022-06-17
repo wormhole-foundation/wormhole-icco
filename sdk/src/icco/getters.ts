@@ -78,6 +78,27 @@ export async function getAllocationIsClaimedOnEth(
   return contributor.allocationIsClaimed(saleId, tokenIndex, walletAddress);
 }
 
+export async function getExcessContributionIsClaimedOnEth(
+  contributorAddress: string,
+  provider: ethers.providers.Provider,
+  saleId: ethers.BigNumberish,
+  tokenIndex: number,
+  walletAddress: string
+): Promise<boolean> {
+  const contributor = Contributor__factory.connect(contributorAddress, provider);
+  return contributor.excessContributionIsClaimed(saleId, tokenIndex, walletAddress);
+}
+
+export async function getSaleExcessContributionOnEth(
+  contributorAddress: string,
+  provider: ethers.providers.Provider,
+  saleId: ethers.BigNumberish,
+  tokenIndex: number
+): Promise<ethers.BigNumberish> {
+  const contributor = Contributor__factory.connect(contributorAddress, provider);
+  return contributor.getSaleExcessContribution(saleId, tokenIndex);
+}
+
 export async function getContributorContractOnEth(
   conductorAddress: string,
   provider: ethers.providers.Provider,

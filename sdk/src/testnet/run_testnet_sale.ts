@@ -8,7 +8,7 @@ import {
   prepareAndExecuteContribution,
   waitForSaleToEnd,
   sealOrAbortSaleOnEth,
-  sealSaleAtContributors,
+  sealSaleAtEthContributors,
   redeemCrossChainAllocations,
   claimContributorAllocationOnEth,
   redeemCrossChainContributions,
@@ -20,6 +20,12 @@ import {
   parseVaaPayload,
   collectContributionsOnConductor,
   attestContributionsOnContributor,
+  getOriginalTokenBalance,
+  getSaleTokenBalancesOnContributors,
+  balancesAllGreaterThan,
+  findUniqueContributions,
+  excessContributionsExistForSale,
+  claimContributorExcessContributionOnEth,
 } from "./utils";
 import {
   SALE_CONFIG,
@@ -29,6 +35,8 @@ import {
   CONTRIBUTOR_NETWORKS,
   CONDUCTOR_ADDRESS,
   CHAIN_ID_TO_NETWORK,
+  WORMHOLE_ADDRESSES,
+  CONDUCTOR_CHAIN_ID,
 } from "./consts";
 import { Contribution, saleParams, SealSaleResult } from "./structs";
 import {
@@ -41,11 +49,12 @@ import {
 } from "@certusone/wormhole-sdk";
 import { Conductor__factory, getSaleFromConductorOnEth, getSaleFromContributorOnEth, parseSolanaSaleInit } from "../";
 import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey";
+import { ethers } from "ethers";
 
 setDefaultWasm("node");
 
 describe("Testnet ICCO Successful Sales", () => {
-  it("Fixedprice With Lock Up", async () => {
+  it("Fixed-price With Lock Up", async () => {
     // const program = createContributorProgram();
 
     // setup sale variables
@@ -95,6 +104,7 @@ describe("Testnet ICCO Successful Sales", () => {
       let successful = false;
       // check if we're contributing a solana token
       if (contribution.chainId == CHAIN_ID_SOLANA) {
+        // TO-DO
         /*successful = await prepareAndExecuteContributionOnSolana(
           program,
           Buffer.from(saleInitArray[1]),
@@ -121,57 +131,65 @@ describe("Testnet ICCO Successful Sales", () => {
     }
     console.log("Successfully collected contributions on the conductor.");
 
-    // seal the sale on the conductor contract
-    const saleResult: SealSaleResult = await sealOrAbortSaleOnEth(saleInit);
-    expect(saleResult.sale.isSealed, "Sale was not sealed").to.be.true;
+    // seal the sale on the conductor
+    // make sure tokenBridge transfers are redeemed
+    // check contributor sale token balances before and after
+    // check to see if the recipient received refund in fixed-price sale
+    let saleResult: SealSaleResult;
+    {
+      const saleTokenBalancesBefore = await getSaleTokenBalancesOnContributors(
+        raiseParams.token,
+        raiseParams.tokenChain
+      );
 
-    /*// check to see if the sale failed, abort and refund folks if so
-        const conductorSale = await getSaleFromConductorOnEth(
-          CONDUCTOR_ADDRESS,
-          testProvider(CONDUCTOR_NETWORK),
-          saleInit.saleId
-        );
-      
-        if (conductorSale.isAborted || saleTerminatedEarly) {
-          // abort on the contributors if not saleTerminatedEarly
-          if (!saleTerminatedEarly) {
-            await abortSaleAtContributors(saleResult);
-          }
-          // confirm that the sale was aborted on each contributor
-          for (let i = 0; i < CONTRIBUTOR_NETWORKS.length; i++) {
-            let network = CONTRIBUTOR_NETWORKS[i];
-            const contributorSale = await getSaleFromContributorOnEth(
-              TESTNET_ADDRESSES[network],
-              testProvider(network),
-              saleInit.saleId
-            );
-            if (contributorSale.isAborted) {
-              console.log("Successfully aborted sale on contributor:", network);
-            } else {
-              console.log("Failed to abort the sale on contributor:", network);
-            }
-          }
-          return;
-        }
-      
-        // redeem the transfer VAAs on all chains
-        await redeemCrossChainAllocations(saleResult);
-      
-        // seal the sale on the Contributor contracts
-        const saleSealedResults = await sealSaleAtContributors(saleInit, saleResult);
-      
-        // claim allocations on contributors
-        for (let i = 0; i < successfulContributions.length; i++) {
-          const successful = await claimContributorAllocationOnEth(
-            saleSealedResults[0],
-            successfulContributions[i]
-          );
-          console.log("Allocation", i, "was claimed successfully:", successful);
-        }
-      
-        // redeem transfer VAAs for conductor
-        for (let [chainId, receipt] of saleSealedResults[1]) {
+      // seal the sale on the conductor contract
+      saleResult = await sealOrAbortSaleOnEth(saleInit);
+      expect(saleResult.sale.isSealed, "Sale was not sealed").to.be.true;
+
+      // redeem the transfer VAAs on all chains
+      await redeemCrossChainAllocations(saleResult);
+
+      const saleTokenBalancesAfter = await getSaleTokenBalancesOnContributors(
+        raiseParams.token,
+        raiseParams.tokenChain
+      );
+
+      // this should only fail if one of the contributors doesn't make a contribution
+      expect(
+        await balancesAllGreaterThan(saleTokenBalancesBefore, saleTokenBalancesAfter),
+        "Sale token balance didn't change."
+      ).to.be.true;
+    }
+
+    // seal the sale at the contributors
+    // TO-DO: balance check the recipients wallet to make sure they recieved the contributed tokens
+    let saleSealedResults;
+    {
+      // seal the sale on the Contributor contracts
+      saleSealedResults = await sealSaleAtEthContributors(saleInit, saleResult);
+
+      // redeem transfer VAAs for conductor
+      for (let [chainId, receipt] of saleSealedResults[1]) {
+        if (chainId != CONDUCTOR_CHAIN_ID) {
           await redeemCrossChainContributions(receipt, chainId);
-        }*/
+        }
+      }
+    }
+
+    // claim allocations on contributors
+    // find unique contributions to claim
+    const uniqueContributors = findUniqueContributions(contributions, acceptedTokens);
+
+    console.log("Claiming contributor allocations and excessContributions if applicable.");
+    for (let i = 0; i < uniqueContributors.length; i++) {
+      const successful = await claimContributorAllocationOnEth(saleSealedResults[0], uniqueContributors[i]);
+      expect(successful, "Failed to claim allocation").to.be.true;
+
+      // check to see if there are any excess contributions to claim
+      if (await excessContributionsExistForSale(saleInit.saleId, uniqueContributors[i])) {
+        const successful = await claimContributorExcessContributionOnEth(saleSealedResults[0], uniqueContributors[i]);
+        expect(successful, "Failed to claim excessContribution").to.be.true;
+      }
+    }
   });
 });

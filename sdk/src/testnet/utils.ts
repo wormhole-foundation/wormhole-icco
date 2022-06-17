@@ -11,6 +11,8 @@ import {
   redeemOnEth,
   CHAIN_ID_ETH,
   CHAIN_ID_SOLANA,
+  getForeignAssetEth,
+  tryNativeToUint8Array,
 } from "@certusone/wormhole-sdk";
 import {
   makeAcceptedToken,
@@ -37,6 +39,7 @@ import {
   abortSaleBeforeStartOnEth,
   saleAbortedOnEth,
   getSaleIdFromIccoVaa,
+  claimContributorRefundOnEth,
 } from "../";
 import {
   WORMHOLE_ADDRESSES,
@@ -52,7 +55,12 @@ import {
 } from "./consts";
 import { TokenConfig, Contribution, SealSaleResult, saleParams, SaleSealed, AcceptedToken, SaleInit } from "./structs";
 import { signContributionOnEth } from "./kyc";
-import { assert } from "console";
+import {
+  claimExcessContributionOnEth,
+  getErc20Balance,
+  getExcessContributionIsClaimedOnEth,
+  getSaleExcessContributionOnEth,
+} from "../icco";
 
 export async function extractVaaPayload(signedVaa: Uint8Array): Promise<Uint8Array> {
   const { parse_vaa } = await importCoreWasm();
@@ -287,7 +295,7 @@ export async function initializeSaleOnEthContributors(saleInitVaa: Uint8Array): 
 
   {
     const receipts = await Promise.all(
-      CONTRIBUTOR_NETWORKS.filter((ntwrk) => ntwrk != "solana_testnet").map(
+      CONTRIBUTOR_NETWORKS.filter((ntwrk) => ntwrk != "solana_devnet").map(
         async (network): Promise<ethers.ContractReceipt> => {
           return initSaleOnEth(TESTNET_ADDRESSES[network], saleInitVaa, initiatorWallet(network));
         }
@@ -300,11 +308,9 @@ export async function initializeSaleOnEthContributors(saleInitVaa: Uint8Array): 
 
 export async function getLatestBlockTime(isMax = true): Promise<number> {
   const currentBlocks = await Promise.all(
-    CONTRIBUTOR_NETWORKS.filter((ntwrk) => ntwrk != "solana_testnet").map(
-      (network): Promise<ethers.providers.Block> => {
-        return getCurrentBlock(testProvider(network));
-      }
-    )
+    CONTRIBUTOR_NETWORKS.filter((ntwrk) => ntwrk != "solana_devnet").map((network): Promise<ethers.providers.Block> => {
+      return getCurrentBlock(testProvider(network));
+    })
   );
 
   return currentBlocks
@@ -430,9 +436,8 @@ export async function attestContributionsOnContributor(saleInit: SaleInit): Prom
   const saleId = saleInit.saleId;
 
   const signedVaas = await Promise.all(
-    CONTRIBUTOR_NETWORKS.filter((ntwrk) => ntwrk != "solana_testnet").map(async (network): Promise<Uint8Array> => {
+    CONTRIBUTOR_NETWORKS.filter((ntwrk) => ntwrk != "solana_devnet").map(async (network): Promise<Uint8Array> => {
       const receipt = await attestContributionsOnEth(TESTNET_ADDRESSES[network], saleId, initiatorWallet(network));
-      console.log("Attested contribution for", network);
 
       return getSignedVaaFromReceiptOnEth(
         WORMHOLE_ADDRESSES[network].chainId,
@@ -536,22 +541,28 @@ export async function redeemCrossChainAllocations(saleResult: SealSaleResult): P
   const transferVaas = saleResult.transferVaas;
 
   return Promise.all(
-    CONTRIBUTOR_NETWORKS.map(async (network): Promise<ethers.ContractReceipt[]> => {
-      const signedVaas = transferVaas.get(WORMHOLE_ADDRESSES[network].chainId);
-      if (signedVaas === undefined) {
-        return [];
+    CONTRIBUTOR_NETWORKS.filter((ntwrk) => ntwrk != "solana_devnet").map(
+      async (network): Promise<ethers.ContractReceipt[]> => {
+        const signedVaas = transferVaas.get(WORMHOLE_ADDRESSES[network].chainId);
+        if (signedVaas === undefined) {
+          return [];
+        }
+        const receipts: ethers.ContractReceipt[] = [];
+        for (const signedVaa of signedVaas) {
+          const receipt = await redeemOnEth(
+            WORMHOLE_ADDRESSES[network].tokenBridge,
+            initiatorWallet(network),
+            signedVaa
+          );
+          receipts.push(receipt);
+        }
+        return receipts;
       }
-      const receipts: ethers.ContractReceipt[] = [];
-      for (const signedVaa of signedVaas) {
-        const receipt = await redeemOnEth(WORMHOLE_ADDRESSES[network].tokenBridge, initiatorWallet(network), signedVaa);
-        receipts.push(receipt);
-      }
-      return receipts;
-    })
+    )
   );
 }
 
-export async function sealSaleAtContributors(
+export async function sealSaleAtEthContributors(
   saleInit: SaleInit,
   saleResult: SealSaleResult
 ): Promise<[SaleSealed, Map<ChainId, ethers.ContractReceipt>]> {
@@ -563,11 +574,13 @@ export async function sealSaleAtContributors(
   const vaaPayload = await extractVaaPayload(signedVaa);
   const saleSealed = await parseSaleSealed(vaaPayload);
 
-  console.log("Sealing sale at the contributors.");
   console.log(saleSealed);
 
   const receipts = new Map<ChainId, ethers.ContractReceipt>();
   for (let [chainId, network] of CHAIN_ID_TO_NETWORK) {
+    if (chainId == CHAIN_ID_SOLANA) {
+      continue;
+    }
     const receipt = await saleSealedOnEth(
       TESTNET_ADDRESSES[network],
       signedVaa,
@@ -611,6 +624,57 @@ export async function claimContributorAllocationOnEth(
     tokenIndex[1],
     wallet.address
   );
+}
+
+export async function claimContributorExcessContributionOnEth(
+  saleSealed: SaleSealed,
+  contribution: Contribution
+): Promise<boolean> {
+  const network = CHAIN_ID_TO_NETWORK.get(contribution.chainId);
+  const saleId = saleSealed.saleId;
+  const wallet = contributorWallet(contribution);
+  const tokenIndex = await getTokenIndexFromConfig(contribution.chainId, contribution.address);
+
+  if (!tokenIndex[0]) {
+    return false;
+  }
+
+  let receipt;
+  try {
+    receipt = await claimExcessContributionOnEth(TESTNET_ADDRESSES[network], saleId, tokenIndex[1], wallet);
+  } catch (error) {
+    if (error.message.includes("excess contribution already claimed")) {
+      return false;
+    } else {
+      console.log(error);
+    }
+  }
+
+  return getExcessContributionIsClaimedOnEth(
+    TESTNET_ADDRESSES[network],
+    wallet.provider,
+    saleId,
+    tokenIndex[1],
+    wallet.address
+  );
+}
+
+export async function excessContributionsExistForSale(
+  saleId: ethers.BigNumberish,
+  contribution: Contribution
+): Promise<boolean> {
+  const network = CHAIN_ID_TO_NETWORK.get(contribution.chainId);
+  const wallet = contributorWallet(contribution);
+  const tokenIndex = await getTokenIndexFromConfig(contribution.chainId, contribution.address);
+
+  const saleExcessContribution = await getSaleExcessContributionOnEth(
+    TESTNET_ADDRESSES[network],
+    wallet.provider,
+    saleId,
+    tokenIndex[1]
+  );
+
+  return ethers.BigNumber.from(saleExcessContribution).gt(0);
 }
 
 export async function redeemCrossChainContributions(
@@ -693,4 +757,101 @@ export async function abortSaleAtContributors(saleResult: SealSaleResult) {
   }
 
   return;
+}
+
+export async function getOriginalTokenBalance(
+  nativeTokenAddress: string,
+  nativeTokenChain: ChainId,
+  walletAddress: string,
+  walletChainId: ChainId
+): Promise<ethers.BigNumberish> {
+  const walletNetwork = CHAIN_ID_TO_NETWORK.get(walletChainId);
+  const tokenAddressBytes = tryNativeToUint8Array(nativeTokenAddress, nativeTokenChain);
+
+  const originAssetAddress = await getForeignAssetEth(
+    WORMHOLE_ADDRESSES[walletNetwork].tokenBridge,
+    testProvider(walletNetwork),
+    nativeTokenChain,
+    tokenAddressBytes
+  );
+
+  const balance = await getErc20Balance(testProvider(walletNetwork), originAssetAddress, walletAddress);
+  return balance;
+}
+
+export async function getSaleTokenBalancesOnContributors(
+  nativeSaleTokenAddress: string,
+  nativeSaleTokenChain: ChainId
+): Promise<ethers.BigNumberish[]> {
+  return Promise.all(
+    // @karl - remove this filter once you add the solana logic
+    //CONTRIBUTOR_NETWORKS.map(async (network): Promise<ethers.BigNumberish> => {
+    CONTRIBUTOR_NETWORKS.filter((ntwrk) => ntwrk != "solana_devnet").map(
+      async (network): Promise<ethers.BigNumberish> => {
+        if (network == "solana_devnet") {
+          // @karl do a spl query
+        } else {
+          return getOriginalTokenBalance(
+            nativeSaleTokenAddress,
+            nativeSaleTokenChain,
+            TESTNET_ADDRESSES[network],
+            WORMHOLE_ADDRESSES[network].chainId
+          );
+        }
+      }
+    )
+  );
+}
+
+export async function balancesAllGreaterThan(
+  before: ethers.BigNumberish[],
+  after: ethers.BigNumberish[]
+): Promise<boolean> {
+  const allGreaterThan = after
+    .map((balance, index) => {
+      return ethers.BigNumber.from(balance).gt(before[index]);
+    })
+    .reduce((prev, curr) => {
+      return prev && curr;
+    });
+
+  return allGreaterThan;
+}
+
+export function findUniqueContributions(
+  contributions: Contribution[],
+  acceptedTokens: AcceptedToken[]
+): Contribution[] {
+  // create map to record which contributions were already accounted for
+  // only count 1 tokenIndex per wallet address
+  const recordedContributions: Map<number, string[]> = new Map<number, string[]>();
+  const uniqueContributions: Contribution[] = [];
+
+  for (let i = 0; i < acceptedTokens.length; i++) {
+    const acceptedAddress = ethers.utils.hexlify(acceptedTokens[i].tokenAddress).substring(2);
+
+    for (const contribution of contributions) {
+      const contributionAddress = tryNativeToHexString(contribution.address, contribution.chainId);
+
+      if (contributionAddress === acceptedAddress) {
+        if (!recordedContributions.has(i)) {
+          const walletArray: string[] = [contribution.key];
+          recordedContributions.set(i, walletArray);
+
+          // add the unique contribution
+          uniqueContributions.push(contribution);
+        } else {
+          const walletArray = recordedContributions.get(i);
+          if (!walletArray.includes(contribution.key)) {
+            walletArray.push(contribution.key);
+            recordedContributions.set(i, walletArray);
+
+            // add the unique contribution
+            uniqueContributions.push(contribution);
+          }
+        }
+      }
+    }
+  }
+  return uniqueContributions;
 }

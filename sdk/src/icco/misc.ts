@@ -12,12 +12,6 @@ import { parseUnits } from "ethers/lib/utils";
 
 export { tryNativeToUint8Array as nativeToUint8Array };
 
-/*
-export function nativeToUint8Array(address: string, chainId: ChainId): Uint8Array {
-  return tryNativeToUint8Array(address, chainId);
-}
-*/
-
 export async function wrapEth(wethAddress: string, amount: string, wallet: ethers.Wallet): Promise<void> {
   const weth = IWETH__factory.connect(wethAddress, wallet);
   await weth.deposit({

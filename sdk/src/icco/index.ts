@@ -1,6 +1,7 @@
 export * from "./abortSaleBeforeStartTime";
 export * from "./attestContributions";
 export * from "./claimAllocation";
+export * from "./claimExcessContribution";
 export * from "./claimRefund";
 export * from "./collectContribution";
 export * from "./contribute";

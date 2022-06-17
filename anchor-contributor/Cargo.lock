@@ -134,6 +134,7 @@ dependencies = [
  "anchor-lang",
  "anchor-spl",
  "borsh",
+ "const-decoder",
  "hex",
  "itertools 0.8.2",
  "num",
@@ -441,6 +442,12 @@ dependencies = [
  "log",
  "web-sys",
 ]
+
+[[package]]
+name = "const-decoder"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "302d8c759518abbeeb6ed010119fc0bfdfb093077a9e476876ede76ce9e79604"
 
 [[package]]
 name = "constant_time_eq"

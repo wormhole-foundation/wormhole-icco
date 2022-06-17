@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use const_decoder::Decoder;
 
 use crate::{
     constants::INDEX_SALE_ID,
@@ -13,10 +14,49 @@ use std::str::FromStr;
 #[derive(Default)]
 pub struct Custodian {
     pub nonce: u32, // 4
+    pub seed_bump: u8,
+    pub wormhole_pubkey: Pubkey,
+    pub token_bridge_pubkey: Pubkey,
+
+    pub custody_signer_key: Pubkey,     // 32
+//    pub custody_signer_bump: u8,        // 1
+
+    pub mint_signer_key: Pubkey,     // 32
+//    pub mint_signer_bump: u8,        // 1
+
+    pub authority_signer_key: Pubkey,     // 32
+//    pub authority_signer_bump: u8,        // 1
+
+    pub bridge_config_key: Pubkey,     // 32
+//    pub bridge_config_bump: u8,        // 1
+
+    pub wormhole_config_key: Pubkey,     // 32
+//    pub wormhole_config_bump: u8,        // 1
+
+    pub fee_collector_key: Pubkey,     // 32
+//    pub fee_collector_bump: u8,        // 1
+
+    pub wormhole_emitter_key: Pubkey,     // 32
+//    pub wormhole_emitter_bump: u8,        // 1
+    
+    pub wormhole_sequence_key: Pubkey,     // 32
+//    pub wormhole_sequence_bump: u8,        // 1
 }
 
+
 impl Custodian {
-    pub const MAXIMUM_SIZE: usize = 32 + 4;
+    pub const MAXIMUM_SIZE: usize = 4 + 1 + 32 + 32
+    + 32 //+ 1        // custody_signer key+bump
+    + 32 //+ 1        // mint_signer key+bump
+    + 32 //+ 1        // authority_signer key+bump
+    + 32 //+ 1        // bridge_config key+bump
+    + 32 //+ 1        // wormhole_config key+bump
+    + 32 //+ 1        // fee_collector key+bump
+    + 32 //+ 1        // wormhole_emitter key+bump
+    + 32 //+ 1        // wormhole_sequence key+bump
+    + 0;           // In case...
+
+    const CONDUCTOR_ADDRESS_BYTES: [u8; 32] = Decoder::Hex.decode(CONDUCTOR_ADDRESS.as_bytes());
 
     pub fn conductor_chain() -> Result<u16> {
         let chain_id = CONDUCTOR_CHAIN
@@ -26,26 +66,31 @@ impl Custodian {
         Ok(chain_id)
     }
 
-    pub fn conductor_address() -> Result<[u8; 32]> {
-        let mut addr = [0u8; 32];
-        addr.copy_from_slice(
-            &hex::decode(CONDUCTOR_ADDRESS)
-                .map_err(|_| ContributorError::InvalidConductorAddress)?,
-        );
-        Ok(addr)
+    pub fn conductor_address () -> &'static [u8; 32] {
+        &Custodian::CONDUCTOR_ADDRESS_BYTES
     }
 
-    pub fn wormhole() -> Result<Pubkey> {
+    pub fn wormhole_check() -> Result<Pubkey> {
         let pubkey = Pubkey::from_str(CORE_BRIDGE_ADDRESS)
             .map_err(|_| ContributorError::InvalidWormholeAddress)?;
         Ok(pubkey)
     }
 
-    pub fn token_bridge() -> Result<Pubkey> {
+    pub fn wormhole(&self) -> &Pubkey {
+        &self.wormhole_pubkey
+    }
+
+
+    pub fn token_bridge_check() -> Result<Pubkey> {
         let pubkey = Pubkey::from_str(TOKEN_BRIDGE_ADDRESS)
             .map_err(|_| ContributorError::InvalidWormholeAddress)?;
         Ok(pubkey)
     }
+
+    pub fn token_bridge(&self) -> &Pubkey {
+        &self.token_bridge_pubkey
+    }
+
 
     pub fn new(&mut self) -> Result<()> {
         self.nonce = 0;
@@ -63,7 +108,7 @@ impl Custodian {
             ContributorError::InvalidConductorChain
         );
         require!(
-            msg.emitter_address == Custodian::conductor_address()?,
+            msg.emitter_address == *Custodian::conductor_address(),
             ContributorError::InvalidConductorAddress
         );
         require!(

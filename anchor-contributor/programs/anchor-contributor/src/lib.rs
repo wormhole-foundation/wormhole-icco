@@ -39,6 +39,37 @@ pub mod anchor_contributor {
         // need to be mutated in future interactions with the program.
         ctx.accounts.custodian.new()?;
 
+        // Store pre-computed bump.
+        ctx.accounts.custodian.seed_bump = ctx.bumps["custodian"];
+
+        // Store wormhole PKs
+        ctx.accounts.custodian.wormhole_pubkey = ctx.accounts.wormhole.key();
+        ctx.accounts.custodian.token_bridge_pubkey = ctx.accounts.token_bridge.key();
+
+        // Create fixed accounts PDAs so we can simply check addresses in subsequent calls.
+        (ctx.accounts.custodian.custody_signer_key, _) =
+            Pubkey::find_program_address(&[b"custody_signer"], &ctx.accounts.token_bridge.key());
+        (ctx.accounts.custodian.mint_signer_key, _) =
+            Pubkey::find_program_address(&[b"mint_signer"], &ctx.accounts.token_bridge.key());
+        (ctx.accounts.custodian.authority_signer_key, _) =
+            Pubkey::find_program_address(&[b"authority_signer"], &ctx.accounts.token_bridge.key());
+        (ctx.accounts.custodian.bridge_config_key, _) =
+            Pubkey::find_program_address(&[b"config"], &ctx.accounts.token_bridge.key());
+        (ctx.accounts.custodian.wormhole_config_key, _) =
+            Pubkey::find_program_address(&[b"Bridge"], &ctx.accounts.wormhole.key());
+        (ctx.accounts.custodian.fee_collector_key, _) =
+            Pubkey::find_program_address(&[b"fee_collector"], &ctx.accounts.wormhole.key());
+        (ctx.accounts.custodian.wormhole_emitter_key, _) =
+            Pubkey::find_program_address(&[b"emitter"], &ctx.accounts.token_bridge.key());
+
+        (ctx.accounts.custodian.wormhole_sequence_key, _) = Pubkey::find_program_address(
+            &[
+                b"Sequence",
+                ctx.accounts.custodian.wormhole_emitter_key.as_ref(),
+            ],
+            &ctx.accounts.wormhole.key(),
+        );
+
         Ok(())
     }
 
@@ -64,6 +95,9 @@ pub mod anchor_contributor {
         // identifier.
         let sale = &mut ctx.accounts.sale;
         sale.parse_sale_init(&msg.payload)?;
+
+        // Store pre-computed bump.
+        sale.seed_bump = ctx.bumps["sale"];
 
         // The VAA encoded the Custodian's associated token account for the sale token. We
         // need to verify that the ATA that we have in the context is the same one the message
@@ -362,7 +396,7 @@ pub mod anchor_contributor {
         );
 
         // We will need the custodian seeds to sign one to two transactions
-        let custodian_seeds = &[SEED_PREFIX_CUSTODIAN.as_bytes(), &[ctx.bumps["custodian"]]];
+        let custodian_seeds = &[SEED_PREFIX_CUSTODIAN.as_bytes(), &[custodian.seed_bump]];
 
         // We need to delegate authority to the token bridge program's
         // authority signer to spend the custodian's token
@@ -593,7 +627,10 @@ pub mod anchor_contributor {
                         to: buyer_token_acct.to_account_info(),
                         authority: transfer_authority.to_account_info(),
                     },
-                    &[&[SEED_PREFIX_CUSTODIAN.as_bytes(), &[ctx.bumps["custodian"]]]],
+                    &[&[
+                        SEED_PREFIX_CUSTODIAN.as_bytes(),
+                        &[ctx.accounts.custodian.seed_bump],
+                    ]],
                 ),
                 refund,
             )?;
@@ -643,7 +680,10 @@ pub mod anchor_contributor {
                     to: buyer_sale_token_acct.to_account_info(),
                     authority: transfer_authority.to_account_info(),
                 },
-                &[&[SEED_PREFIX_CUSTODIAN.as_bytes(), &[ctx.bumps["custodian"]]]],
+                &[&[
+                    SEED_PREFIX_CUSTODIAN.as_bytes(),
+                    &[ctx.accounts.custodian.seed_bump],
+                ]],
             ),
             allocation,
         )?;
@@ -722,7 +762,10 @@ pub mod anchor_contributor {
                         to: buyer_token_acct.to_account_info(),
                         authority: transfer_authority.to_account_info(),
                     },
-                    &[&[SEED_PREFIX_CUSTODIAN.as_bytes(), &[ctx.bumps["custodian"]]]],
+                    &[&[
+                        SEED_PREFIX_CUSTODIAN.as_bytes(),
+                        &[ctx.accounts.custodian.seed_bump],
+                    ]],
                 ),
                 excess,
             )?;

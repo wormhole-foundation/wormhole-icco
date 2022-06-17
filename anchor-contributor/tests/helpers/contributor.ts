@@ -48,6 +48,8 @@ export class IccoContributor {
       .accounts({
         payer: payer.publicKey,
         custodian: this.custodian,
+        wormhole: this.wormhole,
+        tokenBridge: this.tokenBridge,
         systemProgram: web3.SystemProgram.programId,
       })
       .rpc();
@@ -143,6 +145,7 @@ export class IccoContributor {
     const wormhole = this.wormhole;
 
     // Accounts
+    const custodian = this.custodian;
     const sale = this.deriveSaleAccount(saleId);
     const wormholeConfig = deriveAddress([Buffer.from("Bridge")], wormhole);
     const wormholeFeeCollector = deriveAddress([Buffer.from("fee_collector")], wormhole);
@@ -156,6 +159,7 @@ export class IccoContributor {
     return program.methods
       .attestContributions()
       .accounts({
+        custodian,
         sale,
         payer: payer.publicKey,
         systemProgram: web3.SystemProgram.programId,

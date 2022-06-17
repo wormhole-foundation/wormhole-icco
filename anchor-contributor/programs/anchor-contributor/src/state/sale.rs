@@ -63,6 +63,7 @@ pub struct Sale {
     pub totals: Vec<AssetTotal>, // 4 + AssetTotal::LEN * ACCEPTED_TOKENS_MAX
     pub native_token_decimals: u8, // 1
     pub sale_token_mint: Pubkey, // 32
+    pub seed_bump:u8,                    // 1 - precomputed in initSale
 }
 
 impl SaleTimes {
@@ -152,7 +153,8 @@ impl Sale {
         + 1
         + (4 + AssetTotal::LEN * ACCEPTED_TOKENS_MAX)
         + 1
-        + 32;
+        + 32
+        + 1;
 
     pub fn parse_sale_init(&mut self, payload: &[u8]) -> Result<()> {
         require!(!self.initialized, ContributorError::SaleAlreadyInitialized);
@@ -373,7 +375,7 @@ impl Sale {
         let mut encoded: Vec<u8> = Vec::with_capacity(6 * 32);
 
         // grab conductor address from Custodian
-        encoded.extend(Custodian::conductor_address()?); // 32
+        encoded.extend(Custodian::conductor_address()); // 32
 
         // sale id
         encoded.extend(self.id); // 32

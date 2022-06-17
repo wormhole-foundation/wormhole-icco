@@ -1,6 +1,9 @@
 use anchor_lang::{
     prelude::*,
-    solana_program::sysvar::{clock, rent},
+    solana_program::sysvar::{
+        clock,
+        rent,
+    },
 };
 use anchor_spl::{
     associated_token::AssociatedToken,
@@ -30,7 +33,15 @@ pub struct CreateCustodian<'info> {
         bump,
         space = 8 + Custodian::MAXIMUM_SIZE,
     )]
-    pub custodian: Account<'info, Custodian>,
+    pub custodian: Box<Account<'info, Custodian>>,
+
+    #[account(executable, address = Custodian::wormhole_check()?)]
+    /// CHECK: Core Bridge Program
+    pub wormhole: AccountInfo<'info>,
+
+    #[account(executable, address = Custodian::token_bridge_check()?)]
+    /// CHECK: Token Bridge Program
+    pub token_bridge: AccountInfo<'info>,
 
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -57,9 +68,9 @@ pub struct InitSale<'info> {
         seeds = [
             SEED_PREFIX_CUSTODIAN.as_bytes(),
         ],
-        bump,
+        bump = custodian.seed_bump,
     )]
-    pub custodian: Account<'info, Custodian>,
+    pub custodian: Box<Account<'info, Custodian>>,
 
     #[account(
         init,
@@ -73,11 +84,10 @@ pub struct InitSale<'info> {
     )]
     pub sale: Account<'info, Sale>,
 
-    #[account(
-        constraint = core_bridge_vaa.owner.key() ==  Custodian::wormhole()?
-    )]
+    #[account(owner = *custodian.wormhole())]
     /// CHECK: This account is owned by Core Bridge so we trust it
     pub core_bridge_vaa: AccountInfo<'info>,
+
     pub sale_token_mint: Account<'info, Mint>,
 
     #[account(
@@ -112,9 +122,9 @@ pub struct Contribute<'info> {
         seeds = [
             SEED_PREFIX_CUSTODIAN.as_bytes(),
         ],
-        bump,
+        bump=custodian.seed_bump,
     )]
-    pub custodian: Account<'info, Custodian>,
+    pub custodian: Box<Account<'info, Custodian>>,
 
     #[account(
         mut,
@@ -122,7 +132,7 @@ pub struct Contribute<'info> {
             SEED_PREFIX_SALE.as_bytes(),
             &sale.id,
         ],
-        bump,
+        bump=sale.seed_bump,
     )]
     pub sale: Account<'info, Sale>,
 
@@ -181,43 +191,40 @@ pub struct Contribute<'info> {
 pub struct AttestContributions<'info> {
     #[account(
         seeds = [
+            SEED_PREFIX_CUSTODIAN.as_bytes(),
+        ],
+        bump=custodian.seed_bump,
+    )]
+    pub custodian: Box<Account<'info, Custodian>>,
+
+    #[account(
+        seeds = [
             SEED_PREFIX_SALE.as_bytes(),
             &sale.id,
         ],
-        bump,
+        bump=sale.seed_bump,
     )]
     pub sale: Account<'info, Sale>,
 
-    #[account(
-        constraint = wormhole.key() == Custodian::wormhole()?
-    )]
+    #[account(executable, address = *custodian.wormhole())]
     /// CHECK: Wormhole Program
     pub wormhole: AccountInfo<'info>,
-
+    
     #[account(
         mut,
-        seeds = [
-            b"Bridge".as_ref()
-        ],
-        bump,
-        seeds::program =  Custodian::wormhole()?
+        address = custodian.wormhole_config_key,
     )]
     /// CHECK: Wormhole Config
     pub wormhole_config: AccountInfo<'info>,
 
     #[account(
         mut,
-        seeds = [
-            b"fee_collector".as_ref()
-        ],
-        bump,
-        seeds::program = Custodian::wormhole()?
+        address = custodian.fee_collector_key,
     )]
     /// CHECK: Wormhole Fee Collector
     pub wormhole_fee_collector: AccountInfo<'info>,
 
     #[account(
-        mut,
         seeds = [
             b"emitter".as_ref(),
         ],
@@ -233,7 +240,7 @@ pub struct AttestContributions<'info> {
             wormhole_emitter.key().as_ref()
         ],
         bump,
-        seeds::program = Custodian::wormhole()?
+        seeds::program = custodian.wormhole()
     )]
     /// CHECK: Wormhole Sequence Number
     pub wormhole_sequence: AccountInfo<'info>,
@@ -249,15 +256,11 @@ pub struct AttestContributions<'info> {
     /// CHECK: Wormhole Message Storage
     pub wormhole_message: AccountInfo<'info>,
 
-    #[account(
-        constraint = clock.key() == clock::id()
-    )]
+    #[account(address = clock::id())]
     /// CHECK: Clock
     pub clock: AccountInfo<'info>,
 
-    #[account(
-        constraint = rent.key() == rent::id()
-    )]
+    #[account(address = rent::id())]
     /// CHECK: Rent
     pub rent: AccountInfo<'info>,
 
@@ -297,9 +300,9 @@ pub struct BridgeSealedContribution<'info> {
         seeds = [
             SEED_PREFIX_CUSTODIAN.as_bytes(),
         ],
-        bump,
+        bump = custodian.seed_bump,
     )]
-    pub custodian: Account<'info, Custodian>,
+    pub custodian: Box<Account<'info, Custodian>>,
 
     #[account(
         mut,
@@ -307,7 +310,7 @@ pub struct BridgeSealedContribution<'info> {
             SEED_PREFIX_SALE.as_bytes(),
             &sale.id,
         ],
-        bump,
+        bump=sale.seed_bump,
     )]
     pub sale: Account<'info, Sale>,
 
@@ -331,8 +334,8 @@ pub struct BridgeSealedContribution<'info> {
     pub system_program: Program<'info, System>,
     pub associated_token_program: Program<'info, AssociatedToken>,
 
-    #[account(
-        constraint = token_bridge.key() == Custodian::token_bridge()?
+    #[account(executable, 
+        address = *custodian.token_bridge()
     )]
     /// CHECK: Token Bridge Program
     pub token_bridge: AccountInfo<'info>,
@@ -342,87 +345,59 @@ pub struct BridgeSealedContribution<'info> {
     pub custody_or_wrapped_meta: AccountInfo<'info>,
 
     #[account(
-        seeds=[b"custody_signer"],
-        bump,
-        seeds::program = token_bridge.key()
+        address = custodian.custody_signer_key,
     )]
     /// CHECK: Only used for bridging assets native to Solana.
     pub custody_signer: AccountInfo<'info>,
 
     #[account(
-        seeds=[b"mint_signer"],
-        bump,
-        seeds::program = token_bridge.key()
+        address = custodian.mint_signer_key,
     )]
     /// CHECK: We know what we're doing Mr. Anchor ;)
     pub token_mint_signer: AccountInfo<'info>,
 
     #[account(
-        seeds=[b"authority_signer"],
-        bump,
-        seeds::program = token_bridge.key()
+        address = custodian.authority_signer_key,
     )]
     /// CHECK: Token Bridge Authority Signer, delegated approval for transfer
     pub authority_signer: AccountInfo<'info>,
 
     #[account(
         mut,
-        seeds = [
-            b"config".as_ref()
-        ],
-        bump,
-        seeds::program = Custodian::token_bridge()?
+        address = custodian.bridge_config_key,
     )]
     /// CHECK: Token Bridge Config
     pub token_bridge_config: AccountInfo<'info>,
 
-    #[account(
-        constraint = wormhole.key() == Custodian::wormhole()?
+    #[account(executable, 
+        address = *custodian.wormhole()
     )]
     /// CHECK: Wormhole Program
     pub wormhole: AccountInfo<'info>,
 
     #[account(
         mut,
-        seeds = [
-            b"Bridge".as_ref()
-        ],
-        bump,
-        seeds::program = Custodian::wormhole()?
+        address = custodian.wormhole_config_key,
     )]
     /// CHECK: Wormhole Config
     pub wormhole_config: AccountInfo<'info>,
 
     #[account(
         mut,
-        seeds = [
-            b"fee_collector".as_ref()
-        ],
-        bump,
-        seeds::program = Custodian::wormhole()?
+        address = custodian.fee_collector_key,
     )]
     /// CHECK: Wormhole Fee Collector
     pub wormhole_fee_collector: AccountInfo<'info>,
 
     #[account(
-        mut,
-        seeds = [
-            b"emitter".as_ref(),
-        ],
-        bump,
-        seeds::program = Custodian::token_bridge()?
+        address = custodian.wormhole_emitter_key,
     )]
     /// CHECK: Wormhole Emitter is the Token Bridge Program
     pub wormhole_emitter: AccountInfo<'info>,
 
     #[account(
         mut,
-        seeds = [
-            b"Sequence".as_ref(),
-            wormhole_emitter.key().as_ref()
-        ],
-        bump,
-        seeds::program = Custodian::wormhole()?
+        address = custodian.wormhole_sequence_key,
     )]
     /// CHECK: Wormhole Sequence Number
     pub wormhole_sequence: AccountInfo<'info>,
@@ -439,15 +414,11 @@ pub struct BridgeSealedContribution<'info> {
     /// CHECK: Wormhole Message Storage
     pub wormhole_message: AccountInfo<'info>,
 
-    #[account(
-        constraint = clock.key() == clock::id()
-    )]
+    #[account(address = clock::id())]
     /// CHECK: Clock
     pub clock: AccountInfo<'info>,
 
-    #[account(
-        constraint = rent.key() == rent::id()
-    )]
+    #[account(address = rent::id())]
     /// CHECK: Rent
     pub rent: AccountInfo<'info>,
 }
@@ -469,9 +440,9 @@ pub struct AbortSale<'info> {
         seeds = [
             SEED_PREFIX_CUSTODIAN.as_bytes(),
         ],
-        bump,
+        bump = custodian.seed_bump,
     )]
-    pub custodian: Account<'info, Custodian>,
+    pub custodian: Box<Account<'info, Custodian>>,
 
     #[account(
         mut,
@@ -479,13 +450,11 @@ pub struct AbortSale<'info> {
             SEED_PREFIX_SALE.as_bytes(),
             &sale.id,
         ],
-        bump,
+        bump=sale.seed_bump,
     )]
     pub sale: Account<'info, Sale>,
 
-    #[account(
-        constraint = core_bridge_vaa.owner.key() == Custodian::wormhole()?
-    )]
+    #[account(owner = *custodian.wormhole())]
     /// CHECK: This account is owned by Core Bridge so we trust it
     pub core_bridge_vaa: AccountInfo<'info>,
 
@@ -510,9 +479,9 @@ pub struct SealSale<'info> {
         seeds = [
             SEED_PREFIX_CUSTODIAN.as_bytes(),
         ],
-        bump,
+        bump = custodian.seed_bump,
     )]
-    pub custodian: Account<'info, Custodian>,
+    pub custodian: Box<Account<'info, Custodian>>,
 
     #[account(
         mut,
@@ -520,13 +489,11 @@ pub struct SealSale<'info> {
             SEED_PREFIX_SALE.as_bytes(),
             &sale.id,
         ],
-        bump,
+        bump=sale.seed_bump,
     )]
     pub sale: Account<'info, Sale>,
 
-    #[account(
-        constraint = core_bridge_vaa.owner.key() == Custodian::wormhole()?
-    )]
+    #[account( owner= *custodian.wormhole())]
     /// CHECK: This account is owned by Core Bridge so we trust it
     pub core_bridge_vaa: AccountInfo<'info>,
 
@@ -560,16 +527,16 @@ pub struct ClaimAllocation<'info> {
         seeds = [
             SEED_PREFIX_CUSTODIAN.as_bytes(),
         ],
-        bump,
+        bump = custodian.seed_bump,
     )]
-    pub custodian: Account<'info, Custodian>,
+    pub custodian: Box<Account<'info, Custodian>>,
 
     #[account(
         seeds = [
             SEED_PREFIX_SALE.as_bytes(),
             &sale.id,
         ],
-        bump,
+        bump=sale.seed_bump,
     )]
     pub sale: Account<'info, Sale>,
 
@@ -596,7 +563,7 @@ pub struct ClaimAllocation<'info> {
         mut,
         constraint = buyer_sale_token_acct.mint == sale.sale_token_mint,
         constraint = buyer_sale_token_acct.owner == owner.key(),
-    )]
+)]
     pub buyer_sale_token_acct: Account<'info, TokenAccount>,
 
     #[account(mut)]
@@ -626,16 +593,16 @@ pub struct ClaimRefunds<'info> {
         seeds = [
             SEED_PREFIX_CUSTODIAN.as_bytes(),
         ],
-        bump,
+        bump = custodian.seed_bump,
     )]
-    pub custodian: Account<'info, Custodian>,
+    pub custodian: Box<Account<'info, Custodian>>,
 
     #[account(
         seeds = [
             SEED_PREFIX_SALE.as_bytes(),
             &sale.id,
         ],
-        bump,
+        bump=sale.seed_bump,
     )]
     pub sale: Account<'info, Sale>,
 
@@ -676,16 +643,16 @@ pub struct ClaimExcesses<'info> {
         seeds = [
             SEED_PREFIX_CUSTODIAN.as_bytes(),
         ],
-        bump,
+        bump = custodian.seed_bump,
     )]
-    pub custodian: Account<'info, Custodian>,
+    pub custodian: Box<Account<'info, Custodian>>,
 
     #[account(
         seeds = [
             SEED_PREFIX_SALE.as_bytes(),
             &sale.id,
         ],
-        bump,
+        bump=sale.seed_bump,
     )]
     pub sale: Account<'info, Sale>,
 

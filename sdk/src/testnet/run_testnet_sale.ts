@@ -1,4 +1,4 @@
-t adimport { expect } from "chai";
+import { expect } from "chai";
 import {
   initiatorWallet,
   buildAcceptedTokens,

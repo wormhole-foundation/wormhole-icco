@@ -61,7 +61,14 @@ CHAIN_ID_TO_NETWORK.set(CHAIN_ID_ETH, CONTRIBUTOR_NETWORKS[0]);
 CHAIN_ID_TO_NETWORK.set(CHAIN_ID_AVAX, CONTRIBUTOR_NETWORKS[1]);
 CHAIN_ID_TO_NETWORK.set(CHAIN_ID_SOLANA, CONTRIBUTOR_NETWORKS[2]);
 
+// kyc
+export const KYC_AUTHORITY = "0x1dF62f291b2E969fB0849d99D9Ce41e2F137006e";
+// guardians
+export const WORMHOLE_RPCS = ["https://wormhole-v2-testnet-api.certus.one"];
 // solana
 export const SOLANA_RPC = "https://api.devnet.solana.com";
 export const SOLANA_CORE_BRIDGE_ADDRESS = new web3.PublicKey("3u8hJUVTA4jH1wYAyUur7FFZVQ8H635K3tSHHF4ssjQ5");
 export const SOLANA_TOKEN_BRIDGE_ADDRESS = new web3.PublicKey("DZnkkTmCiFWfYTfT41X3Rd1kDgozqzxWaHqsw6W4x2oe");
+// avax
+export const AVAX_CORE_BRIDGE_ADDRESS = "0x7bbcE28e64B3F8b84d876Ab298393c38ad7aac4C";
+export const AVAX_TOKEN_BRIDGE_ADDRESS = "0x61E44E506Ca5659E6c0bba9b678586fA2d729756";

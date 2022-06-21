@@ -13,6 +13,9 @@ import {
   CHAIN_ID_SOLANA,
   getForeignAssetEth,
   tryNativeToUint8Array,
+  transferFromSolana,
+  getEmitterAddressSolana,
+  attestFromSolana,
 } from "@certusone/wormhole-sdk";
 import {
   makeAcceptedToken,
@@ -52,6 +55,9 @@ import {
   CHAIN_ID_TO_NETWORK,
   CONDUCTOR_CHAIN_ID,
   RETRY_TIMEOUT_SECONDS,
+  SOLANA_CORE_BRIDGE_ADDRESS,
+  SOLANA_TOKEN_BRIDGE_ADDRESS,
+  WORMHOLE_RPCS,
   SOLANA_RPC,
 } from "./consts";
 import { TokenConfig, Contribution, SealSaleResult, SaleParams, SaleSealed, AcceptedToken, SaleInit } from "./structs";
@@ -62,8 +68,10 @@ import {
   getExcessContributionIsClaimedOnEth,
   getSaleExcessContributionOnEth,
 } from "../icco";
-import { Connection, PublicKey } from "@solana/web3.js";
-import { getMint } from "@solana/spl-token";
+import { web3 } from "@project-serum/anchor";
+import { getAssociatedTokenAddress, getMint } from "@solana/spl-token";
+import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey";
+import { SignedVAAWithQuorum } from "@certusone/wormhole-sdk/lib/cjs/proto/gossip/v1/gossip";
 
 export async function extractVaaPayload(signedVaa: Uint8Array): Promise<Uint8Array> {
   const { parse_vaa } = await importCoreWasm();
@@ -104,16 +112,12 @@ export function contributorWallet(contribution: Contribution): ethers.Wallet {
 }
 
 export async function getTokenDecimals(chainId: ChainId, tokenAddress: string): Promise<number> {
-  const network = CHAIN_ID_TO_NETWORK.get(chainId);
-
   if (chainId == CHAIN_ID_SOLANA) {
-    const mint = new PublicKey(tokenAddress);
-    const connection = new Connection(SOLANA_RPC);
-    const mintContract = await getMint(connection, mint);
-    return await mintContract.decimals;
-  } else {
-    return await getErc20Decimals(testProvider(network), tokenAddress);
+    const mintContract = await getMint(new web3.Connection(SOLANA_RPC), new web3.PublicKey(tokenAddress));
+    return mintContract.decimals;
   }
+  const network = CHAIN_ID_TO_NETWORK.get(chainId);
+  return getErc20Decimals(testProvider(network), tokenAddress);
 }
 
 export async function buildAcceptedTokens(tokenConfig: TokenConfig[]): Promise<AcceptedToken[]> {
@@ -870,4 +874,84 @@ export function findUniqueContributions(
     }
   }
   return uniqueContributions;
+}
+
+export async function attestMintFromSolana(
+  connection: web3.Connection,
+  sender: web3.Keypair,
+  mint: web3.PublicKey
+): Promise<web3.TransactionResponse> {
+  const transaction = await attestFromSolana(
+    connection,
+    SOLANA_CORE_BRIDGE_ADDRESS.toString(),
+    SOLANA_TOKEN_BRIDGE_ADDRESS.toString(),
+    sender.publicKey.toString(),
+    mint.toString()
+  );
+
+  transaction.partialSign(sender);
+  const tx = await connection.sendRawTransaction(transaction.serialize());
+
+  // confirm
+  while (true) {
+    const result = await connection.confirmTransaction(tx);
+    if (result.value.err == null) {
+      break;
+    }
+    console.log("attempting confirmTransaction again");
+  }
+
+  // return response
+  return connection.getTransaction(tx);
+}
+
+export async function transferFromSolanaToEvm(
+  connection: web3.Connection,
+  sender: web3.Keypair,
+  mint: web3.PublicKey,
+  amount: bigint,
+  recipientChain: ChainId,
+  recipientAddress: string
+): Promise<web3.TransactionResponse> {
+  const tokenAccount = await getAssociatedTokenAddress(mint, sender.publicKey);
+  const transaction = await transferFromSolana(
+    connection,
+    SOLANA_CORE_BRIDGE_ADDRESS.toString(),
+    SOLANA_TOKEN_BRIDGE_ADDRESS.toString(),
+    sender.publicKey.toString(),
+    tokenAccount.toString(),
+    mint.toString(),
+    amount,
+    tryNativeToUint8Array(recipientAddress, recipientChain),
+    recipientChain
+  );
+
+  transaction.partialSign(sender);
+  const tx = await connection.sendRawTransaction(transaction.serialize());
+
+  // confirm
+  while (true) {
+    const result = await connection.confirmTransaction(tx);
+    if (result.value.err == null) {
+      break;
+    }
+    console.log("attempting confirmTransaction again");
+  }
+
+  // return response
+  return connection.getTransaction(tx);
+}
+
+export async function getSignedVaaFromSolanaTokenBridge(sequence: string) {
+  const emitterAddress = await getEmitterAddressSolana(SOLANA_TOKEN_BRIDGE_ADDRESS.toString());
+  const { vaaBytes: signedVaa } = await getSignedVAAWithRetry(
+    WORMHOLE_RPCS,
+    CHAIN_ID_SOLANA,
+    emitterAddress,
+    sequence,
+    {
+      transport: NodeHttpTransport(),
+    }
+  );
+  return signedVaa;
 }

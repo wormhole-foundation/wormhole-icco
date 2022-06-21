@@ -1,4 +1,4 @@
-import { expect } from "chai";
+t adimport { expect } from "chai";
 import {
   initiatorWallet,
   buildAcceptedTokens,
@@ -38,7 +38,7 @@ import {
   WORMHOLE_ADDRESSES,
   CONDUCTOR_CHAIN_ID,
 } from "./consts";
-import { Contribution, saleParams, SealSaleResult } from "./structs";
+import { Contribution, SaleParams, SealSaleResult } from "./structs";
 import {
   setDefaultWasm,
   uint8ArrayToHex,
@@ -47,6 +47,7 @@ import {
   tryHexToNativeString,
   getEmitterAddressSolana,
 } from "@certusone/wormhole-sdk";
+import { MockSale } from "./testCalculator";
 import { Conductor__factory, getSaleFromConductorOnEth, getSaleFromContributorOnEth, parseSolanaSaleInit } from "../";
 import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey";
 import { ethers } from "ethers";
@@ -57,8 +58,20 @@ describe("Testnet ICCO Successful Sales", () => {
   it("Fixed-price With Lock Up", async () => {
     // const program = createContributorProgram();
 
-    // setup sale variables
-    const raiseParams: saleParams = SALE_CONFIG["raiseParams"];
+    // sale parameters
+    const raiseParams: SaleParams = SALE_CONFIG["raiseParams"];
+    const contributions: Contribution[] = CONTRIBUTOR_INFO["contributions"];
+    const acceptedTokens = await buildAcceptedTokens(SALE_CONFIG["acceptedTokens"]);
+
+    // test calculator object
+    const mockSale = new MockSale(
+      CONDUCTOR_CHAIN_ID,
+      SALE_CONFIG["denominationDecimals"],
+      acceptedTokens,
+      raiseParams,
+      contributions
+    );
+    const mockSaleResults = await mockSale.getResults();
 
     // create the sale token ATA
     // TO-DO: need to init sale with the sale token account
@@ -67,9 +80,6 @@ describe("Testnet ICCO Successful Sales", () => {
           raiseParams.solanaTokenAccount
         );
         console.log(saleTokenAta);*/
-
-    // build the accepted token list
-    const acceptedTokens = await buildAcceptedTokens(SALE_CONFIG["acceptedTokens"]);
 
     // create and initialize the sale
     const saleInitArray = await createSaleOnEthConductor(
@@ -98,7 +108,6 @@ describe("Testnet ICCO Successful Sales", () => {
     await waitForSaleToStart(saleInit, extraTime);
 
     // loop through contributors and safe contribute one by one
-    const contributions: Contribution[] = CONTRIBUTOR_INFO["contributions"];
     console.log("Making contributions to the sale.");
     for (const contribution of contributions) {
       let successful = false;

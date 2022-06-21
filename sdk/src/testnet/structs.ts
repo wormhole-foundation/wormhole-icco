@@ -2,7 +2,7 @@ import { ConductorSale } from "../../src";
 import { ChainId } from "@certusone/wormhole-sdk";
 import { ethers } from "ethers";
 
-export interface saleParams {
+export interface SaleParams {
   isFixedPrice: boolean;
   token: string;
   localTokenAddress: string;

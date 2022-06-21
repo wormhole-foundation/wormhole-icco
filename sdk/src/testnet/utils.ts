@@ -52,8 +52,9 @@ import {
   CHAIN_ID_TO_NETWORK,
   CONDUCTOR_CHAIN_ID,
   RETRY_TIMEOUT_SECONDS,
+  SOLANA_RPC,
 } from "./consts";
-import { TokenConfig, Contribution, SealSaleResult, saleParams, SaleSealed, AcceptedToken, SaleInit } from "./structs";
+import { TokenConfig, Contribution, SealSaleResult, SaleParams, SaleSealed, AcceptedToken, SaleInit } from "./structs";
 import { signContributionOnEth } from "./kyc";
 import {
   claimExcessContributionOnEth,
@@ -61,6 +62,8 @@ import {
   getExcessContributionIsClaimedOnEth,
   getSaleExcessContributionOnEth,
 } from "../icco";
+import { Connection, PublicKey } from "@solana/web3.js";
+import { getMint } from "@solana/spl-token";
 
 export async function extractVaaPayload(signedVaa: Uint8Array): Promise<Uint8Array> {
   const { parse_vaa } = await importCoreWasm();
@@ -98,6 +101,19 @@ export function contributorWallet(contribution: Contribution): ethers.Wallet {
   const provider = testProvider(CHAIN_ID_TO_NETWORK.get(contribution.chainId));
   const wallet: ethers.Wallet = new ethers.Wallet(contribution.key, provider);
   return wallet;
+}
+
+export async function getTokenDecimals(chainId: ChainId, tokenAddress: string): Promise<number> {
+  const network = CHAIN_ID_TO_NETWORK.get(chainId);
+
+  if (chainId == CHAIN_ID_SOLANA) {
+    const mint = new PublicKey(tokenAddress);
+    const connection = new Connection(SOLANA_RPC);
+    const mintContract = await getMint(connection, mint);
+    return await mintContract.decimals;
+  } else {
+    return await getErc20Decimals(testProvider(network), tokenAddress);
+  }
 }
 
 export async function buildAcceptedTokens(tokenConfig: TokenConfig[]): Promise<AcceptedToken[]> {
@@ -248,7 +264,7 @@ export async function createSaleOnEthAndGetVaa(
 export async function createSaleOnEthConductor(
   initiatorConductorWallet: ethers.Wallet,
   conductorAddress: string,
-  raiseParams: saleParams,
+  raiseParams: SaleParams,
   acceptedTokens: AcceptedToken[]
 ): Promise<Uint8Array[]> {
   // fetch localToken decimals

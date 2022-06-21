@@ -4,7 +4,7 @@ import { ChainId, CHAIN_ID_ETH, CHAIN_ID_AVAX, CHAIN_ID_SOLANA } from "@certuson
 
 export const WORMHOLE_ADDRESSES = {
   guardianRpc: ["https://wormhole-v2-testnet-api.certus.one"],
-  solana_testnet: {
+  solana_devnet: {
     wormhole: "3u8hJUVTA4jH1wYAyUur7FFZVQ8H635K3tSHHF4ssjQ5",
     tokenBridge: "DZnkkTmCiFWfYTfT41X3Rd1kDgozqzxWaHqsw6W4x2oe",
     chainId: 1,
@@ -48,8 +48,8 @@ export const CONTRIBUTOR_INFO = JSON.parse(fs.readFileSync(`${TESTNET_CFG}/contr
 export const RETRY_TIMEOUT_SECONDS = 180;
 
 // deployment info for the sale
-export const SOLANA_RPC = SALE_CONFIG["initiatorWallet"]["solana_testnet"].rpc;
-export const SOLANA_CORE_BRIDGE_ADDRESS = new web3.PublicKey(WORMHOLE_ADDRESSES.solana_testnet.wormhole);
+export const SOLANA_RPC = SALE_CONFIG["initiatorWallet"]["solana_devnet"].rpc;
+export const SOLANA_CORE_BRIDGE_ADDRESS = new web3.PublicKey(WORMHOLE_ADDRESSES.solana_devnet.wormhole);
 export const CONDUCTOR_ADDRESS = TESTNET_ADDRESSES.conductorAddress;
 export const CONDUCTOR_CHAIN_ID = TESTNET_ADDRESSES.conductorChain;
 export const CONDUCTOR_NETWORK = SALE_CONFIG["conductorNetwork"];

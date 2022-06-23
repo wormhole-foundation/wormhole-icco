@@ -22,6 +22,7 @@ contract ConductorGovernance is ConductorGetters, ConductorSetters, ERC1967Upgra
 
     /// @dev registerChain serves to save Contributor contract addresses in Conductor state
     function registerChain(uint16 contributorChainId, bytes32 contributorAddress) public onlyOwner {
+        require(contributorAddress != bytes32(0), "address not valid");
         require(contributorContracts(contributorChainId) == bytes32(0), "chain already registered");
         setContributor(contributorChainId, contributorAddress);
     }   

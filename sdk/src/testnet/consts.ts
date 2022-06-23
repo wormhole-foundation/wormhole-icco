@@ -55,11 +55,10 @@ export const CONDUCTOR_ADDRESS = TESTNET_ADDRESSES.conductorAddress;
 export const CONDUCTOR_CHAIN_ID = TESTNET_ADDRESSES.conductorChain;
 export const CONDUCTOR_NETWORK = SALE_CONFIG["conductorNetwork"];
 export const KYC_AUTHORITY_KEY = SALE_CONFIG["authority"];
-export const CONTRIBUTOR_NETWORKS: string[] = ["goerli", "fuji", "solana_devnet"];
+export const CONTRIBUTOR_NETWORKS: string[] = ["goerli", "fuji"];
 export const CHAIN_ID_TO_NETWORK = new Map<ChainId, string>();
 CHAIN_ID_TO_NETWORK.set(CHAIN_ID_ETH, CONTRIBUTOR_NETWORKS[0]);
 CHAIN_ID_TO_NETWORK.set(CHAIN_ID_AVAX, CONTRIBUTOR_NETWORKS[1]);
-CHAIN_ID_TO_NETWORK.set(CHAIN_ID_SOLANA, CONTRIBUTOR_NETWORKS[2]);
 
 // kyc
 export const KYC_AUTHORITY = "0x1dF62f291b2E969fB0849d99D9Ce41e2F137006e";

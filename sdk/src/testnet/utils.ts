@@ -19,6 +19,8 @@ import {
   CHAIN_ID_AVAX,
   redeemOnSolana,
   postVaaSolanaWithRetry,
+  tryUint8ArrayToNative,
+  getOriginalAssetEth,
 } from "@certusone/wormhole-sdk";
 import {
   makeAcceptedToken,
@@ -57,7 +59,6 @@ import {
   KYC_AUTHORITY_KEY,
   CHAIN_ID_TO_NETWORK,
   CONDUCTOR_CHAIN_ID,
-  RETRY_TIMEOUT_SECONDS,
   SOLANA_CORE_BRIDGE_ADDRESS,
   SOLANA_TOKEN_BRIDGE_ADDRESS,
   WORMHOLE_RPCS,
@@ -129,35 +130,21 @@ export async function buildAcceptedTokens(tokenConfig: TokenConfig[]): Promise<A
 
   for (const config of tokenConfig) {
     const network = CHAIN_ID_TO_NETWORK.get(config.chainId);
+    const wallet = initiatorWallet(network);
+    const token = ERC20__factory.connect(config.address, wallet);
+    const tokenDecimals = await token.decimals();
 
-    let tokenDecimals;
-    let acceptedTokenDecimalsOnConductor;
-    if (config.chainId == CHAIN_ID_SOLANA) {
-      // TODO - implement get solana token decimals on conductor
-      if (config.address == "5Dmmc5CC6ZpKif8iN5DSY9qNYrWJvEKcX2JrxGESqRMu") {
-        tokenDecimals = 6; // should look these up on solana
-        acceptedTokenDecimalsOnConductor = 6; // should look these
-      } else if (config.address == "3Ftc5hTz9sG4huk79onufGiebJNDMZNL8HYgdMJ9E7JR") {
-        tokenDecimals = 8; // should look these up on solana
-        acceptedTokenDecimalsOnConductor = 18; // should look these
-      }
-    } else {
-      const wallet = initiatorWallet(network);
-      const token = ERC20__factory.connect(config.address, wallet);
-      tokenDecimals = await token.decimals();
-
-      // compute the normalized conversionRate
-      acceptedTokenDecimalsOnConductor = await getAcceptedTokenDecimalsOnConductor(
-        config.chainId,
-        CONDUCTOR_CHAIN_ID,
-        WORMHOLE_ADDRESSES[network].tokenBridge,
-        WORMHOLE_ADDRESSES[CONDUCTOR_NETWORK].tokenBridge,
-        testProvider(network),
-        testProvider(CONDUCTOR_NETWORK),
-        config.address,
-        tokenDecimals
-      );
-    }
+    // compute the normalized conversionRate
+    const acceptedTokenDecimalsOnConductor = await getAcceptedTokenDecimalsOnConductor(
+      config.chainId,
+      CONDUCTOR_CHAIN_ID,
+      WORMHOLE_ADDRESSES[network].tokenBridge,
+      WORMHOLE_ADDRESSES[CONDUCTOR_NETWORK].tokenBridge,
+      testProvider(network),
+      testProvider(CONDUCTOR_NETWORK),
+      config.address,
+      tokenDecimals
+    );
 
     // normalize the conversion rate and then push the accepted token
     const normalizedConversionRate = await normalizeConversionRate(
@@ -180,16 +167,11 @@ export async function getSignedVaaFromSequence(
   emitterAddress: string,
   sequence: string
 ): Promise<Uint8Array> {
-  const result = await getSignedVAAWithRetry(
-    WORMHOLE_ADDRESSES.guardianRpc,
-    chainId,
-    emitterAddress,
-    sequence,
-    {
-      transport: NodeHttpTransport(),
-    },
-    RETRY_TIMEOUT_SECONDS
-  );
+  console.log("Looking for VAA with sequence:", sequence);
+  const result = await getSignedVAAWithRetry(WORMHOLE_ADDRESSES.guardianRpc, chainId, emitterAddress, sequence, {
+    transport: NodeHttpTransport(),
+  });
+  console.log("Found signed VAA for sequence:", sequence);
   return result.vaaBytes;
 }
 
@@ -319,11 +301,9 @@ export async function initializeSaleOnEthContributors(saleInitVaa: Uint8Array): 
 
   {
     const receipts = await Promise.all(
-      CONTRIBUTOR_NETWORKS.filter((ntwrk) => ntwrk != "solana_devnet").map(
-        async (network): Promise<ethers.ContractReceipt> => {
-          return initSaleOnEth(TESTNET_ADDRESSES[network], saleInitVaa, initiatorWallet(network));
-        }
-      )
+      CONTRIBUTOR_NETWORKS.map(async (network): Promise<ethers.ContractReceipt> => {
+        return initSaleOnEth(TESTNET_ADDRESSES[network], saleInitVaa, initiatorWallet(network));
+      })
     );
   }
 
@@ -332,7 +312,7 @@ export async function initializeSaleOnEthContributors(saleInitVaa: Uint8Array): 
 
 export async function getLatestBlockTime(isMax = true): Promise<number> {
   const currentBlocks = await Promise.all(
-    CONTRIBUTOR_NETWORKS.filter((ntwrk) => ntwrk != "solana_devnet").map((network): Promise<ethers.providers.Block> => {
+    CONTRIBUTOR_NETWORKS.map((network): Promise<ethers.providers.Block> => {
       return getCurrentBlock(testProvider(network));
     })
   );
@@ -451,6 +431,7 @@ export async function prepareAndExecuteContribution(
       signature
     );
   } catch (error: any) {
+    console.log(error);
     return false;
   }
   return true;
@@ -460,7 +441,7 @@ export async function attestContributionsOnContributor(saleInit: SaleInit): Prom
   const saleId = saleInit.saleId;
 
   const signedVaas = await Promise.all(
-    CONTRIBUTOR_NETWORKS.filter((ntwrk) => ntwrk != "solana_devnet").map(async (network): Promise<Uint8Array> => {
+    CONTRIBUTOR_NETWORKS.map(async (network): Promise<Uint8Array> => {
       const receipt = await attestContributionsOnEth(TESTNET_ADDRESSES[network], saleId, initiatorWallet(network));
 
       return getSignedVaaFromReceiptOnEth(
@@ -565,24 +546,18 @@ export async function redeemCrossChainAllocations(saleResult: SealSaleResult): P
   const transferVaas = saleResult.transferVaas;
 
   return Promise.all(
-    CONTRIBUTOR_NETWORKS.filter((ntwrk) => ntwrk != "solana_devnet").map(
-      async (network): Promise<ethers.ContractReceipt[]> => {
-        const signedVaas = transferVaas.get(WORMHOLE_ADDRESSES[network].chainId);
-        if (signedVaas === undefined) {
-          return [];
-        }
-        const receipts: ethers.ContractReceipt[] = [];
-        for (const signedVaa of signedVaas) {
-          const receipt = await redeemOnEth(
-            WORMHOLE_ADDRESSES[network].tokenBridge,
-            initiatorWallet(network),
-            signedVaa
-          );
-          receipts.push(receipt);
-        }
-        return receipts;
+    CONTRIBUTOR_NETWORKS.map(async (network): Promise<ethers.ContractReceipt[]> => {
+      const signedVaas = transferVaas.get(WORMHOLE_ADDRESSES[network].chainId);
+      if (signedVaas === undefined) {
+        return [];
       }
-    )
+      const receipts: ethers.ContractReceipt[] = [];
+      for (const signedVaa of signedVaas) {
+        const receipt = await redeemOnEth(WORMHOLE_ADDRESSES[network].tokenBridge, initiatorWallet(network), signedVaa);
+        receipts.push(receipt);
+      }
+      return receipts;
+    })
   );
 }
 
@@ -602,9 +577,6 @@ export async function sealSaleAtEthContributors(
 
   const receipts = new Map<ChainId, ethers.ContractReceipt>();
   for (let [chainId, network] of CHAIN_ID_TO_NETWORK) {
-    if (chainId == CHAIN_ID_SOLANA) {
-      continue;
-    }
     const receipt = await saleSealedOnEth(
       TESTNET_ADDRESSES[network],
       signedVaa,
@@ -788,7 +760,7 @@ export async function getOriginalTokenBalance(
   nativeTokenChain: ChainId,
   walletAddress: string,
   walletChainId: ChainId
-): Promise<ethers.BigNumberish> {
+): Promise<ethers.BigNumber> {
   const walletNetwork = CHAIN_ID_TO_NETWORK.get(walletChainId);
   const tokenAddressBytes = tryNativeToUint8Array(nativeTokenAddress, nativeTokenChain);
 
@@ -806,40 +778,77 @@ export async function getOriginalTokenBalance(
 export async function getSaleTokenBalancesOnContributors(
   nativeSaleTokenAddress: string,
   nativeSaleTokenChain: ChainId
-): Promise<ethers.BigNumberish[]> {
+): Promise<ethers.BigNumber[]> {
   return Promise.all(
-    // @karl - remove this filter once you add the solana logic
-    //CONTRIBUTOR_NETWORKS.map(async (network): Promise<ethers.BigNumberish> => {
-    CONTRIBUTOR_NETWORKS.filter((ntwrk) => ntwrk != "solana_devnet").map(
-      async (network): Promise<ethers.BigNumberish> => {
-        if (network == "solana_devnet") {
-          // @karl do a spl query
-        } else {
-          return getOriginalTokenBalance(
-            nativeSaleTokenAddress,
-            nativeSaleTokenChain,
-            TESTNET_ADDRESSES[network],
-            WORMHOLE_ADDRESSES[network].chainId
-          );
-        }
-      }
-    )
+    CONTRIBUTOR_NETWORKS.map(async (network): Promise<ethers.BigNumber> => {
+      return getOriginalTokenBalance(
+        nativeSaleTokenAddress,
+        nativeSaleTokenChain,
+        TESTNET_ADDRESSES[network],
+        WORMHOLE_ADDRESSES[network].chainId
+      );
+    })
   );
 }
 
-export async function balancesAllGreaterThan(
-  before: ethers.BigNumberish[],
-  after: ethers.BigNumberish[]
-): Promise<boolean> {
-  const allGreaterThan = after
-    .map((balance, index) => {
-      return ethers.BigNumber.from(balance).gt(before[index]);
-    })
-    .reduce((prev, curr) => {
-      return prev && curr;
-    });
+export async function getContributedTokenBalancesOnContributors(
+  acceptedTokens: AcceptedToken[]
+): Promise<ethers.BigNumber[]> {
+  const balances: ethers.BigNumber[] = [];
 
-  return allGreaterThan;
+  for (const token of acceptedTokens) {
+    const chainId = token.tokenChain as ChainId;
+    const addressString = tryUint8ArrayToNative(token.tokenAddress as Uint8Array, chainId);
+    const network = CHAIN_ID_TO_NETWORK.get(chainId);
+    const balance = await getErc20Balance(testProvider(network), addressString, TESTNET_ADDRESSES[network]);
+    balances.push(balance);
+  }
+  return balances;
+}
+
+export async function getRecipientContributedTokenBalances(
+  recipientAddress: string,
+  acceptedTokens: AcceptedToken[]
+): Promise<ethers.BigNumber[]> {
+  const balances: ethers.BigNumber[] = [];
+
+  // doing this serially since order matters
+  for (const token of acceptedTokens) {
+    const tokenChainId = token.tokenChain as ChainId;
+
+    let tokenAddressOnConductorChain;
+    if (tokenChainId === (CONDUCTOR_CHAIN_ID as ChainId)) {
+      tokenAddressOnConductorChain = tryUint8ArrayToNative(token.tokenAddress as Uint8Array, tokenChainId);
+    } else {
+      const network = CHAIN_ID_TO_NETWORK.get(tokenChainId);
+      const nativeTokenAddress = tryUint8ArrayToNative(token.tokenAddress as Uint8Array, tokenChainId);
+
+      // get the original token address of the wrapped token
+      const originalToken = await getOriginalAssetEth(
+        WORMHOLE_ADDRESSES[network].tokenBridge,
+        testProvider(network),
+        nativeTokenAddress,
+        tokenChainId
+      );
+
+      if (originalToken.chainId === CONDUCTOR_CHAIN_ID) {
+        tokenAddressOnConductorChain = tryUint8ArrayToNative(originalToken.assetAddress, originalToken.chainId);
+      } else {
+        // fetch the foreign asset address
+        tokenAddressOnConductorChain = await getForeignAssetEth(
+          WORMHOLE_ADDRESSES[CONDUCTOR_NETWORK].tokenBridge,
+          testProvider(CONDUCTOR_NETWORK),
+          originalToken.chainId,
+          originalToken.assetAddress
+        );
+      }
+    }
+    balances.push(
+      await getErc20Balance(testProvider(CONDUCTOR_NETWORK), tokenAddressOnConductorChain, recipientAddress)
+    );
+  }
+
+  return balances;
 }
 
 export function findUniqueContributions(

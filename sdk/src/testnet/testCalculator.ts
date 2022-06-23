@@ -3,7 +3,6 @@ import { AcceptedToken } from "../icco";
 import { ChainId, tryUint8ArrayToNative, CHAIN_ID_SOLANA } from "@certusone/wormhole-sdk";
 import { SaleParams, Contribution } from "./structs";
 import { getTokenDecimals } from "./utils";
-
 interface Allocations {
   tokenIndex: number;
   allocation: ethers.BigNumber;
@@ -35,6 +34,23 @@ export class MockSale {
     this.acceptedTokens = acceptedTokens;
     this.raiseParams = raiseParams;
     this.contributions = contributions;
+  }
+
+  sumAllocationsByChain(results: Results): Map<ChainId, ethers.BigNumber> {
+    const summedAllocations: Map<ChainId, ethers.BigNumber> = new Map<ChainId, ethers.BigNumber>();
+
+    for (let i = 0; i < this.acceptedTokens.length; i++) {
+      const chainId = this.acceptedTokens[i].tokenChain as ChainId;
+
+      if (!summedAllocations.has(chainId)) {
+        summedAllocations.set(chainId, results.allocations[i].allocation);
+      } else {
+        let currentAllocation = summedAllocations.get(chainId);
+        summedAllocations.set(chainId, currentAllocation.add(results.allocations[i].allocation));
+      }
+    }
+
+    return summedAllocations;
   }
 
   getTokenIndexFromConfig(chainId: ChainId, address: string): number {

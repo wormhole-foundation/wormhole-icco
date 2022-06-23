@@ -1,12 +1,13 @@
 import { expect } from "chai";
 import { web3 } from "@project-serum/anchor";
-import { createMint, getOrCreateAssociatedTokenAccount, mintTo } from "@solana/spl-token";
+import { createMint, getMint, getOrCreateAssociatedTokenAccount, mintTo } from "@solana/spl-token";
 import { ethers } from "ethers";
 import {
   CHAIN_ID_AVAX,
   CHAIN_ID_SOLANA,
   createWrappedOnEth,
   getForeignAssetSolana,
+  getOriginalAssetSol,
   getSignedVAAWithRetry,
   parseSequenceFromLogEth,
   parseSequenceFromLogSolana,
@@ -15,7 +16,10 @@ import {
   redeemOnEth,
   setDefaultWasm,
   transferFromEthNative,
+  tryNativeToHexString,
   tryNativeToUint8Array,
+  tryUint8ArrayToNative,
+  uint8ArrayToHex,
 } from "@certusone/wormhole-sdk";
 import { NodeHttpTransport } from "@improbable-eng/grpc-web-node-http-transport";
 
@@ -25,15 +29,18 @@ import { IccoContributor as SolanaContributor } from "../anchor/contributor";
 import {
   AVAX_CORE_BRIDGE_ADDRESS,
   AVAX_TOKEN_BRIDGE_ADDRESS,
+  CONDUCTOR_NATIVE_ADDRESS,
+  CONDUCTOR_NATIVE_CHAIN,
   KYC_AUTHORITY,
+  KYC_PRIVATE,
   REPO_PATH,
+  SOLANA_CONTRIBUTOR_ADDRESS,
   SOLANA_CORE_BRIDGE_ADDRESS,
   SOLANA_TOKEN_BRIDGE_ADDRESS,
   WAVAX_ADDRESS,
   WORMHOLE_RPCS,
 } from "./consts";
 import { connectToContributorProgram } from "./solana";
-import { readJson } from "./io";
 import { Purse } from "./purse";
 import {
   attestMintFromSolana,
@@ -41,8 +48,12 @@ import {
   getSignedVaaFromSolanaTokenBridge,
   postAndRedeemTransferVaa,
   transferFromSolanaToEvm,
+  waitUntilSolanaBlock,
 } from "./utils";
 import { parseIccoHeader, SaleParameters } from "../utils";
+import { BN } from "bn.js";
+import { KycAuthority } from "../anchor/kyc";
+import { getSplBalance, hexToPublicKey } from "../anchor/utils";
 
 setDefaultWasm("node");
 
@@ -67,33 +78,36 @@ describe("Testnet ICCO Sales", () => {
   // and buyers
   const buyers = [purse.getSolanaWallet(1), purse.getSolanaWallet(2)];
   for (let i = 0; i < buyers.length; ++i) {
-    console.log(`buyer ${i}: ${buyers[i].publicKey.toString()}`);
+    console.log(`buyer ${i}: ${buyers.at(i).publicKey.toString()}`);
   }
 
-  // connect to contracts
-  const addresses = readJson(REPO_PATH + "/testnet.json");
-
   // avax conductor
-  const conductorChain = addresses.conductorChain;
   const conductor = new EvmConductor(
-    addresses.conductorAddress,
-    addresses.conductorChain,
+    CONDUCTOR_NATIVE_ADDRESS,
+    CONDUCTOR_NATIVE_CHAIN,
     avaxOrchestrator,
     AVAX_CORE_BRIDGE_ADDRESS,
     AVAX_TOKEN_BRIDGE_ADDRESS
   );
 
-  // solana contributor
-  const solanaContributorProgramId = new web3.PublicKey(addresses.solana_devnet); // consider renaming to solanaDevnet in testnet.json?
+  // solana contributor consider renaming to solanaDevnet in testnet.json?
   const solanaContributor = new SolanaContributor(
-    connectToContributorProgram(purse.solana.endpoint, solanaOrchestrator, solanaContributorProgramId),
+    connectToContributorProgram(purse.solana.endpoint, solanaOrchestrator, SOLANA_CONTRIBUTOR_ADDRESS),
     SOLANA_CORE_BRIDGE_ADDRESS,
     SOLANA_TOKEN_BRIDGE_ADDRESS,
     postVaaSolanaWithRetry
   );
 
+  // kyc for signing contributions
+  const kyc = new KycAuthority(
+    KYC_PRIVATE,
+    tryNativeToHexString(CONDUCTOR_NATIVE_ADDRESS, CONDUCTOR_NATIVE_CHAIN),
+    solanaContributor
+  );
+
   // warehouse parameters
-  const parameters = new SaleParameters(conductorChain);
+  const denominationDecimals = 6; // same as USDC
+  const parameters = new SaleParameters(CONDUCTOR_NATIVE_CHAIN, denominationDecimals);
 
   before("Check Balances", async () => {
     // need at least 2.5 AVAX to proceed with the test
@@ -102,7 +116,12 @@ describe("Testnet ICCO Sales", () => {
 
     // need at least 1 SOL to proceed with the test
     const solBalance = await solanaConnection.getBalance(solanaOrchestrator.publicKey);
-    expect(solBalance >= 1).to.be.true;
+    expect(solBalance).gte(1);
+
+    for (const buyer of buyers) {
+      const solBalance = await solanaConnection.getBalance(buyer.publicKey);
+      expect(solBalance).gte(1);
+    }
   });
 
   describe("Test Preparation", () => {
@@ -123,7 +142,7 @@ describe("Testnet ICCO Sales", () => {
         solanaOrchestrator.publicKey
       );
 
-      await mintTo(
+      const solanaTx = await mintTo(
         solanaConnection,
         solanaOrchestrator,
         saleTokenMint,
@@ -131,8 +150,9 @@ describe("Testnet ICCO Sales", () => {
         solanaOrchestrator,
         10_000_000_000_000_000_000n // 10,000,000
       );
+      //await solanaConnection.confirmTransaction(solanaTx, "confirmed");
 
-      // attest
+      // attest sale token on Solana and create portal wrapped on Avalanche
       {
         const response = await attestMintFromSolana(solanaConnection, solanaOrchestrator, saleTokenMint);
         const sequence = parseSequenceFromLogSolana(response);
@@ -143,7 +163,7 @@ describe("Testnet ICCO Sales", () => {
         console.log(`avaxTx: ${avaxTx.transactionHash}`);
       }
 
-      // transfer
+      // transfer sale tokens from Solana to Avalanche
       {
         const response = await transferFromSolanaToEvm(
           solanaConnection,
@@ -161,6 +181,7 @@ describe("Testnet ICCO Sales", () => {
         console.log(`avaxTx: ${avaxTx.transactionHash}`);
       }
 
+      // save the sale token (to be used for sale trials)
       parameters.setSaleToken(CHAIN_ID_SOLANA, saleTokenMint.toString());
     });
 
@@ -171,26 +192,37 @@ describe("Testnet ICCO Sales", () => {
         solanaOrchestrator,
         solanaOrchestrator.publicKey,
         solanaOrchestrator.publicKey,
-        6 // same as USDC decimals
+        denominationDecimals // same as USDC decimals on mainnet-beta
       );
+      console.log(`createMint: ${mint.toString()}`);
 
+      // For each buyer, mint an adequate amount for contributions
       for (const buyer of buyers) {
-        const tokenAccount = await getOrCreateAssociatedTokenAccount(
-          solanaConnection,
-          solanaOrchestrator,
-          mint,
-          buyer.publicKey
-        );
-        await mintTo(
+        const tokenAccount = await getOrCreateAssociatedTokenAccount(solanaConnection, buyer, mint, buyer.publicKey);
+
+        const solanaTx = await mintTo(
           solanaConnection,
           solanaOrchestrator,
           mint,
           tokenAccount.address,
-          buyer.publicKey,
-          100_000_000_000_000n // 100,000,000
+          solanaOrchestrator,
+          100_000_000_000_000n // 100,000,000 USDC
         );
+
+        const balance = await getSplBalance(solanaConnection, mint, buyer.publicKey);
+        console.log(
+          `mintTo: ${tokenAccount.address.toString()} belonging to ${buyer.publicKey.toString()}, balance: ${balance.toString()}`
+        );
+        expect(balance.toString()).to.equal("100000000000000");
       }
-      parameters.addAcceptedToken(CHAIN_ID_SOLANA, mint.toString(), "1");
+
+      // we can just pass in the denominationDecimals, but let's confirm the mint info
+      const mintInfo = await getMint(solanaConnection, mint);
+      expect(mintInfo.decimals).to.equal(denominationDecimals);
+
+      // Add this mint acting as USDC to accepted tokens. Conversion rate of 1
+      // means it is priced exactly as USDC, our intended raise denomination
+      parameters.addAcceptedToken(CHAIN_ID_SOLANA, mint.toString(), "1", denominationDecimals);
     });
 
     it("Prepare Wrapped AVAX as Collateral", async () => {
@@ -215,7 +247,7 @@ describe("Testnet ICCO Sales", () => {
         const avaxReceipt = await transferFromEthNative(
           AVAX_TOKEN_BRIDGE_ADDRESS,
           avaxOrchestrator,
-          ethers.utils.parseUnits("1"),
+          ethers.utils.parseUnits("1"), // 1 AVAX per buyer
           CHAIN_ID_SOLANA,
           tryNativeToUint8Array(tokenAccount.address.toString(), CHAIN_ID_SOLANA)
         );
@@ -230,12 +262,39 @@ describe("Testnet ICCO Sales", () => {
         console.log(`solanaTx: ${solanaTx}`);
       }
 
+      // need decimals
+      const mintInfo = await getMint(solanaConnection, new web3.PublicKey(wrapped));
+
       // in the year 6969, AVAX is worth 4,200,000 USDC
-      parameters.addAcceptedToken(CHAIN_ID_SOLANA, wrapped, "4200000");
+      parameters.addAcceptedToken(CHAIN_ID_SOLANA, wrapped, "4200000", mintInfo.decimals);
     });
   });
 
   describe("Conduct Successful Sale", () => {
+    // In total, we are going to contribute:
+    //
+    //   1.5 AVAX:        1.5 * 4,200,000 =  6,300,000
+    //   16,700,000 USDC: 16,700,000 * 1  = 16,700,000
+    //                                    ------------
+    //                               Total: 25,000,000
+    //
+    //                           Max Raise: 20,000,000
+    //                              Excess:  5,000,000
+
+    const buyerContributions = [
+      [
+        ["12500000"], //          12,500,000 USDC
+        ["0.2", "0.4"], //               0.6 AVAX
+      ],
+      [
+        ["2000000", "2200000"], // 4,200,000 USDC
+        ["0.9"], //                      0.9 AVAX
+      ],
+    ];
+
+    // we need this sale id for the test
+    let currentSaleId: Buffer;
+
     it("Orchestrator Prepares Sale Parameters: Raise", async () => {
       {
         const saleTokenMint = await parameters.saleTokenSolanaMint();
@@ -247,21 +306,6 @@ describe("Testnet ICCO Sales", () => {
           true // allowOwnerOffCurve
         );
         console.log(`custodianSaleTokenAccount: ${custodianSaleTokenAccount.address.toString()}`);
-
-        // we want everything denominated in uusd for this test
-        // const denominationNativeAddress = "uusd";
-        // const denominationDecimals = await (async () => {
-        //   const wrapped = await getForeignAssetEth(
-        //     AVAX_TOKEN_BRIDGE_ADDRESS,
-        //     avaxConnection,
-        //     CHAIN_ID_TERRA,
-        //     tryNativeToUint8Array(denominationNativeAddress, CHAIN_ID_TERRA)
-        //   );
-
-        //   const token = ERC20__factory.connect(wrapped, avaxConnection);
-        //   return token.decimals();
-        // })();
-        const denominationDecimals = 6;
 
         const amountToSell = "1000000000"; // 1,000,000,000
 
@@ -278,32 +322,24 @@ describe("Testnet ICCO Sales", () => {
           custodianSaleTokenAccount.address,
           KYC_AUTHORITY
         );
-
-        // const raise: Raise = {
-        //   isFixedPrice: true,
-        //   token: tryNativeToUint8Array(saleTokenMint.toString(), CHAIN_ID_SOLANA),
-        //   tokenAmount: balance.toString(),
-        //   tokenChain: CHAIN_ID_SOLANA,
-        //   minRaise: "1",
-        //   maxRaise: "20",
-        //   recipient: avaxOrchestrator.address,
-        //   refundRecipient: avaxOrchestrator.address,
-        //   saleStart,
-        //   saleEnd,
-        //   unlockTimestamp,
-        //   solanaTokenAccount: tryNativeToUint8Array(custodianSaleTokenAccount.address.toString(), CHAIN_ID_SOLANA),
-        //   authority: "0x1dF62f291b2E969fB0849d99D9Ce41e2F137006e",
-        // };
       }
     });
 
     it("Orchestrator Creates Sale and Initializes Contributor Program", async () => {
+      const acceptedTokens = parameters.acceptedTokens;
+
       const raise = parameters.makeRaiseNow(
-        30, // delay of when to start sale
+        60, // delay of when to start sale
         180, // duration of sale
-        45 // unlock period after sale ends
+        60 // unlock period after sale ends
       );
-      const avaxReceipt = await conductor.createSale(raise, parameters.acceptedTokens);
+      const avaxReceipt = await conductor.createSale(
+        raise,
+        acceptedTokens,
+        solanaConnection,
+        solanaOrchestrator,
+        solanaContributor.custodian
+      );
       console.log(`avaxReceipt: ${avaxReceipt.transactionHash}`);
 
       // we only care about the last one for the solana contributor
@@ -337,8 +373,6 @@ describe("Testnet ICCO Sales", () => {
         return erc20.decimals();
       })();
 
-      console.info("saleState", saleState);
-
       // verify
       expect(Uint8Array.from(saleState.id)).to.deep.equal(saleId);
       expect(saleState.saleTokenMint.toString()).to.equal(saleTokenMint.toString());
@@ -347,13 +381,112 @@ describe("Testnet ICCO Sales", () => {
       expect(saleState.times.start.toString()).to.equal(raise.saleStart.toString());
       expect(saleState.times.end.toString()).to.equal(raise.saleEnd.toString());
       expect(saleState.times.unlockAllocation.toString()).to.equal(raise.unlockTimestamp.toString());
-      expect(Uint8Array.from(saleState.recipient)).to.deep.equal(Buffer.from(raise.recipient, "hex"));
-      expect(Uint8Array.from(saleState.kycAuthority)).to.deep.equal(Buffer.from(raise.authority, "hex"));
+      expect(Uint8Array.from(saleState.recipient)).to.deep.equal(
+        tryNativeToUint8Array(raise.recipient, CONDUCTOR_NATIVE_CHAIN)
+      );
+      expect(Uint8Array.from(saleState.kycAuthority)).to.deep.equal(ethers.utils.arrayify(raise.authority));
       expect(saleState.status).has.key("active");
+
+      const totals: any = saleState.totals;
+      const numExpected = acceptedTokens.length;
+      expect(totals.length).to.equal(numExpected);
+
+      for (let tokenIndex = 0; tokenIndex < numExpected; ++tokenIndex) {
+        const total = totals.at(tokenIndex);
+        const token = acceptedTokens.at(tokenIndex);
+
+        expect(total.tokenIndex).to.equal(tokenIndex);
+        expect(total.mint.toString()).to.equal(
+          tryUint8ArrayToNative(ethers.utils.arrayify(token.tokenAddress), CHAIN_ID_SOLANA)
+        );
+        expect(total.contributions.toString()).to.equal("0");
+        expect(total.allocations.toString()).to.equal("0");
+        expect(total.excessContributions.toString()).to.equal("0");
+        expect(total.status).has.key("active");
+      }
+
+      // save saleId for later use
+      currentSaleId = saleId;
     });
 
     it("User Contributes to Sale", async () => {
-      // TODO
+      const saleId = currentSaleId;
+      if (saleId == undefined) {
+        throw Error("sale is not initialized");
+      }
+
+      const saleStart = ethers.BigNumber.from(parameters.raise.saleStart).toNumber();
+      await waitUntilSolanaBlock(solanaConnection, saleStart);
+
+      const acceptedTokens = parameters.acceptedTokens;
+      const acceptedMints = acceptedTokens.map((token) =>
+        hexToPublicKey(uint8ArrayToHex(ethers.utils.arrayify(token.tokenAddress)))
+      );
+
+      const startingBalanceBuyers = await Promise.all(
+        buyers.map(async (buyer) => {
+          return Promise.all(
+            acceptedMints.map(async (mint) => {
+              return getSplBalance(solanaConnection, mint, buyer.publicKey);
+            })
+          );
+        })
+      );
+
+      for (let i = 0; i < buyers.length; ++i) {
+        const buyer = buyers.at(i);
+        const contributions = buyerContributions.at(i);
+        for (let tokenIndex = 0; tokenIndex < contributions.length; ++tokenIndex) {
+          if (tokenIndex == 1) {
+            console.log(`force skip tokenIndex ${tokenIndex}`);
+            continue;
+          }
+          const mint = acceptedMints.at(tokenIndex);
+          for (const decimalizedAmount of contributions.at(tokenIndex)) {
+            const mintInfo = await getMint(solanaConnection, mint);
+            const amount = new BN(ethers.utils.parseUnits(decimalizedAmount, mintInfo.decimals).toString());
+            const solanaTx = await solanaContributor.contribute(
+              buyer,
+              saleId,
+              tokenIndex,
+              amount,
+              await kyc.signContribution(saleId, tokenIndex, amount, buyer.publicKey)
+            );
+            console.log(`buyer ${i}: ${buyer.publicKey.toString()}, tokenIndex: ${tokenIndex}, solanaTx: ${solanaTx}`);
+          }
+        }
+      }
+
+      const endingBalanceBuyers = await Promise.all(
+        buyers.map(async (buyer) => {
+          return Promise.all(
+            acceptedMints.map(async (mint) => {
+              return getSplBalance(solanaConnection, mint, buyer.publicKey);
+            })
+          );
+        })
+      );
+
+      for (let i = 0; i < buyers.length; ++i) {
+        for (let tokenIndex = 0; tokenIndex < acceptedMints.length; ++tokenIndex) {
+          if (tokenIndex == 1) {
+            console.log(`force skip tokenIndex ${tokenIndex}`);
+            continue;
+          }
+          // check buyer
+          {
+            const start = startingBalanceBuyers.at(i).at(tokenIndex);
+            const end = endingBalanceBuyers.at(i).at(tokenIndex);
+            const expected = buyerContributions
+              .at(i)
+              .at(tokenIndex)
+              .map((value) => new BN(value))
+              .reduce((prev, curr) => prev.add(curr));
+            console.log("buyer", i, "tokenIndex", tokenIndex, start.toString(), end.toString(), expected.toString());
+            expect(start.sub(end).toString()).to.equal(expected.toString());
+          }
+        }
+      }
     });
 
     it("Orchestrator Attests Contributions", async () => {

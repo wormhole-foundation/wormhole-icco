@@ -5,6 +5,7 @@ import {
   getForeignAssetEth,
   tryNativeToUint8Array,
   tryUint8ArrayToNative,
+  uint8ArrayToHex,
 } from "@certusone/wormhole-sdk";
 import { getForeignAssetSolana } from "@certusone/wormhole-sdk";
 import { web3 } from "@project-serum/anchor";
@@ -12,27 +13,13 @@ import { ethers } from "ethers";
 import { AcceptedToken, Raise } from "./icco";
 import { getCurrentTime } from "./testnet/utils";
 
-// interface SaleConfig {
-//   isFixedPrice: boolean;
-//   token: string;
-//   // localTokenAddress: string;
-//   tokenAmount: string;
-//   tokenChain: ChainId;
-//   tokenDecimals: number;
-//   minRaise: string;
-//   maxRaise: string;
-//   recipient: string;
-//   refundRecipient: string;
-//   saleDurationSeconds: number;
-//   lockUpDurationSeconds: number;
-//   saleStartTimer: number;
-//   solanaTokenAccount: string;
-//   authority: string;
-// }
-
 export class SaleParameters {
   // conductor
   conductorChain: ChainId;
+
+  // for accepted token conversion rate calculations
+  precision: number;
+  denominationDecimals: number;
 
   // parameters
   raise: Raise;
@@ -40,15 +27,12 @@ export class SaleParameters {
   tokenChain: ChainId;
   tokenAddress: string;
 
-  // TODO: use Drew's calculator here
-  calculator: DummyCalculator;
-
-  constructor(conductorChain: ChainId) {
+  constructor(conductorChain: ChainId, denominationDecimals: number) {
     this.conductorChain = conductorChain;
+    this.denominationDecimals = denominationDecimals;
     this.acceptedTokens = [];
 
-    //
-    this.calculator = new DummyCalculator();
+    this.precision = 18;
   }
 
   setSaleToken(chain: ChainId, address: string) {
@@ -115,18 +99,16 @@ export class SaleParameters {
     return this.raise;
   }
 
-  addAcceptedToken(chain: ChainId, address: string, conversion: string) {
+  addAcceptedToken(chain: ChainId, address: string, priceConversion: string, nativeDecimals: number) {
+    // we need to ensure that amounts will add up to the same units as the denomination
+    // of the raise
+    const normalization = this.denominationDecimals + this.precision - nativeDecimals;
+
     this.acceptedTokens.push({
       tokenAddress: tryNativeToUint8Array(address, chain),
       tokenChain: chain as number,
-      conversionRate: this.calculator.normalize(chain, this.conductorChain, conversion),
+      conversionRate: ethers.utils.parseUnits(priceConversion, normalization).toString(),
     });
-  }
-}
-
-class DummyCalculator {
-  normalize(fromChain: ChainId, toChain: ChainId, conversion: string) {
-    return conversion;
   }
 }
 
@@ -134,4 +116,8 @@ export function parseIccoHeader(iccoSignedVaa: Buffer): [number, Buffer] {
   const numSigners = iccoSignedVaa[5];
   const payloadStart = 57 + 66 * numSigners;
   return [iccoSignedVaa[payloadStart], iccoSignedVaa.subarray(payloadStart + 1, payloadStart + 33)];
+}
+
+export function bytesLikeToHex(byteslike: ethers.BytesLike) {
+  return uint8ArrayToHex(ethers.utils.arrayify(byteslike));
 }

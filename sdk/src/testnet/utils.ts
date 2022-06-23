@@ -19,8 +19,6 @@ import {
   CHAIN_ID_AVAX,
   redeemOnSolana,
   postVaaSolanaWithRetry,
-  tryUint8ArrayToNative,
-  getOriginalAssetEth,
 } from "@certusone/wormhole-sdk";
 import {
   makeAcceptedToken,
@@ -77,6 +75,7 @@ import { web3 } from "@project-serum/anchor";
 import { getAssociatedTokenAddress, getMint } from "@solana/spl-token";
 import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey";
 import { SignedVAAWithQuorum } from "@certusone/wormhole-sdk/lib/cjs/proto/gossip/v1/gossip";
+import { getBlockTime, wait } from "../anchor/utils";
 
 export async function extractVaaPayload(signedVaa: Uint8Array): Promise<Uint8Array> {
   const { parse_vaa } = await importCoreWasm();
@@ -1008,4 +1007,14 @@ export async function postAndRedeemTransferVaa(
   );
   transaction.partialSign(payer);
   return connection.sendRawTransaction(transaction.serialize());
+}
+
+export async function waitUntilSolanaBlock(connection: web3.Connection, expiration: number) {
+  let blockTime = await getBlockTime(connection);
+  console.log("start waiting", blockTime, expiration, "diff", expiration - blockTime);
+  while (blockTime <= expiration) {
+    console.log("waiting", blockTime, expiration, "diff", expiration - blockTime);
+    await wait(1);
+    blockTime = await getBlockTime(connection);
+  }
 }

@@ -16,6 +16,9 @@ import {
   transferFromSolana,
   getEmitterAddressSolana,
   attestFromSolana,
+  CHAIN_ID_AVAX,
+  redeemOnSolana,
+  postVaaSolanaWithRetry,
 } from "@certusone/wormhole-sdk";
 import {
   makeAcceptedToken,
@@ -59,6 +62,7 @@ import {
   SOLANA_TOKEN_BRIDGE_ADDRESS,
   WORMHOLE_RPCS,
   SOLANA_RPC,
+  AVAX_TOKEN_BRIDGE_ADDRESS,
 } from "./consts";
 import { TokenConfig, Contribution, SealSaleResult, SaleParams, SaleSealed, AcceptedToken, SaleInit } from "./structs";
 import { signContributionOnEth } from "./kyc";
@@ -954,4 +958,45 @@ export async function getSignedVaaFromSolanaTokenBridge(sequence: string) {
     }
   );
   return signedVaa;
+}
+
+export async function getSignedVaaFromAvaxTokenBridge(sequence: string) {
+  const { vaaBytes: signedVaa } = await getSignedVAAWithRetry(
+    WORMHOLE_RPCS,
+    CHAIN_ID_AVAX,
+    getEmitterAddressEth(AVAX_TOKEN_BRIDGE_ADDRESS),
+    sequence,
+    {
+      transport: NodeHttpTransport(),
+    }
+  );
+  return signedVaa;
+}
+
+export async function postAndRedeemTransferVaa(
+  connection: web3.Connection,
+  payer: web3.Keypair,
+  signedVaa: Uint8Array
+) {
+  await postVaaSolanaWithRetry(
+    connection,
+    async (tx) => {
+      tx.partialSign(payer);
+      return tx;
+    },
+    SOLANA_CORE_BRIDGE_ADDRESS.toString(),
+    payer.publicKey.toString(),
+    Buffer.from(signedVaa),
+    10
+  );
+
+  const transaction = await redeemOnSolana(
+    connection,
+    SOLANA_CORE_BRIDGE_ADDRESS.toString(),
+    SOLANA_TOKEN_BRIDGE_ADDRESS.toString(),
+    payer.publicKey.toString(),
+    signedVaa
+  );
+  transaction.partialSign(payer);
+  return connection.sendRawTransaction(transaction.serialize());
 }

@@ -70,5 +70,6 @@ export const SOLANA_RPC = "https://api.devnet.solana.com";
 export const SOLANA_CORE_BRIDGE_ADDRESS = new web3.PublicKey("3u8hJUVTA4jH1wYAyUur7FFZVQ8H635K3tSHHF4ssjQ5");
 export const SOLANA_TOKEN_BRIDGE_ADDRESS = new web3.PublicKey("DZnkkTmCiFWfYTfT41X3Rd1kDgozqzxWaHqsw6W4x2oe");
 // avax
+export const WAVAX_ADDRESS = "0xd00ae08403B9bbb9124bB305C09058E32C39A48c";
 export const AVAX_CORE_BRIDGE_ADDRESS = "0x7bbcE28e64B3F8b84d876Ab298393c38ad7aac4C";
 export const AVAX_TOKEN_BRIDGE_ADDRESS = "0x61E44E506Ca5659E6c0bba9b678586fA2d729756";

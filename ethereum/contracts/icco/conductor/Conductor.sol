@@ -355,8 +355,9 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
              * @dev This calculates the total contribution for each accepted token.
              * - it uses the conversion rate to convert contributions into the minRaise denomination
              */
-            accounting.totalContribution += sale.contributions[i] * sale.acceptedTokensConversionRates[i] / 1e18;
+            accounting.totalContribution += sale.contributions[i] * sale.acceptedTokensConversionRates[i]; 
         }
+        accounting.totalContribution /= 1e18;
 
         IWormhole wormhole = wormhole();
 

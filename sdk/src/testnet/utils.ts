@@ -19,6 +19,8 @@ import {
   CHAIN_ID_AVAX,
   redeemOnSolana,
   postVaaSolanaWithRetry,
+  tryUint8ArrayToNative,
+  getOriginalAssetEth,
 } from "@certusone/wormhole-sdk";
 import {
   makeAcceptedToken,
@@ -36,7 +38,6 @@ import {
   parseSaleSealed,
   saleSealedOnEth,
   normalizeConversionRate,
-  getAcceptedTokenDecimalsOnConductor,
   getErc20Decimals,
   claimAllocationOnEth,
   getAllocationIsClaimedOnEth,
@@ -133,24 +134,11 @@ export async function buildAcceptedTokens(tokenConfig: TokenConfig[]): Promise<A
     const token = ERC20__factory.connect(config.address, wallet);
     const tokenDecimals = await token.decimals();
 
-    // compute the normalized conversionRate
-    const acceptedTokenDecimalsOnConductor = await getAcceptedTokenDecimalsOnConductor(
-      config.chainId,
-      CONDUCTOR_CHAIN_ID,
-      WORMHOLE_ADDRESSES[network].tokenBridge,
-      WORMHOLE_ADDRESSES[CONDUCTOR_NETWORK].tokenBridge,
-      testProvider(network),
-      testProvider(CONDUCTOR_NETWORK),
-      config.address,
-      tokenDecimals
-    );
-
     // normalize the conversion rate and then push the accepted token
     const normalizedConversionRate = await normalizeConversionRate(
       SALE_CONFIG.denominationDecimals,
       tokenDecimals,
-      config.conversionRate,
-      acceptedTokenDecimalsOnConductor
+      config.conversionRate
     );
     acceptedTokens.push(makeAcceptedToken(config.chainId, config.address, normalizedConversionRate));
   }

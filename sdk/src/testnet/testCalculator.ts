@@ -144,7 +144,7 @@ export class MockSale {
 
       let allocation = ethers.BigNumber.from(0);
       let excessContribution = ethers.BigNumber.from(0);
-      let normalizedTotalContribution = totalContributions[i];
+
       if (totalRaised.gte(minRaise)) {
         allocation = saleTokenAmount.mul(scaledContribution).div(totalRaised);
         excessContribution = totalExcessContribution.mul(totalContributions[i]).div(totalRaised);
@@ -155,26 +155,13 @@ export class MockSale {
             this.normalizeAmount(allocation, ethers.BigNumber.from(this.saleTokenDecimals)),
             ethers.BigNumber.from(this.saleTokenDecimals)
           );
-
-          // normalize the contribution amount for foreign contributors
-          const nativeAddress = await tryUint8ArrayToNative(
-            this.acceptedTokens[i].tokenAddress as Uint8Array,
-            this.acceptedTokens[i].tokenChain as ChainId
-          );
-          const contributedTokenDecimals = ethers.BigNumber.from(
-            await getTokenDecimals(this.acceptedTokens[i].tokenChain as ChainId, nativeAddress)
-          );
-          normalizedTotalContribution = this.denormalizeAmount(
-            this.normalizeAmount(totalContributions[i], contributedTokenDecimals),
-            contributedTokenDecimals
-          );
         }
         // create the allocation
         allocations.push({
           tokenIndex: i,
           allocation: allocation,
           excessContribution: excessContribution,
-          totalContribution: normalizedTotalContribution,
+          totalContribution: totalContributions[i],
         });
       }
       // keep running total of allocations

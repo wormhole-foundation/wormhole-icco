@@ -19,8 +19,8 @@ import {
   findUniqueContributions,
   excessContributionsExistForSale,
   claimContributorExcessContributionOnEth,
-  getRecipientContributedTokenBalances,
   getContributedTokenBalancesOnContributors,
+  getTokenDecimals,
 } from "./utils";
 import {
   SALE_CONFIG,
@@ -32,9 +32,10 @@ import {
   CONDUCTOR_CHAIN_ID,
 } from "./consts";
 import { Contribution, SaleParams, SealSaleResult } from "./structs";
-import { setDefaultWasm, ChainId } from "@certusone/wormhole-sdk";
+import { setDefaultWasm, ChainId, tryUint8ArrayToNative } from "@certusone/wormhole-sdk";
 import { MockSale } from "./testCalculator";
 import { getErc20Balance } from "../";
+import { ethers } from "ethers";
 
 setDefaultWasm("node");
 
@@ -54,6 +55,15 @@ describe("Testnet ICCO Successful Sales", () => {
       contributions
     );
     const mockSaleResults = await mockSale.getResults();
+
+    console.log("Expected Sale Results");
+    for (const result of mockSaleResults.allocations) {
+      console.log(
+        `Token: ${
+          result.tokenIndex
+        }, Allocation: ${result.allocation.toString()}, ExcessContribution: ${result.excessContribution.toString()}, TotalContribution: ${result.totalContribution.toString()}`
+      );
+    }
 
     // create and initialize the sale
     const saleInitArray = await createSaleOnEthConductor(
@@ -174,13 +184,27 @@ describe("Testnet ICCO Successful Sales", () => {
 
       // make sure the balance changes are what we expected
       for (let i = 0; i < acceptedTokens.length; i++) {
+        let expectedBalanceChange = mockSaleResults.allocations[i].totalContribution.sub(
+          mockSaleResults.allocations[i].excessContribution
+        );
+        if ((acceptedTokens[i].tokenChain as ChainId) != CONDUCTOR_CHAIN_ID) {
+          const nativeAddress = await tryUint8ArrayToNative(
+            acceptedTokens[i].tokenAddress as Uint8Array,
+            acceptedTokens[i].tokenChain as ChainId
+          );
+          const contributedTokenDecimals = ethers.BigNumber.from(
+            await getTokenDecimals(acceptedTokens[i].tokenChain as ChainId, nativeAddress)
+          );
+
+          // copy what the token bridge does by norm/denorm based on token decimals
+          expectedBalanceChange = mockSale.denormalizeAmount(
+            mockSale.normalizeAmount(expectedBalanceChange, contributedTokenDecimals),
+            contributedTokenDecimals
+          );
+        }
+
         expect(
-          contributorBalancesBefore[i]
-            .sub(contributorBalancesAfter[i])
-            .add(mockSaleResults.allocations[i].excessContribution)
-            .eq(
-              mockSaleResults.allocations[i].totalContribution.sub(mockSaleResults.allocations[i].excessContribution)
-            ),
+          contributorBalancesBefore[i].sub(contributorBalancesAfter[i]).eq(expectedBalanceChange),
           `Incorrect recipient balance change for acceptedToken=${i}`
         ).to.be.true;
       }

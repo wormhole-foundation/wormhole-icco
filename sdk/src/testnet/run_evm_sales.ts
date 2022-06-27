@@ -226,7 +226,7 @@ describe("Testnet ICCO Successful Sales", () => {
     }
   });
 
-  it("Under Subscribed Fixed-price Sale", async () => {
+  it("Undersubscribed Fixed-price Sale", async () => {
     // increase the minRaise and maxRaise significantly so that the test is unsuccessful
     raiseParams["minRaise"] = "999999999";
     raiseParams["maxRaise"] = "999999999";

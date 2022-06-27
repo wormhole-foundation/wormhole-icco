@@ -12,7 +12,7 @@
   "scripts": {
     "clean": "rm -rf node_modules evm-contracts target src/ethers-contracts src/anchor",
     "build": "bash scripts/copy_ethereum.sh && bash scripts/copy_anchor.sh",
-    "testnet-evm-test": "ts-mocha src/testnet/run_testnet_sale.ts -t 1000000",
+    "testnet-evm-test": "ts-mocha src/testnet/run_evm_sales.ts -t 1000000",
     "testnet-solana-test": "ts-mocha src/testnet/run_solana_sales.ts -t 10000000 --exit",
     "format": "echo \"disabled: prettier --write \"src/**/*.ts\"\"",
     "lint": "tslint -p tsconfig.json",

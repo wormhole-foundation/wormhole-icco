@@ -8,13 +8,13 @@
     "localTokenAddress": "0x36Ed51Afc79619b299b238898E72ce482600568a",
     "tokenChain": 3,
     "tokenAmount": "1",
-    "minRaise": "0.01",
-    "maxRaise": ".10",
+    "minRaise": "5",
+    "maxRaise": "40",
     "recipient": "ADD RECIPIENT PUBLIC KEY",
     "refundRecipient": "ADD REFUND RECIPIENT PUBLIC KEY",
-    "saleDurationSeconds": 120,
-    "lockUpDurationSeconds": 100,
-    "saleStartTimer": 90,
+    "saleDurationSeconds": 200,
+    "lockUpDurationSeconds": 40,
+    "saleStartTimer": 50,
     "authority": "ADD KYC AUTHORITY PUBLIC KEY"
   },
   "acceptedTokens": [

@@ -47,6 +47,7 @@ import {
   saleAbortedOnEth,
   getSaleIdFromIccoVaa,
   claimContributorRefundOnEth,
+  getRefundIsClaimedOnEth,
 } from "../";
 import {
   WORMHOLE_ADDRESSES,
@@ -1005,4 +1006,27 @@ export async function waitUntilSolanaBlock(connection: web3.Connection, expirati
     await wait(1);
     blockTime = await getBlockTime(connection);
   }
+}
+
+export async function claimRefundForContributorOnEth(saleInit: SaleInit, contribution: Contribution): Promise<boolean> {
+  const network = CHAIN_ID_TO_NETWORK.get(contribution.chainId);
+  const tokenIndex = await getTokenIndexFromConfig(contribution.chainId, contribution.address);
+  const wallet = contributorWallet(contribution);
+
+  try {
+    await claimContributorRefundOnEth(TESTNET_ADDRESSES[network], saleInit.saleId, tokenIndex[1], wallet);
+  } catch (error: any) {
+    console.log(error);
+    return false;
+  }
+
+  const isClaimed = await getRefundIsClaimedOnEth(
+    TESTNET_ADDRESSES[network],
+    wallet.provider,
+    saleInit.saleId,
+    tokenIndex[1],
+    wallet.address
+  );
+
+  return isClaimed;
 }

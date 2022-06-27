@@ -21,6 +21,8 @@ import {
   claimContributorExcessContributionOnEth,
   getContributedTokenBalancesOnContributors,
   getTokenDecimals,
+  abortSaleAtContributors,
+  claimRefundForContributorOnEth,
 } from "./utils";
 import {
   SALE_CONFIG,
@@ -40,10 +42,16 @@ import { ethers } from "ethers";
 setDefaultWasm("node");
 
 describe("Testnet ICCO Successful Sales", () => {
-  it("Fixed-price With Lock Up", async () => {
+  // read in test configs
+  const raiseParams: SaleParams = SALE_CONFIG["raiseParams"];
+  const contributions: Contribution[] = CONTRIBUTOR_INFO["contributions"];
+
+  it("Successful Fixed-price With Lock Up", async () => {
+    // this test will handle successful sales and oversubscribed sales
+    // successful sale: minRaise < totalRaised < maxRaise
+    // oversubscribed sale: totalRaised > maxRaise >= minRaise
+
     // sale parameters
-    const raiseParams: SaleParams = SALE_CONFIG["raiseParams"];
-    const contributions: Contribution[] = CONTRIBUTOR_INFO["contributions"];
     const acceptedTokens = await buildAcceptedTokens(SALE_CONFIG["acceptedTokens"]);
 
     // test calculator object
@@ -55,15 +63,6 @@ describe("Testnet ICCO Successful Sales", () => {
       contributions
     );
     const mockSaleResults = await mockSale.getResults();
-
-    console.log("Expected Sale Results");
-    for (const result of mockSaleResults.allocations) {
-      console.log(
-        `Token: ${
-          result.tokenIndex
-        }, Allocation: ${result.allocation.toString()}, ExcessContribution: ${result.excessContribution.toString()}, TotalContribution: ${result.totalContribution.toString()}`
-      );
-    }
 
     // create and initialize the sale
     const saleInitArray = await createSaleOnEthConductor(
@@ -224,6 +223,110 @@ describe("Testnet ICCO Successful Sales", () => {
         const successful = await claimContributorExcessContributionOnEth(saleSealedResults[0], uniqueContributors[i]);
         expect(successful, "Failed to claim excessContribution").to.be.true;
       }
+    }
+  });
+
+  it("Under Subscribed Fixed-price Sale", async () => {
+    // increase the minRaise and maxRaise significantly so that the test is unsuccessful
+    raiseParams["minRaise"] = "999999999";
+    raiseParams["maxRaise"] = "999999999";
+
+    // sale parameters
+    const acceptedTokens = await buildAcceptedTokens(SALE_CONFIG["acceptedTokens"]);
+
+    // test calculator object
+    const mockSale = new MockSale(
+      CONDUCTOR_CHAIN_ID,
+      SALE_CONFIG["denominationDecimals"],
+      acceptedTokens,
+      raiseParams,
+      contributions
+    );
+    const mockSaleResults = await mockSale.getResults();
+
+    // create and initialize the sale
+    const saleInitArray = await createSaleOnEthConductor(
+      initiatorWallet(CONDUCTOR_NETWORK),
+      TESTNET_ADDRESSES.conductorAddress,
+      raiseParams,
+      acceptedTokens
+    );
+
+    // // initialize the sale on the contributors
+    const saleInit = await initializeSaleOnEthContributors(saleInitArray[0]);
+    console.log(saleInit);
+    console.info("Sale", saleInit.saleId, "has been initialized on the EVM contributors.");
+
+    // wait for the sale to start before contributing
+    console.info("Waiting for the sale to start.");
+    const extraTime: number = 5; // wait an extra 5 seconds
+    await waitForSaleToStart(saleInit, extraTime);
+
+    // loop through contributors and safe contribute one by one
+    console.log("Making contributions to the sale.");
+    for (const contribution of contributions) {
+      let successful = false;
+      // check if we're contributing a solana token
+      successful = await prepareAndExecuteContribution(saleInit.saleId, raiseParams.token, contribution);
+      expect(successful, "Contribution failed").to.be.true;
+    }
+
+    // wait for sale to end
+    console.log("Waiting for the sale to end.");
+    await waitForSaleToEnd(saleInit, raiseParams.lockUpDurationSeconds); // add the lock up duration
+
+    // attest and collect contributions on EVM
+    const attestVaas: Uint8Array[] = await attestContributionsOnContributor(saleInit);
+    console.log("Successfully attested contributions on", attestVaas.length, "chains.");
+
+    // collect contributions on the conductor
+    const collectionResults = await collectContributionsOnConductor(attestVaas, saleInit.saleId);
+    for (const result of collectionResults) {
+      expect(result, "Failed to collect all contributions on the conductor.").to.be.true;
+    }
+    console.log("Successfully collected contributions on the conductor.");
+
+    // seal the sale on the conductor
+    // make sure the refundRecipient has received the refund
+    // abort the sale on the contributor contracts
+    let saleResult: SealSaleResult;
+    {
+      const refundRecipientBalanceBefore = await getErc20Balance(
+        testProvider(CONDUCTOR_NETWORK),
+        raiseParams.localTokenAddress,
+        raiseParams.refundRecipient
+      );
+
+      // seal or abort the sale on the conductor contract
+      saleResult = await sealOrAbortSaleOnEth(saleInit);
+      expect(saleResult.sale.isAborted, "Sale was not aborted").to.be.true;
+
+      // sum allocations by chain
+      const refundRecipientBalanceAfter = await getErc20Balance(
+        testProvider(CONDUCTOR_NETWORK),
+        raiseParams.localTokenAddress,
+        raiseParams.refundRecipient
+      );
+
+      // abort the sale on the contributor contracts
+      await abortSaleAtContributors(saleResult);
+      console.log("Successfully aborted the sale on the contributors.");
+
+      // confirms that the refund recipient received the sale token refund (if applicable)
+      expect(
+        refundRecipientBalanceAfter.sub(refundRecipientBalanceBefore).eq(mockSaleResults.tokenRefund),
+        "Incorrect sale token refund"
+      ).to.be.true;
+    }
+
+    // claim allocations on contributors
+    // find unique refunds to claim
+    const uniqueContributors = findUniqueContributions(contributions, acceptedTokens);
+
+    console.log("Claiming contributor refunds.");
+    for (let i = 0; i < uniqueContributors.length; i++) {
+      const successful = await claimRefundForContributorOnEth(saleInit, uniqueContributors[i]);
+      expect(successful, "Failed to claim refund").to.be.true;
     }
   });
 });

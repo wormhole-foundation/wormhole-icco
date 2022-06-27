@@ -110,6 +110,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
         require(raise.tokenAmount > 0, "amount must be > 0");
         require(acceptedTokens.length > 0, "must accept at least one token");
         require(acceptedTokens.length < 255, "too many tokens");
+        require(raise.minRaise > 0, "minRaise must be > 0");
         require(raise.maxRaise >= raise.minRaise, "maxRaise must be >= minRaise");
 
         /// @dev take custody of sale token and fetch decimal/address info for the sale token
@@ -355,8 +356,9 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
              * @dev This calculates the total contribution for each accepted token.
              * - it uses the conversion rate to convert contributions into the minRaise denomination
              */
-            accounting.totalContribution += sale.contributions[i] * sale.acceptedTokensConversionRates[i] / 1e18;
+            accounting.totalContribution += sale.contributions[i] * sale.acceptedTokensConversionRates[i]; 
         }
+        accounting.totalContribution /= 1e18;
 
         IWormhole wormhole = wormhole();
 

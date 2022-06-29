@@ -19,42 +19,27 @@ pub struct Custodian {
     pub token_bridge_pubkey: Pubkey,
 
     pub custody_signer_key: Pubkey,     // 32
-//    pub custody_signer_bump: u8,        // 1
-
     pub mint_signer_key: Pubkey,     // 32
-//    pub mint_signer_bump: u8,        // 1
-
     pub authority_signer_key: Pubkey,     // 32
-//    pub authority_signer_bump: u8,        // 1
-
     pub bridge_config_key: Pubkey,     // 32
-//    pub bridge_config_bump: u8,        // 1
-
     pub wormhole_config_key: Pubkey,     // 32
-//    pub wormhole_config_bump: u8,        // 1
-
     pub fee_collector_key: Pubkey,     // 32
-//    pub fee_collector_bump: u8,        // 1
-
     pub wormhole_emitter_key: Pubkey,     // 32
-//    pub wormhole_emitter_bump: u8,        // 1
-    
     pub wormhole_sequence_key: Pubkey,     // 32
-//    pub wormhole_sequence_bump: u8,        // 1
 }
 
 
 impl Custodian {
     pub const MAXIMUM_SIZE: usize = 4 + 1 + 32 + 32
-    + 32 //+ 1        // custody_signer key+bump
-    + 32 //+ 1        // mint_signer key+bump
-    + 32 //+ 1        // authority_signer key+bump
-    + 32 //+ 1        // bridge_config key+bump
-    + 32 //+ 1        // wormhole_config key+bump
-    + 32 //+ 1        // fee_collector key+bump
-    + 32 //+ 1        // wormhole_emitter key+bump
-    + 32 //+ 1        // wormhole_sequence key+bump
-    + 0;           // In case...
+    + 32         // custody_signer key+bump
+    + 32         // mint_signer key+bump
+    + 32         // authority_signer key+bump
+    + 32         // bridge_config key+bump
+    + 32         // wormhole_config key+bump
+    + 32         // fee_collector key+bump
+    + 32         // wormhole_emitter key+bump
+    + 32         // wormhole_sequence key+bump
+    + 0;         // In case...
 
     const CONDUCTOR_ADDRESS_BYTES: [u8; 32] = Decoder::Hex.decode(CONDUCTOR_ADDRESS.as_bytes());
 

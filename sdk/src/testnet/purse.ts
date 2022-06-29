@@ -36,7 +36,7 @@ export class Purse {
     };
     this.solana = {
       endpoint: cfg.solana.rpc,
-      provider: new web3.Connection(cfg.solana.rpc, "confirmed"),
+      provider: new web3.Connection(cfg.solana.rpc, "finalized"),
       wallets: [],
     };
 

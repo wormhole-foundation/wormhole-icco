@@ -13,7 +13,7 @@ import { getOrCreateAssociatedTokenAccount } from "@solana/spl-token";
 import { ethers } from "ethers";
 import { hexToPublicKey } from "../anchor/utils";
 import { Conductor, Conductor__factory, ERC20__factory } from "../ethers-contracts";
-import { AcceptedToken, Raise } from "../icco";
+import { AcceptedToken, ConductorSale, Raise } from "../icco";
 import { bytesLikeToHex } from "../utils";
 
 export class IccoConductor {
@@ -62,8 +62,7 @@ export class IccoConductor {
             payer,
             mint,
             custodian,
-            true, // allowOwnerOffCurve
-            "confirmed"
+            true // allowOwnerOffCurve
           );
         }
       }
@@ -80,12 +79,55 @@ export class IccoConductor {
         ethers.utils.arrayify(raise.token)
       );
       const token = ERC20__factory.connect(wrapped, this.signer());
-      const tx = await token.approve(this.address(), raise.tokenAmount);
-      const receipt = await tx.wait();
+      const receipt = await token.approve(this.address(), raise.tokenAmount).then((tx) => tx.wait());
     }
 
     // now create
-    const tx = await contract.createSale(raise, acceptedTokens);
-    return tx.wait();
+    return contract.createSale(raise, acceptedTokens).then((tx) => tx.wait());
+  }
+
+  async getSale(saleId: ethers.BigNumber): Promise<ConductorSale> {
+    const sale = await this.contract.sales(saleId);
+
+    return {
+      saleId: sale.saleID,
+      tokenAddress: sale.tokenAddress,
+      tokenChain: sale.tokenChain,
+      localTokenDecimals: sale.localTokenDecimals,
+      localTokenAddress: sale.localTokenAddress,
+      solanaTokenAccount: sale.solanaTokenAccount,
+      tokenAmount: sale.tokenAmount,
+      minRaise: sale.minRaise,
+      maxRaise: sale.maxRaise,
+      saleStart: sale.saleStart,
+      saleEnd: sale.saleEnd,
+      initiator: sale.initiator,
+      recipient: sale.recipient,
+      refundRecipient: sale.refundRecipient,
+      acceptedTokensChains: sale.acceptedTokensChains,
+      acceptedTokensAddresses: sale.acceptedTokensAddresses,
+      acceptedTokensConversionRates: sale.acceptedTokensConversionRates,
+      solanaAcceptedTokensCount: sale.solanaAcceptedTokensCount,
+      contributions: sale.contributions,
+      contributionsCollected: sale.contributionsCollected,
+      isSealed: sale.isSealed,
+      isAborted: sale.isAborted,
+    };
+  }
+
+  async collectContribution(signedVaa: Uint8Array) {
+    return this.contract.collectContribution(signedVaa).then((tx) => tx.wait());
+  }
+
+  async sealSale(saleId: ethers.BigNumber) {
+    // save on gas by checking the state of the sale
+    const sale = await this.getSale(saleId);
+
+    if (sale.isSealed || sale.isAborted) {
+      throw Error("already sealed / aborted");
+    }
+
+    // and seal
+    return this.contract.sealSale(saleId).then((tx) => tx.wait());
   }
 }

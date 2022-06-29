@@ -1,11 +1,12 @@
 import { expect } from "chai";
-import { web3 } from "@project-serum/anchor";
+import { web3, BN } from "@project-serum/anchor";
 import { createMint, getMint, getOrCreateAssociatedTokenAccount, mintTo } from "@solana/spl-token";
 import { ethers } from "ethers";
 import {
   CHAIN_ID_AVAX,
   CHAIN_ID_SOLANA,
   createWrappedOnEth,
+  getEmitterAddressSolana,
   getForeignAssetSolana,
   getOriginalAssetSol,
   getSignedVAAWithRetry,
@@ -51,9 +52,8 @@ import {
   waitUntilSolanaBlock,
 } from "./utils";
 import { parseIccoHeader, SaleParameters } from "../utils";
-import { BN } from "bn.js";
 import { KycAuthority } from "../anchor/kyc";
-import { getSplBalance, hexToPublicKey } from "../anchor/utils";
+import { getPdaSplBalance, getSplBalance, hexToPublicKey } from "../anchor/utils";
 
 setDefaultWasm("node");
 
@@ -133,7 +133,7 @@ describe("Testnet ICCO Sales", () => {
         solanaOrchestrator.publicKey,
         9
       );
-      console.log(`created sale token: ${saleTokenMint.toString()}`);
+      console.log(`createMint (sale token): ${saleTokenMint.toString()}`);
 
       const tokenAccount = await getOrCreateAssociatedTokenAccount(
         solanaConnection,
@@ -150,7 +150,7 @@ describe("Testnet ICCO Sales", () => {
         solanaOrchestrator,
         10_000_000_000_000_000_000n // 10,000,000
       );
-      //await solanaConnection.confirmTransaction(solanaTx, "confirmed");
+      console.log(`mintTo ${tokenAccount.address.toString()}: ${solanaTx}`);
 
       // attest sale token on Solana and create portal wrapped on Avalanche
       {
@@ -159,8 +159,8 @@ describe("Testnet ICCO Sales", () => {
         console.log(`attestMintFromSolana, sequence=${sequence}`);
 
         const signedVaa = await getSignedVaaFromSolanaTokenBridge(sequence);
-        const avaxTx = await createWrappedOnEth(AVAX_TOKEN_BRIDGE_ADDRESS, avaxOrchestrator, signedVaa);
-        console.log(`avaxTx: ${avaxTx.transactionHash}`);
+        const avaxReceipt = await createWrappedOnEth(AVAX_TOKEN_BRIDGE_ADDRESS, avaxOrchestrator, signedVaa);
+        console.log(`createWrappedOnEth: ${avaxReceipt.transactionHash}`);
       }
 
       // transfer sale tokens from Solana to Avalanche
@@ -178,7 +178,7 @@ describe("Testnet ICCO Sales", () => {
 
         const signedVaa = await getSignedVaaFromSolanaTokenBridge(sequence);
         const avaxTx = await redeemOnEth(AVAX_TOKEN_BRIDGE_ADDRESS, avaxOrchestrator, signedVaa);
-        console.log(`avaxTx: ${avaxTx.transactionHash}`);
+        console.log(`redeemOnEth: ${avaxTx.transactionHash}`);
       }
 
       // save the sale token (to be used for sale trials)
@@ -187,52 +187,57 @@ describe("Testnet ICCO Sales", () => {
 
     it("Prepare Native Solana Mint as Collateral", async () => {
       // we're going to pretend this is a stablecoin pegged to USDC price
-      const mint = await createMint(
+      const stableMint = await createMint(
         solanaConnection,
         solanaOrchestrator,
         solanaOrchestrator.publicKey,
         solanaOrchestrator.publicKey,
         denominationDecimals // same as USDC decimals on mainnet-beta
       );
-      console.log(`createMint: ${mint.toString()}`);
+      console.log(`createMint (stable): ${stableMint.toString()}`);
 
       // For each buyer, mint an adequate amount for contributions
       for (const buyer of buyers) {
-        const tokenAccount = await getOrCreateAssociatedTokenAccount(solanaConnection, buyer, mint, buyer.publicKey);
+        const tokenAccount = await getOrCreateAssociatedTokenAccount(
+          solanaConnection,
+          buyer,
+          stableMint,
+          buyer.publicKey
+        );
 
         const solanaTx = await mintTo(
           solanaConnection,
           solanaOrchestrator,
-          mint,
+          stableMint,
           tokenAccount.address,
           solanaOrchestrator,
           100_000_000_000_000n // 100,000,000 USDC
         );
+        console.log(`mintTo ${tokenAccount.address.toString()}: ${solanaTx}`);
 
-        const balance = await getSplBalance(solanaConnection, mint, buyer.publicKey);
-        console.log(
-          `mintTo: ${tokenAccount.address.toString()} belonging to ${buyer.publicKey.toString()}, balance: ${balance.toString()}`
-        );
+        const balance = await getSplBalance(solanaConnection, stableMint, buyer.publicKey);
         expect(balance.toString()).to.equal("100000000000000");
       }
 
       // we can just pass in the denominationDecimals, but let's confirm the mint info
-      const mintInfo = await getMint(solanaConnection, mint);
+      const mintInfo = await getMint(solanaConnection, stableMint);
       expect(mintInfo.decimals).to.equal(denominationDecimals);
 
       // Add this mint acting as USDC to accepted tokens. Conversion rate of 1
       // means it is priced exactly as USDC, our intended raise denomination
-      parameters.addAcceptedToken(CHAIN_ID_SOLANA, mint.toString(), "1", denominationDecimals);
+      parameters.addAcceptedToken(CHAIN_ID_SOLANA, stableMint.toString(), "1", denominationDecimals);
     });
 
     it("Prepare Wrapped AVAX as Collateral", async () => {
-      const wrapped = await getForeignAssetSolana(
-        solanaConnection,
-        SOLANA_TOKEN_BRIDGE_ADDRESS.toString(),
-        CHAIN_ID_AVAX,
-        tryNativeToUint8Array(WAVAX_ADDRESS, CHAIN_ID_AVAX)
+      const wavaxMint = new web3.PublicKey(
+        await getForeignAssetSolana(
+          solanaConnection,
+          SOLANA_TOKEN_BRIDGE_ADDRESS.toString(),
+          CHAIN_ID_AVAX,
+          tryNativeToUint8Array(WAVAX_ADDRESS, CHAIN_ID_AVAX)
+        )
       );
-      console.log(`WAVAX on Solana: ${wrapped}`);
+      console.log(`wavaxMint: ${wavaxMint.toString()}`);
 
       // bridge
       const sequences = [];
@@ -240,7 +245,7 @@ describe("Testnet ICCO Sales", () => {
         const tokenAccount = await getOrCreateAssociatedTokenAccount(
           solanaConnection,
           solanaOrchestrator,
-          new web3.PublicKey(wrapped),
+          wavaxMint,
           buyer.publicKey
         );
 
@@ -259,39 +264,18 @@ describe("Testnet ICCO Sales", () => {
       for (const sequence of sequences) {
         const signedVaa = await getSignedVaaFromAvaxTokenBridge(sequence);
         const solanaTx = await postAndRedeemTransferVaa(solanaConnection, solanaOrchestrator, signedVaa);
-        console.log(`solanaTx: ${solanaTx}`);
+        console.log(`postAndRedeemTransferVaa: ${solanaTx}`);
       }
 
       // need decimals
-      const mintInfo = await getMint(solanaConnection, new web3.PublicKey(wrapped));
+      const mintInfo = await getMint(solanaConnection, wavaxMint);
 
       // in the year 6969, AVAX is worth 4,200,000 USDC
-      parameters.addAcceptedToken(CHAIN_ID_SOLANA, wrapped, "4200000", mintInfo.decimals);
+      parameters.addAcceptedToken(CHAIN_ID_SOLANA, wavaxMint.toString(), "4200000", mintInfo.decimals);
     });
   });
 
   describe("Conduct Successful Sale", () => {
-    // In total, we are going to contribute:
-    //
-    //   1.5 AVAX:        1.5 * 4,200,000 =  6,300,000
-    //   16,700,000 USDC: 16,700,000 * 1  = 16,700,000
-    //                                    ------------
-    //                               Total: 25,000,000
-    //
-    //                           Max Raise: 20,000,000
-    //                              Excess:  5,000,000
-
-    const buyerContributions = [
-      [
-        ["12500000"], //          12,500,000 USDC
-        ["0.2", "0.4"], //               0.6 AVAX
-      ],
-      [
-        ["2000000", "2200000"], // 4,200,000 USDC
-        ["0.9"], //                      0.9 AVAX
-      ],
-    ];
-
     // we need this sale id for the test
     let currentSaleId: Buffer;
 
@@ -309,12 +293,16 @@ describe("Testnet ICCO Sales", () => {
 
         const amountToSell = "1000000000"; // 1,000,000,000
 
+        const avaxSaleTokenDecimals = await parameters
+          .saleTokenEvm(avaxConnection, AVAX_TOKEN_BRIDGE_ADDRESS)
+          .then((token) => token.decimals());
+
         const minRaise = "5000000"; //   5,000,000 usdc
         const maxRaise = "20000000"; // 20,000,000 usdc
 
         parameters.prepareRaise(
           true, // fixed price sale == true
-          amountToSell,
+          ethers.utils.parseUnits(amountToSell, avaxSaleTokenDecimals).toString(),
           avaxOrchestrator.address,
           avaxOrchestrator.address,
           ethers.utils.parseUnits(minRaise, denominationDecimals).toString(),
@@ -330,7 +318,7 @@ describe("Testnet ICCO Sales", () => {
 
       const raise = parameters.makeRaiseNow(
         60, // delay of when to start sale
-        180, // duration of sale
+        120, // duration of sale
         60 // unlock period after sale ends
       );
       const avaxReceipt = await conductor.createSale(
@@ -340,12 +328,13 @@ describe("Testnet ICCO Sales", () => {
         solanaOrchestrator,
         solanaContributor.custodian
       );
-      console.log(`avaxReceipt: ${avaxReceipt.transactionHash}`);
+      console.log(`createSale: ${avaxReceipt.transactionHash}`);
 
       // we only care about the last one for the solana contributor
-      const [_, sequence] = parseSequencesFromLogEth(avaxReceipt, AVAX_CORE_BRIDGE_ADDRESS);
-      console.log(`createSale, sequence=${sequence}`);
+      const sequences = parseSequencesFromLogEth(avaxReceipt, AVAX_CORE_BRIDGE_ADDRESS);
+      expect(sequences).has.length(2);
 
+      const [_, sequence] = sequences;
       const signedVaa = await (async () => {
         const { vaaBytes: signedVaa } = await getSignedVAAWithRetry(
           WORMHOLE_RPCS,
@@ -364,7 +353,7 @@ describe("Testnet ICCO Sales", () => {
 
       const saleTokenMint = await parameters.saleTokenSolanaMint();
       const solanaTx = await solanaContributor.initSale(solanaOrchestrator, signedVaa, saleTokenMint);
-      console.log(`solanaTx: ${solanaTx}`);
+      console.log(`initSale: ${solanaTx}`);
 
       const saleState = await solanaContributor.getSale(saleId);
 
@@ -407,7 +396,29 @@ describe("Testnet ICCO Sales", () => {
 
       // save saleId for later use
       currentSaleId = saleId;
+      console.log(`saleId: ${saleId.toString("hex")}`);
     });
+
+    // In total, we are going to contribute:
+    //
+    //   1.5 AVAX:        1.5 * 4,200,000 =  6,300,000
+    //   16,700,000 USDC: 16,700,000 * 1  = 16,700,000
+    //                                    ------------
+    //                               Total: 25,000,000
+    //
+    //                           Max Raise: 20,000,000
+    //                              Excess:  5,000,000
+
+    const buyerContributions = [
+      [
+        ["12500000"].map((v) => ethers.utils.parseUnits(v, 6).toString()), //          12,500,000 USDC
+        ["0.2", "0.4"].map((v) => ethers.utils.parseUnits(v, 8).toString()), //               0.6 AVAX
+      ],
+      [
+        ["2000000", "2200000"].map((v) => ethers.utils.parseUnits(v, 6).toString()), // 4,200,000 USDC
+        ["0.9"].map((v) => ethers.utils.parseUnits(v, 8).toString()), //                      0.9 AVAX
+      ],
+    ];
 
     it("User Contributes to Sale", async () => {
       const saleId = currentSaleId;
@@ -415,12 +426,28 @@ describe("Testnet ICCO Sales", () => {
         throw Error("sale is not initialized");
       }
 
-      const saleStart = ethers.BigNumber.from(parameters.raise.saleStart).toNumber();
+      const custodian = solanaContributor.custodian;
+
+      const previousState = await solanaContributor.getSale(saleId);
+      const saleStart = previousState.times.start.toNumber() + 10; // adding ten seconds arbitrarily
       await waitUntilSolanaBlock(solanaConnection, saleStart);
 
-      const acceptedTokens = parameters.acceptedTokens;
-      const acceptedMints = acceptedTokens.map((token) =>
-        hexToPublicKey(uint8ArrayToHex(ethers.utils.arrayify(token.tokenAddress)))
+      const previousTotals: any = previousState.totals;
+      const acceptedMints: web3.PublicKey[] = previousTotals.map((asset) => asset.mint);
+
+      const previousTotalContributions: BN[] = previousTotals.map((asset) => asset.contributions);
+      const previousBuyerContributions = await Promise.all(
+        buyers.map(async (buyer) => {
+          return solanaContributor
+            .getBuyer(saleId, buyer.publicKey)
+            .then((state) => {
+              const amounts: BN[] = (state.contributions as any).map((item) => item.amount);
+              return amounts;
+            })
+            .catch((_) => {
+              return acceptedMints.map((_) => new BN("0"));
+            });
+        })
       );
 
       const startingBalanceBuyers = await Promise.all(
@@ -433,18 +460,17 @@ describe("Testnet ICCO Sales", () => {
         })
       );
 
+      const startingBalanceCustodian = await Promise.all(
+        acceptedMints.map(async (mint) => {
+          return getPdaSplBalance(solanaConnection, mint, custodian);
+        })
+      );
+
       for (let i = 0; i < buyers.length; ++i) {
         const buyer = buyers.at(i);
         const contributions = buyerContributions.at(i);
         for (let tokenIndex = 0; tokenIndex < contributions.length; ++tokenIndex) {
-          if (tokenIndex == 1) {
-            console.log(`force skip tokenIndex ${tokenIndex}`);
-            continue;
-          }
-          const mint = acceptedMints.at(tokenIndex);
-          for (const decimalizedAmount of contributions.at(tokenIndex)) {
-            const mintInfo = await getMint(solanaConnection, mint);
-            const amount = new BN(ethers.utils.parseUnits(decimalizedAmount, mintInfo.decimals).toString());
+          for (const amount of contributions.at(tokenIndex).map((value) => new BN(value))) {
             const solanaTx = await solanaContributor.contribute(
               buyer,
               saleId,
@@ -452,7 +478,9 @@ describe("Testnet ICCO Sales", () => {
               amount,
               await kyc.signContribution(saleId, tokenIndex, amount, buyer.publicKey)
             );
-            console.log(`buyer ${i}: ${buyer.publicKey.toString()}, tokenIndex: ${tokenIndex}, solanaTx: ${solanaTx}`);
+            console.log(
+              `buyer ${i}: ${buyer.publicKey.toString()}, tokenIndex: ${tokenIndex}, contribute: ${solanaTx}`
+            );
           }
         }
       }
@@ -467,34 +495,126 @@ describe("Testnet ICCO Sales", () => {
         })
       );
 
+      const endingBalanceCustodian = await Promise.all(
+        acceptedMints.map(async (mint) => {
+          return getPdaSplBalance(solanaConnection, mint, custodian);
+        })
+      );
+
+      // check sale
+      const saleState = await solanaContributor.getSale(saleId);
+      const assets: any = saleState.totals;
+
+      for (let tokenIndex = 0; tokenIndex < (assets.length as number); ++tokenIndex) {
+        const asset = assets.at(tokenIndex);
+        expect(asset.allocations.toString()).to.equal("0");
+        expect(asset.excessContributions.toString()).to.equal("0");
+
+        const currentTotal: BN = asset.contributions;
+        expect(currentTotal.sub(previousTotalContributions.at(tokenIndex)).toString()).to.equal(
+          endingBalanceCustodian.at(tokenIndex).sub(startingBalanceCustodian.at(tokenIndex)).toString()
+        );
+      }
+
+      // check buyers
       for (let i = 0; i < buyers.length; ++i) {
+        const previousContributions = previousBuyerContributions.at(i);
+
+        const buyer = buyers.at(i);
+        const buyerState = await solanaContributor.getBuyer(saleId, buyer.publicKey);
+        const buyerTotals: any = buyerState.contributions;
+
+        const startingBalance = startingBalanceBuyers.at(i);
+        const endingBalance = endingBalanceBuyers.at(i);
+        const contributions = buyerContributions.at(i);
         for (let tokenIndex = 0; tokenIndex < acceptedMints.length; ++tokenIndex) {
-          if (tokenIndex == 1) {
-            console.log(`force skip tokenIndex ${tokenIndex}`);
-            continue;
-          }
+          const expected = contributions
+            .at(tokenIndex)
+            .map((value) => new BN(value))
+            .reduce((prev, curr) => prev.add(curr))
+            .toString();
+
           // check buyer
           {
-            const start = startingBalanceBuyers.at(i).at(tokenIndex);
-            const end = endingBalanceBuyers.at(i).at(tokenIndex);
-            const expected = buyerContributions
-              .at(i)
-              .at(tokenIndex)
-              .map((value) => new BN(value))
-              .reduce((prev, curr) => prev.add(curr));
-            console.log("buyer", i, "tokenIndex", tokenIndex, start.toString(), end.toString(), expected.toString());
-            expect(start.sub(end).toString()).to.equal(expected.toString());
+            expect(startingBalance.at(tokenIndex).sub(endingBalance.at(tokenIndex)).toString()).to.equal(expected);
+
+            const current = buyerTotals.at(tokenIndex);
+            expect(current.status).has.key(expected == "0" ? "inactive" : "active");
+            expect(current.excess.toString()).to.equal("0");
+
+            const currentAmount: BN = current.amount;
+            expect(currentAmount.sub(previousContributions.at(tokenIndex)).toString()).to.equal(expected);
           }
         }
       }
     });
 
-    it("Orchestrator Attests Contributions", async () => {
-      // TODO
+    it("Orchestrator Attests and Collects Contributions", async () => {
+      const saleId = currentSaleId;
+      if (saleId == undefined) {
+        throw Error("sale is not initialized");
+      }
+      const previousState = await solanaContributor.getSale(saleId);
+      const saleEnd = previousState.times.end.toNumber() + 10; // adding two seconds arbitrarily
+      await waitUntilSolanaBlock(solanaConnection, saleEnd);
+
+      const solanaResponse = await solanaContributor
+        .attestContributions(solanaOrchestrator, saleId)
+        .then((tx) => solanaConnection.getTransaction(tx));
+      const sequence = parseSequenceFromLogSolana(solanaResponse);
+      console.log(`attestContributions, sequence=${sequence}`);
+
+      const { vaaBytes: signedVaa } = await getSignedVAAWithRetry(
+        WORMHOLE_RPCS,
+        CHAIN_ID_SOLANA,
+        await getEmitterAddressSolana(solanaContributor.program.programId.toString()),
+        sequence,
+        {
+          transport: NodeHttpTransport(),
+        }
+      );
+
+      const avaxReceipt = await conductor.collectContribution(signedVaa);
+      console.log(`collectContribution: ${avaxReceipt.transactionHash}`);
     });
 
     it("Orchestrator Seals Sale", async () => {
-      // TODO
+      const saleId = currentSaleId;
+
+      const avaxReceipt = await conductor.sealSale(ethers.BigNumber.from(saleId));
+      console.log(`sealSale: ${avaxReceipt.transactionHash}`);
+      const sequences = parseSequencesFromLogEth(avaxReceipt, AVAX_CORE_BRIDGE_ADDRESS);
+
+      // first two are token bridge transfers
+      // second two are saleSealed vaas (second one of which is what we need)
+      expect(sequences).has.length(4);
+
+      for (let i = 0; i < 2; ++i) {
+        const signedVaa = await getSignedVaaFromAvaxTokenBridge(sequences.shift());
+        const solanaTx = await postAndRedeemTransferVaa(solanaConnection, solanaOrchestrator, signedVaa);
+        console.log(`postAndRedeemTransferVaa: ${solanaTx}`);
+      }
+
+      const [_, sequence] = sequences;
+      const signedVaa = await (async () => {
+        const { vaaBytes: signedVaa } = await getSignedVAAWithRetry(
+          WORMHOLE_RPCS,
+          conductor.chain,
+          conductor.emitterAddress(),
+          sequence,
+          {
+            transport: NodeHttpTransport(),
+          }
+        );
+        return Buffer.from(signedVaa);
+      })();
+
+      const [payloadId, checkSaleId] = parseIccoHeader(signedVaa);
+      expect(payloadId).to.equal(3);
+      expect(checkSaleId).to.deep.equal(saleId);
+
+      const solanaTx = await solanaContributor.sealSale(solanaOrchestrator, signedVaa);
+      console.log(`sealSale: ${solanaTx}`);
     });
 
     it("Orchestrator Bridges Contributions to Conductor", async () => {

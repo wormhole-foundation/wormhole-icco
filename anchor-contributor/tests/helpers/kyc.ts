@@ -1,6 +1,6 @@
 import { CHAIN_ID_SOLANA, tryNativeToHexString } from "@certusone/wormhole-sdk";
 import { web3, BN } from "@project-serum/anchor";
-import { soliditySha3 } from "web3-utils";
+import keccak256 from "keccak256";
 import { IccoContributor } from "./contributor";
 import { toBigNumberHex } from "./utils";
 
@@ -11,11 +11,7 @@ export class KycAuthority {
   conductorAddress: string;
   contributor: IccoContributor;
 
-  constructor(
-    privateKey: string,
-    conductorAddress: string,
-    contributor: IccoContributor
-  ) {
+  constructor(privateKey: string, conductorAddress: string, contributor: IccoContributor) {
     this.privateKey = Buffer.from(privateKey, "hex");
     this.conductorAddress = conductorAddress;
     this.contributor = contributor;
@@ -29,11 +25,7 @@ export class KycAuthority {
     return this.contributor.getBuyer(saleId, buyer);
   }
 
-  async fetchBuyerTotalContribution(
-    saleId: Buffer,
-    tokenIndex: number,
-    buyer: web3.PublicKey
-  ): Promise<BN> {
+  async fetchBuyerTotalContribution(saleId: Buffer, tokenIndex: number, buyer: web3.PublicKey): Promise<BN> {
     try {
       const sale = await this.getSale(saleId);
       const totals: any = sale.totals;
@@ -53,35 +45,20 @@ export class KycAuthority {
     }
   }
 
-  async signContribution(
-    saleId: Buffer,
-    tokenIndex: number,
-    amount: BN,
-    buyer: web3.PublicKey
-  ) {
-    const totalContribution = await this.fetchBuyerTotalContribution(
-      saleId,
-      tokenIndex,
-      buyer
-    );
+  async signContribution(saleId: Buffer, tokenIndex: number, amount: BN, buyer: web3.PublicKey) {
+    const totalContribution = await this.fetchBuyerTotalContribution(saleId, tokenIndex, buyer);
 
     const body = Buffer.alloc(6 * 32, 0);
     body.write(this.conductorAddress, 0, "hex");
     body.write(saleId.toString("hex"), 32, "hex");
     body.write(toBigNumberHex(tokenIndex, 32), 2 * 32, "hex");
     body.write(toBigNumberHex(amount.toString(), 32), 3 * 32, "hex");
-    body.write(
-      tryNativeToHexString(buyer.toString(), CHAIN_ID_SOLANA),
-      4 * 32,
-      "hex"
-    );
+    body.write(tryNativeToHexString(buyer.toString(), CHAIN_ID_SOLANA), 4 * 32, "hex");
     body.write(toBigNumberHex(totalContribution.toString(), 32), 5 * 32, "hex");
-
-    const hash = soliditySha3("0x" + body.toString("hex"));
 
     const ec = new elliptic.ec("secp256k1");
     const key = ec.keyFromPrivate(this.privateKey);
-    const signature = key.sign(hash.substring(2), { canonical: true });
+    const signature = key.sign(keccak256(body), { canonical: true });
 
     const packed = Buffer.alloc(65);
     packed.write(signature.r.toString(16).padStart(64, "0"), 0, "hex");

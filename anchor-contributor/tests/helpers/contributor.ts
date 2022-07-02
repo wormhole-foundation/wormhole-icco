@@ -212,19 +212,8 @@ export class IccoContributor {
 
     const custodyOrWrappedMeta = await (async () => {
       const mintInfo = await getMint(program.provider.connection, acceptedMint);
-      if (mintInfo.mintAuthority == tokenMintSigner) {
-        //First derive the Wrapped Mint Key
-        const nativeInfo = await getOriginalAssetSol(
-          program.provider.connection,
-          tokenBridge.toString(),
-          acceptedMint.toString()
-        );
-        const wrappedMintKey = deriveAddress(
-          [Buffer.from("wrapped"), serializeUint16(nativeInfo.chainId as number), acceptedMint.toBytes()],
-          tokenBridge
-        );
-        //Then derive the Wrapped Meta Key
-        return deriveAddress([Buffer.from("meta"), wrappedMintKey.toBytes()], tokenBridge);
+      if (mintInfo.mintAuthority.equals(tokenMintSigner)) {
+        return deriveAddress([Buffer.from("meta"), acceptedMint.toBytes()], tokenBridge);
       } else {
         return deriveAddress([acceptedMint.toBytes()], tokenBridge);
       }

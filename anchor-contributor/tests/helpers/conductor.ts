@@ -75,15 +75,8 @@ export class DummyConductor {
     return new web3.PublicKey(this.saleTokenOnSolana);
   }
 
-  async createAcceptedTokens(connection: web3.Connection, payer: web3.Keypair): Promise<SolanaAcceptedToken[]> {
-    const tokenIndices = [2, 3, 5, 8, 13, 21, 34, 55];
-
-    for (let i = 0; i < MAX_ACCEPTED_TOKENS; ++i) {
-      // just make everything the same number of decimals (9)
-      const mint = await createMint(connection, payer, payer.publicKey, payer.publicKey, 9);
-      this.acceptedTokens.push(makeSolanaAcceptedToken(tokenIndices[i], mint.toString()));
-    }
-    return this.acceptedTokens;
+  addAcceptedToken(tokenIndex: number, mint: web3.PublicKey) {
+    this.acceptedTokens.push(makeSolanaAcceptedToken(tokenIndex, mint.toString()));
   }
 
   getSaleId(): Buffer {

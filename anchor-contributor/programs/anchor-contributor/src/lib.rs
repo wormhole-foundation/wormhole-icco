@@ -346,20 +346,26 @@ pub mod anchor_contributor {
 
         let custodian_token_acct = &ctx.accounts.custodian_token_acct;
 
-        let accepted_mint = &ctx.accounts.accepted_mint;
-        let (idx, asset) = sale.get_total_info(&accepted_mint.key())?;
+        let accepted_mint_info = &ctx.accounts.accepted_mint;
+        let accepted_mint = &accepted_mint_info.key();
+        let (idx, asset) = sale.get_total_info(accepted_mint)?;
 
         let custodian = &ctx.accounts.custodian;
 
-        // is this overkill to check given anchor constraints?
+        // Is this overkill to check given anchor constraints?
         asset.verify_ata(&custodian_token_acct.to_account_info(), &custodian.key())?;
 
-        // check if asset is in the correct state after sealing the sale
+        // Check if asset is in the correct state after sealing the sale
         require!(
             asset.is_ready_for_transfer(),
             ContributorError::TransferNotAllowed
         );
 
+        // We will need the custodian seeds to sign one to two transactions
+        let custodian_seeds = &[SEED_PREFIX_CUSTODIAN.as_bytes(), &[ctx.bumps["custodian"]]];
+
+        // We need to delegate authority to the token bridge program's
+        // authority signer to spend the custodian's token
         let amount = asset.contributions - asset.excess_contributions;
         let authority_signer = &ctx.accounts.authority_signer;
         token::approve(
@@ -370,7 +376,8 @@ pub mod anchor_contributor {
                     delegate: authority_signer.to_account_info(),
                     authority: custodian.to_account_info(),
                 },
-                &[&[SEED_PREFIX_CUSTODIAN.as_bytes(), &[ctx.bumps["custodian"]]]],
+                //&[&[SEED_PREFIX_CUSTODIAN.as_bytes(), &[ctx.bumps["custodian"]]]],
+                &[&custodian_seeds[..]],
             ),
             amount,
         )?;
@@ -382,30 +389,56 @@ pub mod anchor_contributor {
             target_address: sale.recipient,
             target_chain: Custodian::conductor_chain()?,
         };
-        // token bridge transfer this amount over to conductor_address on conductor_chain to recipient
 
+        let token_bridge_key = &ctx.accounts.token_bridge.key();
+
+        // We will need the wormhole message seeds for both types
+        // of token bridge transfers.
+        let wormhole_message_seeds = &[
+            &b"bridge-sealed".as_ref(),
+            &sale.id[..],
+            accepted_mint.as_ref(),
+            &[ctx.bumps["wormhole_message"]],
+        ];
+
+        // There are two instructions to bridge assets depending on
+        // whether the accepted token's mint authority is the token
+        // bridge program's.
         let token_mint_signer = &ctx.accounts.token_mint_signer;
-        let minted_by_token_bridge = match accepted_mint.mint_authority {
+        let minted_by_token_bridge = match accepted_mint_info.mint_authority {
             COption::Some(authority) => authority == token_mint_signer.key(),
             _ => false,
         };
 
         if minted_by_token_bridge {
-            let wrapped_meta = &ctx.accounts.custody_or_wrapped_meta;
+            let wrapped_meta_key = &ctx.accounts.custody_or_wrapped_meta.key();
+
+            // Because we don't have an account check for wrapped_meta,
+            // let's do it here.
+            let (derived_key, _) = Pubkey::find_program_address(
+                &[b"meta".as_ref(), accepted_mint.as_ref()],
+                token_bridge_key,
+            );
+            require!(
+                *wrapped_meta_key == derived_key,
+                ContributorError::InvalidAccount
+            );
+
+            // Now bridge
             invoke_signed(
                 &Instruction {
-                    program_id: ctx.accounts.token_bridge.key(),
+                    program_id: *token_bridge_key,
                     accounts: vec![
                         AccountMeta::new(ctx.accounts.payer.key(), true),
                         AccountMeta::new_readonly(ctx.accounts.token_bridge_config.key(), false),
                         AccountMeta::new(custodian_token_acct.key(), false),
                         AccountMeta::new_readonly(custodian.key(), true),
-                        AccountMeta::new(accepted_mint.key(), false),
-                        AccountMeta::new_readonly(wrapped_meta.key(), false),
+                        AccountMeta::new(*accepted_mint, false),
+                        AccountMeta::new_readonly(*wrapped_meta_key, false),
                         AccountMeta::new_readonly(authority_signer.key(), false),
                         AccountMeta::new(ctx.accounts.wormhole_config.key(), false),
                         AccountMeta::new(ctx.accounts.wormhole_message.key(), true),
-                        AccountMeta::new_readonly(ctx.accounts.wormhole_emitter.key(), true),
+                        AccountMeta::new_readonly(ctx.accounts.wormhole_emitter.key(), false),
                         AccountMeta::new(ctx.accounts.wormhole_sequence.key(), false),
                         AccountMeta::new(ctx.accounts.wormhole_fee_collector.key(), false),
                         AccountMeta::new_readonly(clock::id(), false),
@@ -417,26 +450,29 @@ pub mod anchor_contributor {
                     data: (TRANSFER_WRAPPED_INSTRUCTION, transfer_data).try_to_vec()?,
                 },
                 &ctx.accounts.to_account_infos(),
-                &[
-                    &[SEED_PREFIX_CUSTODIAN.as_ref(), &[ctx.bumps["custodian"]]],
-                    &[
-                        &b"bridge-sealed".as_ref(),
-                        &sale.id,
-                        &accepted_mint.key().as_ref(),
-                        &[ctx.bumps["wormhole_message"]],
-                    ],
-                ],
+                &[&custodian_seeds[..], &wormhole_message_seeds[..]],
             )?;
         } else {
             let token_bridge_custody = &ctx.accounts.custody_or_wrapped_meta;
+
+            // Because we don't have an account check for token_bridge_custody,
+            // let's do it here.
+            let (derived_key, _) =
+                Pubkey::find_program_address(&[accepted_mint.key().as_ref()], token_bridge_key);
+            require!(
+                token_bridge_custody.key() == derived_key,
+                ContributorError::InvalidAccount
+            );
+
+            // Now bridge
             invoke_signed(
                 &Instruction {
-                    program_id: ctx.accounts.token_bridge.key(),
+                    program_id: *token_bridge_key,
                     accounts: vec![
                         AccountMeta::new(ctx.accounts.payer.key(), true),
                         AccountMeta::new_readonly(ctx.accounts.token_bridge_config.key(), false),
                         AccountMeta::new(custodian_token_acct.key(), false),
-                        AccountMeta::new(accepted_mint.key(), false),
+                        AccountMeta::new(*accepted_mint, false),
                         AccountMeta::new(token_bridge_custody.key(), false),
                         AccountMeta::new_readonly(authority_signer.key(), false),
                         AccountMeta::new_readonly(ctx.accounts.custody_signer.key(), false),
@@ -454,12 +490,7 @@ pub mod anchor_contributor {
                     data: (TRANSFER_NATIVE_INSTRUCTION, transfer_data).try_to_vec()?,
                 },
                 &ctx.accounts.to_account_infos(),
-                &[&[
-                    &b"bridge-sealed".as_ref(),
-                    &ctx.accounts.sale.id,
-                    &accepted_mint.key().as_ref(),
-                    &[ctx.bumps["wormhole_message"]],
-                ]],
+                &[&wormhole_message_seeds[..]],
             )?;
         }
 

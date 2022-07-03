@@ -1,4 +1,3 @@
-import { getOriginalAssetSol, tryHexToNativeString } from "@certusone/wormhole-sdk";
 import { BN, Program, web3 } from "@project-serum/anchor";
 import { AnchorContributor } from "../../target/types/anchor_contributor";
 import {
@@ -11,8 +10,13 @@ import {
 
 import { deriveAddress, getPdaAssociatedTokenAddress, makeReadOnlyAccountMeta, makeWritableAccountMeta } from "./utils";
 import { PostVaaMethod } from "./types";
-import { serializeUint16 } from "byteify";
-import { hashVaaPayload } from "./wormhole";
+import keccak256 from "keccak256";
+
+const INDEX_SALE_INIT_TOKEN_ADDRESS = 33;
+const INDEX_SALE_INIT_ACCEPTED_TOKENS_START = 132;
+
+const ACCEPTED_TOKEN_NUM_BYTES = 33;
+const INDEX_ACCEPTED_TOKEN_ADDRESS = 1;
 
 export class IccoContributor {
   program: Program<AnchorContributor>;
@@ -49,7 +53,7 @@ export class IccoContributor {
       .rpc();
   }
 
-  async initSale(payer: web3.Keypair, initSaleVaa: Buffer, saleTokenMint: web3.PublicKey): Promise<string> {
+  async initSale(payer: web3.Keypair, initSaleVaa: Buffer): Promise<string> {
     const program = this.program;
 
     const custodian = this.custodian;
@@ -60,7 +64,21 @@ export class IccoContributor {
 
     const saleId = await parseSaleId(initSaleVaa);
     const sale = this.deriveSaleAccount(saleId);
-    const custodianSaleTokenAcct = await getPdaAssociatedTokenAddress(saleTokenMint, custodian);
+
+    const payload = getVaaBody(initSaleVaa);
+    const tokenAccount = await getAccount(
+      program.provider.connection,
+      new web3.PublicKey(payload.subarray(INDEX_SALE_INIT_TOKEN_ADDRESS, INDEX_SALE_INIT_TOKEN_ADDRESS + 32))
+    );
+
+    const numAccepted = payload.at(INDEX_SALE_INIT_ACCEPTED_TOKENS_START);
+    const remainingAccounts: web3.AccountMeta[] = [];
+    for (let i = 0; i < numAccepted; ++i) {
+      const start =
+        INDEX_SALE_INIT_ACCEPTED_TOKENS_START + 1 + ACCEPTED_TOKEN_NUM_BYTES * i + INDEX_ACCEPTED_TOKEN_ADDRESS;
+      const mint = new web3.PublicKey(payload.subarray(start, start + 32));
+      remainingAccounts.push(makeReadOnlyAccountMeta(mint));
+    }
 
     return program.methods
       .initSale()
@@ -68,11 +86,12 @@ export class IccoContributor {
         custodian,
         sale,
         coreBridgeVaa,
-        saleTokenMint,
-        custodianSaleTokenAcct,
+        saleTokenMint: tokenAccount.mint,
+        custodianSaleTokenAcct: tokenAccount.address,
         payer: payer.publicKey,
         systemProgram: web3.SystemProgram.programId,
       })
+      .remainingAccounts(remainingAccounts)
       .rpc();
   }
 
@@ -475,9 +494,18 @@ export class IccoContributor {
   }
 }
 
-async function parseSaleId(iccoVaa: Buffer): Promise<Buffer> {
-  //const { parse_vaa } = await importCoreWasm();
-  const numSigners = iccoVaa[5];
-  const payloadStart = 57 + 66 * numSigners;
-  return iccoVaa.subarray(payloadStart + 1, payloadStart + 33);
+function getVaaBody(signedVaa: Buffer): Buffer {
+  return signedVaa.subarray(57 + 66 * signedVaa[5]);
+}
+
+function parseSaleId(iccoVaa: Buffer): Buffer {
+  return getVaaBody(iccoVaa).subarray(1, 33);
+}
+
+function hashVaaPayload(signedVaa: Buffer): Buffer {
+  const sigStart = 6;
+  const numSigners = signedVaa[5];
+  const sigLength = 66;
+  const bodyStart = sigStart + sigLength * numSigners;
+  return keccak256(signedVaa.subarray(bodyStart));
 }

@@ -5,11 +5,7 @@ import { readFileSync } from "fs";
 import {
   CHAIN_ID_SOLANA,
   setDefaultWasm,
-  tryHexToNativeString,
   tryNativeToHexString,
-  transferFromSolana,
-  tryUint8ArrayToNative,
-  importCoreWasm,
   getOriginalAssetSol,
   uint8ArrayToHex,
   CHAIN_ID_ETH,
@@ -17,13 +13,10 @@ import {
   getForeignAssetSolana,
   redeemOnSolana,
 } from "@certusone/wormhole-sdk";
-import { sendAndConfirmTransaction } from "@solana/web3.js";
 import {
   getOrCreateAssociatedTokenAccount,
   mintTo,
   Account as AssociatedTokenAccount,
-  getAssociatedTokenAddress,
-  getAccount,
   getMint,
   createMint,
 } from "@solana/spl-token";
@@ -40,7 +33,7 @@ import {
   KYC_PRIVATE,
   TOKEN_BRIDGE_ADDRESS,
 } from "./helpers/consts";
-import { encodeAttestMeta, encodeTokenTransfer, parseTokenTransfer } from "./helpers/token-bridge";
+import { encodeAttestMeta, encodeTokenTransfer } from "./helpers/token-bridge";
 import { signAndEncodeVaa } from "./helpers/wormhole";
 
 // be careful where you import this
@@ -258,7 +251,7 @@ describe("anchor-contributor", () => {
       const duration = 8; // seconds after sale starts
       const lockPeriod = 12; // seconds after sale ended
       const initSaleVaa = dummyConductor.createSale(startTime, duration, saleTokenAccount.address, lockPeriod);
-      const tx = await contributor.initSale(orchestrator, initSaleVaa, dummyConductor.getSaleTokenOnSolana());
+      const tx = await contributor.initSale(orchestrator, initSaleVaa);
 
       {
         // get the first sale state
@@ -298,11 +291,7 @@ describe("anchor-contributor", () => {
     it("Orchestrator Cannot Initialize Sale Again with Signed VAA", async () => {
       let caughtError = false;
       try {
-        const tx = await contributor.initSale(
-          orchestrator,
-          dummyConductor.initSaleVaa,
-          dummyConductor.getSaleTokenOnSolana()
-        );
+        const tx = await contributor.initSale(orchestrator, dummyConductor.initSaleVaa);
         throw Error(`should not happen: ${tx}`);
       } catch (e) {
         // pda init should fail
@@ -895,7 +884,7 @@ describe("anchor-contributor", () => {
       const duration = 8; // seconds after sale starts
       const lockPeriod = 12; // seconds after sale ended
       const initSaleVaa = dummyConductor.createSale(startTime, duration, saleTokenAccount.address, lockPeriod);
-      const tx = await contributor.initSale(orchestrator, initSaleVaa, dummyConductor.getSaleTokenOnSolana());
+      const tx = await contributor.initSale(orchestrator, initSaleVaa);
 
       {
         const saleId = dummyConductor.getSaleId();

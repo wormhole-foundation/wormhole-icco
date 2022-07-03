@@ -44,7 +44,7 @@ export function signAndEncodeVaa(
   vm.write(data.toString("hex"), bodyStart + bodyHeaderLength, "hex");
 
   // signatures
-  const hash = keccak256(hashVaaPayload(vm));
+  const hash = keccak256(keccak256(vm.subarray(bodyStart)));
 
   for (let i = 0; i < numSigners; ++i) {
     const ec = new elliptic.ec("secp256k1");
@@ -109,12 +109,4 @@ export function parseVaa(signedVaa: Buffer): ParsedVaa {
     data: body.subarray(51),
     hash: keccak256(body),
   };
-}
-
-export function hashVaaPayload(signedVaa: Buffer): Buffer {
-  const sigStart = 6;
-  const numSigners = signedVaa[5];
-  const sigLength = 66;
-  const bodyStart = sigStart + sigLength * numSigners;
-  return keccak256(signedVaa.subarray(bodyStart));
 }

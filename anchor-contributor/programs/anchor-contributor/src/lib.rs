@@ -73,6 +73,32 @@ pub mod anchor_contributor {
             ContributorError::InvalidVaaPayload
         );
 
+        // We need to verify that the accepted tokens are actual mints.
+        let assets = &sale.totals;
+        let accepted_mints = &ctx.remaining_accounts[..];
+        require!(
+            assets.len() == accepted_mints.len(),
+            ContributorError::InvalidRemainingAccounts
+        );
+
+        for (asset, accepted_mint) in izip!(assets, accepted_mints) {
+            require!(
+                *accepted_mint.owner == token::ID,
+                ContributorError::InvalidAcceptedToken
+            );
+            require!(
+                accepted_mint.key() == asset.mint,
+                ContributorError::InvalidAcceptedToken
+            );
+
+            let mut bf: &[u8] = &accepted_mint.try_borrow_data()?;
+            let mint_info = token::Mint::try_deserialize_unchecked(&mut bf)?;
+            require!(
+                mint_info.is_initialized,
+                ContributorError::InvalidAcceptedToken
+            );
+        }
+
         // We want to save the sale token's mint information in the Sale struct. Most
         // important of which is the number of decimals for this SPL token. The sale
         // token that lives on the conductor chain can have a different number of decimals.

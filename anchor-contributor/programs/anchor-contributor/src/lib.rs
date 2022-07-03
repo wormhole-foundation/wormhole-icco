@@ -81,22 +81,20 @@ pub mod anchor_contributor {
             ContributorError::InvalidRemainingAccounts
         );
 
-        for (asset, accepted_mint) in izip!(assets, accepted_mints) {
+        for (asset, accepted_mint_acct_info) in izip!(assets, accepted_mints) {
             require!(
-                *accepted_mint.owner == token::ID,
+                *accepted_mint_acct_info.owner == token::ID,
                 ContributorError::InvalidAcceptedToken
             );
             require!(
-                accepted_mint.key() == asset.mint,
+                accepted_mint_acct_info.key() == asset.mint,
                 ContributorError::InvalidAcceptedToken
             );
 
-            let mut bf: &[u8] = &accepted_mint.try_borrow_data()?;
-            let mint_info = token::Mint::try_deserialize_unchecked(&mut bf)?;
-            require!(
-                mint_info.is_initialized,
-                ContributorError::InvalidAcceptedToken
-            );
+            // try_deserialize calls Mint::unpack, which checks if
+            // SPL is_intialized is true
+            let mut bf: &[u8] = &accepted_mint_acct_info.try_borrow_data()?;
+            let _ = token::Mint::try_deserialize(&mut bf)?;
         }
 
         // We want to save the sale token's mint information in the Sale struct. Most
@@ -141,12 +139,6 @@ pub mod anchor_contributor {
             // We need to use the buyer's associated token account to help us find the token index
             // for this particular mint he wishes to contribute.
             let (idx, asset) = sale.get_total_info(&buyer_token_acct.mint)?;
-
-            // is this overkill to check given anchor constraints?
-            asset.verify_ata(
-                &custodian_token_acct.to_account_info(),
-                &ctx.accounts.custodian.key(),
-            )?;
 
             // If the buyer account wasn't initialized before, we will do so here. This initializes
             // the state for all of this buyer's contributions.
@@ -197,22 +189,6 @@ pub mod anchor_contributor {
             ),
             amount,
         )?;
-
-        // For some reason, using the anchor_spl library did not work on
-        // Solana devnet for one of our test trials, so we're keeping the
-        // native instruction here in case we need it.
-        //
-        // invoke(
-        //     &spl_token::instruction::transfer(
-        //         &token::ID,
-        //         &buyer_token_acct.key(),
-        //         &custodian_token_acct.key(),
-        //         &transfer_authority.key(),
-        //         &[&transfer_authority.key()],
-        //         amount,
-        //     )?,
-        //     &ctx.accounts.to_account_infos(),
-        // )?;
 
         // Finish instruction.
         Ok(())
@@ -342,7 +318,8 @@ pub mod anchor_contributor {
         for (asset, custodian_token_acct) in izip!(totals, custodian_token_accts) {
             // re-derive custodian_token_acct address and check it.
             // Verifies the authority and mint of the custodian's associated token account
-            let ata = asset.verify_ata(custodian_token_acct, &custodian.key())?;
+            let ata = asset
+                .deserialize_associated_token_account(custodian_token_acct, &custodian.key())?;
             require!(
                 ata.amount >= asset.contributions,
                 ContributorError::InsufficientFunds
@@ -372,14 +349,11 @@ pub mod anchor_contributor {
 
         let custodian_token_acct = &ctx.accounts.custodian_token_acct;
 
-        let accepted_mint_info = &ctx.accounts.accepted_mint;
-        let accepted_mint = &accepted_mint_info.key();
-        let (idx, asset) = sale.get_total_info(accepted_mint)?;
+        let accepted_mint_acct = &ctx.accounts.accepted_mint;
+        let accepted_mint_key = &accepted_mint_acct.key();
+        let (idx, asset) = sale.get_total_info(accepted_mint_key)?;
 
         let custodian = &ctx.accounts.custodian;
-
-        // Is this overkill to check given anchor constraints?
-        asset.verify_ata(&custodian_token_acct.to_account_info(), &custodian.key())?;
 
         // Check if asset is in the correct state after sealing the sale
         require!(
@@ -402,7 +376,6 @@ pub mod anchor_contributor {
                     delegate: authority_signer.to_account_info(),
                     authority: custodian.to_account_info(),
                 },
-                //&[&[SEED_PREFIX_CUSTODIAN.as_bytes(), &[ctx.bumps["custodian"]]]],
                 &[&custodian_seeds[..]],
             ),
             amount,
@@ -423,7 +396,7 @@ pub mod anchor_contributor {
         let wormhole_message_seeds = &[
             &b"bridge-sealed".as_ref(),
             &sale.id[..],
-            accepted_mint.as_ref(),
+            accepted_mint_key.as_ref(),
             &[ctx.bumps["wormhole_message"]],
         ];
 
@@ -431,7 +404,7 @@ pub mod anchor_contributor {
         // whether the accepted token's mint authority is the token
         // bridge program's.
         let token_mint_signer = &ctx.accounts.token_mint_signer;
-        let minted_by_token_bridge = match accepted_mint_info.mint_authority {
+        let minted_by_token_bridge = match accepted_mint_acct.mint_authority {
             COption::Some(authority) => authority == token_mint_signer.key(),
             _ => false,
         };
@@ -442,7 +415,7 @@ pub mod anchor_contributor {
             // Because we don't have an account check for wrapped_meta,
             // let's do it here.
             let (derived_key, _) = Pubkey::find_program_address(
-                &[b"meta".as_ref(), accepted_mint.as_ref()],
+                &[b"meta".as_ref(), accepted_mint_key.as_ref()],
                 token_bridge_key,
             );
             require!(
@@ -459,7 +432,7 @@ pub mod anchor_contributor {
                         AccountMeta::new_readonly(ctx.accounts.token_bridge_config.key(), false),
                         AccountMeta::new(custodian_token_acct.key(), false),
                         AccountMeta::new_readonly(custodian.key(), true),
-                        AccountMeta::new(*accepted_mint, false),
+                        AccountMeta::new(*accepted_mint_key, false),
                         AccountMeta::new_readonly(*wrapped_meta_key, false),
                         AccountMeta::new_readonly(authority_signer.key(), false),
                         AccountMeta::new(ctx.accounts.wormhole_config.key(), false),
@@ -484,7 +457,7 @@ pub mod anchor_contributor {
             // Because we don't have an account check for token_bridge_custody,
             // let's do it here.
             let (derived_key, _) =
-                Pubkey::find_program_address(&[accepted_mint.key().as_ref()], token_bridge_key);
+                Pubkey::find_program_address(&[accepted_mint_key.as_ref()], token_bridge_key);
             require!(
                 token_bridge_custody.key() == derived_key,
                 ContributorError::InvalidAccount
@@ -498,7 +471,7 @@ pub mod anchor_contributor {
                         AccountMeta::new(ctx.accounts.payer.key(), true),
                         AccountMeta::new_readonly(ctx.accounts.token_bridge_config.key(), false),
                         AccountMeta::new(custodian_token_acct.key(), false),
-                        AccountMeta::new(*accepted_mint, false),
+                        AccountMeta::new(*accepted_mint_key, false),
                         AccountMeta::new(token_bridge_custody.key(), false),
                         AccountMeta::new_readonly(authority_signer.key(), false),
                         AccountMeta::new_readonly(ctx.accounts.custody_signer.key(), false),
@@ -598,10 +571,13 @@ pub mod anchor_contributor {
             izip!(totals, custodian_token_accts, buyer_token_accts).enumerate()
         {
             // Verify the custodian's associated token account
-            asset.verify_ata(custodian_token_acct, &ctx.accounts.custodian.key())?;
+            asset.deserialize_associated_token_account(
+                custodian_token_acct,
+                &ctx.accounts.custodian.key(),
+            )?;
 
             // And verify the buyer's token account
-            asset.verify_token_account(buyer_token_acct, &owner.key())?;
+            asset.deserialize_token_account(buyer_token_acct, &owner.key())?;
 
             // Now calculate the refund and transfer to the buyer's associated
             // token account if there is any amount to refund.
@@ -621,23 +597,6 @@ pub mod anchor_contributor {
                 ),
                 refund,
             )?;
-
-            // For some reason, using the anchor_spl library did not work on
-            // Solana devnet for one of our test trials, so we're keeping the
-            // native instruction here in case we need it.
-            //
-            // invoke_signed(
-            //     &spl_token::instruction::transfer(
-            //         &token::ID,
-            //         &custodian_token_acct.key(),
-            //         &buyer_token_acct.key(),
-            //         &transfer_authority.key(),
-            //         &[&transfer_authority.key()],
-            //         refund,
-            //     )?,
-            //     &all_accts,
-            //     &[&[&SEED_PREFIX_CUSTODIAN.as_bytes(), &[ctx.bumps["custodian"]]]],
-            // )?;
         }
 
         // Finish instruction.
@@ -688,23 +647,6 @@ pub mod anchor_contributor {
             ),
             allocation,
         )?;
-
-        // For some reason, using the anchor_spl library did not work on
-        // Solana devnet for one of our test trials, so we're keeping the
-        // native instruction here in case we need it.
-        //
-        // invoke_signed(
-        //     &spl_token::instruction::transfer(
-        //         &token::ID,
-        //         &custodian_sale_token_acct.key(),
-        //         &buyer_sale_token_acct.key(),
-        //         &transfer_authority.key(),
-        //         &[&transfer_authority.key()],
-        //         allocation,
-        //     )?,
-        //     &ctx.accounts.to_account_infos(),
-        //     &[&[&SEED_PREFIX_CUSTODIAN.as_bytes(), &[custodian_bump]]],
-        // )?;
 
         // Finish instruction.
         Ok(())
@@ -758,10 +700,13 @@ pub mod anchor_contributor {
             izip!(totals, custodian_token_accts, buyer_token_accts).enumerate()
         {
             // Verify the custodian's associated token account
-            asset.verify_ata(custodian_token_acct, &ctx.accounts.custodian.key())?;
+            asset.deserialize_associated_token_account(
+                custodian_token_acct,
+                &ctx.accounts.custodian.key(),
+            )?;
 
             // And verify the buyer's token account
-            asset.verify_token_account(buyer_token_acct, &owner.key())?;
+            asset.deserialize_token_account(buyer_token_acct, &owner.key())?;
 
             // Now calculate the excess contribution and transfer to the
             // buyer's associated token account if there is any amount calculated.
@@ -781,23 +726,6 @@ pub mod anchor_contributor {
                 ),
                 excess,
             )?;
-
-            // For some reason, using the anchor_spl library did not work on
-            // Solana devnet for one of our test trials, so we're keeping the
-            // native instruction here in case we need it.
-            //
-            // invoke_signed(
-            //     &spl_token::instruction::transfer(
-            //         &token::ID,
-            //         &custodian_token_acct.key(),
-            //         &buyer_token_acct.key(),
-            //         &transfer_authority.key(),
-            //         &[&transfer_authority.key()],
-            //         excess,
-            //     )?,
-            //     &all_accts,
-            //     &[&[&SEED_PREFIX_CUSTODIAN.as_bytes(), &[ctx.bumps["custodian"]]]],
-            // )?;
         }
 
         // Finish instruction.

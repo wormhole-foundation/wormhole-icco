@@ -37,3 +37,12 @@ program = "./tests/token_bridge.so"
 [[test.validator.account]]
 address = "3GwVs8GSLdo4RUsoXTkGQhojauQ1sXcDNjm7LSDicw19"
 filename = "./tests/token_config.json"
+
+[[test.validator.account]]
+address = "7UqWgfVW1TrjrqauMfDoNMcw8kEStSsQXWNoT2BbhDS5"
+filename = "./tests/ethereum_token_bridge.json"
+
+
+[[test.genesis]]
+address = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+program = "./tests/spl_token_metadata.so"

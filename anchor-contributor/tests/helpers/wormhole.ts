@@ -1,29 +1,7 @@
-import { web3 } from "@project-serum/anchor";
+import { ChainId } from "@certusone/wormhole-sdk";
 import keccak256 from "keccak256";
-import { soliditySha3 } from "web3-utils";
-import { postVaaSolanaWithRetry } from "@certusone/wormhole-sdk";
 
 const elliptic = require("elliptic");
-
-/*
-export async function postVaa(
-  connection: web3.Connection,
-  payer: web3.Keypair,
-  wormhole: web3.PublicKey,
-  signedVaa: Buffer
-): Promise<void> {
-  await postVaaSolanaWithRetry(
-    connection,
-    async (tx) => {
-      tx.partialSign(payer);
-      return tx;
-    },
-    wormhole.toString(),
-    payer.publicKey.toString(),
-    signedVaa,
-    10
-  );
-}*/
 
 export function signAndEncodeVaa(
   timestamp: number,
@@ -66,8 +44,7 @@ export function signAndEncodeVaa(
   vm.write(data.toString("hex"), bodyStart + bodyHeaderLength, "hex");
 
   // signatures
-  const body = vm.subarray(bodyStart).toString("hex");
-  const hash = soliditySha3(soliditySha3("0x" + body)!)!.substring(2);
+  const hash = keccak256(keccak256(vm.subarray(bodyStart)));
 
   for (let i = 0; i < numSigners; ++i) {
     const ec = new elliptic.ec("secp256k1");
@@ -84,10 +61,52 @@ export function signAndEncodeVaa(
   return vm;
 }
 
-export function hashVaaPayload(signedVaa: Buffer): Buffer {
+export interface GuardianSignature {
+  r: Buffer;
+  s: Buffer;
+  v: number;
+}
+
+export interface ParsedVaa {
+  version: number;
+  guardianSignatures: GuardianSignature[];
+  timestamp: number;
+  nonce: number;
+  emitterChain: ChainId;
+  emitterAddress: Buffer;
+  sequence: bigint;
+  consistencyLevel: number;
+  data: Buffer;
+  hash: Buffer;
+}
+
+export function parseVaa(signedVaa: Buffer): ParsedVaa {
   const sigStart = 6;
   const numSigners = signedVaa[5];
   const sigLength = 66;
-  const bodyStart = sigStart + sigLength * numSigners;
-  return keccak256(signedVaa.subarray(bodyStart));
+
+  const guardianSignatures: GuardianSignature[] = [];
+  for (let i = 0; i < numSigners; ++i) {
+    const start = i * sigLength + 1;
+    guardianSignatures.push({
+      r: signedVaa.subarray(start, start + 32),
+      s: signedVaa.subarray(start + 32, start + 64),
+      v: signedVaa[start + 64],
+    });
+  }
+
+  const body = signedVaa.subarray(sigStart + sigLength * numSigners);
+
+  return {
+    version: signedVaa[0],
+    guardianSignatures,
+    timestamp: body.readUint32BE(0),
+    nonce: body.readUint32BE(4),
+    emitterChain: body.readUint16BE(8) as ChainId,
+    emitterAddress: body.subarray(10, 42),
+    sequence: body.readBigUint64BE(42),
+    consistencyLevel: body[50],
+    data: body.subarray(51),
+    hash: keccak256(body),
+  };
 }

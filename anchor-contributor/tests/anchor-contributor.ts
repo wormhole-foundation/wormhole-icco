@@ -5,35 +5,25 @@ import { readFileSync } from "fs";
 import {
   CHAIN_ID_SOLANA,
   setDefaultWasm,
-  tryHexToNativeString,
   tryNativeToHexString,
-  transferFromSolana,
-  tryUint8ArrayToNative,
-  importCoreWasm,
   getOriginalAssetSol,
   uint8ArrayToHex,
+  CHAIN_ID_ETH,
+  createWrappedOnSolana,
+  getForeignAssetSolana,
+  redeemOnSolana,
 } from "@certusone/wormhole-sdk";
-import { sendAndConfirmTransaction } from "@solana/web3.js";
 import {
   getOrCreateAssociatedTokenAccount,
   mintTo,
   Account as AssociatedTokenAccount,
-  getAssociatedTokenAddress,
-  getAccount,
   getMint,
+  createMint,
 } from "@solana/spl-token";
 
 import { DummyConductor } from "./helpers/conductor";
 import { IccoContributor } from "./helpers/contributor";
-import {
-  deriveAddress,
-  getBlockTime,
-  getPdaAssociatedTokenAddress,
-  getPdaSplBalance,
-  getSplBalance,
-  hexToPublicKey,
-  wait,
-} from "./helpers/utils";
+import { deriveAddress, getBlockTime, getPdaSplBalance, getSplBalance, hexToPublicKey, wait } from "./helpers/utils";
 import { BigNumber } from "ethers";
 import { KycAuthority } from "./helpers/kyc";
 import {
@@ -43,6 +33,8 @@ import {
   KYC_PRIVATE,
   TOKEN_BRIDGE_ADDRESS,
 } from "./helpers/consts";
+import { encodeAttestMeta, encodeTokenTransfer } from "./helpers/token-bridge";
+import { signAndEncodeVaa } from "./helpers/wormhole";
 
 // be careful where you import this
 import { postVaaSolanaWithRetry } from "@certusone/wormhole-sdk";
@@ -87,42 +79,112 @@ describe("anchor-contributor", () => {
       await dummyConductor.attestSaleToken(connection, orchestrator);
     });
 
-    it("Bridge Sale Token To Null Recipient", async () => {
-      // we need to simulate attesting the sale token on Solana.
-      // this allows us to "redeem" the sale token prior to sealing the sale
-      // (which in the case of this test means minting it on the contributor program's ATA)
-      //ait dummyConductor.attestSaleToken(connection, orchestrator);
+    it("Attest Accepted Token from Ethereum", async () => {
+      // we have two token bridge actions: create wrapped and bridge
+      let emitterSequence = 0;
 
-      const saleTokenMint = dummyConductor.getSaleTokenOnSolana();
-      const tokenAccount = await getOrCreateAssociatedTokenAccount(
-        connection,
-        orchestrator,
-        dummyConductor.getSaleTokenOnSolana(),
-        orchestrator.publicKey
+      // fabricate token address
+      const tokenAddress = Buffer.alloc(32);
+      tokenAddress.fill(105, 12);
+
+      const ethTokenBridge = Buffer.from(
+        tryNativeToHexString("0x0290FB167208Af455bB137780163b7B7a9a10C16", CHAIN_ID_ETH),
+        "hex"
       );
-      await mintTo(connection, orchestrator, saleTokenMint, tokenAccount.address, orchestrator, 1n);
 
-      const transaction = await transferFromSolana(
+      const attestMetaSignedVaa = signAndEncodeVaa(
+        0,
+        0,
+        CHAIN_ID_ETH as number,
+        ethTokenBridge,
+        ++emitterSequence,
+        encodeAttestMeta(tokenAddress, CHAIN_ID_ETH, 9, "WORTH", "Definitely Worth Something")
+      );
+
+      await postVaaSolanaWithRetry(
         connection,
+        async (tx) => {
+          tx.partialSign(orchestrator);
+          return tx;
+        },
         CORE_BRIDGE_ADDRESS.toString(),
-        TOKEN_BRIDGE_ADDRESS.toString(),
         orchestrator.publicKey.toString(),
-        tokenAccount.address.toString(),
-        saleTokenMint.toString(),
-        1n,
-        new Uint8Array(32), // null address
-        "ethereum"
+        attestMetaSignedVaa,
+        10
       );
-      transaction.partialSign(orchestrator);
-      const txid = await connection.sendRawTransaction(transaction.serialize());
+
+      {
+        const response = await createWrappedOnSolana(
+          connection,
+          CORE_BRIDGE_ADDRESS.toString(),
+          TOKEN_BRIDGE_ADDRESS.toString(),
+          orchestrator.publicKey.toString(),
+          Uint8Array.from(attestMetaSignedVaa)
+        )
+          .then((transaction) => {
+            transaction.partialSign(orchestrator);
+            return connection.sendRawTransaction(transaction.serialize());
+          })
+          .then((tx) => connection.confirmTransaction(tx));
+      }
+
+      const mint = new web3.PublicKey(
+        await getForeignAssetSolana(connection, TOKEN_BRIDGE_ADDRESS.toString(), CHAIN_ID_ETH, tokenAddress)
+      );
+      const tokenIndex = 2;
+      dummyConductor.addAcceptedToken(tokenIndex, mint);
+
+      // create ata for buyer
+      const tokenAccount = await getOrCreateAssociatedTokenAccount(connection, buyer, mint, buyer.publicKey);
+
+      // now mint to buyer for testing
+      let amount = new BN("200000000000");
+      const tokenTransferSignedVaa = signAndEncodeVaa(
+        0,
+        0,
+        CHAIN_ID_ETH as number,
+        ethTokenBridge,
+        ++emitterSequence,
+        encodeTokenTransfer(amount.toString(), tokenAddress, CHAIN_ID_ETH, tokenAccount.address)
+      );
+
+      await postVaaSolanaWithRetry(
+        connection,
+        async (tx) => {
+          tx.partialSign(orchestrator);
+          return tx;
+        },
+        CORE_BRIDGE_ADDRESS.toString(),
+        orchestrator.publicKey.toString(),
+        tokenTransferSignedVaa,
+        10
+      );
+      {
+        const response = await redeemOnSolana(
+          connection,
+          CORE_BRIDGE_ADDRESS.toString(),
+          TOKEN_BRIDGE_ADDRESS.toString(),
+          buyer.publicKey.toString(),
+          Uint8Array.from(tokenTransferSignedVaa)
+        )
+          .then((transaction) => {
+            transaction.partialSign(buyer);
+            return connection.sendRawTransaction(transaction.serialize(), { skipPreflight: true });
+          })
+          .then((tx) => connection.confirmTransaction(tx));
+      }
+
+      const balance = await getSplBalance(connection, mint, buyer.publicKey);
+      expect(balance.toString()).to.equal(amount.toString());
     });
 
     it("Mint Accepted SPL Tokens to Buyer", async () => {
-      // first create them and add them to the accepted tokens list
-      const acceptedTokens = await dummyConductor.createAcceptedTokens(connection, orchestrator);
+      // remaining token indices
+      const tokenIndices = [3, 5, 8, 13, 21, 34, 55];
 
-      for (const token of acceptedTokens) {
-        const mint = hexToPublicKey(token.address);
+      for (let i = 0; i < tokenIndices.length; ++i) {
+        const mint = await createMint(connection, orchestrator, orchestrator.publicKey, orchestrator.publicKey, 9);
+        dummyConductor.addAcceptedToken(tokenIndices.at(i), mint);
 
         // create ata for buyer
         const tokenAccount = await getOrCreateAssociatedTokenAccount(connection, buyer, mint, buyer.publicKey);
@@ -189,7 +251,7 @@ describe("anchor-contributor", () => {
       const duration = 8; // seconds after sale starts
       const lockPeriod = 12; // seconds after sale ended
       const initSaleVaa = dummyConductor.createSale(startTime, duration, saleTokenAccount.address, lockPeriod);
-      const tx = await contributor.initSale(orchestrator, initSaleVaa, dummyConductor.getSaleTokenOnSolana());
+      const tx = await contributor.initSale(orchestrator, initSaleVaa);
 
       {
         // get the first sale state
@@ -229,11 +291,7 @@ describe("anchor-contributor", () => {
     it("Orchestrator Cannot Initialize Sale Again with Signed VAA", async () => {
       let caughtError = false;
       try {
-        const tx = await contributor.initSale(
-          orchestrator,
-          dummyConductor.initSaleVaa,
-          dummyConductor.getSaleTokenOnSolana()
-        );
+        const tx = await contributor.initSale(orchestrator, dummyConductor.initSaleVaa);
         throw Error(`should not happen: ${tx}`);
       } catch (e) {
         // pda init should fail
@@ -629,7 +687,7 @@ describe("anchor-contributor", () => {
           const parsedTokenChain = payload.readUint16BE(65);
 
           const tokenMintSigner = deriveAddress([Buffer.from("mint_signer")], TOKEN_BRIDGE_ADDRESS);
-          if (mintInfo.mintAuthority == tokenMintSigner) {
+          if (mintInfo.mintAuthority.equals(tokenMintSigner)) {
             // wrapped, so get native info
             const nativeInfo = await getOriginalAssetSol(connection, TOKEN_BRIDGE_ADDRESS.toString(), mint.toString());
             expect(uint8ArrayToHex(nativeInfo.assetAddress)).to.equal(parsedTokenAddress.toString("hex"));
@@ -826,7 +884,7 @@ describe("anchor-contributor", () => {
       const duration = 8; // seconds after sale starts
       const lockPeriod = 12; // seconds after sale ended
       const initSaleVaa = dummyConductor.createSale(startTime, duration, saleTokenAccount.address, lockPeriod);
-      const tx = await contributor.initSale(orchestrator, initSaleVaa, dummyConductor.getSaleTokenOnSolana());
+      const tx = await contributor.initSale(orchestrator, initSaleVaa);
 
       {
         const saleId = dummyConductor.getSaleId();

@@ -321,7 +321,8 @@ pub struct BridgeSealedContribution<'info> {
     pub custodian_token_acct: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
-    /// CHECK: Check if owned by SPL Account. Token Bridge needs this to be mutable
+    /// CHECK: Check if owned by SPL Account.
+    /// Token Bridge needs this to be mutable if it created mint
     pub accepted_mint: Box<Account<'info, Mint>>,
 
     #[account(mut)]

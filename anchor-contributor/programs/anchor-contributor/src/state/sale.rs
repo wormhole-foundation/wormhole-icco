@@ -77,6 +77,7 @@ impl AssetTotal {
             bytes.len() == INDEX_ACCEPTED_TOKEN_END,
             ContributorError::InvalidAcceptedTokenPayload
         );
+
         Ok(Self {
             token_index: bytes[INDEX_ACCEPTED_TOKEN_INDEX],
             mint: Pubkey::new(&bytes[INDEX_ACCEPTED_TOKEN_ADDRESS..INDEX_ACCEPTED_TOKEN_END]),
@@ -105,25 +106,24 @@ impl AssetTotal {
         self.status = AssetStatus::TransferredToConductor;
     }
 
-    pub fn verify_ata(
+    pub fn deserialize_associated_token_account(
         &self,
         token_acct_info: &AccountInfo,
         authority: &Pubkey,
     ) -> Result<TokenAccount> {
         require!(
-            get_associated_token_address(&authority, &self.mint) == token_acct_info.key(),
+            get_associated_token_address(authority, &self.mint) == token_acct_info.key(),
             ContributorError::InvalidAccount
         );
-
-        AssetTotal::deserialize_token_account(token_acct_info)
+        AssetTotal::deserialize_token_account_unchecked(token_acct_info)
     }
 
-    pub fn verify_token_account(
+    pub fn deserialize_token_account(
         &self,
         token_acct_info: &AccountInfo,
         owner: &Pubkey,
     ) -> Result<TokenAccount> {
-        let token_acct = AssetTotal::deserialize_token_account(token_acct_info)?;
+        let token_acct = AssetTotal::deserialize_token_account_unchecked(token_acct_info)?;
         require!(token_acct.owner == *owner, ContributorError::InvalidAccount);
         require!(
             token_acct.mint == self.mint,
@@ -132,7 +132,9 @@ impl AssetTotal {
         Ok(token_acct)
     }
 
-    pub fn deserialize_token_account(token_acct_info: &AccountInfo) -> Result<TokenAccount> {
+    pub fn deserialize_token_account_unchecked(
+        token_acct_info: &AccountInfo,
+    ) -> Result<TokenAccount> {
         let mut bf: &[u8] = &token_acct_info.try_borrow_data()?;
         TokenAccount::try_deserialize_unchecked(&mut bf)
     }
@@ -196,7 +198,6 @@ impl Sale {
         // where this guy is based on how many accepted tokens there are. yes, we hate this, too
         let recipient_idx =
             INDEX_SALE_INIT_ACCEPTED_TOKENS_START + 1 + ACCEPTED_TOKEN_NUM_BYTES * num_accepted;
-        //self.recipient = to_bytes32(payload, recipient_idx);
         self.recipient
             .copy_from_slice(&payload[recipient_idx..(recipient_idx + 32)]);
 

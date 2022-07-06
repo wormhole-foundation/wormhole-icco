@@ -26,12 +26,14 @@ contract ContributorEvents {
 
     event EventClaimAllocation (
         uint256 saleId,
-        uint256 tokenIndex
+        uint256 tokenIndex,
+        uint256 amount
     );
 
     event EventClaimRefund (
         uint256 saleId,
-        uint256 tokenIndex
+        uint256 tokenIndex,
+        uint256 amount
     );
 
     event EventClaimExcessContribution (

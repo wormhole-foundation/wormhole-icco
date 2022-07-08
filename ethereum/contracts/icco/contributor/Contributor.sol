@@ -450,7 +450,7 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
         SafeERC20.safeTransfer(IERC20(tokenAddress), msg.sender, thisAllocation); 
 
         /// emit EventClaimAllocation event.
-        emit EventClaimAllocation(saleId, tokenIndex);
+        emit EventClaimAllocation(saleId, tokenIndex, thisAllocation);
     }
 
     /**
@@ -487,7 +487,7 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
         );
 
         /// emit EventClaimExcessContribution event.
-        emit EventClaimExcessContribution(saleId, tokenIndex);
+        emit EventClaimExcessContribution(saleId, tokenIndex, thisExcessContribution);
     }
 
     /**
@@ -510,15 +510,16 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
 
         address tokenAddress = address(uint160(uint256(tokenAddressBytes)));
 
+        uint256 thisRefundContribution = getSaleContribution(saleId, tokenIndex, msg.sender);
         /// refund tokens
         SafeERC20.safeTransfer(
             IERC20(tokenAddress), 
             msg.sender, 
-            getSaleContribution(saleId, tokenIndex, msg.sender)
+            thisRefundContribution
         );
 
         /// emit EventClaimRefund event.
-        emit EventClaimRefund(saleId, tokenIndex);
+        emit EventClaimRefund(saleId, tokenIndex, thisRefundContribution);
     }
 
     // @dev verifyConductorVM serves to validate VMs by checking against the known Conductor contract 

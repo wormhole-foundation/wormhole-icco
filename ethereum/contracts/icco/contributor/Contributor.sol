@@ -510,7 +510,9 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
 
         address tokenAddress = address(uint160(uint256(tokenAddressBytes)));
 
+        /// grab the amount to refund the user
         uint256 thisRefundContribution = getSaleContribution(saleId, tokenIndex, msg.sender);
+
         /// refund tokens
         SafeERC20.safeTransfer(
             IERC20(tokenAddress), 

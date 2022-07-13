@@ -1465,6 +1465,7 @@ contract("ICCO", function(accounts) {
     let eventClaim = claimTx1["events"]["EventClaimAllocation"]["returnValues"];
     assert.equal(eventClaim["saleId"], SALE_ID);
     assert.equal(eventClaim["tokenIndex"], TOKEN_TWO_INDEX);
+    assert.equal(eventClaim["amount"], expectedBuyerTwoBalanceAfter);
 
     ONE_CLAIM_SNAPSHOT = await snapshot();
 
@@ -2214,6 +2215,10 @@ contract("ICCO", function(accounts) {
     let eventClaim = refundTx1["events"]["EventClaimRefund"]["returnValues"];
     assert.equal(eventClaim["saleId"], SALE_2_ID);
     assert.equal(eventClaim["tokenIndex"], TOKEN_ONE_INDEX);
+    assert.equal(
+      eventClaim["amount"],
+      parseInt(expectedBuyerOneTokenOneBalanceAfter) - parseInt(actualBuyerOneTokenOneBalanceBefore)
+    );
 
     // snapshot to test trying to claim refund 2x
     ONE_REFUND_SNAPSHOT = await snapshot();
@@ -3629,6 +3634,7 @@ contract("ICCO", function(accounts) {
     const eventClaimExcess = claimExcessTx["events"]["EventClaimExcessContribution"]["returnValues"];
     assert.equal(eventClaimExcess["saleId"], SALE_4_ID);
     assert.equal(eventClaimExcess["tokenIndex"], TOKEN_TWO_INDEX);
+    assert.equal(eventClaimExcess["amount"], expectedBuyerTwoTokenTwoRefund);
 
     // check that excess contributions were distributed correctly
     const buyerOneTokenOneBalanceAfter = await CONTRIBUTED_TOKEN_ONE.balanceOf(BUYER_ONE);

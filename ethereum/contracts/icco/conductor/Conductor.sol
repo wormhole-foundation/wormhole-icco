@@ -339,6 +339,8 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
      * - it determines if the sale was a success by comparing the total to minRaise
      * - it calculates allocations and excess contributions for each accepted token
      * - it disseminates a saleSealed or saleAborted message to Contributors via wormhole
+     * - it bridges the sale tokens to the contributor contracts if sealed
+     * - it refunds the refundRecipient if the sale is aborted or the maxRaise is not met (partial refund)
      */
     function sealSale(uint256 saleId) public payable returns (uint256 wormholeSequence, uint256 wormholeSequence2) {
         require(saleExists(saleId), "sale not initiated");

@@ -3,6 +3,12 @@ const elliptic = require("elliptic");
 const { assert } = require("chai");
 const ethers = require("ethers");
 
+require("@openzeppelin/test-helpers/configure")({ provider: web3.currentProvider, environment: "truffle" });
+const { singletons } = require("@openzeppelin/test-helpers");
+
+const TokenERC777 = artifacts.require("TokenERC777");
+const MaliciousSeller = artifacts.require("MaliciousSeller");
+
 const TokenImplementation = artifacts.require("TokenImplementation");
 
 const TokenSaleConductor = artifacts.require("TokenSaleConductor");
@@ -1459,7 +1465,6 @@ contract("ICCO", function(accounts) {
     let eventClaim = claimTx1["events"]["EventClaimAllocation"]["returnValues"];
     assert.equal(eventClaim["saleId"], SALE_ID);
     assert.equal(eventClaim["tokenIndex"], TOKEN_TWO_INDEX);
-    assert.equal(eventClaim["amount"], expectedBuyerTwoBalanceAfter);
 
     ONE_CLAIM_SNAPSHOT = await snapshot();
 
@@ -2209,10 +2214,6 @@ contract("ICCO", function(accounts) {
     let eventClaim = refundTx1["events"]["EventClaimRefund"]["returnValues"];
     assert.equal(eventClaim["saleId"], SALE_2_ID);
     assert.equal(eventClaim["tokenIndex"], TOKEN_ONE_INDEX);
-    assert.equal(
-      eventClaim["amount"],
-      parseInt(expectedBuyerOneTokenOneBalanceAfter) - parseInt(actualBuyerOneTokenOneBalanceBefore)
-    );
 
     // snapshot to test trying to claim refund 2x
     ONE_REFUND_SNAPSHOT = await snapshot();
@@ -3628,7 +3629,6 @@ contract("ICCO", function(accounts) {
     const eventClaimExcess = claimExcessTx["events"]["EventClaimExcessContribution"]["returnValues"];
     assert.equal(eventClaimExcess["saleId"], SALE_4_ID);
     assert.equal(eventClaimExcess["tokenIndex"], TOKEN_TWO_INDEX);
-    assert.equal(eventClaimExcess["amount"], expectedBuyerTwoTokenTwoRefund);
 
     // check that excess contributions were distributed correctly
     const buyerOneTokenOneBalanceAfter = await CONTRIBUTED_TOKEN_ONE.balanceOf(BUYER_ONE);
@@ -4405,6 +4405,224 @@ contract("ICCO", function(accounts) {
 
     assert.equal(parseInt(buyerOneBalanceAfter) - parseInt(buyerOneBalanceBefore), expectedBuyerOneAllocation);
     assert.equal(parseInt(buyerTwoBalanceAfter) - parseInt(buyerTwoBalanceBefore), expectedBuyerTwoAllocation);
+  });
+
+  // more global sale test variables
+  let SALE_7_START;
+  let SALE_7_END;
+  let SALE_7_ID;
+  let SALE_7_REFUND_RECIPIENT;
+  let MALICIOUS_SELLER;
+
+  it("create and init seventh sale correctly", async function() {
+    console.log(
+      "\n       -------------------------- Sale Test #7 (Testing Reentrancy with ERC777 Token) --------------------------"
+    );
+
+    // test variables
+    const current_block = await web3.eth.getBlock("latest");
+    SALE_7_START = current_block.timestamp + 5;
+    SALE_7_END = SALE_7_START + 8;
+    SALE_7_UNLOCK_TIMESTAMP = SALE_7_END + 30; // time when tokens can be claimed by contributors
+
+    const saleTokenAmount = "10000";
+    const minimumTokenRaise = "2000";
+    const maximumTokenRaise = "10000";
+    const tokenOneConversionRate = "1000000000000000000";
+    const saleRecipient = accounts[0];
+    const isFixedPriceSale = true;
+
+    await singletons.ERC1820Registry(accounts[0]);
+
+    SOLD_TOKEN = await TokenERC777.deployed();
+    SOLD_TOKEN_BYTES32_ADDRESS = "0x000000000000000000000000" + SOLD_TOKEN.address.substr(2);
+
+    const initializedConductor = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+    const initializedContributor = new web3.eth.Contract(
+      ContributorImplementationFullABI,
+      TokenSaleContributor.address
+    );
+
+    MALICIOUS_SELLER = await MaliciousSeller.deployed();
+    SALE_7_REFUND_RECIPIENT = MALICIOUS_SELLER.address;
+    await MALICIOUS_SELLER.setToken(SOLD_TOKEN.address);
+    await MALICIOUS_SELLER.setConductor(initializedConductor._address);
+    await MALICIOUS_SELLER.setWormholeFee(WORMHOLE_FEE);
+
+    // mint some more sale tokens
+    await SOLD_TOKEN.mint(SELLER, saleTokenAmount);
+    await SOLD_TOKEN.approve(TokenSaleConductor.address, saleTokenAmount);
+
+    // Simulate SOLD_TOKEN from previously created sales (testing purposes)
+    await SOLD_TOKEN.transfer(initializedConductor._address, "120000");
+
+    web3.eth.sendTransaction({ to: SALE_7_REFUND_RECIPIENT, from: SELLER, value: web3.utils.toWei("1") });
+
+    // create array (struct) for sale params
+    const saleParams = [
+      isFixedPriceSale,
+      SOLD_TOKEN_BYTES32_ADDRESS,
+      TEST_CHAIN_ID,
+      saleTokenAmount,
+      minimumTokenRaise,
+      maximumTokenRaise,
+      SALE_7_START,
+      SALE_7_END,
+      SALE_7_UNLOCK_TIMESTAMP,
+      saleRecipient,
+      SALE_7_REFUND_RECIPIENT,
+      SOLD_TOKEN_BYTES32_ADDRESS,
+      KYC_AUTHORITY,
+    ];
+
+    // create accepted tokens array
+    const acceptedTokens = [
+      [TEST_CHAIN_ID, "0x000000000000000000000000" + CONTRIBUTED_TOKEN_ONE.address.substr(2), tokenOneConversionRate],
+    ];
+
+    // create the sale
+    await initializedConductor.methods.createSale(saleParams, acceptedTokens).send({
+      value: WORMHOLE_FEE * 1,
+      from: SELLER,
+      gasLimit: GAS_LIMIT,
+    });
+
+    SALE_7_ID = SALE_6_ID + 1;
+
+    MALICIOUS_SELLER.setSaleId(SALE_7_ID);
+    MALICIOUS_SELLER.setNumTimes(12);
+
+    const log = (
+      await WORMHOLE.getPastEvents("LogMessagePublished", {
+        fromBlock: "latest",
+      })
+    )[0].returnValues;
+
+    // create initSale VM
+    const vm = await signAndEncodeVM(
+      1,
+      1,
+      TEST_CHAIN_ID,
+      "0x000000000000000000000000" + TokenSaleConductor.address.substr(2),
+      0,
+      log.payload.toString(),
+      [testSigner1PK],
+      0,
+      0
+    );
+
+    // init the sale
+    await initializedContributor.methods.initSale("0x" + vm).send({
+      from: SELLER,
+      gasLimit: GAS_LIMIT,
+    });
+
+    // verify getSaleTimeFrame getter
+    const saleTimeframe = await initializedContributor.methods.getSaleTimeframe(SALE_7_ID).call();
+
+    assert.equal(saleTimeframe.start, SALE_7_START);
+    assert.equal(saleTimeframe.end, SALE_7_END);
+    assert.equal(saleTimeframe.unlockTimestamp, SALE_7_UNLOCK_TIMESTAMP);
+  });
+
+  it("should accept contributions in the contributor during the seventh sale timeframe", async function() {
+    await wait(5);
+
+    // test variables
+    const tokenOneContributionAmount = "8000";
+
+    await CONTRIBUTED_TOKEN_ONE.mint(BUYER_ONE, tokenOneContributionAmount);
+
+    const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
+
+    // approve contribution amounts
+    await CONTRIBUTED_TOKEN_ONE.approve(TokenSaleContributor.address, tokenOneContributionAmount, {
+      from: BUYER_ONE,
+    });
+
+    // perform "kyc" and contribute to the token sale for BUYER_ONE
+    const kycSig1 = await signContribution(
+      CONDUCTOR_BYTES32_ADDRESS,
+      SALE_7_ID,
+      TOKEN_ONE_INDEX,
+      tokenOneContributionAmount,
+      BUYER_ONE,
+      kycSignerPK
+    );
+    await initialized.methods.contribute(SALE_7_ID, TOKEN_ONE_INDEX, tokenOneContributionAmount, kycSig1).send({
+      from: BUYER_ONE,
+      gasLimit: GAS_LIMIT,
+    });
+  });
+
+  it("balance of SOLD_TOKEN for Conductor before sealing the sale is 130,000", async function() {
+    const initializedConductor = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+
+    const expectedConductorBalance = "130000"; // 120000 (previous sales) + 10000 (current sale)
+
+    const conductorBalance = await SOLD_TOKEN.balanceOf(initializedConductor._address);
+
+    assert.equal(parseInt(conductorBalance), expectedConductorBalance);
+  });
+
+  it("Sealing the sale should fail due to malicious sale token attempting a reentrancy attack", async function() {
+    await wait(10);
+
+    const initializedConductor = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+    const initializedContributor = new web3.eth.Contract(
+      ContributorImplementationFullABI,
+      TokenSaleContributor.address
+    );
+
+    // attest contributions
+    await initializedContributor.methods.attestContributions(SALE_7_ID).send({
+      from: SELLER,
+      value: WORMHOLE_FEE,
+      gasLimit: GAS_LIMIT,
+    });
+
+    // grab the message generated by the conductor
+    const log = (
+      await WORMHOLE.getPastEvents("LogMessagePublished", {
+        fromBlock: "latest",
+      })
+    )[0].returnValues;
+
+    // create the vaa to initialize the sale
+    const vm = await signAndEncodeVM(
+      1,
+      1,
+      TEST_CHAIN_ID,
+      "0x000000000000000000000000" + TokenSaleContributor.address.substr(2),
+      0,
+      log.payload.toString(),
+      [testSigner1PK],
+      0,
+      0
+    );
+
+    // attest contributions
+    await initializedConductor.methods.collectContribution("0x" + vm).send({
+      from: SELLER,
+      gasLimit: GAS_LIMIT,
+    });
+
+    let failed = false;
+    try {
+      // seal the sale in the conductor
+      await initializedConductor.methods.sealSale(SALE_7_ID).send({
+        from: SELLER,
+        value: WORMHOLE_FEE,
+        gasLimit: GAS_LIMIT,
+      });
+    } catch (e) {
+      assert.equal(
+        e.message,
+        "Returned error: VM Exception while processing transaction: revert already sealed / aborted"
+      );
+      failed = true;
+    }
+    assert.ok(failed);
   });
 
   it("conductor should not allow a sale to abort after the sale start time", async function() {

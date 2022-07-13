@@ -364,6 +364,9 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
 
         /// check to see if the sale was successful
         if (accounting.totalContribution >= sale.minRaise) {
+            /// set saleSealed
+            setSaleSealed(saleId);
+
             ITokenBridge tknBridge = tokenBridge();
 
             /// set the messageFee and valueSent values 
@@ -459,10 +462,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
             }
 
             require(accounting.valueSent >= accounting.messageFee, "insufficient wormhole messaging fees");
-            accounting.valueSent -= accounting.messageFee;
-
-            /// set saleSealed
-            setSaleSealed(saleId);
+            accounting.valueSent -= accounting.messageFee; 
 
             /// @dev send encoded SaleSealed message to Contributor contracts
             wormholeSequence = wormhole.publishMessage{

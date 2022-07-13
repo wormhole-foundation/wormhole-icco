@@ -170,7 +170,7 @@ pub mod anchor_contributor {
         let clock = Clock::get()?;
         ctx.accounts
             .sale
-            .update_total_contributions(clock.unix_timestamp, token_index, amount)?;
+            .update_total_contributions(clock.unix_timestamp, token_index, idx, amount)?;
 
         // And we do the same with the Buyer account.
         ctx.accounts.buyer.contribute(idx, amount)?;
@@ -382,7 +382,7 @@ pub mod anchor_contributor {
         )?;
 
         let transfer_data = TransferData {
-            nonce: 0, // ctx.accounts.custodian.nonce,
+            nonce: 0,
             amount,
             fee: 0,
             target_address: sale.recipient,

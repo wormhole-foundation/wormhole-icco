@@ -166,6 +166,7 @@ impl Sale {
         );
         
         let num_accepted = payload[INDEX_SALE_INIT_ACCEPTED_TOKENS_START] as usize;
+
 //      msg!("payloadlen: {}, exp: {}", payload.len(), INDEX_SALE_INIT_ACCEPTED_TOKENS_START + 1 + ACCEPTED_TOKEN_NUM_BYTES * num_accepted + SALE_INIT_TAIL);
         require!(
             payload.len() == INDEX_SALE_INIT_ACCEPTED_TOKENS_START + 1 + ACCEPTED_TOKEN_NUM_BYTES * num_accepted + SALE_INIT_TAIL,
@@ -177,7 +178,7 @@ impl Sale {
             ContributorError::TooManyAcceptedTokens
         );
 
-        self.totals = Vec::with_capacity(ACCEPTED_TOKENS_MAX);
+        self.totals = Vec::with_capacity(num_accepted);
         for i in 0..num_accepted {
             let start = INDEX_SALE_INIT_ACCEPTED_TOKENS_START + 1 + ACCEPTED_TOKEN_NUM_BYTES * i;
             self.totals.push(AssetTotal::make_from_slice(
@@ -248,8 +249,9 @@ impl Sale {
         &mut self,
         block_time: i64,
         token_index: u8,
+        solana_idx: usize,
         contributed: u64,
-    ) -> Result<usize> {
+    ) -> Result<()> {
         require!(self.is_active(block_time), ContributorError::SaleEnded);
 
         let block_time = block_time as u64;
@@ -257,10 +259,9 @@ impl Sale {
             block_time >= self.times.start,
             ContributorError::ContributionTooEarly
         );
-        let idx = self.get_index(token_index)?;
-        self.totals[idx].contributions += contributed;
+        self.totals[solana_idx].contributions += contributed;
 
-        Ok(idx)
+        Ok(())
     }
 
     pub fn serialize_contributions(&self, block_time: i64) -> Result<Vec<u8>> {
@@ -427,15 +428,6 @@ impl Sale {
 
     pub fn is_aborted(&self) -> bool {
         return self.initialized && self.status == SaleStatus::Aborted;
-    }
-
-    pub fn get_index(&self, token_index: u8) -> Result<usize> {
-        let result = self
-            .totals
-            .iter()
-            .position(|item| item.token_index == token_index);
-        require!(result != None, ContributorError::InvalidTokenIndex);
-        Ok(result.unwrap())
     }
 
     pub fn allocation_unlocked(&self, block_time: i64) -> bool {

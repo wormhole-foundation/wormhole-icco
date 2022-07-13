@@ -12,11 +12,11 @@ use std::str::FromStr;
 #[account]
 #[derive(Default)]
 pub struct Custodian {
-    pub nonce: u32, // 4
+//    pub nonce: u32, // 4
 }
 
 impl Custodian {
-    pub const MAXIMUM_SIZE: usize = 32 + 4;
+    pub const MAXIMUM_SIZE: usize = 0; //32 + 4;
 
     pub fn conductor_chain() -> Result<u16> {
         let chain_id = CONDUCTOR_CHAIN
@@ -48,7 +48,7 @@ impl Custodian {
     }
 
     pub fn new(&mut self) -> Result<()> {
-        self.nonce = 0;
+    //    self.nonce = 0;
         Ok(())
     }
 

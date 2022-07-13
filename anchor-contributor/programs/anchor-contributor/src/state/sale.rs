@@ -164,8 +164,14 @@ impl Sale {
             payload.len() > INDEX_SALE_INIT_ACCEPTED_TOKENS_START,
             ContributorError::InvalidVaaPayload
         );
-
+        
         let num_accepted = payload[INDEX_SALE_INIT_ACCEPTED_TOKENS_START] as usize;
+//      msg!("payloadlen: {}, exp: {}", payload.len(), INDEX_SALE_INIT_ACCEPTED_TOKENS_START + 1 + ACCEPTED_TOKEN_NUM_BYTES * num_accepted + SALE_INIT_TAIL);
+        require!(
+            payload.len() == INDEX_SALE_INIT_ACCEPTED_TOKENS_START + 1 + ACCEPTED_TOKEN_NUM_BYTES * num_accepted + SALE_INIT_TAIL,
+            ContributorError::InvalidVaaPayload
+        );
+
         require!(
             num_accepted <= ACCEPTED_TOKENS_MAX,
             ContributorError::TooManyAcceptedTokens

@@ -382,7 +382,7 @@ pub mod anchor_contributor {
         )?;
 
         let transfer_data = TransferData {
-            nonce: ctx.accounts.custodian.nonce,
+            nonce: 0, // ctx.accounts.custodian.nonce,
             amount,
             fee: 0,
             target_address: sale.recipient,

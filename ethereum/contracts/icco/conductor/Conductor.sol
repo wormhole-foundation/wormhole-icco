@@ -331,7 +331,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
                 conSealed.contributions[i].contributed
             );
         }
-    } 
+    }
 
     /**
      * @dev sealSale serves to determine if a sale was successful or not. 
@@ -456,12 +456,21 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
             accounting.saleTokenRefund = sale.tokenAmount - accounting.totalAllocated;
 
             if (accounting.saleTokenRefund > 0) {
-                SafeERC20.safeTransfer(
-                    IERC20(sale.localTokenAddress), 
-                    address(uint160(uint256(sale.refundRecipient))), 
-                    accounting.saleTokenRefund
+                /// @dev using low-level call instead of safeTransfer to fetch success boolean
+                (bool success, ) = sale.localTokenAddress.call(
+                    abi.encodeWithSelector(
+                        IERC20(sale.localTokenAddress).transfer.selector,
+                        address(uint160(uint256(sale.refundRecipient))), 
+                        accounting.saleTokenRefund
+                    )
                 );
-            }
+
+                /// @dev if this fails, it's due to an attempted reentrancy attack
+                if (!success) {
+                    wormholeSequence = abortSale(saleId, false);
+                    return (wormholeSequence, 0);
+                } 
+            } 
 
             require(accounting.valueSent >= accounting.messageFee, "insufficient wormhole messaging fees");
             accounting.valueSent -= accounting.messageFee; 
@@ -501,28 +510,48 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
             /// emit EventSealSale event.
             emit EventSealSale(saleId); 
         } else {
-            /// set saleAborted
-            setSaleAborted(sale.saleID);
+            wormholeSequence = abortSale(saleId, true);
+            return (wormholeSequence, 0);
+        }
+    }
 
-            /// @dev send encoded SaleAborted message to Contributor contracts
-            wormholeSequence = wormhole.publishMessage{
-                value : msg.value
-            }(0, ICCOStructs.encodeSaleAborted(ICCOStructs.SaleAborted({
-                payloadID : 4,
-                saleID : saleId
-            })), consistencyLevel());
+    /**
+     * @dev abortSale serves to mark the sale as aborted.
+     * - it sends a SaleAborted VAA
+     * - it sends the refundRecipient a refund if the minRaise is not met
+     * - it does not send the refund if a prior transfer to the refundRecipient fails 
+     * - it emits an EventAbortSale event
+     * - it should only be called from within the sealSale function
+     */
+    function abortSale(uint256 saleId, bool sendRefund) internal returns (uint256 wormholeSequence) {
+        /// set saleAborted
+        setSaleAborted(saleId);
 
-            /// @dev refund the sale tokens to refund recipient
+        /// cache wormhole instance
+        IWormhole wormhole = wormhole();
+
+        /// @dev send encoded SaleAborted message to Contributor contracts
+        wormholeSequence = wormhole.publishMessage{
+            value : wormhole.messageFee()
+        }(0, ICCOStructs.encodeSaleAborted(ICCOStructs.SaleAborted({
+            payloadID : 4,
+            saleID : saleId
+        })), consistencyLevel());
+
+        /// @dev refund the sale tokens to refund recipient if sendRefund is true
+        if (sendRefund) {
+            ConductorStructs.Sale memory sale = sales(saleId);
+
             SafeERC20.safeTransfer(
                 IERC20(sale.localTokenAddress), 
                 address(uint160(uint256(sale.refundRecipient))), 
                 sale.tokenAmount 
             );
-
-            /// emit EventAbortSale event.
-            emit EventAbortSale(saleId);
         }
-    } 
+
+        /// emit EventAbortSale event.
+        emit EventAbortSale(saleId);
+    }
  
     /// @dev useSaleId serves to update the current saleId in the Conductor state
     function useSaleId() internal returns(uint256 saleId) {
@@ -531,7 +560,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
     }
 
     /// @dev verifyContributorVM serves to validate VMs by checking against known Contributor contracts    
-    function verifyContributorVM(IWormhole.VM memory vm) internal view returns (bool){
+    function verifyContributorVM(IWormhole.VM memory vm) internal view returns (bool) {
         if (contributorContracts(vm.emitterChainId) == vm.emitterAddress) {
             return true;
         }

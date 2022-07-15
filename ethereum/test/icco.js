@@ -4561,17 +4561,7 @@ contract("ICCO", function(accounts) {
     });
   });
 
-  it("balance of SOLD_TOKEN for Conductor before sealing the sale is 130,000", async function() {
-    const initializedConductor = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
-
-    const expectedConductorBalance = "130000"; // 120000 (previous sales) + 10000 (current sale)
-
-    const conductorBalance = await SOLD_TOKEN.balanceOf(initializedConductor._address);
-
-    assert.equal(parseInt(conductorBalance), expectedConductorBalance);
-  });
-
-  it("Sealing the sale should fail due to malicious sale token attempting a reentrancy attack", async function() {
+  it("sale should be aborted after attempted reentrancy attack with ERC777 token transfer", async function() {
     await wait(10);
 
     const initializedConductor = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
@@ -4613,22 +4603,61 @@ contract("ICCO", function(accounts) {
       gasLimit: GAS_LIMIT,
     });
 
-    let failed = false;
-    try {
-      // seal the sale in the conductor
-      await initializedConductor.methods.sealSale(SALE_7_ID).send({
-        from: SELLER,
-        value: WORMHOLE_FEE,
-        gasLimit: GAS_LIMIT,
-      });
-    } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert already sealed / aborted"
-      );
-      failed = true;
-    }
-    assert.ok(failed);
+    // confirm that saleAborted was set to true
+    const conductorStatusBefore = await initializedConductor.methods.sales(SALE_7_ID).call();
+
+    assert.ok(!conductorStatusBefore.isAborted);
+    assert.ok(!conductorStatusBefore.isSealed);
+
+    // attempt to seal the sale
+    await initializedConductor.methods.sealSale(SALE_7_ID).send({
+      from: SELLER,
+      value: WORMHOLE_FEE,
+      gasLimit: GAS_LIMIT,
+    });
+
+    // confirm that saleAborted was set to true
+    const conductorStatusAfter = await initializedConductor.methods.sales(SALE_7_ID).call();
+
+    // both sealed and aborted since the ERC777 contract tried to cross-call the contract again
+    assert.ok(conductorStatusAfter.isAborted);
+    assert.ok(conductorStatusAfter.isSealed);
+
+    const log2 = (
+      await WORMHOLE.getPastEvents("LogMessagePublished", {
+        fromBlock: "latest",
+      })
+    )[0].returnValues;
+
+    // verify getSaleStatus before aborting in contributor
+    const contributorStatusBefore = await initializedContributor.methods.getSaleStatus(SALE_7_ID).call();
+
+    assert.ok(!contributorStatusBefore.isAborted);
+    assert.ok(!contributorStatusBefore.isSealed);
+
+    const vm2 = await signAndEncodeVM(
+      1,
+      1,
+      TEST_CHAIN_ID,
+      "0x000000000000000000000000" + TokenSaleConductor.address.substr(2),
+      0,
+      log2.payload,
+      [testSigner1PK],
+      0,
+      0
+    );
+
+    // abort the sale
+    await initializedContributor.methods.saleAborted("0x" + vm2).send({
+      from: BUYER_ONE,
+      gasLimit: GAS_LIMIT,
+    });
+
+    // confirm that saleAborted was set to true
+    const contributorStatusAfter = await initializedContributor.methods.getSaleStatus(SALE_2_ID).call();
+
+    assert.ok(contributorStatusAfter.isAborted);
+    assert.ok(!contributorStatusAfter.isSealed);
   });
 
   it("conductor should not allow a sale to abort after the sale start time", async function() {

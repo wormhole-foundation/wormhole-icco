@@ -248,8 +248,7 @@ impl Sale {
     pub fn update_total_contributions(
         &mut self,
         block_time: i64,
-        token_index: u8,
-        solana_idx: usize,
+        asset_total_idx: usize,
         contributed: u64,
     ) -> Result<()> {
         require!(self.is_active(block_time), ContributorError::SaleEnded);
@@ -259,7 +258,7 @@ impl Sale {
             block_time >= self.times.start,
             ContributorError::ContributionTooEarly
         );
-        self.totals[solana_idx].contributions += contributed;
+        self.totals[asset_total_idx].contributions += contributed;
 
         Ok(())
     }

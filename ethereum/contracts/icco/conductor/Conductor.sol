@@ -465,7 +465,12 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
                     )
                 );
 
-                /// @dev if this fails, it's due to an attempted reentrancy attack
+                /**
+                 * @dev If the success boolean value is false, someone is attempting a reentrancy attack
+                 * - the contract will emit a saleAborted VAA so contributor contracts will allow
+                 * contributors to claim a refund
+                 * regardless of the sale outcome, the sale will be aborted
+                 */
                 if (!success) {
                     wormholeSequence = abortSale(saleId, false);
                     return (wormholeSequence, 0);

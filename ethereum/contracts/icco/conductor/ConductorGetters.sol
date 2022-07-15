@@ -15,6 +15,10 @@ contract ConductorGetters is ConductorState {
         return _state.owner;
     } 
 
+    function pendingOwner() public view returns (address) {
+        return _state.pendingOwner;
+    } 
+
     function isInitialized(address impl) public view returns (bool) {
         return _state.initializedImplementations[impl];
     }

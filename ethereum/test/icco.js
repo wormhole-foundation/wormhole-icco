@@ -393,64 +393,40 @@ contract("ICCO", function(accounts) {
     assert.ok(conductorFailed);
   });
 
-  it("conductor and contributor should allow the owner to transfer ownership", async function() {
+  it("conductor should allow the owner to transfer ownership", async function() {
     // test variables
     const currentOwner = accounts[0];
     const newOwner = accounts[1];
 
-    const contributorContract = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
     const conductorContract = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
 
-    // transfer ownership
-    const contributorTx = await contributorContract.methods.transferOwnership(TEST_CHAIN_ID, newOwner).send({
+    await conductorContract.methods.submitOwnershipTransferRequest(TEST_CHAIN_ID, newOwner).send({
       value: "0",
       from: currentOwner, // contract owner
       gasLimit: GAS_LIMIT,
     });
 
-    const conductorTx = await conductorContract.methods.transferOwnership(TEST_CHAIN_ID, newOwner).send({
+    const conductorTx = await conductorContract.methods.confirmOwnershipTransferRequest().send({
       value: "0",
-      from: currentOwner, // contract owner
+      from: newOwner, // pending owner
       gasLimit: GAS_LIMIT,
     });
 
     // check getters after the action
-    let contributorOwner = await contributorContract.methods.owner().call();
     let conductorOwner = await conductorContract.methods.owner().call();
 
-    assert.equal(contributorOwner, newOwner);
     assert.equal(conductorOwner, newOwner);
 
-    // confirm that the ConsistencyLevelUpdate event is emitted for contributor
-    let contributorEventOutput = contributorTx["events"]["OwnershipTransfered"]["returnValues"];
-
-    assert.equal(contributorEventOutput["oldOwner"].toLowerCase(), currentOwner.toLowerCase());
-    assert.equal(contributorEventOutput["newOwner"].toLowerCase(), newOwner.toLowerCase());
-
-    // confirm that the ConsistencyLevelUpdate event is emitted for conductor
+    // confirm that the OwnershipTransfered event is emitted for conductor
     let conductorEventOutput = conductorTx["events"]["OwnershipTransfered"]["returnValues"];
 
     assert.equal(conductorEventOutput["oldOwner"].toLowerCase(), currentOwner.toLowerCase());
     assert.equal(conductorEventOutput["newOwner"].toLowerCase(), newOwner.toLowerCase());
 
-    // make sure only the owner can transfer ownership
-    let contributorFailed = false;
-    try {
-      await contributorContract.methods.transferOwnership(TEST_CHAIN_ID, currentOwner).send({
-        value: "0",
-        from: currentOwner, // no longer the current owner
-        gasLimit: GAS_LIMIT,
-      });
-    } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert caller is not the owner"
-      );
-      contributorFailed = true;
-    }
+    // try to submit an ownership transfer request w/ non-owner wallet
     conductorFailed = false;
     try {
-      await conductorContract.methods.transferOwnership(TEST_CHAIN_ID, currentOwner).send({
+      await conductorContract.methods.submitOwnershipTransferRequest(TEST_CHAIN_ID, currentOwner).send({
         value: "0",
         from: currentOwner, // no longer the current owner
         gasLimit: GAS_LIMIT,
@@ -463,28 +439,140 @@ contract("ICCO", function(accounts) {
       conductorFailed = true;
     }
 
-    assert.ok(contributorFailed);
     assert.ok(conductorFailed);
 
-    // revert ownership back to currentOwner
-    await contributorContract.methods.transferOwnership(TEST_CHAIN_ID, currentOwner).send({
+    // try to confirm the ownership change with the wrong wallet
+    conductorFailed = false;
+    try {
+      await conductorContract.methods.submitOwnershipTransferRequest(TEST_CHAIN_ID, newOwner).send({
+        value: "0",
+        from: newOwner, // contract owner
+        gasLimit: GAS_LIMIT,
+      });
+
+      await conductorContract.methods.confirmOwnershipTransferRequest().send({
+        value: "0",
+        from: currentOwner, // pending owner
+        gasLimit: GAS_LIMIT,
+      });
+    } catch (e) {
+      assert.equal(
+        e.message,
+        "Returned error: VM Exception while processing transaction: revert caller must be pendingOwner"
+      );
+      conductorFailed = true;
+    }
+
+    assert.ok(conductorFailed);
+
+    // transfer ownership back to original owner
+    await conductorContract.methods.submitOwnershipTransferRequest(TEST_CHAIN_ID, currentOwner).send({
       value: "0",
-      from: newOwner,
+      from: newOwner, // contract owner
       gasLimit: GAS_LIMIT,
     });
 
-    await conductorContract.methods.transferOwnership(TEST_CHAIN_ID, currentOwner).send({
+    await conductorContract.methods.confirmOwnershipTransferRequest().send({
       value: "0",
-      from: newOwner,
+      from: currentOwner, // pending owner
       gasLimit: GAS_LIMIT,
     });
 
-    // check getters before the action
-    contributorOwner = await contributorContract.methods.owner().call();
+    // check getters after the action
     conductorOwner = await conductorContract.methods.owner().call();
 
-    assert.equal(contributorOwner, currentOwner);
     assert.equal(conductorOwner, currentOwner);
+  });
+
+  it("contributor should allow the owner to transfer ownership", async function() {
+    // test variables
+    const currentOwner = accounts[0];
+    const newOwner = accounts[1];
+
+    const contributorContract = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
+
+    await contributorContract.methods.submitOwnershipTransferRequest(TEST_CHAIN_ID, newOwner).send({
+      value: "0",
+      from: currentOwner, // contract owner
+      gasLimit: GAS_LIMIT,
+    });
+
+    const contributorTx = await contributorContract.methods.confirmOwnershipTransferRequest().send({
+      value: "0",
+      from: newOwner, // pending owner
+      gasLimit: GAS_LIMIT,
+    });
+
+    // check getters after the action
+    let contributorOwner = await contributorContract.methods.owner().call();
+
+    assert.equal(contributorOwner, newOwner);
+
+    // confirm that the OwnershipTransfered event is emitted for contributor
+    let contributorEventOutput = contributorTx["events"]["OwnershipTransfered"]["returnValues"];
+
+    assert.equal(contributorEventOutput["oldOwner"].toLowerCase(), currentOwner.toLowerCase());
+    assert.equal(contributorEventOutput["newOwner"].toLowerCase(), newOwner.toLowerCase());
+
+    // try to submit an ownership transfer request w/ non-owner wallet
+    contributorFailed = false;
+    try {
+      await contributorContract.methods.submitOwnershipTransferRequest(TEST_CHAIN_ID, currentOwner).send({
+        value: "0",
+        from: currentOwner, // no longer the current owner
+        gasLimit: GAS_LIMIT,
+      });
+    } catch (e) {
+      assert.equal(
+        e.message,
+        "Returned error: VM Exception while processing transaction: revert caller is not the owner"
+      );
+      contributorFailed = true;
+    }
+
+    assert.ok(contributorFailed);
+
+    // try to confirm the ownership change with the wrong wallet
+    contributorFailed = false;
+    try {
+      await contributorContract.methods.submitOwnershipTransferRequest(TEST_CHAIN_ID, newOwner).send({
+        value: "0",
+        from: newOwner, // contract owner
+        gasLimit: GAS_LIMIT,
+      });
+
+      await contributorContract.methods.confirmOwnershipTransferRequest().send({
+        value: "0",
+        from: currentOwner, // pending owner
+        gasLimit: GAS_LIMIT,
+      });
+    } catch (e) {
+      assert.equal(
+        e.message,
+        "Returned error: VM Exception while processing transaction: revert caller must be pendingOwner"
+      );
+      contributorFailed = true;
+    }
+
+    assert.ok(contributorFailed);
+
+    // transfer ownership back to original owner
+    await contributorContract.methods.submitOwnershipTransferRequest(TEST_CHAIN_ID, currentOwner).send({
+      value: "0",
+      from: newOwner, // contract owner
+      gasLimit: GAS_LIMIT,
+    });
+
+    await contributorContract.methods.confirmOwnershipTransferRequest().send({
+      value: "0",
+      from: currentOwner, // pending owner
+      gasLimit: GAS_LIMIT,
+    });
+
+    // check getters after the action
+    contributorOwner = await contributorContract.methods.owner().call();
+
+    assert.equal(contributorOwner, currentOwner);
   });
 
   // global sale test variables

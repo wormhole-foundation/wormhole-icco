@@ -47,18 +47,37 @@ contract ContributorGovernance is ContributorGetters, ContributorSetters, ERC196
         setConsistencyLevel(newConsistencyLevel);    
 
         emit ConsistencyLevelUpdated(currentConsistencyLevel, newConsistencyLevel);
-    }
+    } 
 
-    /// @dev transferOwnership serves to change the ownership of the Contributor contract
-    function transferOwnership(uint16 contributorChainId, address newOwner) public onlyOwner {
-        require(contributorChainId == chainId(), "wrong chain id");
+    /**
+     * @dev submitOwnershipTransferRequest serves to begin the ownership transfer process of the contracts
+     * - it saves an address for the new owner in the pending state
+     */
+    function submitOwnershipTransferRequest(uint16 contributorChainId, address newOwner) public onlyOwner {
+        require(contributorChainId == chainId(), "wrong chain id"); 
         require(newOwner != address(0), "new owner cannot be the zero address");
 
+        setPendingOwner(newOwner); 
+    }
+
+    /**
+     * @dev confirmOwnershipTransferRequest serves to finalize an ownership transfer
+     * - it checks that the caller is the pendingOwner to validate the wallet address
+     * - it updates the owner state variable with the pendingOwner state variable
+     */
+    function confirmOwnershipTransferRequest() public {
+        /// cache the new owner address
+        address newOwner = pendingOwner();
+
+        require(msg.sender == newOwner, "caller must be pendingOwner");
+
+        /// cache currentOwner for Event
         address currentOwner = owner();
 
+        /// @dev update the owner in the contract state
         setOwner(newOwner);
 
-        emit OwnershipTransfered(currentOwner, newOwner);
+        emit OwnershipTransfered(currentOwner, newOwner); 
     }
 
     modifier onlyOwner() {

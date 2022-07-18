@@ -5011,7 +5011,7 @@ contract("ICCO", function(accounts) {
       KYC_AUTHORITY,
     ];
 
-    // create accepted tokens array
+    // create accepted tokens array with duplicate tokens (w/ same chainId)
     const acceptedTokens = [
       [TEST_CHAIN_ID, "0x000000000000000000000000" + CONTRIBUTED_TOKEN_ONE.address.substr(2), tokenOneConversionRate],
       [TEST_CHAIN_ID, "0x000000000000000000000000" + CONTRIBUTED_TOKEN_THREE.address.substr(2), tokenOneConversionRate],
@@ -5022,7 +5022,7 @@ contract("ICCO", function(accounts) {
 
     let failed = false;
     try {
-      // try to create a sale with duplicate tokens
+      // try to create a sale with duplicate tokens (w/ same chainId)
       await initialized.methods.createSale(saleParams, acceptedTokens).send({
         value: WORMHOLE_FEE,
         from: SELLER,
@@ -5037,6 +5037,23 @@ contract("ICCO", function(accounts) {
     }
 
     assert.ok(failed);
+
+    // create accepted tokens array with duplicate tokens (no matching chainIds)
+    const newChainId = 5;
+    const acceptedTokens2 = [
+      [TEST_CHAIN_ID, "0x000000000000000000000000" + CONTRIBUTED_TOKEN_ONE.address.substr(2), tokenOneConversionRate],
+      [TEST_CHAIN_ID, "0x000000000000000000000000" + CONTRIBUTED_TOKEN_THREE.address.substr(2), tokenOneConversionRate],
+      [TEST_CHAIN_ID, "0x000000000000000000000000" + CONTRIBUTED_TOKEN_TWO.address.substr(2), tokenOneConversionRate],
+      [newChainId, "0x000000000000000000000000" + CONTRIBUTED_TOKEN_ONE.address.substr(2), tokenOneConversionRate],
+      [newChainId, "0x000000000000000000000000" + CONTRIBUTED_TOKEN_THREE.address.substr(2), tokenOneConversionRate],
+    ];
+
+    // successfully create a sale with duplicate tokens (w/ different chainIds)
+    await initialized.methods.createSale(saleParams, acceptedTokens2).send({
+      value: WORMHOLE_FEE,
+      from: SELLER,
+      gasLimit: GAS_LIMIT,
+    });
   });
 
   it("conductor should not accept sale start/end times larger than uint64", async function() {

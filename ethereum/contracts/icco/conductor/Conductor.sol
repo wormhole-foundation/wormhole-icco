@@ -160,7 +160,9 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
 
             /// @dev make sure there are no duplicate accepted tokens
             for (uint256 j = 0; j < i; j++) {
-                require(sale.acceptedTokensAddresses[j] != acceptedTokens[i].tokenAddress, "duplicate tokens not allowed");
+                if (sale.acceptedTokensAddresses[j] == acceptedTokens[i].tokenAddress) {
+                     require(sale.acceptedTokensChains[j]!=acceptedTokens[i].tokenChain, "duplicate tokens not allowed");
+                }
             }
 
             /// add the unique accepted token information

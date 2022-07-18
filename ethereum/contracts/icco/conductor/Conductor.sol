@@ -155,7 +155,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
         });
 
         /// populate the accepted token arrays
-        for (uint256 i = 0; i < acceptedTokensLength; ++i) {
+        for (uint256 i = 0; i < acceptedTokensLength;) {
             require(acceptedTokens[i].conversionRate > 0, "conversion rate cannot be zero");
             sale.acceptedTokensChains[i] = acceptedTokens[i].tokenChain;
             sale.acceptedTokensAddresses[i] = acceptedTokens[i].tokenAddress;
@@ -172,6 +172,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
                 /// save in contract storage
                 solanaAcceptedTokens.push(solanaToken);
             }
+            unchecked { i += 1; }
         }
 
         /// save number of accepted solana tokens in the sale
@@ -330,12 +331,13 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
         );
 
         /// save the total contribution amount for each accepted token 
-        for (uint256 i = 0; i < contributionsLength; ++i) {
+        for (uint256 i = 0; i < contributionsLength;) {
             setSaleContribution(
                 conSealed.saleID,
                 conSealed.contributions[i].tokenIndex,
                 conSealed.contributions[i].contributed
             );
+            unchecked { i += 1; }
         }
     }
 
@@ -359,13 +361,14 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
         ConductorStructs.InternalAccounting memory accounting;        
 
         uint256 contributionsLength = sale.contributionsCollected.length;
-        for (uint256 i = 0; i < contributionsLength; ++i) {
+        for (uint256 i = 0; i < contributionsLength;) {
             require(saleContributionIsCollected(saleId, i), "missing contribution info");
             /**
             * @dev This calculates the total contribution for each accepted token.
             * - it uses the conversion rate to convert contributions into the minRaise denomination
             */
             accounting.totalContribution += sale.contributions[i] * sale.acceptedTokensConversionRates[i]; 
+            unchecked { i += 1; }
         }
         accounting.totalContribution /= 1e18;
         
@@ -409,7 +412,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
             });
 
             /// calculate allocations and excessContributions for each accepted token  
-            for (uint256 i = 0; i < acceptedTokensLength; ++i) {
+            for (uint256 i = 0; i < acceptedTokensLength;) {
                 accounting.allocation = accounting.adjustedSaleTokenAmount * (sale.contributions[i] * sale.acceptedTokensConversionRates[i] / 1e18) / accounting.totalContribution;
                 accounting.excessContribution = accounting.totalExcessContribution * sale.contributions[i] / accounting.totalContribution;
 
@@ -460,6 +463,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
                     allocation : accounting.allocation,
                     excessContribution : accounting.excessContribution
                 });
+                unchecked { i += 1; }
             }
 
             /// @dev transfer dust partial refund (if applicable) back to refund recipient
@@ -506,11 +510,12 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
 
                     /// remove non-solana allocations in SaleSealed VAA
                     uint8 solanaAllocationIndex;
-                    for (uint256 i = 0; i < acceptedTokensLength; ++i) {
+                    for (uint256 i = 0; i < acceptedTokensLength;) {
                         if (sale.acceptedTokensChains[i] == 1) {
                             solanaAllocations[solanaAllocationIndex] = saleSealed.allocations[i];
                             solanaAllocationIndex += 1;
                         }
+                        unchecked { i += 1; }
                     }
                     /// @dev replace allocations in the saleSealed struct with Solana only allocations
                     saleSealed.allocations = solanaAllocations;

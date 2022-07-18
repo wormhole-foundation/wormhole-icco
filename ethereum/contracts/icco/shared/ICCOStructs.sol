@@ -230,24 +230,26 @@ library ICCOStructs {
 
     function encodeTokens(Token[] memory tokens) public pure returns (bytes memory encoded) {
         encoded = abi.encodePacked(uint8(tokens.length));
-        for (uint256 i = 0; i < tokens.length; i++) {
+        for (uint256 i = 0; i < tokens.length;) {
             encoded = abi.encodePacked(
                 encoded,
                 tokens[i].tokenAddress,
                 tokens[i].tokenChain,
                 tokens[i].conversionRate
             );
+            unchecked { i += 1; }
         }
     }
 
     function encodeSolanaTokens(SolanaToken[] memory tokens) public pure returns (bytes memory encoded) {
         encoded = abi.encodePacked(uint8(tokens.length));
-        for (uint256 i = 0; i < tokens.length; i++) {
+        for (uint256 i = 0; i < tokens.length; ) {
             encoded = abi.encodePacked(
                 encoded,
                 tokens[i].tokenIndex,
                 tokens[i].tokenAddress
             );
+            unchecked { i += 1; }
         }
     }
 
@@ -258,10 +260,11 @@ library ICCOStructs {
 
         tokens = new Token[](len);
 
-        for (uint256 i = 0; i < len; i++) {
+        for (uint256 i = 0; i < len;) {
             tokens[i].tokenAddress   = encoded.toBytes32( 1 + i * 50);
             tokens[i].tokenChain     = encoded.toUint16( 33 + i * 50);
             tokens[i].conversionRate = encoded.toUint128(35 + i * 50);
+            unchecked { i += 1; }
         }
     }
 
@@ -297,12 +300,13 @@ library ICCOStructs {
 
     function encodeContributions(Contribution[] memory contributions) public pure returns (bytes memory encoded) {
         encoded = abi.encodePacked(uint8(contributions.length));
-        for (uint256 i = 0; i < contributions.length; i++) {
+        for (uint256 i = 0; i < contributions.length;) {
             encoded = abi.encodePacked(
                 encoded,
                 contributions[i].tokenIndex,
                 contributions[i].contributed
             );
+            unchecked { i += 1; }
         }
     }
 
@@ -313,9 +317,10 @@ library ICCOStructs {
 
         cons = new Contribution[](len);
 
-        for (uint256 i = 0; i < len; i++) {
+        for (uint256 i = 0; i < len;) {
             cons[i].tokenIndex  = encoded.toUint8(1 + i * 33);
             cons[i].contributed = encoded.toUint256(2 + i * 33);
+            unchecked { i += 1; }
         }
     }
 
@@ -346,13 +351,14 @@ library ICCOStructs {
 
     function encodeAllocations(Allocation[] memory allocations) public pure returns (bytes memory encoded) {
         encoded = abi.encodePacked(uint8(allocations.length));
-        for (uint256 i = 0; i < allocations.length; i++) {
+        for (uint256 i = 0; i < allocations.length;) {
             encoded = abi.encodePacked(
                 encoded,
                 allocations[i].tokenIndex,
                 allocations[i].allocation,
                 allocations[i].excessContribution
             );
+            unchecked { i += 1; }
         }
     }
 
@@ -363,10 +369,11 @@ library ICCOStructs {
 
         allos = new Allocation[](len);
 
-        for (uint256 i = 0; i < len; i++) {
+        for (uint256 i = 0; i < len; ) {
             allos[i].tokenIndex = encoded.toUint8(1 + i * 65);
             allos[i].allocation = encoded.toUint256(2 + i * 65);
             allos[i].excessContribution = encoded.toUint256(34 + i * 65);
+            unchecked { i += 1; }
         }
     }
 

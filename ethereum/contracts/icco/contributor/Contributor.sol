@@ -74,7 +74,7 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
          * on this Contributor chain.
          * - it checks that the token is a valid ERC20 token
          */  
-        for (uint256 i = 0; i < acceptedTokensLength; ++i) {
+        for (uint256 i = 0; i < acceptedTokensLength;) {
             if (saleInit.acceptedTokens[i].tokenChain == chainId()) {
                 address tokenAddress = address(uint160(uint256(saleInit.acceptedTokens[i].tokenAddress)));
                 (, bytes memory queriedTotalSupply) = tokenAddress.staticcall(
@@ -85,6 +85,7 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
             sale.acceptedTokensChains[i] = saleInit.acceptedTokens[i].tokenChain;
             sale.acceptedTokensAddresses[i] = saleInit.acceptedTokens[i].tokenAddress;
             sale.acceptedTokensConversionRates[i] = saleInit.acceptedTokens[i].conversionRate;
+            unchecked { i += 1; }
         }
 
         /// save the sale in contract storage
@@ -220,10 +221,11 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
         uint256 nativeTokens = 0;
         uint16 chainId = chainId(); /// cache from storage
         uint256 acceptedTokensLength = sale.acceptedTokensAddresses.length; /// cache to save on gas
-        for (uint256 i = 0; i < acceptedTokensLength; ++i) {
+        for (uint256 i = 0; i < acceptedTokensLength;) {
             if (sale.acceptedTokensChains[i] == chainId) {
                 nativeTokens++;
             }
+            unchecked { i += 1; }
         }
 
         /// declare ContributionsSealed struct and add contribution info
@@ -235,12 +237,13 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
         });
 
         uint256 ci = 0;
-        for (uint256 i = 0; i < acceptedTokensLength; ++i) {
+        for (uint256 i = 0; i < acceptedTokensLength;) {
             if (sale.acceptedTokensChains[i] == chainId) {
                 consSealed.contributions[ci].tokenIndex = uint8(i);
                 consSealed.contributions[ci].contributed = getSaleTotalContribution(saleId, i);
                 ci++;
             }
+            unchecked { i += 1; }
         }
 
         /// @dev send encoded ContributionsSealed message to Conductor contract
@@ -296,7 +299,7 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
             /// store the allocated token amounts defined in the SaleSealed message
             uint256 tokenAllocation;
             uint256 allocationsLength = sealedSale.allocations.length;
-            for (uint256 i = 0; i < allocationsLength; ++i) {
+            for (uint256 i = 0; i < allocationsLength;) {
                 ICCOStructs.Allocation memory allo = sealedSale.allocations[i];
                 if (sale.acceptedTokensChains[allo.tokenIndex] == thisChainId) {
                     tokenAllocation += allo.allocation;
@@ -305,6 +308,7 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
                     /// set the excessContribution for this token
                     setExcessContribution(sealedSale.saleID, allo.tokenIndex, allo.excessContribution);
                 }
+                unchecked { i += 1; }
             }
 
             require(tokenBalance >= tokenAllocation, "insufficient sale token balance");
@@ -327,7 +331,7 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
          */ 
         uint16 conductorChainId = conductorChainId();
         uint256 acceptedTokensLength = sale.acceptedTokensAddresses.length;
-        for (uint256 i = 0; i < acceptedTokensLength; ++i) {
+        for (uint256 i = 0; i < acceptedTokensLength;) {
             if (sale.acceptedTokensChains[i] == thisChainId) {
                 /// compute the total contributions to send to the recipient
                 uint256 totalContributionsLessExcess = getSaleTotalContribution(sale.saleID, i) - getSaleExcessContribution(sale.saleID, i); 
@@ -387,6 +391,7 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
                     }
                 }
             }
+            unchecked { i += 1; }
         } 
 
         /// emit EventSealSale event.

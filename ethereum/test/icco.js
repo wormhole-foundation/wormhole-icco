@@ -3691,6 +3691,7 @@ contract("ICCO", function(accounts) {
   let SOLANA_TOKEN_INDEX_ONE;
   let SOLANA_TOKEN_INDEX_TWO;
   let ETH_TOKEN_INDEX;
+  let CONTRIBUTED_TOKEN_THREE;
 
   it("create a fifth sale correctly and attest over wormhole", async function() {
     console.log("\n       -------------------------- Sale Test #5 (Sale With Solana Token) --------------------------");
@@ -3753,11 +3754,13 @@ contract("ICCO", function(accounts) {
     {
       let testAcceptedTokens = [];
 
-      // add 7 more tokens
+      // add 9 tokens to the accepted tokens list
       for (let i = 0; i < 9; i++) {
+        // create random ethereum address for the accepted token (w/ wallet generation)
+        const wallet = ethers.Wallet.createRandom();
         let defaultToken = [
           SOLANA_CHAIN_ID,
-          "0x000000000000000000000000" + accounts[i].substr(2), // placeholder address
+          "0x000000000000000000000000" + wallet.address.substr(2), // placeholder address
           tokenOneConversionRate,
         ];
         testAcceptedTokens.push(defaultToken);
@@ -3765,7 +3768,7 @@ contract("ICCO", function(accounts) {
 
       let failed = false;
       try {
-        // attest contributions
+        // try to create sale with too many solana tokens (greater than 8)
         await initialized.methods.createSale(saleParams, testAcceptedTokens).send({
           value: WORMHOLE_FEE * 2,
           from: SELLER,
@@ -3781,9 +3784,30 @@ contract("ICCO", function(accounts) {
       assert.ok(failed);
     }
 
+    // mint new token to contribute in sale
+    CONTRIBUTED_TOKEN_THREE = await TokenImplementation.new();
+    const tokenOneName = "Contributed Stablecoin2";
+    const tokenOneSymbol = "STABLE2";
+
+    const mintAccount = accounts[0];
+    const tokenSequence = 0; // set to 0 for the test
+    const tokenChainId = 0; // set to 0 for the test
+    const nativeContractAddress = "0x00"; // set to 0 for the test
+
+    await CONTRIBUTED_TOKEN_THREE.initialize(
+      tokenOneName,
+      tokenOneSymbol,
+      SOLD_TOKEN_DECIMALS,
+      tokenSequence,
+      mintAccount,
+      tokenChainId,
+      nativeContractAddress
+    );
+    await CONTRIBUTED_TOKEN_THREE.mint(BUYER_ONE, "100000"); // mint random number of new token
+
     // create accepted tokens array
     const acceptedTokens = [
-      [TEST_CHAIN_ID, "0x000000000000000000000000" + CONTRIBUTED_TOKEN_TWO.address.substr(2), tokenTwoConversionRate],
+      [TEST_CHAIN_ID, "0x000000000000000000000000" + CONTRIBUTED_TOKEN_THREE.address.substr(2), tokenTwoConversionRate],
       [
         SOLANA_CHAIN_ID,
         "0x000000000000000000000000" + CONTRIBUTED_TOKEN_ONE.address.substr(2), // placeholder address
@@ -4924,6 +4948,90 @@ contract("ICCO", function(accounts) {
       assert.equal(
         e.message,
         "Returned error: VM Exception while processing transaction: revert conversion rate cannot be zero"
+      );
+      failed = true;
+    }
+
+    assert.ok(failed);
+  });
+
+  it("conductor should not accept duplicate tokens", async function() {
+    // test variables
+    const current_block = await web3.eth.getBlock("latest");
+    const saleStart = current_block.timestamp + 5;
+    const saleEnd = saleStart + 8;
+    const saleTokenAmount = "10";
+    const minimumTokenRaise = "2000";
+    const maximumTokenRaise = "30000";
+    const tokenOneConversionRate = "10000000000000";
+    const saleRecipient = accounts[0];
+    const refundRecipient = accounts[0];
+    const SOLD_TOKEN_DECIMALS = 18;
+    const mintAccount = SELLER;
+    const tokenSequence = 0; // set to 0 for the test
+    const tokenChainId = 0; // set to 0 for the test
+    const nativeContractAddress = "0x00"; // set to 0 for the test
+    const isFixedPriceSale = false;
+
+    const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+
+    // create sale token again
+    const saleTokenMintAmount = "2000";
+    const soldToken = await TokenImplementation.new();
+    const soldTokenName = "Sold Token";
+    const soldTokenSymbol = "SOLD";
+    const soldTokenBytes32 = "0x000000000000000000000000" + soldToken.address.substr(2);
+
+    await soldToken.initialize(
+      soldTokenName,
+      soldTokenSymbol,
+      SOLD_TOKEN_DECIMALS,
+      tokenSequence,
+      mintAccount,
+      tokenChainId,
+      nativeContractAddress
+    );
+    await soldToken.mint(SELLER, saleTokenMintAmount);
+    await soldToken.approve(TokenSaleConductor.address, saleTokenAmount);
+
+    // create array (solidity struct) for sale params
+    const saleParams = [
+      isFixedPriceSale,
+      soldTokenBytes32,
+      TEST_CHAIN_ID,
+      saleTokenAmount,
+      minimumTokenRaise,
+      maximumTokenRaise,
+      saleStart,
+      saleEnd,
+      saleEnd,
+      saleRecipient,
+      refundRecipient,
+      SOLD_TOKEN_BYTES32_ADDRESS,
+      KYC_AUTHORITY,
+    ];
+
+    // create accepted tokens array
+    const acceptedTokens = [
+      [TEST_CHAIN_ID, "0x000000000000000000000000" + CONTRIBUTED_TOKEN_ONE.address.substr(2), tokenOneConversionRate],
+      [TEST_CHAIN_ID, "0x000000000000000000000000" + CONTRIBUTED_TOKEN_THREE.address.substr(2), tokenOneConversionRate],
+      [TEST_CHAIN_ID, "0x000000000000000000000000" + CONTRIBUTED_TOKEN_TWO.address.substr(2), tokenOneConversionRate],
+      [TEST_CHAIN_ID, "0x000000000000000000000000" + CONTRIBUTED_TOKEN_ONE.address.substr(2), tokenOneConversionRate],
+      [TEST_CHAIN_ID, "0x000000000000000000000000" + CONTRIBUTED_TOKEN_THREE.address.substr(2), tokenOneConversionRate],
+    ];
+
+    let failed = false;
+    try {
+      // try to create a sale with duplicate tokens
+      await initialized.methods.createSale(saleParams, acceptedTokens).send({
+        value: WORMHOLE_FEE,
+        from: SELLER,
+        gasLimit: GAS_LIMIT,
+      });
+    } catch (e) {
+      assert.equal(
+        e.message,
+        "Returned error: VM Exception while processing transaction: revert duplicate tokens not allowed"
       );
       failed = true;
     }

@@ -60,5 +60,7 @@ contract ConductorStructs {
         uint256 adjustedSaleTokenAmount;
         uint256 saleTokenRefund; 
         uint256 totalExcessContribution;
+        uint256 allocation;
+        uint256 excessContribution;
     }
 }

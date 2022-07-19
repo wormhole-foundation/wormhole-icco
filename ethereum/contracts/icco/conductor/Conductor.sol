@@ -115,6 +115,9 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
 
         /// @dev take custody of sale token and fetch decimal/address info for the sale token
         (address localTokenAddress, uint8 localTokenDecimals) = receiveSaleToken(raise);
+
+        /// @dev cache to save on gas (referenced several times)
+        uint256 acceptedTokensLength = acceptedTokens.length;
         
         /// create Sale struct for Conductor's view of the sale
         saleId = useSaleId();
@@ -133,12 +136,12 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
             saleEnd : raise.saleEnd,
             unlockTimestamp : raise.unlockTimestamp,
             /// save accepted token info
-            acceptedTokensChains : new uint16[](acceptedTokens.length),
-            acceptedTokensAddresses : new bytes32[](acceptedTokens.length),
-            acceptedTokensConversionRates : new uint128[](acceptedTokens.length),
+            acceptedTokensChains : new uint16[](acceptedTokensLength),
+            acceptedTokensAddresses : new bytes32[](acceptedTokensLength),
+            acceptedTokensConversionRates : new uint128[](acceptedTokensLength),
             solanaAcceptedTokensCount: 0,
-            contributions : new uint256[](acceptedTokens.length),
-            contributionsCollected : new bool[](acceptedTokens.length),
+            contributions : new uint256[](acceptedTokensLength),
+            contributionsCollected : new bool[](acceptedTokensLength),
             /// sale wallet management 
             initiator : msg.sender, 
             recipient : bytes32(uint256(uint160(raise.recipient))),
@@ -152,7 +155,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
         });
 
         /// populate the accepted token arrays
-        for (uint256 i = 0; i < acceptedTokens.length; i++) {
+        for (uint256 i = 0; i < acceptedTokensLength;) {
             require(acceptedTokens[i].conversionRate > 0, "conversion rate cannot be zero");
             sale.acceptedTokensChains[i] = acceptedTokens[i].tokenChain;
             sale.acceptedTokensAddresses[i] = acceptedTokens[i].tokenAddress;
@@ -169,6 +172,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
                 /// save in contract storage
                 solanaAcceptedTokens.push(solanaToken);
             }
+            unchecked { i += 1; }
         }
 
         /// save number of accepted solana tokens in the sale
@@ -212,7 +216,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
         }(0, ICCOStructs.encodeSaleInit(saleInit), consistencyLevel());
 
         /// see if the sale accepts any Solana tokens
-        if (solanaAcceptedTokens.length > 0) {
+        if (sale.solanaAcceptedTokensCount > 0) {
             /// create SolanaSaleInit struct to disseminate to the Solana Contributor
             ICCOStructs.SolanaSaleInit memory solanaSaleInit = ICCOStructs.SolanaSaleInit({
                 payloadID : 5,
@@ -316,20 +320,24 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
         require(!sale.isAborted, "sale was aborted");
         require(block.timestamp > sale.saleEnd, "sale has not ended yet");
 
-        /// confirm that contribution information is valid and that it hasn't been collected for this Contributor
-        require(conSealed.contributions.length > 0, "no contributions");
+        /// cache because it's referenced several times
+        uint256 contributionsLength = conSealed.contributions.length; 
+
+        // confirm that contribution information is valid and that it hasn't been collected for this Contributor
+        require(contributionsLength > 0, "no contributions");
         require(!saleContributionIsCollected(
             conSealed.saleID, conSealed.contributions[0].tokenIndex), 
             "already collected contribution"
         );
 
         /// save the total contribution amount for each accepted token 
-        for (uint256 i = 0; i < conSealed.contributions.length; i++) {
+        for (uint256 i = 0; i < contributionsLength;) {
             setSaleContribution(
                 conSealed.saleID,
                 conSealed.contributions[i].tokenIndex,
                 conSealed.contributions[i].contributed
             );
+            unchecked { i += 1; }
         }
     }
 
@@ -352,16 +360,18 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
 
         ConductorStructs.InternalAccounting memory accounting;        
 
-        for (uint256 i = 0; i < sale.contributionsCollected.length; i++) {
+        uint256 contributionsLength = sale.contributionsCollected.length;
+        for (uint256 i = 0; i < contributionsLength;) {
             require(saleContributionIsCollected(saleId, i), "missing contribution info");
             /**
-             * @dev This calculates the total contribution for each accepted token.
-             * - it uses the conversion rate to convert contributions into the minRaise denomination
-             */
+            * @dev This calculates the total contribution for each accepted token.
+            * - it uses the conversion rate to convert contributions into the minRaise denomination
+            */
             accounting.totalContribution += sale.contributions[i] * sale.acceptedTokensConversionRates[i]; 
+            unchecked { i += 1; }
         }
         accounting.totalContribution /= 1e18;
-
+        
         IWormhole wormhole = wormhole();
 
         /// check to see if the sale was successful
@@ -391,19 +401,22 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
                 accounting.adjustedSaleTokenAmount = sale.tokenAmount * accounting.totalContribution / sale.maxRaise;
             }
 
+            /// cache because it's referenced several times
+            uint256 acceptedTokensLength = sale.acceptedTokensAddresses.length;
+
             /// @dev This is a successful sale struct that saves sale token allocation information
             ICCOStructs.SaleSealed memory saleSealed = ICCOStructs.SaleSealed({
                 payloadID : 3,
                 saleID : saleId,
-                allocations : new ICCOStructs.Allocation[](sale.acceptedTokensAddresses.length)
+                allocations : new ICCOStructs.Allocation[](acceptedTokensLength)
             });
 
-            /// calculate allocations and excessContributions for each accepted token 
-            for (uint256 i = 0; i < sale.acceptedTokensAddresses.length; i++) {
-                uint256 allocation = accounting.adjustedSaleTokenAmount * (sale.contributions[i] * sale.acceptedTokensConversionRates[i] / 1e18) / accounting.totalContribution;
-                uint256 excessContribution = accounting.totalExcessContribution * sale.contributions[i] / accounting.totalContribution;
+            /// calculate allocations and excessContributions for each accepted token  
+            for (uint256 i = 0; i < acceptedTokensLength;) {
+                accounting.allocation = accounting.adjustedSaleTokenAmount * (sale.contributions[i] * sale.acceptedTokensConversionRates[i] / 1e18) / accounting.totalContribution;
+                accounting.excessContribution = accounting.totalExcessContribution * sale.contributions[i] / accounting.totalContribution;
 
-                if (allocation > 0) {
+                if (accounting.allocation > 0) {
                     /// send allocations to Contributor contracts
                     if (sale.acceptedTokensChains[i] == chainId()) {
                         /// simple transfer on same chain
@@ -411,12 +424,12 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
                         SafeERC20.safeTransfer(
                             IERC20(sale.localTokenAddress), 
                             address(uint160(uint256(contributorWallets(sale.saleID, sale.acceptedTokensChains[i])))),
-                            allocation
+                            accounting.allocation
                         );
                     } else {
                         /// adjust allocation for dust after token bridge transfer
-                        allocation = ICCOStructs.deNormalizeAmount(
-                            ICCOStructs.normalizeAmount(allocation, sale.localTokenDecimals), 
+                        accounting.allocation = ICCOStructs.deNormalizeAmount(
+                            ICCOStructs.normalizeAmount(accounting.allocation, sale.localTokenDecimals), 
                             sale.localTokenDecimals
                         );
 
@@ -424,7 +437,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
                         SafeERC20.safeApprove(
                             IERC20(sale.localTokenAddress), 
                             address(tknBridge), 
-                            allocation
+                            accounting.allocation
                         );
 
                         require(accounting.valueSent >= accounting.messageFee, "insufficient wormhole messaging fees");
@@ -434,22 +447,23 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
                             value : accounting.messageFee
                         }(
                             sale.localTokenAddress,
-                            allocation,
+                            accounting.allocation,
                             sale.acceptedTokensChains[i],
                             contributorWallets(sale.saleID, sale.acceptedTokensChains[i]),
                             0,
                             0
                         );
                     }
-                    accounting.totalAllocated += allocation;
+                    accounting.totalAllocated += accounting.allocation;
                 }
 
                 /// allocation information that is encoded in the SaleSealed struct
                 saleSealed.allocations[i] = ICCOStructs.Allocation({
                     tokenIndex : uint8(i),
-                    allocation : allocation,
-                    excessContribution : excessContribution
+                    allocation : accounting.allocation,
+                    excessContribution : accounting.excessContribution
                 });
+                unchecked { i += 1; }
             }
 
             /// @dev transfer dust partial refund (if applicable) back to refund recipient
@@ -496,11 +510,12 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
 
                     /// remove non-solana allocations in SaleSealed VAA
                     uint8 solanaAllocationIndex;
-                    for (uint256 i = 0; i < sale.acceptedTokensAddresses.length; i++) {
+                    for (uint256 i = 0; i < acceptedTokensLength;) {
                         if (sale.acceptedTokensChains[i] == 1) {
                             solanaAllocations[solanaAllocationIndex] = saleSealed.allocations[i];
                             solanaAllocationIndex += 1;
                         }
+                        unchecked { i += 1; }
                     }
                     /// @dev replace allocations in the saleSealed struct with Solana only allocations
                     saleSealed.allocations = solanaAllocations;

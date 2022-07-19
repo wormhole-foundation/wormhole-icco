@@ -218,7 +218,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
             recipient : bytes32(uint256(uint160(raise.recipient))),
             /// public key of kyc authority 
             authority : raise.authority,
-            /// lock timestamp (when tokens can be claimed)
+            /// unlock timestamp (when tokens can be claimed)
             unlockTimestamp : raise.unlockTimestamp
         }); 
 
@@ -250,7 +250,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
                 recipient : bytes32(uint256(uint160(raise.recipient))),
                 /// public key of kyc authority 
                 authority: raise.authority,
-                /// lock timestamp (when tokens can be claimed)
+                /// unlock timestamp (when tokens can be claimed)
                 unlockTimestamp : raise.unlockTimestamp
             });
 

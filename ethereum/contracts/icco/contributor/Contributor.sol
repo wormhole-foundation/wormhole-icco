@@ -256,7 +256,7 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
     }
 
     /**
-     * @dev sealSale serves to send contributed funds to the saleRecipient.
+     * @dev saleSealed serves to send contributed funds to the saleRecipient.
      * - it parses the SaleSealed message sent from the Conductor contract
      * - it determines if all the sale tokens are in custody of this contract
      * - it send the contributed funds to the token sale recipient

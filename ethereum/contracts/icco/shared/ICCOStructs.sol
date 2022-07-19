@@ -55,7 +55,7 @@ library ICCOStructs {
         uint256 unlockTimestamp;
         /// recipient of proceeds
         address recipient;
-        /// refund recipient in cse the sale is aborted
+        /// refund recipient in case the sale is aborted
         address refundRecipient;
         /// sale token ATA for Solana
         bytes32 solanaTokenAccount;
@@ -357,8 +357,8 @@ library ICCOStructs {
 
     function encodeAllocations(Allocation[] memory allocations) public pure returns (bytes memory encoded) {
         uint256 allocationsLength = allocations.length;
-
         encoded = abi.encodePacked(uint8(allocationsLength));
+
         for (uint256 i = 0; i < allocationsLength;) {
             encoded = abi.encodePacked(
                 encoded,

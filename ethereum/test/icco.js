@@ -5,6 +5,7 @@ const ethers = require("ethers");
 
 require("@openzeppelin/test-helpers/configure")({ provider: web3.currentProvider, environment: "truffle" });
 const { singletons } = require("@openzeppelin/test-helpers");
+const { ZERO_BYTES32 } = require("@openzeppelin/test-helpers/src/constants");
 
 const TokenERC777 = artifacts.require("TokenERC777");
 const MaliciousSeller = artifacts.require("MaliciousSeller");
@@ -5445,6 +5446,98 @@ contract("ICCO", function(accounts) {
 
     assert.equal(actualAllocation, expectedAllocation);
     assert.equal(actualExcessContribution, expectedExcessContribution);
+  });
+
+  it("conductor should sanity check addresses in Raise parameters", async function() {
+    // test variables
+    const current_block = await web3.eth.getBlock("latest");
+    const saleStart = current_block.timestamp + 5;
+    const saleEnd = saleStart + 8;
+    const saleTokenAmount = "1000";
+    const minimumTokenRaise = "2000";
+    const maximumTokenRaise = "2000";
+    const tokenOneConversionRate = "1000000000000000000";
+    const recipient = accounts[0]; // make zero address for the test
+    const refundRecipient = accounts[0];
+    const isFixedPriceSale = false;
+    const soldTokenBytes32 = "0x000000000000000000000000" + SOLD_TOKEN.address.substr(2);
+
+    // setup smart contracts
+    const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+
+    // create array (solidity struct) for sale params
+    const saleParams1 = [
+      isFixedPriceSale,
+      soldTokenBytes32,
+      TEST_CHAIN_ID,
+      saleTokenAmount,
+      minimumTokenRaise,
+      maximumTokenRaise,
+      saleStart,
+      saleEnd,
+      saleEnd,
+      ZERO_ADDRESS, // change the recipient address to address(0)
+      refundRecipient,
+      SOLD_TOKEN_BYTES32_ADDRESS,
+      KYC_AUTHORITY,
+    ];
+
+    const saleParams2 = [
+      isFixedPriceSale,
+      ZERO_BYTES32, // change the sale token address to bytes32(0)
+      TEST_CHAIN_ID,
+      saleTokenAmount,
+      minimumTokenRaise,
+      maximumTokenRaise,
+      saleStart,
+      saleEnd,
+      saleEnd,
+      recipient,
+      refundRecipient,
+      SOLD_TOKEN_BYTES32_ADDRESS,
+      KYC_AUTHORITY,
+    ];
+
+    // create accepted tokens array
+    const acceptedTokens = [
+      [TEST_CHAIN_ID, "0x000000000000000000000000" + CONTRIBUTED_TOKEN_ONE.address.substr(2), tokenOneConversionRate],
+    ];
+
+    let failed = false;
+    try {
+      // try to create a sale zero address for recipient
+      await initialized.methods.createSale(saleParams1, acceptedTokens).send({
+        value: WORMHOLE_FEE,
+        from: SELLER,
+        gasLimit: GAS_LIMIT,
+      });
+    } catch (e) {
+      assert.equal(
+        e.message,
+        "Returned error: VM Exception while processing transaction: revert recipient must not be address(0)"
+      );
+      failed = true;
+    }
+
+    assert.ok(failed);
+
+    failed = false;
+    try {
+      // try to create a sale zero bytes32 for the sale token
+      await initialized.methods.createSale(saleParams2, acceptedTokens).send({
+        value: WORMHOLE_FEE,
+        from: SELLER,
+        gasLimit: GAS_LIMIT,
+      });
+    } catch (e) {
+      assert.equal(
+        e.message,
+        "Returned error: VM Exception while processing transaction: revert token must not be bytes32(0)"
+      );
+      failed = true;
+    }
+
+    assert.ok(failed);
   });
 
   it("sdk should correctly convert conversion rates based on the saleToken decimals", async function() {

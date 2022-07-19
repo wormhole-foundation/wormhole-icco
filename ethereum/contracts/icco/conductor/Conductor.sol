@@ -112,6 +112,11 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
         require(acceptedTokens.length < 255, "too many tokens");
         require(raise.minRaise > 0, "minRaise must be > 0");
         require(raise.maxRaise >= raise.minRaise, "maxRaise must be >= minRaise");
+        /// Sanity check address
+        require(raise.token != bytes32(0), "token must not be bytes32(0)");
+        require(raise.solanaTokenAccount != bytes32(0), "solanaTokenAccount must not be bytes32(0)");
+        require(raise.recipient != address(0), "recipient must not be address(0)");
+        require(raise.refundRecipient != address(0), "refundRecipient must not be address(0)");
 
         /// @dev take custody of sale token and fetch decimal/address info for the sale token
         (address localTokenAddress, uint8 localTokenDecimals) = receiveSaleToken(raise);
@@ -156,8 +161,6 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
 
         /// populate the accepted token arrays
         for (uint256 i = 0; i < acceptedTokensLength;) {
-            require(acceptedTokens[i].conversionRate > 0, "conversion rate cannot be zero");
-
             /// @dev make sure there are no duplicate accepted tokens
             for (uint256 j = 0; j < i;) {
                 require(
@@ -167,6 +170,10 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
                 );
                 unchecked { j += 1; }
             }
+
+            /// @dev sanity check accepted tokens
+            require(acceptedTokens[i].conversionRate > 0, "conversion rate cannot be zero");
+            require(acceptedTokens[i].tokenAddress != bytes32(0), "acceptedTokens.tokenAddress must not be bytes32(0)");
 
             /// add the unique accepted token information
             sale.acceptedTokensChains[i] = acceptedTokens[i].tokenChain;

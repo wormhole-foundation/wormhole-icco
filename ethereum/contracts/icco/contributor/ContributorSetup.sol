@@ -18,6 +18,11 @@ contract ContributorSetup is ContributorSetters, ERC1967Upgrade {
         address tokenBridge,
         uint8 consistencyLevel
     ) public {
+        require(wormhole != address(0), "wormhole address must not be address(0)");
+        require(tokenBridge != address(0), "tokenBridge's address must not be address(0)");
+        require(conductorContract != bytes32(0), "Conductor's address must not be bytes32(0)");
+        require(implementation != address(0), "implementation's address must not be address(0)");
+        
         setOwner(_msgSender());
 
         setChainId(chainId);

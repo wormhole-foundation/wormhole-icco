@@ -105,6 +105,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
         require(block.timestamp < raise.saleStart, "sale start must be in the future");
         require(raise.saleStart < raise.saleEnd, "sale end must be after sale start");
         require(raise.unlockTimestamp >= raise.saleEnd, "unlock timestamp should be >= saleEnd");
+        require(raise.unlockTimestamp - raise.saleEnd <= 63072000, "unlock timestamp must be <= 2 years in the future");
         /// set timestamp cap for non-evm Contributor contracts
         require(raise.saleStart <= 2**63-1, "saleStart too far in the future");
         require(raise.tokenAmount > 0, "amount must be > 0");

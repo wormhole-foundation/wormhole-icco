@@ -5540,6 +5540,65 @@ contract("ICCO", function(accounts) {
     assert.ok(failed);
   });
 
+  it("conductor should not allow a token vesting period greater than 2 years", async function() {
+    // test variables
+    const current_block = await web3.eth.getBlock("latest");
+    const saleStart = current_block.timestamp + 5;
+    const saleEnd = saleStart + 8;
+    const saleUnlockTime = saleEnd + 63072001;
+    const saleTokenAmount = "1000";
+    const minimumTokenRaise = "2000";
+    const maximumTokenRaise = "2000";
+    const tokenOneConversionRate = "1000000000000000000";
+    const recipient = accounts[0]; // make zero address for the test
+    const refundRecipient = accounts[0];
+    const isFixedPriceSale = true;
+    const soldTokenBytes32 = "0x000000000000000000000000" + SOLD_TOKEN.address.substr(2);
+
+    // setup smart contracts
+    const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+
+    // create array (solidity struct) for sale params
+    const saleParams = [
+      isFixedPriceSale,
+      soldTokenBytes32,
+      TEST_CHAIN_ID,
+      saleTokenAmount,
+      minimumTokenRaise,
+      maximumTokenRaise,
+      saleStart,
+      saleEnd,
+      saleUnlockTime,
+      recipient,
+      refundRecipient,
+      SOLD_TOKEN_BYTES32_ADDRESS,
+      KYC_AUTHORITY,
+    ];
+
+    // create accepted tokens array
+    const acceptedTokens = [
+      [TEST_CHAIN_ID, "0x000000000000000000000000" + CONTRIBUTED_TOKEN_ONE.address.substr(2), tokenOneConversionRate],
+    ];
+
+    let failed = false;
+    try {
+      // try to create a sale where the unlock period begins > 2 years in the future
+      await initialized.methods.createSale(saleParams, acceptedTokens).send({
+        value: WORMHOLE_FEE,
+        from: SELLER,
+        gasLimit: GAS_LIMIT,
+      });
+    } catch (e) {
+      assert.equal(
+        e.message,
+        "Returned error: VM Exception while processing transaction: revert unlock timestamp must be <= 2 years in the future"
+      );
+      failed = true;
+    }
+
+    assert.ok(failed);
+  });
+
   it("sdk should correctly convert conversion rates based on the saleToken decimals", async function() {
     // conversion rate ("price" * 1e18) for both accepted tokens
     const rawConversionRate = "1";

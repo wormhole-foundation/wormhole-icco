@@ -15,6 +15,10 @@ contract ContributorGetters is ContributorState {
         return _state.owner;
     }
 
+    function pendingOwner() public view returns (address) {
+        return _state.pendingOwner;
+    }
+
     function authority(uint256 saleId_) public view returns (address) {
         return _state.sales[saleId_].authority;
     }

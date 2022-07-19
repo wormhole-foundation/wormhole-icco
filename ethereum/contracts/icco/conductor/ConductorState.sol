@@ -36,6 +36,9 @@ contract ConductorStorage {
 
         /// contract deployer
         address owner;
+
+        /// intermediate state when transfering contract ownership
+        address pendingOwner;
         
         /// number of confirmations for wormhole messages
         uint8 consistencyLevel; 

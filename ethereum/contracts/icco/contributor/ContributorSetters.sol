@@ -15,6 +15,10 @@ contract ContributorSetters is ContributorState, Context {
         _state.owner = owner_;
     }
 
+    function setPendingOwner(address newOwner) internal {
+        _state.pendingOwner = newOwner;
+    }
+
     function setChainId(uint16 chainId) internal {
         _state.provider.chainId = chainId;
     }

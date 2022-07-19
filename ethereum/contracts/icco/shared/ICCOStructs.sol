@@ -229,8 +229,10 @@ library ICCOStructs {
     }
 
     function encodeTokens(Token[] memory tokens) public pure returns (bytes memory encoded) {
-        encoded = abi.encodePacked(uint8(tokens.length));
-        for (uint256 i = 0; i < tokens.length;) {
+        uint256 tokensLength = tokens.length;
+        encoded = abi.encodePacked(uint8(tokensLength));
+
+        for (uint256 i = 0; i < tokensLength;) {
             encoded = abi.encodePacked(
                 encoded,
                 tokens[i].tokenAddress,
@@ -242,8 +244,10 @@ library ICCOStructs {
     }
 
     function encodeSolanaTokens(SolanaToken[] memory tokens) public pure returns (bytes memory encoded) {
-        encoded = abi.encodePacked(uint8(tokens.length));
-        for (uint256 i = 0; i < tokens.length; ) {
+        uint256 tokensLength = tokens.length;
+        encoded = abi.encodePacked(uint8(tokensLength));
+
+        for (uint256 i = 0; i < tokensLength;) {
             encoded = abi.encodePacked(
                 encoded,
                 tokens[i].tokenIndex,
@@ -299,8 +303,10 @@ library ICCOStructs {
     }
 
     function encodeContributions(Contribution[] memory contributions) public pure returns (bytes memory encoded) {
-        encoded = abi.encodePacked(uint8(contributions.length));
-        for (uint256 i = 0; i < contributions.length;) {
+        uint256 contributionsLength = contributions.length;
+        encoded = abi.encodePacked(uint8(contributionsLength));
+
+        for (uint256 i = 0; i < contributionsLength;) {
             encoded = abi.encodePacked(
                 encoded,
                 contributions[i].tokenIndex,
@@ -350,8 +356,10 @@ library ICCOStructs {
     }
 
     function encodeAllocations(Allocation[] memory allocations) public pure returns (bytes memory encoded) {
-        encoded = abi.encodePacked(uint8(allocations.length));
-        for (uint256 i = 0; i < allocations.length;) {
+        uint256 allocationsLength = allocations.length;
+
+        encoded = abi.encodePacked(uint8(allocationsLength));
+        for (uint256 i = 0; i < allocationsLength;) {
             encoded = abi.encodePacked(
                 encoded,
                 allocations[i].tokenIndex,
@@ -369,7 +377,7 @@ library ICCOStructs {
 
         allos = new Allocation[](len);
 
-        for (uint256 i = 0; i < len; ) {
+        for (uint256 i = 0; i < len;) {
             allos[i].tokenIndex = encoded.toUint8(1 + i * 65);
             allos[i].allocation = encoded.toUint256(2 + i * 65);
             allos[i].excessContribution = encoded.toUint256(34 + i * 65);

@@ -80,8 +80,9 @@ contract ConductorGovernance is ConductorGetters, ConductorSetters, ERC1967Upgra
         /// cache currentOwner for Event
         address currentOwner = owner();
 
-        /// @dev update the owner in the contract state
+        /// @dev update the owner in the contract state and reset the pending owner
         setOwner(newOwner);
+        setPendingOwner(address(0));
 
         emit OwnershipTransfered(currentOwner, newOwner); 
     }

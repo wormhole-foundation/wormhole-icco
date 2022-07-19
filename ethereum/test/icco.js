@@ -44,6 +44,7 @@ contract("ICCO", function(accounts) {
   const WORMHOLE = new web3.eth.Contract(WormholeImplementationFullABI, config.wormhole);
   const CONDUCTOR_BYTES32_ADDRESS = "0x000000000000000000000000" + TokenSaleConductor.address.substr(2);
   const KYC_AUTHORITY = "0x1dF62f291b2E969fB0849d99D9Ce41e2F137006e";
+  const ZERO_ADDRESS = ethers.constants.AddressZero;
   const WORMHOLE_FEE = 1000;
 
   it("should set wormhole fee", async function() {
@@ -482,6 +483,11 @@ contract("ICCO", function(accounts) {
     conductorOwner = await conductorContract.methods.owner().call();
 
     assert.equal(conductorOwner, currentOwner);
+
+    // confirm that the pending owner address was reset
+    const pendingOwner = await conductorContract.methods.pendingOwner().call();
+
+    assert.equal(pendingOwner, ZERO_ADDRESS);
   });
 
   it("contributor should allow the owner to transfer ownership", async function() {
@@ -573,6 +579,11 @@ contract("ICCO", function(accounts) {
     contributorOwner = await contributorContract.methods.owner().call();
 
     assert.equal(contributorOwner, currentOwner);
+
+    // confirm that the pending owner address was reset
+    const pendingOwner = await contributorContract.methods.pendingOwner().call();
+
+    assert.equal(pendingOwner, ZERO_ADDRESS);
   });
 
   // global sale test variables

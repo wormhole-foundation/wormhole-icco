@@ -31,5 +31,9 @@ contract ConductorSetup is ConductorSetters, ERC1967Upgrade {
         setConsistencyLevel(consistencyLevel);
 
         _upgradeTo(implementation);
+
+        /// @dev call initialize function of the new implementation
+        (bool success, bytes memory reason) = implementation.delegatecall(abi.encodeWithSignature("initialize()"));
+        require(success, string(reason));
     }
 }

@@ -571,13 +571,10 @@ pub mod anchor_contributor {
             izip!(totals, custodian_token_accts, buyer_token_accts).enumerate()
         {
             // Verify the custodian's associated token account
-            asset.deserialize_associated_token_account(
-                custodian_token_acct,
-                &ctx.accounts.custodian.key(),
-            )?;
+            asset.deserialize_associated_token_account(custodian_token_acct, &ctx.accounts.custodian.key(),)?;
 
             // And verify the buyer's token account
-            asset.deserialize_token_account(buyer_token_acct, &owner.key())?;
+            asset.deserialize_associated_token_account(buyer_token_acct, &owner.key())?;
 
             // Now calculate the refund and transfer to the buyer's associated
             // token account if there is any amount to refund.
@@ -700,13 +697,10 @@ pub mod anchor_contributor {
             izip!(totals, custodian_token_accts, buyer_token_accts).enumerate()
         {
             // Verify the custodian's associated token account
-            asset.deserialize_associated_token_account(
-                custodian_token_acct,
-                &ctx.accounts.custodian.key(),
-            )?;
+            asset.deserialize_associated_token_account(custodian_token_acct, &ctx.accounts.custodian.key())?;
 
             // And verify the buyer's token account
-            asset.deserialize_token_account(buyer_token_acct, &owner.key())?;
+            asset.deserialize_associated_token_account(buyer_token_acct, &owner.key())?;
 
             // Now calculate the excess contribution and transfer to the
             // buyer's associated token account if there is any amount calculated.

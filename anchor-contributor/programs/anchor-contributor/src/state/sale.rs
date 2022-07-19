@@ -119,21 +119,7 @@ impl AssetTotal {
         AssetTotal::deserialize_token_account_unchecked(token_acct_info)
     }
 
-    pub fn deserialize_token_account(
-        &self,
-        token_acct_info: &AccountInfo,
-        owner: &Pubkey,
-    ) -> Result<TokenAccount> {
-        let token_acct = AssetTotal::deserialize_token_account_unchecked(token_acct_info)?;
-        require!(token_acct.owner == *owner, ContributorError::InvalidAccount);
-        require!(
-            token_acct.mint == self.mint,
-            ContributorError::InvalidAccount
-        );
-        Ok(token_acct)
-    }
-
-    pub fn deserialize_token_account_unchecked(
+    fn deserialize_token_account_unchecked(
         token_acct_info: &AccountInfo,
     ) -> Result<TokenAccount> {
         let mut bf: &[u8] = &token_acct_info.try_borrow_data()?;

@@ -97,4 +97,13 @@ pub enum ContributorError {
 
     #[msg("AllocationsLocked")]
     AllocationsLocked,
+
+    #[msg("SaleContributionsAreBlocked")]
+    SaleContributionsAreBlocked,
+
+    #[msg("AssetContributionsAreBlocked")]
+    AssetContributionsAreBlocked,
+
+    #[msg("InvalidAcceptedTokenATA")]
+    InvalidAcceptedTokenATA,
 }

@@ -1,5 +1,5 @@
 import { web3 } from "@project-serum/anchor";
-import { CHAIN_ID_ETH, CHAIN_ID_SOLANA, tryNativeToHexString } from "@certusone/wormhole-sdk";
+import { ChainId, CHAIN_ID_ETH, CHAIN_ID_SOLANA, tryNativeToHexString } from "@certusone/wormhole-sdk";
 import { createMint, mintTo } from "@solana/spl-token";
 import { BigNumber, BigNumberish } from "ethers";
 
@@ -86,8 +86,9 @@ export class DummyConductor {
   createSale(
     startTime: number,
     duration: number,
-    associatedSaleTokenAddress: web3.PublicKey,
-    lockPeriod: number
+    saleTokenMint: string,
+    lockPeriod: number,
+    saleTokenChainId: ChainId
   ): Buffer {
     // uptick saleId for every new sale
     ++this.saleId;
@@ -106,7 +107,7 @@ export class DummyConductor {
       this.wormholeSequence,
       encodeSaleInit(
         this.saleId,
-        tryNativeToHexString(associatedSaleTokenAddress.toString(), CHAIN_ID_SOLANA),
+        tryNativeToHexString(saleTokenMint, saleTokenChainId),
         this.tokenChain,
         this.tokenDecimals,
         this.saleStart,
@@ -172,7 +173,7 @@ export class DummyConductor {
 
   // sale parameters that won't change for the test
   //associatedTokenAddress = "00000000000000000000000083752ecafebf4707258dedffbd9c7443148169db";
-  tokenChain = CHAIN_ID_ETH as number;
+  tokenChain = CHAIN_ID_SOLANA as number; // Solana sale token is non-wrapped on Solana, so we check sale_token_ATA with icco_custodian as owner.
   tokenDecimals = 18;
   nativeTokenDecimals = 7;
   recipient = tryNativeToHexString("0x22d491bde2303f2f43325b2108d26f1eaba1e32b", CHAIN_ID_ETH);
@@ -214,9 +215,9 @@ export function encodeAcceptedTokens(acceptedTokens: SolanaAcceptedToken[]): Buf
   return encoded;
 }
 
-export function encodeSaleInit(
+function encodeSaleInit(
   saleId: number,
-  associatedTokenAddress: string, // 32 bytes
+  saleTokenMint: string, // 32 bytes, left-padded with 0 if needed
   tokenChain: number,
   tokenDecimals: number,
   saleStart: number,
@@ -231,7 +232,7 @@ export function encodeSaleInit(
 
   encoded.writeUInt8(5, 0); // initSale payload for solana = 5
   encoded.write(toBigNumberHex(saleId, 32), 1, "hex");
-  encoded.write(associatedTokenAddress, 33, "hex");
+  encoded.write(saleTokenMint, 33, "hex");
   encoded.writeUint16BE(tokenChain, 65);
   encoded.writeUint8(tokenDecimals, 67);
   encoded.write(toBigNumberHex(saleStart, 32), 68, "hex");

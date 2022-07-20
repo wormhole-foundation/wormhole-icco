@@ -64,6 +64,9 @@ describe("anchor-contributor", () => {
   // kyc for signing contributions
   const kyc = new KycAuthority(KYC_PRIVATE, CONDUCTOR_ADDRESS, contributor);
 
+  // Token bridge emitter sequence. Used when we attest tokens on Solana.
+  let emitterSequence = 0;
+
   before("Airdrop SOL", async () => {
     await connection.requestAirdrop(buyer.publicKey, 8000000000); // 8,000,000,000 lamports
 
@@ -81,8 +84,6 @@ describe("anchor-contributor", () => {
 
     it("Attest Accepted Token from Ethereum", async () => {
       // we have two token bridge actions: create wrapped and bridge
-      let emitterSequence = 0;
-
       // fabricate token address
       const tokenAddress = Buffer.alloc(32);
       tokenAddress.fill(105, 12);
@@ -131,6 +132,10 @@ describe("anchor-contributor", () => {
       const mint = new web3.PublicKey(
         await getForeignAssetSolana(connection, TOKEN_BRIDGE_ADDRESS.toString(), CHAIN_ID_ETH, tokenAddress)
       );
+
+      //const rMint = await getMint(connection, mint);
+      //      console.log("mint: ", rMint.address.toString(), " decimals: ", rMint.decimals);
+
       const tokenIndex = 2;
       dummyConductor.addAcceptedToken(tokenIndex, mint);
 
@@ -169,7 +174,9 @@ describe("anchor-contributor", () => {
         )
           .then((transaction) => {
             transaction.partialSign(buyer);
-            return connection.sendRawTransaction(transaction.serialize(), { skipPreflight: true });
+            return connection.sendRawTransaction(transaction.serialize(), {
+              skipPreflight: true,
+            });
           })
           .then((tx) => connection.confirmTransaction(tx));
       }
@@ -227,7 +234,7 @@ describe("anchor-contributor", () => {
     });
   });
 
-  describe("Conduct Successful Sale", () => {
+  describe("Conduct Successful Sale (Native Solana Sale Token)", () => {
     // global contributions for test
     const contributions = new Map<number, string[]>();
     const totalContributions: BN[] = [];
@@ -250,8 +257,14 @@ describe("anchor-contributor", () => {
       const startTime = 8 + (await getBlockTime(connection));
       const duration = 8; // seconds after sale starts
       const lockPeriod = 12; // seconds after sale ended
-      const initSaleVaa = dummyConductor.createSale(startTime, duration, saleTokenAccount.address, lockPeriod);
-      const tx = await contributor.initSale(orchestrator, initSaleVaa);
+      const initSaleVaa = dummyConductor.createSale(
+        startTime,
+        duration,
+        dummyConductor.getSaleTokenOnSolana().toString(),
+        lockPeriod,
+        CHAIN_ID_SOLANA
+      );
+      const tx = await contributor.initSale(orchestrator, initSaleVaa, CHAIN_ID_SOLANA);
 
       {
         // get the first sale state
@@ -269,6 +282,7 @@ describe("anchor-contributor", () => {
         expect(Uint8Array.from(saleState.recipient)).to.deep.equal(Buffer.from(dummyConductor.recipient, "hex"));
         expect(Uint8Array.from(saleState.kycAuthority)).to.deep.equal(Buffer.from(dummyConductor.kycAuthority, "hex"));
         expect(saleState.status).has.key("active");
+        expect(saleState.saleTokenAta.equals(contributor.lastSolanaSaleTokenATA)).to.be.true;
 
         // check totals
         const totals: any = saleState.totals;
@@ -291,7 +305,7 @@ describe("anchor-contributor", () => {
     it("Orchestrator Cannot Initialize Sale Again with Signed VAA", async () => {
       let caughtError = false;
       try {
-        const tx = await contributor.initSale(orchestrator, dummyConductor.initSaleVaa);
+        const tx = await contributor.initSale(orchestrator, dummyConductor.initSaleVaa, CHAIN_ID_SOLANA);
         throw Error(`should not happen: ${tx}`);
       } catch (e) {
         // pda init should fail
@@ -495,7 +509,7 @@ describe("anchor-contributor", () => {
       );
       const payload = vaaAccountInfo.data.subarray(95); // 95 is where the payload starts
 
-      const headerLength = 33;
+      const headerLength = 33 + 32;
       const contributionLength = 33;
       expect(payload.length).to.equal(headerLength + 3 + contributionLength * numExpected);
 
@@ -503,7 +517,13 @@ describe("anchor-contributor", () => {
       expect(payload.readUint8(0)).to.equal(payloadId);
       expect(payload.subarray(1, 33).toString("hex")).to.equal(saleId.toString("hex"));
       expect(payload.readUint16BE(33)).to.equal(CHAIN_ID_SOLANA as number);
-      expect(payload.readUint8(35)).to.equal(numExpected);
+      expect(payload.readUint8(35 + 32)).to.equal(numExpected);
+
+      // check saleTokenAta
+      const saleTokenAtaAddr = payload.subarray(35, 35 + 32);
+      expect(new web3.PublicKey(saleTokenAtaAddr).equals(contributor.lastSolanaSaleTokenATA)).to.be.true;
+
+      expect(payload.readUint8(35 + 32)).to.equal(numExpected);
 
       const contributionsStart = headerLength + 3;
       for (let i = 0; i < dummyConductor.acceptedTokens.length; ++i) {
@@ -607,9 +627,9 @@ describe("anchor-contributor", () => {
           expect(actual.excessContributions.toString()).to.equal(expected.excessContribution);
 
           if (expected.allocation == "0") {
-            expect(actual.status).has.key("nothingToTransfer");
+            expect(actual.assetStatus).has.key("nothingToTransfer");
           } else {
-            expect(actual.status).has.key("readyForTransfer");
+            expect(actual.assetStatus).has.key("readyForTransfer");
           }
         }
       }
@@ -656,7 +676,7 @@ describe("anchor-contributor", () => {
 
       for (let i = 0; i < numExpected; ++i) {
         const asset = assets[i];
-        if (asset.status.readyForTransfer) {
+        if (asset.assetStatus.readyForTransfer) {
           const mint = asset.mint;
           const tx = await contributor.bridgeSealedContribution(orchestrator, saleId, mint);
 
@@ -860,7 +880,7 @@ describe("anchor-contributor", () => {
     });
   });
 
-  describe("Conduct Aborted Sale", () => {
+  describe("Conduct Aborted Sale (Native Solana Sale Token)", () => {
     // global contributions for test
     const contributions = new Map<number, string[]>();
     const totalContributions: BN[] = [];
@@ -883,8 +903,14 @@ describe("anchor-contributor", () => {
       const startTime = 8 + (await getBlockTime(connection));
       const duration = 8; // seconds after sale starts
       const lockPeriod = 12; // seconds after sale ended
-      const initSaleVaa = dummyConductor.createSale(startTime, duration, saleTokenAccount.address, lockPeriod);
-      const tx = await contributor.initSale(orchestrator, initSaleVaa);
+      const initSaleVaa = dummyConductor.createSale(
+        startTime,
+        duration,
+        dummyConductor.getSaleTokenOnSolana().toString(),
+        lockPeriod,
+        CHAIN_ID_SOLANA
+      );
+      const tx = await contributor.initSale(orchestrator, initSaleVaa, CHAIN_ID_SOLANA);
 
       {
         const saleId = dummyConductor.getSaleId();
@@ -1053,6 +1079,290 @@ describe("anchor-contributor", () => {
 
       if (!caughtError) {
         throw Error("did not catch expected error");
+      }
+    });
+  });
+
+  describe("Initialize and Attest Blocked Sale", () => {
+    // global contributions for test
+    const contributions = new Map<number, string[]>();
+    const totalContributions: BN[] = [];
+
+    // squirrel away associated sale token account
+    let saleTokenAccount: AssociatedTokenAccount;
+
+    it("Create ATA for Sale Token if Non-Existent", async () => {
+      const allowOwnerOffCurve = true;
+      saleTokenAccount = await getOrCreateAssociatedTokenAccount(
+        connection,
+        orchestrator,
+        dummyConductor.getSaleTokenOnSolana(),
+        contributor.custodian,
+        allowOwnerOffCurve
+      );
+    });
+
+    it("Orchestrator Initialized Blocked Sale By Using Non-Existent Sale Token", async () => {
+      const startTime = 8 + (await getBlockTime(connection));
+      const duration = 8; // seconds after sale starts
+      const lockPeriod = 12; // seconds after sale ended
+
+      // sale token is not Token Bridge wrapped, but the token chain
+      // indicates it is
+      dummyConductor.tokenChain = CHAIN_ID_ETH;
+      const initSaleVaa = dummyConductor.createSale(
+        startTime,
+        duration,
+        dummyConductor.getSaleTokenOnSolana().toString(),
+        lockPeriod,
+        CHAIN_ID_SOLANA
+      );
+      const tx = await contributor.initSale(orchestrator, initSaleVaa, CHAIN_ID_SOLANA);
+
+      {
+        const saleId = dummyConductor.getSaleId();
+        const saleState = await contributor.getSale(saleId);
+
+        // verify
+        expect(Uint8Array.from(saleState.id)).to.deep.equal(saleId);
+        expect(saleState.saleTokenMint.toString()).to.equal(dummyConductor.saleTokenOnSolana);
+        expect(saleState.tokenChain).to.equal(dummyConductor.tokenChain);
+        expect(saleState.tokenDecimals).to.equal(dummyConductor.tokenDecimals);
+        expect(saleState.nativeTokenDecimals).to.equal(dummyConductor.nativeTokenDecimals);
+        expect(saleState.times.start.toString()).to.equal(dummyConductor.saleStart.toString());
+        expect(saleState.times.end.toString()).to.equal(dummyConductor.saleEnd.toString());
+        expect(saleState.times.unlockAllocation.toString()).to.equal(dummyConductor.saleUnlock.toString());
+        expect(Uint8Array.from(saleState.recipient)).to.deep.equal(Buffer.from(dummyConductor.recipient, "hex"));
+        expect(Uint8Array.from(saleState.kycAuthority)).to.deep.equal(Buffer.from(dummyConductor.kycAuthority, "hex"));
+        expect(saleState.status).has.key("active");
+
+        // check that contributions are blocked
+        expect(saleState.contributionsBlocked).to.equal(true);
+
+        // check totals
+        const totals: any = saleState.totals;
+        const numAccepted = dummyConductor.acceptedTokens.length;
+        expect(totals.length).to.equal(numAccepted);
+
+        for (let i = 0; i < numAccepted; ++i) {
+          const total = totals[i];
+          const acceptedToken = dummyConductor.acceptedTokens[i];
+
+          expect(total.tokenIndex).to.equal(acceptedToken.index);
+          expect(tryNativeToHexString(total.mint.toString(), CHAIN_ID_SOLANA)).to.equal(acceptedToken.address);
+          expect(total.contributions.toString()).to.equal("0");
+          expect(total.allocations.toString()).to.equal("0");
+          expect(total.excessContributions.toString()).to.equal("0");
+        }
+      }
+    });
+
+    it("User can not Contribute to the Blocked Sale", async () => {
+      // wait for sale to start here
+      const saleStart = dummyConductor.saleStart;
+      await waitUntilBlock(connection, saleStart);
+
+      // prep contributions info
+      const acceptedTokens = dummyConductor.acceptedTokens;
+      const contributedTokenIndices = [acceptedTokens[0].index];
+      contributions.set(contributedTokenIndices[0], ["200000000", "400000000"]);
+
+      contributedTokenIndices.forEach((tokenIndex) => {
+        const amounts = contributions.get(tokenIndex);
+        totalContributions.push(amounts.map((x) => new BN(x)).reduce((prev, curr) => prev.add(curr)));
+      });
+
+      // now go about your business
+      // contribute multiple times
+      let caughtError = false;
+      try {
+        const saleId = dummyConductor.getSaleId();
+        for (const tokenIndex of contributedTokenIndices) {
+          for (const amount of contributions.get(tokenIndex).map((value) => new BN(value))) {
+            const tx = await contributor.contribute(
+              buyer,
+              saleId,
+              tokenIndex,
+              amount,
+              await kyc.signContribution(saleId, tokenIndex, amount, buyer.publicKey)
+            );
+          }
+        }
+      } catch (e) {
+        // Contribution should fail
+        caughtError = verifyErrorMsg(e, "SaleContributionsAreBlocked");
+      }
+      if (!caughtError) {
+        throw Error("did not catch expected error");
+      }
+    });
+
+    it("Orchestrator Attests Contributions, check that contributions are empty", async () => {
+      const saleId = dummyConductor.getSaleId();
+
+      // wait for sale to end here
+      const saleEnd = dummyConductor.saleEnd;
+      await waitUntilBlock(connection, saleEnd);
+      const tx = await contributor.attestContributions(orchestrator, saleId);
+
+      const expectedContributedAmounts = [
+        new BN(0),
+        new BN(0),
+        new BN(0),
+        new BN(0),
+        new BN(0),
+        new BN(0),
+        new BN(0),
+        new BN(0),
+      ];
+      const numExpected = expectedContributedAmounts.length;
+
+      // now go about your business. read VAA back.
+      await connection.confirmTransaction(tx);
+      const vaaAccountInfo = await connection.getAccountInfo(
+        contributor.deriveAttestContributionsMessageAccount(saleId),
+        "confirmed"
+      );
+      const payload = vaaAccountInfo.data.subarray(95); // 95 is where the payload starts
+
+      const headerLength = 33 + 32;
+      const contributionLength = 33;
+      expect(payload.length).to.equal(headerLength + 3 + contributionLength * numExpected);
+
+      const payloadId = 2;
+      expect(payload.readUint8(0)).to.equal(payloadId);
+      expect(payload.subarray(1, 33).toString("hex")).to.equal(saleId.toString("hex"));
+      expect(payload.readUint16BE(33)).to.equal(CHAIN_ID_SOLANA as number);
+      expect(payload.readUint8(35 + 32)).to.equal(numExpected);
+
+      // check saleTokenAta
+      const saleTokenAtaAddr = payload.subarray(35, 35 + 32);
+      expect(new web3.PublicKey(saleTokenAtaAddr).equals(web3.PublicKey.default)).to.be.true;
+
+      expect(payload.readUint8(35 + 32)).to.equal(numExpected);
+
+      const contributionsStart = headerLength + 3;
+      for (let i = 0; i < dummyConductor.acceptedTokens.length; ++i) {
+        const start = contributionsStart + contributionLength * i;
+
+        const tokenIndex = payload.readUint8(start);
+        expect(tokenIndex).to.equal(dummyConductor.acceptedTokens[i].index);
+
+        const amount = new BN(payload.subarray(start + 1, start + 33));
+        expect(amount.toString()).to.equal(expectedContributedAmounts[i].toString());
+      }
+    });
+  });
+
+  describe("Initialize Sale (Token Bridge Wrapped Sale Token)", () => {
+    // global contributions for test
+    const contributions = new Map<number, string[]>();
+    const totalContributions: BN[] = [];
+    // Sale number two. This one is good.
+    it("Orchestrator Attests Sale Token from Ethereum", async () => {
+      // Create wrapped and bridge
+      // fabricate ETH token address
+      const tokenAddress = Buffer.alloc(32);
+      tokenAddress.fill(106, 12);
+
+      const ethTokenBridge = Buffer.from(
+        tryNativeToHexString("0x0290FB167208Af455bB137780163b7B7a9a10C16", CHAIN_ID_ETH),
+        "hex"
+      );
+
+      const attestVaa = signAndEncodeVaa(
+        0,
+        0,
+        CHAIN_ID_ETH as number,
+        ethTokenBridge,
+        ++emitterSequence,
+        encodeAttestMeta(tokenAddress, CHAIN_ID_ETH, 4, "WWHT", "Token on Sale")
+      );
+
+      await postVaaSolanaWithRetry(
+        connection,
+        async (tx) => {
+          tx.partialSign(orchestrator);
+          return tx;
+        },
+        CORE_BRIDGE_ADDRESS.toString(),
+        orchestrator.publicKey.toString(),
+        attestVaa,
+        10
+      );
+
+      {
+        const response = await createWrappedOnSolana(
+          connection,
+          CORE_BRIDGE_ADDRESS.toString(),
+          TOKEN_BRIDGE_ADDRESS.toString(),
+          orchestrator.publicKey.toString(),
+          Uint8Array.from(attestVaa)
+        )
+          .then((transaction) => {
+            transaction.partialSign(orchestrator);
+            return connection.sendRawTransaction(transaction.serialize());
+          })
+          .then((tx) => connection.confirmTransaction(tx));
+      }
+
+      const mint = new web3.PublicKey(
+        await getForeignAssetSolana(connection, TOKEN_BRIDGE_ADDRESS.toString(), CHAIN_ID_ETH, tokenAddress)
+      );
+    });
+
+    it("Orchestrator Initializes Sale with Signed VAA", async () => {
+      // Fabricated ETH sale token address from last test.
+      const tokenAddress = Buffer.alloc(32);
+      tokenAddress.fill(106, 12);
+
+      const startTime = 8 + (await getBlockTime(connection));
+      const duration = 8; // seconds after sale starts
+      const lockPeriod = 12; // seconds after sale ended
+      dummyConductor.tokenChain = CHAIN_ID_ETH;
+      dummyConductor.tokenDecimals = 4;
+
+      const initSaleVaa = dummyConductor.createSale(
+        startTime,
+        duration,
+        "0x" + tokenAddress.slice(12).toString("hex"),
+        lockPeriod,
+        CHAIN_ID_ETH
+      );
+      const tx = await contributor.initSale(orchestrator, initSaleVaa, CHAIN_ID_ETH);
+
+      {
+        const saleId = dummyConductor.getSaleId();
+        const saleState = await contributor.getSale(saleId);
+
+        // verify
+        expect(Uint8Array.from(saleState.id)).to.deep.equal(saleId);
+        expect(saleState.tokenChain).to.equal(CHAIN_ID_ETH as number);
+        expect(saleState.tokenDecimals).to.equal(dummyConductor.tokenDecimals);
+        expect(saleState.nativeTokenDecimals).to.equal(4); // That's what was attested above.
+        expect(saleState.times.start.toString()).to.equal(dummyConductor.saleStart.toString());
+        expect(saleState.times.end.toString()).to.equal(dummyConductor.saleEnd.toString());
+        expect(saleState.times.unlockAllocation.toString()).to.equal(dummyConductor.saleUnlock.toString());
+        expect(Uint8Array.from(saleState.recipient)).to.deep.equal(Buffer.from(dummyConductor.recipient, "hex"));
+        expect(Uint8Array.from(saleState.kycAuthority)).to.deep.equal(Buffer.from(dummyConductor.kycAuthority, "hex"));
+        expect(saleState.status).has.key("active");
+        expect(saleState.contributionsBlocked).to.equal(false);
+
+        // check totals
+        const totals: any = saleState.totals;
+        const numAccepted = dummyConductor.acceptedTokens.length;
+        expect(totals.length).to.equal(numAccepted);
+
+        for (let i = 0; i < numAccepted; ++i) {
+          const total = totals[i];
+          const acceptedToken = dummyConductor.acceptedTokens[i];
+
+          expect(total.tokenIndex).to.equal(acceptedToken.index);
+          expect(tryNativeToHexString(total.mint.toString(), CHAIN_ID_SOLANA)).to.equal(acceptedToken.address);
+          expect(total.contributions.toString()).to.equal("0");
+          expect(total.allocations.toString()).to.equal("0");
+          expect(total.excessContributions.toString()).to.equal("0");
+        }
       }
     });
   });

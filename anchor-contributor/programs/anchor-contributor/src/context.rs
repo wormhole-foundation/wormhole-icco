@@ -46,7 +46,6 @@ pub struct CreateCustodian<'info> {
 /// * `custodian`
 /// * `core_bridge_vaa`
 /// * `sale_token_mint`
-/// * `custodian_sale_token_acct`
 ///
 /// Mutable
 /// * `sale`
@@ -79,13 +78,6 @@ pub struct InitSale<'info> {
     /// CHECK: This account is owned by Core Bridge so we trust it
     pub core_bridge_vaa: AccountInfo<'info>,
     pub sale_token_mint: Account<'info, Mint>,
-
-    #[account(
-        associated_token::mint = sale_token_mint,
-        associated_token::authority = custodian,
-    )]
-    /// This must be an associated token account
-    pub custodian_sale_token_acct: Account<'info, TokenAccount>,
 
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -531,8 +523,6 @@ pub struct SealSale<'info> {
     pub core_bridge_vaa: AccountInfo<'info>,
 
     #[account(
-        associated_token::mint = sale.sale_token_mint,
-        associated_token::authority = custodian,
     )]
     /// This must be an associated token account
     pub custodian_sale_token_acct: Account<'info, TokenAccount>,
@@ -586,8 +576,6 @@ pub struct ClaimAllocation<'info> {
 
     #[account(
         mut,
-        associated_token::mint = sale.sale_token_mint,
-        associated_token::authority = custodian,
     )]
     /// This must be an associated token account
     pub custodian_sale_token_acct: Account<'info, TokenAccount>,

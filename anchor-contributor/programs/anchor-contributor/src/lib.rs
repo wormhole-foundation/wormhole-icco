@@ -28,9 +28,13 @@ pub mod anchor_contributor {
         system_instruction::transfer,
         sysvar::*,
     };
+    use anchor_spl::associated_token::get_associated_token_address;
     use anchor_spl::*;
+
+    use env::TOKEN_BRIDGE_ADDRESS;
     use itertools::izip;
     use state::custodian::Custodian;
+    use std::str::FromStr;
 
     /// Instruction to create the custodian account (which we referr to as `custodian`)
     /// in all instruction contexts found in contexts.rs.
@@ -65,36 +69,61 @@ pub mod anchor_contributor {
         let sale = &mut ctx.accounts.sale;
         sale.parse_sale_init(&msg.payload)?;
 
-        // The VAA encoded the Custodian's associated token account for the sale token. We
-        // need to verify that the ATA that we have in the context is the same one the message
-        // refers to.
-        require!(
-            sale.associated_sale_token_address == ctx.accounts.custodian_sale_token_acct.key(),
-            ContributorError::InvalidVaaPayload
-        );
+        // Derive Token Bridge mint address and verify that this equals sale_token_mint
+        let token_bridge_key = Pubkey::from_str(TOKEN_BRIDGE_ADDRESS)
+            .map_err(|_| ContributorError::InvalidTokenBridgeAddress)?;
+        if sale.token_chain != CHAIN_ID {
+            let (mint, _) = sale.derive_wrapped_mint_pda(&token_bridge_key);
+            if mint != ctx.accounts.sale_token_mint.key() {
+                sale.block_contributions();
+            }
+        }
+
+        // Derive sale_token_ata and store it in this sale for later verification and to send it to the conductor in attest VAA.
+        let sale_token_ata = if sale.is_blocked_contributions() {
+            Pubkey::new_from_array([0_u8; 32])
+        } else {
+            get_associated_token_address(
+                &ctx.accounts.custodian.key(),
+                &ctx.accounts.sale_token_mint.key(),
+            )
+        };
 
         // We need to verify that the accepted tokens are actual mints.
-        let assets = &sale.totals;
-        let accepted_mints = &ctx.remaining_accounts[..];
-        require!(
-            assets.len() == accepted_mints.len(),
-            ContributorError::InvalidRemainingAccounts
-        );
-
-        for (asset, accepted_mint_acct_info) in izip!(assets, accepted_mints) {
+        // We set status to invalid on bad ones.
+        {
+            let assets = &mut sale.totals;
+            let accepted_mints = &ctx.remaining_accounts[..];
             require!(
-                *accepted_mint_acct_info.owner == token::ID,
-                ContributorError::InvalidAcceptedToken
+                assets.len() == accepted_mints.len(),
+                ContributorError::InvalidRemainingAccounts
             );
-            require!(
-                accepted_mint_acct_info.key() == asset.mint,
-                ContributorError::InvalidAcceptedToken
-            );
-
-            // try_deserialize calls Mint::unpack, which checks if
-            // SPL is_intialized is true
-            let mut bf: &[u8] = &accepted_mint_acct_info.try_borrow_data()?;
-            let _ = token::Mint::try_deserialize(&mut bf)?;
+            for (asset, accepted_mint_acct_info) in izip!(assets, accepted_mints) {
+                // Check that accepted_mint key mathes sale VAA and is owned by token program.
+                let mut pass = *accepted_mint_acct_info.owner == token::ID
+                    && accepted_mint_acct_info.key() == asset.mint;
+                if pass {
+                    // try_deserialize calls Mint::unpack, which checks if
+                    // SPL is_intialized is true
+                    match accepted_mint_acct_info.try_borrow_data() {
+                        Ok(rbf) => {
+                            let mut bf: &[u8] = &rbf;
+                            match token::Mint::try_deserialize(&mut bf) {
+                                Err(_) => {
+                                    pass = false;
+                                }
+                                _ => {}
+                            }
+                        }
+                        Err(_) => {
+                            pass = false;
+                        }
+                    }
+                }
+                if !pass {
+                    asset.invalidate();
+                }
+            }
         }
 
         // We want to save the sale token's mint information in the Sale struct. Most
@@ -105,6 +134,7 @@ pub mod anchor_contributor {
         sale.set_sale_token_mint_info(
             &ctx.accounts.sale_token_mint.key(),
             &ctx.accounts.sale_token_mint,
+            &sale_token_ata,
         )?;
 
         // Finish instruction.
@@ -132,18 +162,19 @@ pub mod anchor_contributor {
         // for the SPL transfer that will happen at the end of all the accounting processing.
         let transfer_authority = &ctx.accounts.owner;
 
-        // Find indices used for contribution accounting
+        // Check that sale on Solana is not blocked due to invalid InitSale account.
         let sale = &ctx.accounts.sale;
-
         require!(
             !sale.is_blocked_contributions(),
             ContributorError::SaleContributionsAreBlocked
         );
 
+        // Find indices used for contribution accounting
         // We need to use the buyer's associated token account to help us find the token index
         // for this particular mint he wishes to contribute.
         let (idx, asset) = sale.get_total_info(&buyer_token_acct.mint)?;
 
+        // Check if asset is valid.
         require!(
             asset.is_valid_for_contribution(),
             ContributorError::AssetContributionsAreBlocked
@@ -156,13 +187,11 @@ pub mod anchor_contributor {
             buyer.initialize(sale.totals.len());
         }
 
-        let token_index = asset.token_index;
-
         // We verify the KYC signature by encoding specific details of this contribution the
         // same way the KYC entity signed for the transaction. If we cannot recover the KYC's
         // public key using ecdsa recovery, we cannot allow the contribution to continue.
         sale.verify_kyc_authority(
-            token_index,
+            asset.token_index,
             amount,
             &transfer_authority.key(),
             buyer.contributions[idx].amount,
@@ -303,6 +332,11 @@ pub mod anchor_contributor {
         // in the custodian's associated token account for distribution to all of the
         // participants of the sale. If there aren't, we cannot allow the instruction to
         // continue.
+        require!(
+            ctx.accounts.custodian_sale_token_acct.key() == sale.sale_token_ata,
+            ContributorError::InvalidAcceptedTokenATA
+        );
+
         let total_allocations: u64 = sale.totals.iter().map(|total| total.allocations).sum();
         require!(
             ctx.accounts.custodian_sale_token_acct.amount >= total_allocations,
@@ -633,6 +667,12 @@ pub mod anchor_contributor {
 
         let custodian_sale_token_acct = &ctx.accounts.custodian_sale_token_acct;
         let buyer_sale_token_acct = &ctx.accounts.buyer_sale_token_acct;
+
+        // Confirm custodian_sale_token_acct is same as the one stored in sale
+        require!(
+            custodian_sale_token_acct.key() == sale.sale_token_ata,
+            ContributorError::InvalidAcceptedTokenATA
+        );
 
         // compute allocation
         let totals = &sale.totals;

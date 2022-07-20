@@ -7,12 +7,16 @@ import {
   getOrCreateAssociatedTokenAccount,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
+import { CHAIN_ID_SOLANA } from "@certusone/wormhole-sdk";
 
 import { deriveAddress, getPdaAssociatedTokenAddress, makeReadOnlyAccountMeta, makeWritableAccountMeta } from "./utils";
 import { PostVaaMethod } from "./types";
 import keccak256 from "keccak256";
+import { ChainID } from "@certusone/wormhole-sdk/lib/cjs/proto/publicrpc/v1/publicrpc";
+import { TOKEN_BRIDGE_ADDRESS } from "./consts";
 
-const INDEX_SALE_INIT_TOKEN_ADDRESS = 33;
+const INDEX_SALE_INIT_NATIVE_MINT_ADDRESS = 33;
+const INDEX_SALE_INIT_TOKEN_CHAIN_START = 65; // u16
 const INDEX_SALE_INIT_ACCEPTED_TOKENS_START = 132;
 
 const ACCEPTED_TOKEN_NUM_BYTES = 33;
@@ -26,6 +30,7 @@ export class IccoContributor {
 
   whMessageKey: web3.Keypair;
   custodian: web3.PublicKey;
+  lastSolanaSaleTokenATA: web3.PublicKey;
 
   constructor(
     program: Program<AnchorContributor>,
@@ -53,7 +58,7 @@ export class IccoContributor {
       .rpc();
   }
 
-  async initSale(payer: web3.Keypair, initSaleVaa: Buffer): Promise<string> {
+  async initSale(payer: web3.Keypair, initSaleVaa: Buffer, saleTokenChainIdOverride: number): Promise<string> {
     const program = this.program;
 
     const custodian = this.custodian;
@@ -62,14 +67,28 @@ export class IccoContributor {
     await this.postVaa(payer, initSaleVaa);
     const coreBridgeVaa = this.deriveSignedVaaAccount(initSaleVaa);
 
-    const saleId = await parseSaleId(initSaleVaa);
+    const saleId = parseSaleId(initSaleVaa);
     const sale = this.deriveSaleAccount(saleId);
 
     const payload = getVaaBody(initSaleVaa);
-    const tokenAccount = await getAccount(
-      program.provider.connection,
-      new web3.PublicKey(payload.subarray(INDEX_SALE_INIT_TOKEN_ADDRESS, INDEX_SALE_INIT_TOKEN_ADDRESS + 32))
-    );
+
+    const saleTokenChainId = payload.readInt16BE(INDEX_SALE_INIT_TOKEN_CHAIN_START) as ChainID;
+
+    const nativeMintAddr =
+      saleTokenChainIdOverride == CHAIN_ID_SOLANA
+        ? new web3.PublicKey(
+            payload.subarray(INDEX_SALE_INIT_NATIVE_MINT_ADDRESS, INDEX_SALE_INIT_NATIVE_MINT_ADDRESS + 32)
+          )
+        : deriveAddress(
+            [
+              Buffer.from("wrapped"),
+              payload.subarray(INDEX_SALE_INIT_TOKEN_CHAIN_START, INDEX_SALE_INIT_TOKEN_CHAIN_START + 2),
+              payload.subarray(INDEX_SALE_INIT_NATIVE_MINT_ADDRESS, INDEX_SALE_INIT_NATIVE_MINT_ADDRESS + 32),
+            ],
+            TOKEN_BRIDGE_ADDRESS
+          );
+
+    this.lastSolanaSaleTokenATA = await getPdaAssociatedTokenAddress(nativeMintAddr, custodian); // Leave for now for double-checks.
 
     const numAccepted = payload.at(INDEX_SALE_INIT_ACCEPTED_TOKENS_START);
     const remainingAccounts: web3.AccountMeta[] = [];
@@ -86,13 +105,12 @@ export class IccoContributor {
         custodian,
         sale,
         coreBridgeVaa,
-        saleTokenMint: tokenAccount.mint,
-        custodianSaleTokenAcct: tokenAccount.address,
+        saleTokenMint: nativeMintAddr,
         payer: payer.publicKey,
         systemProgram: web3.SystemProgram.programId,
       })
       .remainingAccounts(remainingAccounts)
-      .rpc();
+      .rpc(/*{ skipPreflight: true }*/);
   }
 
   async contribute(

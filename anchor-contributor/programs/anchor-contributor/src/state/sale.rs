@@ -19,7 +19,7 @@ pub struct AssetTotal {
     pub contributions: u64,        // 8
     pub allocations: u64,          // 8
     pub excess_contributions: u64, // 8
-    pub status: AssetStatus,       // 1
+    pub asset_status: AssetStatus, // 1
 }
 
 #[derive(
@@ -30,6 +30,7 @@ pub enum AssetStatus {
     NothingToTransfer,
     ReadyForTransfer,
     TransferredToConductor,
+    InvalidToken,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
@@ -50,19 +51,21 @@ pub enum SaleStatus {
 
 #[account]
 pub struct Sale {
-    pub id: [u8; 32],                          // 32
-    pub associated_sale_token_address: Pubkey, // 32
-    pub token_chain: u16,                      // 2
-    pub token_decimals: u8,                    // 1
-    pub times: SaleTimes,                      // SaleStatus::LEN
-    pub recipient: [u8; 32],                   // 32
-    pub status: SaleStatus,                    // 1
-    pub kyc_authority: [u8; 20],               // 20 (this is an evm pubkey)
-    pub initialized: bool,                     // 1
+    pub id: [u8; 32],                     // 32
+    pub native_sale_token_mint: [u8; 32], // 32    Native for sale token chain.
+    pub token_chain: u16,                 // 2
+    pub token_decimals: u8,               // 1
+    pub times: SaleTimes,                 // SaleStatus::LEN
+    pub recipient: [u8; 32],              // 32
+    pub status: SaleStatus,               // 1
+    pub kyc_authority: [u8; 20],          // 20 (this is an evm pubkey)
+    pub initialized: bool,                // 1
 
     pub totals: Vec<AssetTotal>, // 4 + AssetTotal::LEN * ACCEPTED_TOKENS_MAX
     pub native_token_decimals: u8, // 1
-    pub sale_token_mint: Pubkey, // 32
+    pub sale_token_mint: Pubkey, // 32   Solana Native or wrapped.
+    pub sale_token_ata: Pubkey,  // 32
+    pub contributions_blocked: bool, // 1 Bad sale token mint address.
 }
 
 impl SaleTimes {
@@ -84,12 +87,16 @@ impl AssetTotal {
             contributions: 0,
             allocations: 0,
             excess_contributions: 0,
-            status: AssetStatus::Active,
+            asset_status: AssetStatus::Active,
         })
     }
 
+    pub fn invalidate(&mut self) {
+        self.asset_status = AssetStatus::InvalidToken;
+    }
+
     pub fn prepare_for_transfer(&mut self) {
-        self.status = {
+        self.asset_status = {
             if self.contributions == 0 {
                 AssetStatus::NothingToTransfer
             } else {
@@ -98,12 +105,16 @@ impl AssetTotal {
         };
     }
 
+    pub fn is_valid_for_contribution(&self) -> bool {
+        self.asset_status != AssetStatus::InvalidToken
+    }
+
     pub fn is_ready_for_transfer(&self) -> bool {
-        self.status == AssetStatus::ReadyForTransfer
+        self.asset_status == AssetStatus::ReadyForTransfer
     }
 
     pub fn set_transferred(&mut self) {
-        self.status = AssetStatus::TransferredToConductor;
+        self.asset_status = AssetStatus::TransferredToConductor;
     }
 
     pub fn deserialize_associated_token_account(
@@ -136,7 +147,9 @@ impl Sale {
         + 1
         + (4 + AssetTotal::LEN * ACCEPTED_TOKENS_MAX)
         + 1
-        + 32;
+        + 32
+        + 32
+        + 1;
 
     pub fn parse_sale_init(&mut self, payload: &[u8]) -> Result<()> {
         require!(!self.initialized, ContributorError::SaleAlreadyInitialized);
@@ -177,11 +190,10 @@ impl Sale {
         self.id = Sale::get_id(payload);
 
         // deserialize other things
-        let mut addr = [0u8; 32];
-        addr.copy_from_slice(
+
+        self.native_sale_token_mint.copy_from_slice(
             &payload[INDEX_SALE_INIT_TOKEN_ADDRESS..(INDEX_SALE_INIT_TOKEN_ADDRESS + 32)],
         );
-        self.associated_sale_token_address = Pubkey::new(&addr);
         self.token_chain = to_u16_be(payload, INDEX_SALE_INIT_TOKEN_CHAIN);
         self.token_decimals = payload[INDEX_SALE_INIT_TOKEN_DECIMALS];
 
@@ -205,18 +217,43 @@ impl Sale {
 
         // finally set the status to active
         self.status = SaleStatus::Active;
+        self.contributions_blocked = false;
 
         Ok(())
     }
 
-    pub fn set_sale_token_mint_info(&mut self, mint: &Pubkey, mint_info: &Mint) -> Result<()> {
+    pub fn derive_wrapped_mint_pda(&self, token_bridge: &Pubkey) -> (Pubkey, u8) {
+        // For reference: wrapped mint derivation code from token bridge:
+        // fn seeds(data: &WrappedDerivationData) -> Vec<Vec<u8>> {
+        // vec![
+        //     String::from("wrapped").as_bytes().to_vec(),
+        //     data.token_chain.to_be_bytes().to_vec(),
+        //     data.token_address.to_vec(),
+        // ]
+        Pubkey::find_program_address(
+            &[
+                b"wrapped", // ? b"wrapped".as_ref()
+                &self.token_chain.to_be_bytes(),
+                &self.native_sale_token_mint,
+            ],
+            token_bridge,
+        )
+    }
+
+    pub fn set_sale_token_mint_info(
+        &mut self,
+        mint: &Pubkey,
+        mint_info: &Mint,
+        ata: &Pubkey,
+    ) -> Result<()> {
         let decimals = mint_info.decimals;
         require!(
             self.token_decimals >= decimals,
             ContributorError::InvalidTokenDecimals
         );
         self.native_token_decimals = decimals;
-        self.sale_token_mint = mint.clone();
+        self.sale_token_mint = *mint;
+        self.sale_token_ata = *ata;
         Ok(())
     }
 
@@ -271,6 +308,7 @@ impl Sale {
         attested.push(PAYLOAD_ATTEST_CONTRIBUTIONS);
         attested.extend(self.id.iter());
         attested.extend(CHAIN_ID.to_be_bytes());
+        attested.extend(self.sale_token_ata.to_bytes());
 
         // push contributions length
         attested.push(contributions_len);

@@ -39,15 +39,14 @@ export function encodeAttestMeta(
   if (name.length > 64) {
     throw Error("name.length > 64");
   }
-
   const encoded = Buffer.alloc(100);
   encoded.writeUint8(2, 0);
   encoded.write(tokenAddress.toString("hex"), 1, "hex");
   encoded.writeUint16BE(tokenChain, 33);
   encoded.writeUint8(decimals, 35);
-  encoded.write(symbol, 37);
+  encoded.write(symbol, 36);
   encoded.write(name, 68);
-
+  // console.log("buffer:\n", encoded.toString("hex"));
   return encoded;
 }
 
@@ -219,7 +218,11 @@ export class TokenBridgeProgram {
       { pubkey: splMetadata, isSigner: false, isWritable: true },
       { pubkey: mintAuthorityKey, isSigner: false, isWritable: false },
       { pubkey: web3.SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
-      { pubkey: web3.SystemProgram.programId, isSigner: false, isWritable: false },
+      {
+        pubkey: web3.SystemProgram.programId,
+        isSigner: false,
+        isWritable: false,
+      },
       { pubkey: this.wormhole, isSigner: false, isWritable: false },
       { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: SPL_METADATA_PROGRAM, isSigner: false, isWritable: false },

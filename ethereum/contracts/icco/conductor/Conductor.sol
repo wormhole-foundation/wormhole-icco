@@ -118,6 +118,8 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
         require(raise.solanaTokenAccount != bytes32(0), "solanaTokenAccount must not be bytes32(0)");
         require(raise.recipient != address(0), "recipient must not be address(0)");
         require(raise.refundRecipient != address(0), "refundRecipient must not be address(0)");
+        /// confirm that sale authority is set
+        require(raise.authority != address(0), "authority must not be address(0)");
 
         /// @dev take custody of sale token and fetch decimal/address info for the sale token
         (address localTokenAddress, uint8 localTokenDecimals) = receiveSaleToken(raise);

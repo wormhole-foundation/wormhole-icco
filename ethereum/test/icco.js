@@ -5434,7 +5434,6 @@ contract("ICCO", function(accounts) {
     const recipient = accounts[0]; // make zero address for the test
     const refundRecipient = accounts[0];
     const isFixedPriceSale = false;
-    const soldTokenBytes32 = "0x000000000000000000000000" + SOLD_TOKEN.address.substr(2);
 
     // setup smart contracts
     const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
@@ -5442,7 +5441,7 @@ contract("ICCO", function(accounts) {
     // create array (solidity struct) for sale params
     const saleParams1 = [
       isFixedPriceSale,
-      soldTokenBytes32,
+      SOLD_TOKEN_BYTES32_ADDRESS,
       TEST_CHAIN_ID,
       saleTokenAmount,
       minimumTokenRaise,
@@ -5455,6 +5454,29 @@ contract("ICCO", function(accounts) {
       SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
+
+    // create accepted tokens array
+    const acceptedTokens = [
+      [TEST_CHAIN_ID, "0x000000000000000000000000" + CONTRIBUTED_TOKEN_ONE.address.substr(2), tokenOneConversionRate],
+    ];
+
+    let failed = false;
+    try {
+      // try to create a sale with the zero address for recipient
+      await initialized.methods.createSale(saleParams1, acceptedTokens).send({
+        value: WORMHOLE_FEE,
+        from: SELLER,
+        gasLimit: GAS_LIMIT,
+      });
+    } catch (e) {
+      assert.equal(
+        e.message,
+        "Returned error: VM Exception while processing transaction: revert recipient must not be address(0)"
+      );
+      failed = true;
+    }
+
+    assert.ok(failed);
 
     const saleParams2 = [
       isFixedPriceSale,
@@ -5472,32 +5494,9 @@ contract("ICCO", function(accounts) {
       KYC_AUTHORITY,
     ];
 
-    // create accepted tokens array
-    const acceptedTokens = [
-      [TEST_CHAIN_ID, "0x000000000000000000000000" + CONTRIBUTED_TOKEN_ONE.address.substr(2), tokenOneConversionRate],
-    ];
-
-    let failed = false;
-    try {
-      // try to create a sale zero address for recipient
-      await initialized.methods.createSale(saleParams1, acceptedTokens).send({
-        value: WORMHOLE_FEE,
-        from: SELLER,
-        gasLimit: GAS_LIMIT,
-      });
-    } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert recipient must not be address(0)"
-      );
-      failed = true;
-    }
-
-    assert.ok(failed);
-
     failed = false;
     try {
-      // try to create a sale zero bytes32 for the sale token
+      // try to create a sale with a zero bytes32 for the sale token
       await initialized.methods.createSale(saleParams2, acceptedTokens).send({
         value: WORMHOLE_FEE,
         from: SELLER,
@@ -5507,6 +5506,40 @@ contract("ICCO", function(accounts) {
       assert.equal(
         e.message,
         "Returned error: VM Exception while processing transaction: revert token must not be bytes32(0)"
+      );
+      failed = true;
+    }
+
+    assert.ok(failed);
+
+    const saleParams3 = [
+      isFixedPriceSale,
+      SOLD_TOKEN_BYTES32_ADDRESS,
+      TEST_CHAIN_ID,
+      saleTokenAmount,
+      minimumTokenRaise,
+      maximumTokenRaise,
+      saleStart,
+      saleEnd,
+      saleEnd,
+      recipient,
+      refundRecipient,
+      SOLD_TOKEN_BYTES32_ADDRESS,
+      ZERO_ADDRESS, // change the authority to address(0)
+    ];
+
+    failed = false;
+    try {
+      // try to create a sale that bypasses the KYC check
+      await initialized.methods.createSale(saleParams3, acceptedTokens).send({
+        value: WORMHOLE_FEE,
+        from: SELLER,
+        gasLimit: GAS_LIMIT,
+      });
+    } catch (e) {
+      assert.equal(
+        e.message,
+        "Returned error: VM Exception while processing transaction: revert authority must not be address(0)"
       );
       failed = true;
     }

@@ -5156,55 +5156,32 @@ contract("ICCO", function(accounts) {
     });
   });
 
-  it("conductor should not accept sale start/end times larger than uint64", async function() {
+  it("conductor should not accept sale timestamps larger than uint64", async function() {
     // test variables
     const saleStart = "100000000000000000000000";
     const saleEnd = "100000000000000000000001";
+    const saleUnlockTime = "100000000000000000000002";
     const saleTokenAmount = "10";
     const minimumTokenRaise = "2000";
     const maximumTokenRaise = "30000";
     const tokenOneConversionRate = "1000000000000000000";
     const saleRecipient = accounts[0];
     const refundRecipient = accounts[0];
-    const SOLD_TOKEN_DECIMALS = 18;
-    const mintAccount = SELLER;
-    const tokenSequence = 0; // set to 0 for the test
-    const tokenChainId = 0; // set to 0 for the test
-    const nativeContractAddress = "0x00"; // set to 0 for the test
     const isFixedPriceSale = false;
 
     const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
 
-    // create sale token again
-    const saleTokenMintAmount = "2000";
-    const soldToken = await TokenImplementation.new();
-    const soldTokenName = "Sold Token";
-    const soldTokenSymbol = "SOLD";
-    const soldTokenBytes32 = "0x000000000000000000000000" + soldToken.address.substr(2);
-
-    await soldToken.initialize(
-      soldTokenName,
-      soldTokenSymbol,
-      SOLD_TOKEN_DECIMALS,
-      tokenSequence,
-      mintAccount,
-      tokenChainId,
-      nativeContractAddress
-    );
-    await soldToken.mint(SELLER, saleTokenMintAmount);
-    await soldToken.approve(TokenSaleConductor.address, saleTokenAmount);
-
     // create array (solidity struct) for sale params
     const saleParams = [
       isFixedPriceSale,
-      soldTokenBytes32,
+      SOLD_TOKEN_BYTES32_ADDRESS,
       TEST_CHAIN_ID,
       saleTokenAmount,
       minimumTokenRaise,
       maximumTokenRaise,
       saleStart,
       saleEnd,
-      saleEnd,
+      saleUnlockTime,
       saleRecipient,
       refundRecipient,
       SOLD_TOKEN_BYTES32_ADDRESS,
@@ -5218,17 +5195,14 @@ contract("ICCO", function(accounts) {
 
     let failed = false;
     try {
-      // try to create a sale with sale start/end times larger than uint64
+      // try to create a sale with sale unlock timestamp larger than uint64
       await initialized.methods.createSale(saleParams, acceptedTokens).send({
         value: WORMHOLE_FEE,
         from: SELLER,
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert saleStart too far in the future"
-      );
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert timestamp too large");
       failed = true;
     }
 

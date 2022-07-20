@@ -107,13 +107,13 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
         require(raise.unlockTimestamp >= raise.saleEnd, "unlock timestamp should be >= saleEnd");
         require(raise.unlockTimestamp - raise.saleEnd <= 63072000, "unlock timestamp must be <= 2 years in the future");
         /// set timestamp cap for non-evm Contributor contracts
-        require(raise.saleStart <= 2**63-1, "saleStart too far in the future");
+        require(raise.unlockTimestamp <= 2**63-1, "timestamp too large");
+        /// sanity check other raise parameters
         require(raise.tokenAmount > 0, "amount must be > 0");
         require(acceptedTokens.length > 0, "must accept at least one token");
         require(acceptedTokens.length < 255, "too many tokens");
         require(raise.minRaise > 0, "minRaise must be > 0");
         require(raise.maxRaise >= raise.minRaise, "maxRaise must be >= minRaise");
-        /// Sanity check address
         require(raise.token != bytes32(0), "token must not be bytes32(0)");
         require(raise.solanaTokenAccount != bytes32(0), "solanaTokenAccount must not be bytes32(0)");
         require(raise.recipient != address(0), "recipient must not be address(0)");

@@ -26,9 +26,6 @@ import "../shared/ICCOStructs.sol";
  * specified recipient address.
  */ 
 contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
-    /// @dev create dynamic storage for accepted solana tokens
-    ICCOStructs.SolanaToken[] solanaAcceptedTokens;
-
     /**
      * @dev receiveSaleToken serves to take custody of the sale token and 
      * returns information about the token on the Conductor chain.
@@ -201,15 +198,15 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
                     tokenAddress: acceptedTokens[i].tokenAddress
                 });
                 /// only allow 8 accepted tokens for the Solana Contributor
-                require(solanaAcceptedTokens.length < 8, "too many solana tokens");
+                require(_state.solanaAcceptedTokens.length < 8, "too many solana tokens");
                 /// save in contract storage
-                solanaAcceptedTokens.push(solanaToken);
+                _state.solanaAcceptedTokens.push(solanaToken);
             }
             unchecked { i += 1; }
         }
 
         /// save number of accepted solana tokens in the sale
-        sale.solanaAcceptedTokensCount = uint8(solanaAcceptedTokens.length);
+        sale.solanaAcceptedTokensCount = uint8(_state.solanaAcceptedTokens.length);
 
         /// store sale info
         setSale(saleId, sale); 
@@ -265,7 +262,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
                 /// timestamp raise end
                 saleEnd : raise.saleEnd,
                 /// accepted Tokens
-                acceptedTokens : solanaAcceptedTokens,
+                acceptedTokens : _state.solanaAcceptedTokens,
                 /// recipient of proceeds
                 recipient : bytes32(uint256(uint160(raise.recipient))),
                 /// public key of kyc authority 
@@ -283,7 +280,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
             feeAccounting.accumulatedFees += feeAccounting.messageFee; 
 
             /// @dev garbage collection to save on gas fees
-            delete solanaAcceptedTokens;
+            delete _state.solanaAcceptedTokens;
         }
 
         /// @dev refund the caller any extra wormhole fees

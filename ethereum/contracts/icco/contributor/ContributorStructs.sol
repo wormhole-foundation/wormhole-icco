@@ -36,10 +36,4 @@ contract ContributorStructs {
         uint256[] allocations;
         uint256[] excessContributions;
     }
-
-    struct InternalAccounting {
-        /// fees
-        uint256 messageFee;
-        uint256 valueSent;
-    }
 }

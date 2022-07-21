@@ -217,6 +217,14 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
         require(!sale.isSealed && !sale.isAborted, "already sealed / aborted");
         require(block.timestamp > sale.saleEnd, "sale has not yet ended");
 
+        IWormhole wormhole = wormhole();
+
+        /// set up fee accounting 
+        ICCOStructs.WormholeFees memory feeAccounting;
+        feeAccounting.messageFee = wormhole.messageFee();
+        feeAccounting.valueSent = msg.value;
+        require(feeAccounting.valueSent >= feeAccounting.messageFee, "insufficient value");
+
         /// count accepted tokens for this contract to allocate memory in ContributionsSealed struct 
         uint256 nativeTokens = 0;
         uint16 chainId = chainId(); /// cache from storage
@@ -247,9 +255,13 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
         }
 
         /// @dev send encoded ContributionsSealed message to Conductor contract
-        wormholeSequence = wormhole().publishMessage{
-            value : msg.value
+        wormholeSequence = wormhole.publishMessage{
+            value : feeAccounting.messageFee
         }(0, ICCOStructs.encodeContributionsSealed(consSealed), consistencyLevel());
+
+        /// @dev refund the caller any extra wormhole fees
+        feeAccounting.refundAmount = feeAccounting.valueSent - feeAccounting.messageFee;
+        if (feeAccounting.refundAmount > 0) payable(msg.sender).transfer(feeAccounting.refundAmount);
 
         /// emit EventAttestContribution event.
         emit EventAttestContribution(saleId);
@@ -273,7 +285,12 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
         
         ContributorStructs.Sale memory sale = sales(sealedSale.saleID);
 
-        // check to see if the sale was aborted already
+        /// set up struct used for wormhole message accounting
+        ICCOStructs.WormholeFees memory feeAccounting;
+        feeAccounting.messageFee = wormhole().messageFee();
+        feeAccounting.valueSent = msg.value;
+
+        /// check to see if the sale was aborted already
         require(!sale.isSealed && !sale.isAborted, "already sealed / aborted");
 
         /// confirm that the allocated sale tokens are in custody of this contract
@@ -308,11 +325,19 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
                     /// set the excessContribution for this token
                     setExcessContribution(sealedSale.saleID, allo.tokenIndex, allo.excessContribution);
                 }
+
+                /// @dev count how many token bridge transfer will occur in sealSale
+                if (sale.acceptedTokensChains[i] != thisChainId) {
+                    feeAccounting.bridgeCount += 1;
+                }
                 unchecked { i += 1; }
             }
-
+ 
             require(tokenBalance >= tokenAllocation, "insufficient sale token balance");
             setSaleSealed(sealedSale.saleID);
+
+            /// @dev msg.value must cover all token bridge transfer fees (when bridgeCount is 0, no fees are charged in this method)
+            require(feeAccounting.valueSent >= feeAccounting.messageFee * feeAccounting.bridgeCount, "insufficient value");
         }
         
         /** 
@@ -320,10 +345,6 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
          * are being sent to a recipient on a different chain.
          */
         ITokenBridge tknBridge = tokenBridge();
-
-        ContributorStructs.InternalAccounting memory accounting; 
-        accounting.messageFee = wormhole().messageFee();
-        accounting.valueSent = msg.value;
 
         /**
          * @dev Cache the conductorChainId from storage to save on gas.
@@ -375,11 +396,11 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
                             totalContributionsLessExcess
                         );
 
-                        require(accounting.valueSent >= accounting.messageFee, "insufficient wormhole messaging fees");
-                        accounting.valueSent -= accounting.messageFee;
+                        require(feeAccounting.valueSent >= feeAccounting.messageFee, "insufficient wormhole messaging fees");
+                        feeAccounting.valueSent -= feeAccounting.messageFee;
 
                         tknBridge.transferTokens{
-                            value : accounting.messageFee
+                            value : feeAccounting.messageFee
                         }(
                             acceptedTokenAddress,
                             totalContributionsLessExcess,
@@ -388,11 +409,18 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
                             0,
                             0
                         );
+
+                        /// uptick fee counter
+                        feeAccounting.accumulatedFees += feeAccounting.messageFee;
                     }
                 }
             }
             unchecked { i += 1; }
         } 
+
+        /// @dev refund the caller any extra wormhole fees
+        feeAccounting.refundAmount = feeAccounting.valueSent - feeAccounting.accumulatedFees;  
+        if (feeAccounting.refundAmount > 0) payable(msg.sender).transfer(feeAccounting.refundAmount);
 
         /// emit EventSealSale event.
         emit EventSaleSealed(sale.saleID);
@@ -550,4 +578,7 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
     function saleExists(uint256 saleId) public view returns (bool exists) {
         exists = (getSaleTokenAddress(saleId) != bytes32(0));
     }
+
+    // necessary for receiving native assets
+    receive() external payable {}
 }

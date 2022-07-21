@@ -50,10 +50,7 @@ contract ConductorStructs {
         bool isFixedPrice;
     }
 
-    struct InternalAccounting {
-        /// fees
-        uint256 messageFee;
-        uint256 valueSent;
+    struct SealSaleAccounting {
         /// token allocation
         uint256 totalContribution;
         uint256 totalAllocated;

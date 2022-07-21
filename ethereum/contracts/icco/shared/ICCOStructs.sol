@@ -140,6 +140,15 @@ library ICCOStructs {
         uint256 saleID;
     }
 
+    struct WormholeFees {
+        /// wormhole messaging fees
+        uint256 valueSent;
+        uint256 messageFee;
+        uint256 accumulatedFees;
+        uint256 refundAmount;
+        uint8 bridgeCount;
+    }
+
     function normalizeAmount(uint256 amount, uint8 decimals) public pure returns(uint256){
         if (decimals > 8) {
             amount /= 10 ** (decimals - 8);

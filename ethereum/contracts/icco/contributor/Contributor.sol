@@ -396,9 +396,6 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
                             totalContributionsLessExcess
                         );
 
-                        require(feeAccounting.valueSent >= feeAccounting.messageFee, "insufficient wormhole messaging fees");
-                        feeAccounting.valueSent -= feeAccounting.messageFee;
-
                         tknBridge.transferTokens{
                             value : feeAccounting.messageFee
                         }(

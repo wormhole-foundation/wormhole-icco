@@ -146,10 +146,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert caller is not the owner"
-      );
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 9");
       failed = true;
     }
 
@@ -174,10 +171,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert chain already registered"
-      );
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 2");
       failed = true;
     }
   });
@@ -199,10 +193,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert caller is not the owner"
-      );
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 9");
       failed = true;
     }
 
@@ -384,10 +375,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert caller is not the owner"
-      );
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 9");
       conductorFailed = true;
     }
 
@@ -434,10 +422,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert caller is not the owner"
-      );
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 9");
       conductorFailed = true;
     }
 
@@ -458,10 +443,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert caller must be pendingOwner"
-      );
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 8");
       conductorFailed = true;
     }
 
@@ -1346,10 +1328,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert already collected contribution"
-      );
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 33");
       failed = true;
     }
 
@@ -1369,7 +1348,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert sale not initiated");
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 34");
       failed = true;
     }
 
@@ -2705,10 +2684,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert only initiator can abort the sale early"
-      );
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 24");
       failed = true;
     }
 
@@ -3914,10 +3890,7 @@ contract("ICCO", function(accounts) {
           gasLimit: GAS_LIMIT,
         });
       } catch (e) {
-        assert.equal(
-          e.message,
-          "Returned error: VM Exception while processing transaction: revert too many solana tokens"
-        );
+        assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 22");
         failed = true;
       }
       assert.ok(failed);
@@ -3969,7 +3942,7 @@ contract("ICCO", function(accounts) {
           gasLimit: GAS_LIMIT,
         });
       } catch (e) {
-        assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert insufficient value");
+        assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 18");
         failed = true;
       }
       assert.ok(failed);
@@ -4918,10 +4891,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert sale cannot be aborted once it has started"
-      );
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 26");
       failed = true;
     }
 
@@ -5117,10 +5087,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert conversion rate cannot be zero"
-      );
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 20");
       failed = true;
     }
 
@@ -5201,10 +5168,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert duplicate tokens not allowed"
-      );
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 19");
       failed = true;
     }
 
@@ -5274,7 +5238,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert timestamp too large");
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 7");
       failed = true;
     }
 
@@ -5541,10 +5505,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert recipient must not be address(0)"
-      );
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 15");
       failed = true;
     }
 
@@ -5575,10 +5536,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert token must not be bytes32(0)"
-      );
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 13");
       failed = true;
     }
 
@@ -5609,10 +5567,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert authority must not be address(0)"
-      );
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 17");
       failed = true;
     }
 
@@ -5668,10 +5623,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert unlock timestamp must be <= 2 years in the future"
-      );
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 6");
       failed = true;
     }
 

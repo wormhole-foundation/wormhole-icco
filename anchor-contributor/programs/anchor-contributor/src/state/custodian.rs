@@ -78,7 +78,6 @@ impl Custodian {
 
 
     pub fn new(&mut self) -> Result<()> {
-        self.nonce = 0;
         Ok(())
     }
 

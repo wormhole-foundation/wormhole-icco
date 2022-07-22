@@ -167,35 +167,31 @@ pub mod anchor_contributor {
         let transfer_authority = &ctx.accounts.owner;
 
         // Find indices used for contribution accounting
-        let (idx, token_index) = {
-            let sale = &ctx.accounts.sale;
+        let sale = &ctx.accounts.sale;
 
-            // We need to use the buyer's associated token account to help us find the token index
-            // for this particular mint he wishes to contribute.
-            let (idx, asset) = sale.get_total_info(&buyer_token_acct.mint)?;
+        // We need to use the buyer's associated token account to help us find the token index
+        // for this particular mint he wishes to contribute.
+        let (idx, asset) = sale.get_total_info(&buyer_token_acct.mint)?;
 
-            // If the buyer account wasn't initialized before, we will do so here. This initializes
-            // the state for all of this buyer's contributions.
-            let buyer = &mut ctx.accounts.buyer;
-            if !buyer.initialized {
-                buyer.initialize(sale.totals.len());
-            }
+        // If the buyer account wasn't initialized before, we will do so here. This initializes
+        // the state for all of this buyer's contributions.
+        let buyer = &mut ctx.accounts.buyer;
+        if !buyer.initialized {
+            buyer.initialize(sale.totals.len());
+        }
 
-            let token_index = asset.token_index;
+        let token_index = asset.token_index;
 
-            // We verify the KYC signature by encoding specific details of this contribution the
-            // same way the KYC entity signed for the transaction. If we cannot recover the KYC's
-            // public key using ecdsa recovery, we cannot allow the contribution to continue.
-            sale.verify_kyc_authority(
-                token_index,
-                amount,
-                &transfer_authority.key(),
-                buyer.contributions[idx].amount,
-                &kyc_signature,
-            )?;
-
-            (idx, token_index)
-        };
+        // We verify the KYC signature by encoding specific details of this contribution the
+        // same way the KYC entity signed for the transaction. If we cannot recover the KYC's
+        // public key using ecdsa recovery, we cannot allow the contribution to continue.
+        sale.verify_kyc_authority(
+            token_index,
+            amount,
+            &transfer_authority.key(),
+            buyer.contributions[idx].amount,
+            &kyc_signature,
+        )?;
 
         // We need to grab the current block's timestamp and verify that the buyer is allowed
         // to contribute now. A user cannot contribute before the sale has started. If all the
@@ -204,7 +200,7 @@ pub mod anchor_contributor {
         let clock = Clock::get()?;
         ctx.accounts
             .sale
-            .update_total_contributions(clock.unix_timestamp, token_index, amount)?;
+            .update_total_contributions(clock.unix_timestamp, idx, amount)?;
 
         // And we do the same with the Buyer account.
         ctx.accounts.buyer.contribute(idx, amount)?;
@@ -416,7 +412,7 @@ pub mod anchor_contributor {
         )?;
 
         let transfer_data = TransferData {
-            nonce: ctx.accounts.custodian.nonce,
+            nonce: 0,
             amount,
             fee: 0,
             target_address: sale.recipient,

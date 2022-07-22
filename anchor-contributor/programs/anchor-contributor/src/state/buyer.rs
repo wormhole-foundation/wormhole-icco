@@ -66,7 +66,7 @@ pub struct Buyer {
 }
 
 impl BuyerContribution {
-    pub const LENGTH: usize = 8 + 8 + 8 + 1;
+    pub const LENGTH: usize = 8 + 8 + 1;
 }
 
 impl BuyerAllocation {

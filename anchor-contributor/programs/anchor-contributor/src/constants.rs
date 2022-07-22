@@ -22,6 +22,7 @@ pub const INDEX_SALE_INIT_TOKEN_DECIMALS: usize = 67;
 pub const INDEX_SALE_INIT_SALE_START: usize = 68;
 pub const INDEX_SALE_INIT_SALE_END: usize = 100;
 pub const INDEX_SALE_INIT_ACCEPTED_TOKENS_START: usize = 132;
+pub const SALE_INIT_TAIL:  usize = 84;
 
 pub const ACCEPTED_TOKEN_NUM_BYTES: usize = 33;
 pub const ACCEPTED_TOKENS_MAX: usize = 8;

@@ -133,35 +133,41 @@ pub mod anchor_contributor {
         let transfer_authority = &ctx.accounts.owner;
 
         // Find indices used for contribution accounting
-        let (idx, token_index) = {
-            let sale = &ctx.accounts.sale;
+        let sale = &ctx.accounts.sale;
 
-            // We need to use the buyer's associated token account to help us find the token index
-            // for this particular mint he wishes to contribute.
-            let (idx, asset) = sale.get_total_info(&buyer_token_acct.mint)?;
+        require!(
+            !sale.is_blocked_contributions(),
+            ContributorError::SaleContributionsAreBlocked
+        );
 
-            // If the buyer account wasn't initialized before, we will do so here. This initializes
-            // the state for all of this buyer's contributions.
-            let buyer = &mut ctx.accounts.buyer;
-            if !buyer.initialized {
-                buyer.initialize(sale.totals.len());
-            }
+        // We need to use the buyer's associated token account to help us find the token index
+        // for this particular mint he wishes to contribute.
+        let (idx, asset) = sale.get_total_info(&buyer_token_acct.mint)?;
 
-            let token_index = asset.token_index;
+        require!(
+            asset.is_valid_for_contribution(),
+            ContributorError::AssetContributionsAreBlocked
+        );
 
-            // We verify the KYC signature by encoding specific details of this contribution the
-            // same way the KYC entity signed for the transaction. If we cannot recover the KYC's
-            // public key using ecdsa recovery, we cannot allow the contribution to continue.
-            sale.verify_kyc_authority(
-                token_index,
-                amount,
-                &transfer_authority.key(),
-                buyer.contributions[idx].amount,
-                &kyc_signature,
-            )?;
+        // If the buyer account wasn't initialized before, we will do so here. This initializes
+        // the state for all of this buyer's contributions.
+        let buyer = &mut ctx.accounts.buyer;
+        if !buyer.initialized {
+            buyer.initialize(sale.totals.len());
+        }
 
-            (idx, token_index)
-        };
+        let token_index = asset.token_index;
+
+        // We verify the KYC signature by encoding specific details of this contribution the
+        // same way the KYC entity signed for the transaction. If we cannot recover the KYC's
+        // public key using ecdsa recovery, we cannot allow the contribution to continue.
+        sale.verify_kyc_authority(
+            token_index,
+            amount,
+            &transfer_authority.key(),
+            buyer.contributions[idx].amount,
+            &kyc_signature,
+        )?;
 
         // We need to grab the current block's timestamp and verify that the buyer is allowed
         // to contribute now. A user cannot contribute before the sale has started. If all the
@@ -170,7 +176,7 @@ pub mod anchor_contributor {
         let clock = Clock::get()?;
         ctx.accounts
             .sale
-            .update_total_contributions(clock.unix_timestamp, token_index, amount)?;
+            .update_total_contributions(clock.unix_timestamp, idx, amount)?;
 
         // And we do the same with the Buyer account.
         ctx.accounts.buyer.contribute(idx, amount)?;
@@ -382,7 +388,7 @@ pub mod anchor_contributor {
         )?;
 
         let transfer_data = TransferData {
-            nonce: ctx.accounts.custodian.nonce,
+            nonce: 0,
             amount,
             fee: 0,
             target_address: sale.recipient,
@@ -571,7 +577,10 @@ pub mod anchor_contributor {
             izip!(totals, custodian_token_accts, buyer_token_accts).enumerate()
         {
             // Verify the custodian's associated token account
-            asset.deserialize_associated_token_account(custodian_token_acct, &ctx.accounts.custodian.key(),)?;
+            asset.deserialize_associated_token_account(
+                custodian_token_acct,
+                &ctx.accounts.custodian.key(),
+            )?;
 
             // And verify the buyer's token account
             asset.deserialize_associated_token_account(buyer_token_acct, &owner.key())?;
@@ -697,7 +706,10 @@ pub mod anchor_contributor {
             izip!(totals, custodian_token_accts, buyer_token_accts).enumerate()
         {
             // Verify the custodian's associated token account
-            asset.deserialize_associated_token_account(custodian_token_acct, &ctx.accounts.custodian.key())?;
+            asset.deserialize_associated_token_account(
+                custodian_token_acct,
+                &ctx.accounts.custodian.key(),
+            )?;
 
             // And verify the buyer's token account
             asset.deserialize_associated_token_account(buyer_token_acct, &owner.key())?;

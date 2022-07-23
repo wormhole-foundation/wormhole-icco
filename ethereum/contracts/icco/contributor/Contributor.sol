@@ -99,8 +99,9 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
      * @dev verifySignature serves to verify a contribution signature for KYC purposes.
      * - it computes the keccak256 hash of data passed by the client
      * - it recovers the KYC authority key from the hashed data and signature
+     * - it saves gas by not caling the verifySignature method in ICCOStructs.sol
      */ 
-    function verifySignature(bytes memory encodedHashData, bytes memory sig, address authority) public pure returns (bool) {
+    function verifySignature(bytes memory encodedHashData, bytes memory sig, address authority) internal pure returns (bool) {
         require(sig.length == 65, "incorrect signature length"); 
         require(encodedHashData.length > 0, "no hash data");
 
@@ -562,6 +563,25 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
         emit EventClaimRefund(saleId, tokenIndex, thisRefundContribution);
     }
 
+    /// @dev saleAuthorityUpdated serves to consume an AuthorityUpdated VAA and change a sale's kyc authority
+    function saleAuthorityUpdated(bytes memory authorityUpdatedVaa) public {
+        /// @dev confirms that the message is from the Conductor and valid
+        (IWormhole.VM memory vm, bool valid, string memory reason) = wormhole().parseAndVerifyVM(authorityUpdatedVaa);
+
+        require(valid, reason);
+        require(verifyConductorVM(vm), "invalid emitter");
+
+        /// parse the sale information sent by the Conductor contract
+        ICCOStructs.AuthorityUpdated memory update = ICCOStructs.parseAuthorityUpdated(vm.payload);
+        require(saleExists(update.saleID), "sale not initiated");
+
+        /// @dev check if the VAA was consumed already
+        require(update.newAuthority != authority(update.saleID), "newAuthority already set");
+
+        /// @dev update sale state with the new authority public key
+        setNewAuthority(update.saleID, update.newAuthority);
+    }
+
     // @dev verifyConductorVM serves to validate VMs by checking against the known Conductor contract 
     function verifyConductorVM(IWormhole.VM memory vm) internal view returns (bool) {
         if (conductorContract() == vm.emitterAddress && conductorChainId() == vm.emitterChainId) {
@@ -574,7 +594,7 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
     /// @dev saleExists serves to check if a sale exists
     function saleExists(uint256 saleId) public view returns (bool exists) {
         exists = (getSaleTokenAddress(saleId) != bytes32(0));
-    }
+    } 
 
     // necessary for receiving native assets
     receive() external payable {}

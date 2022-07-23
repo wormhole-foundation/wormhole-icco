@@ -16,7 +16,7 @@
 | 14   | Conductor           | createSale                      | solanaTokenAccount must not be bytes32(0)          |
 | 15   | Conductor           | createSale                      | recipient must not be address(0)                   |
 | 16   | Conductor           | createSale                      | refundRecipient must not be address(0)             |
-| 17   | Conductor           | createSale                      | authority must not be address(0)                   |
+| 17   | Conductor           | createSale                      | authority must not be address(0) or the owner      |
 | 18   | Conductor           | createSale                      | insufficient value                                 |
 | 19   | Conductor           | createSale                      | duplicate tokens not allowed                       |
 | 20   | Conductor           | createSale                      | conversion rate cannot be zero                     |
@@ -37,6 +37,11 @@
 | 35   | Conductor           | sealSale                        | already sealed / aborted                           |
 | 36   | Conductor           | sealSale                        | missing contribution info                          |
 | 37   | Conductor           | sealSale                        | insufficient value                                 |
+| 38   | Conductor           | updateSaleAuthority             | sale not initiated                                 |
+| 39   | Conductor           | updateSaleAuthority             | new authority must not be address(0) or the owner  |
+| 40   | Conductor           | updateSaleAuthority             | unauthorized authority key                         |
+| 41   | Conductor           | updateSaleAuthority             | already sealed / aborted                           |
+| 42   | Conductor           | updateSaleAuthority             | incorrect value for messageFee                     |
 | 1    | ConductorSetup      | setup                           | wormhole address must not be address(0)            |
 | 2    | ConductorSetup      | setup                           | tokenBridge's address must not be address(0)       |
 | 3    | ConductorSetup      | setup                           | implementation's address must not be address(0)    |

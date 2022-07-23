@@ -115,8 +115,8 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
         require(raise.solanaTokenAccount != bytes32(0), "14");
         require(raise.recipient != address(0), "15");
         require(raise.refundRecipient != address(0), "16");
-        /// confirm that sale authority is set
-        require(raise.authority != address(0), "17");
+        /// confirm that sale authority is set properly
+        require(raise.authority != address(0) && raise.authority != owner(), "17");
 
         /// cache wormhole instance 
         IWormhole wormhole = wormhole();
@@ -639,7 +639,53 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
         /// emit EventAbortSale event.
         emit EventAbortSale(saleId);
     }
- 
+
+    /**
+     * @dev updateSaleAuthority serves to change the KYC authority during a sale
+     * - it recovers the signer's public key to validate that the signer is the new authority
+     * - it sends an AuthorityUpdated VAA to contributors
+     * - it updates the authority in the contract state
+     * - it should only be used during an emergency (E.g. authority's key is compromised)
+     */
+    function updateSaleAuthority(
+        uint256 saleId,
+        address newAuthority,
+        bytes memory sig
+    ) public payable onlyOwner returns (uint256 wormholeSequence) {
+        require(saleExists(saleId), "38");
+        require(newAuthority != address(0) && newAuthority != owner(), "39");
+
+        /// @dev verify new authority signature (proves ownership of keys)
+        bytes memory encodedHashData = abi.encodePacked(
+            bytes12(0x0),
+            address(this),
+            saleId
+        );
+        require(ICCOStructs.verifySignature(encodedHashData, sig, newAuthority), "40");
+
+        /// @dev make sure the sale hasn't been sealed/aborted (don't want to rewrite history)
+        ConductorStructs.Sale memory sale = sales(saleId);
+        require(!sale.isSealed && !sale.isAborted, "41");
+
+        /// @dev set new authority for the sale and send VAA
+        setNewAuthority(saleId, newAuthority);
+
+        /// cache wormhole instance
+        IWormhole wormhole = wormhole();
+        uint256 messageFee = wormhole.messageFee();
+
+        require(messageFee == msg.value, "42"); 
+
+        /// @dev send encoded AuthorityUpdated message to Contributor contracts
+        wormholeSequence = wormhole.publishMessage{
+            value : messageFee
+        }(0, ICCOStructs.encodeAuthorityUpdated(ICCOStructs.AuthorityUpdated({
+            payloadID : 6,
+            newAuthority: newAuthority,
+            saleID : saleId
+        })), consistencyLevel());
+    }
+
     /// @dev useSaleId serves to update the current saleId in the Conductor state
     function useSaleId() internal returns(uint256 saleId) {
         saleId = getNextSaleId();

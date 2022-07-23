@@ -140,6 +140,15 @@ library ICCOStructs {
         uint256 saleID;
     }
 
+    struct AuthorityUpdated {
+        /// payloadID uint8 = 6
+        uint8 payloadID;
+        /// sale ID
+        uint256 saleID;
+        /// address of new authority
+        address newAuthority; 
+    }
+
     struct WormholeFees {
         /// wormhole messaging fees
         uint256 valueSent;
@@ -396,7 +405,7 @@ library ICCOStructs {
 
     function encodeSaleAborted(SaleAborted memory ca) public pure returns (bytes memory encoded) {
         return abi.encodePacked(uint8(4), ca.saleID);
-    }
+    } 
 
     function parseSaleAborted(bytes memory encoded) public pure returns (SaleAborted memory sa) {
         uint256 index = 0;
@@ -409,5 +418,55 @@ library ICCOStructs {
         index += 32;
 
         require(encoded.length == index, "invalid SaleAborted");
+    }
+
+     function encodeAuthorityUpdated(AuthorityUpdated memory update) public pure returns (bytes memory encoded) {
+        return abi.encodePacked(uint8(6), update.saleID, update.newAuthority);
+    }
+
+    function parseAuthorityUpdated(bytes memory encoded) public pure returns (AuthorityUpdated memory update) {
+        uint256 index = 0;
+        update.payloadID = encoded.toUint8(index);
+        index += 1;
+
+        require(update.payloadID == 6, "invalid payloadID");
+
+        update.saleID = encoded.toUint256(index);
+        index += 32;
+
+        update.newAuthority = encoded.toAddress(index);
+        index += 20; 
+
+        require(encoded.length == index, "invalid AuthorityUpdated");
+    }
+
+    /// @dev duplicate method from Contributor.sol 
+    function verifySignature(bytes memory encodedHashData, bytes memory sig, address authority) public pure returns (bool) {
+        require(sig.length == 65, "incorrect signature length"); 
+        require(encodedHashData.length > 0, "no hash data");
+
+        /// compute hash from encoded data
+        bytes32 hash_ = keccak256(encodedHashData);  
+        
+        /// parse v, r, s
+        uint8 index = 0;
+
+        bytes32 r = sig.toBytes32(index);
+        index += 32;
+
+        bytes32 s = sig.toBytes32(index);
+        index += 32;
+
+        uint8 v = sig.toUint8(index) + 27;
+
+        /// recovered key
+        address key = ecrecover(hash_, v, r, s);
+
+        /// confirm that the recovered key is the authority
+        if (key == authority) {
+            return true;
+        } else {
+            return false;
+        }
     }
 }

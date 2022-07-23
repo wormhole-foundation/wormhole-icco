@@ -4609,8 +4609,8 @@ contract("ICCO", function(accounts) {
 
     await singletons.ERC1820Registry(accounts[0]);
 
-    SOLD_TOKEN = await TokenERC777.deployed();
-    SOLD_TOKEN_BYTES32_ADDRESS = "0x000000000000000000000000" + SOLD_TOKEN.address.substr(2);
+    MALICIOUS_SOLD_TOKEN = await TokenERC777.deployed();
+    MALICIOUS_SOLD_TOKEN_BYTES32_ADDRESS = "0x000000000000000000000000" + MALICIOUS_SOLD_TOKEN.address.substr(2);
 
     const initializedConductor = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
     const initializedContributor = new web3.eth.Contract(
@@ -4620,23 +4620,23 @@ contract("ICCO", function(accounts) {
 
     MALICIOUS_SELLER = await MaliciousSeller.deployed();
     SALE_7_REFUND_RECIPIENT = MALICIOUS_SELLER.address;
-    await MALICIOUS_SELLER.setToken(SOLD_TOKEN.address);
+    await MALICIOUS_SELLER.setToken(MALICIOUS_SOLD_TOKEN.address);
     await MALICIOUS_SELLER.setConductor(initializedConductor._address);
     await MALICIOUS_SELLER.setWormholeFee(WORMHOLE_FEE.toString());
 
     // mint some more sale tokens
-    await SOLD_TOKEN.mint(SELLER, saleTokenAmount);
-    await SOLD_TOKEN.approve(TokenSaleConductor.address, saleTokenAmount);
+    await MALICIOUS_SOLD_TOKEN.mint(SELLER, saleTokenAmount);
+    await MALICIOUS_SOLD_TOKEN.approve(TokenSaleConductor.address, saleTokenAmount);
 
     // Simulate SOLD_TOKEN from previously created sales (testing purposes)
-    await SOLD_TOKEN.transfer(initializedConductor._address, "120000");
+    await MALICIOUS_SOLD_TOKEN.transfer(initializedConductor._address, "120000");
 
     web3.eth.sendTransaction({ to: SALE_7_REFUND_RECIPIENT, from: SELLER, value: web3.utils.toWei("1") });
 
     // create array (struct) for sale params
     const saleParams = [
       isFixedPriceSale,
-      SOLD_TOKEN_BYTES32_ADDRESS,
+      MALICIOUS_SOLD_TOKEN_BYTES32_ADDRESS,
       TEST_CHAIN_ID,
       saleTokenAmount,
       minimumTokenRaise,
@@ -4646,7 +4646,7 @@ contract("ICCO", function(accounts) {
       SALE_7_UNLOCK_TIMESTAMP,
       saleRecipient,
       SALE_7_REFUND_RECIPIENT,
-      SOLD_TOKEN_BYTES32_ADDRESS,
+      MALICIOUS_SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -5458,6 +5458,253 @@ contract("ICCO", function(accounts) {
     assert.equal(actualExcessContribution, expectedExcessContribution);
   });
 
+  it("conductor and contributor should allow the owner to update the authority", async function() {
+    // test variables
+    const current_block = await web3.eth.getBlock("latest");
+    const saleStart = current_block.timestamp + 5;
+    const saleEnd = saleStart + 8;
+    const saleTokenAmount = "1000";
+    const minimumTokenRaise = "2000";
+    const maximumTokenRaise = "2000";
+    const tokenOneConversionRate = "1000000000000000000";
+    const contributionAmount = "1000";
+    const saleRecipient = accounts[0];
+    const refundRecipient = accounts[0];
+    const SOLD_TOKEN_DECIMALS = 18;
+    const mintAccount = SELLER;
+    const tokenSequence = 0; // set to 0 for the test
+    const tokenChainId = 0; // set to 0 for the test
+    const nativeContractAddress = "0x00"; // set to 0 for the test
+    const isFixedPriceSale = false;
+
+    // create sale token again
+    const saleTokenMintAmount = "2000";
+    const soldToken = await TokenImplementation.new();
+    const soldTokenName = "Sold Token";
+    const soldTokenSymbol = "SOLD";
+    const soldTokenBytes32 = "0x000000000000000000000000" + soldToken.address.substr(2);
+
+    await soldToken.initialize(
+      soldTokenName,
+      soldTokenSymbol,
+      SOLD_TOKEN_DECIMALS,
+      tokenSequence,
+      mintAccount,
+      tokenChainId,
+      nativeContractAddress
+    );
+    await soldToken.mint(SELLER, saleTokenMintAmount);
+    await soldToken.approve(TokenSaleConductor.address, saleTokenAmount);
+
+    // setup smart contracts
+    const initializedConductor = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+    const initializedContributor = new web3.eth.Contract(
+      ContributorImplementationFullABI,
+      TokenSaleContributor.address
+    );
+
+    const saleId = await initializedConductor.methods.getNextSaleId().call();
+
+    await soldToken.approve(TokenSaleConductor.address, saleTokenAmount);
+
+    // create array (solidity struct) for sale params
+    const saleParams = [
+      isFixedPriceSale,
+      soldTokenBytes32,
+      TEST_CHAIN_ID,
+      saleTokenAmount,
+      minimumTokenRaise,
+      maximumTokenRaise,
+      saleStart,
+      saleEnd,
+      saleEnd,
+      saleRecipient,
+      refundRecipient,
+      SOLD_TOKEN_BYTES32_ADDRESS,
+      KYC_AUTHORITY,
+    ];
+
+    // create accepted tokens array
+    const acceptedTokens = [
+      [TEST_CHAIN_ID, "0x000000000000000000000000" + CONTRIBUTED_TOKEN_ONE.address.substr(2), tokenOneConversionRate],
+    ];
+
+    // create another sale
+    await initializedConductor.methods.createSale(saleParams, acceptedTokens).send({
+      value: WORMHOLE_FEE * 2,
+      from: SELLER,
+      gasLimit: GAS_LIMIT,
+    });
+
+    // grab the message generated by the conductor
+    const log = (
+      await WORMHOLE.getPastEvents("LogMessagePublished", {
+        fromBlock: "latest",
+      })
+    )[0].returnValues;
+
+    // create the vaa to initialize the sale
+    const vm = await signAndEncodeVM(
+      1,
+      1,
+      TEST_CHAIN_ID,
+      "0x000000000000000000000000" + TokenSaleConductor.address.substr(2),
+      0,
+      log.payload.toString(),
+      [testSigner1PK],
+      0,
+      0
+    );
+
+    // initialize the sale
+    await initializedContributor.methods.initSale("0x" + vm).send({
+      from: SELLER,
+      gasLimit: GAS_LIMIT,
+    });
+
+    // wait for sale to start
+    await wait(5);
+
+    // approve the contribution amount for BUYER_ONE
+    await CONTRIBUTED_TOKEN_ONE.approve(TokenSaleContributor.address, maximumTokenRaise, {
+      from: BUYER_ONE,
+    });
+
+    // mint some more tokens to contribute with
+    await CONTRIBUTED_TOKEN_ONE.mint(BUYER_ONE, maximumTokenRaise);
+
+    // perform "kyc" and contribute tokens to the sale for BUYER_ONE (starting authority)
+    const kycSig1 = await signContribution(
+      CONDUCTOR_BYTES32_ADDRESS,
+      saleId,
+      TOKEN_ONE_INDEX,
+      contributionAmount,
+      BUYER_ONE,
+      kycSignerPK
+    );
+    await initializedContributor.methods
+      .contribute(saleId, TOKEN_ONE_INDEX, parseInt(contributionAmount), kycSig1)
+      .send({
+        from: BUYER_ONE,
+        gasLimit: GAS_LIMIT,
+      });
+
+    // check the authority on the conductor and contributor before updating it
+    const contributorAuthorityBefore = await initializedContributor.methods.authority(saleId).call();
+    const conductorAuthorityBefore = await initializedConductor.methods.sales(saleId).call();
+
+    assert.equal(contributorAuthorityBefore, KYC_AUTHORITY);
+    assert.equal(conductorAuthorityBefore.authority, KYC_AUTHORITY);
+
+    // now update the authority to the new key
+    const newAuthorityPK = testSigner1PK;
+    const newAuthorityAccount = web3.eth.accounts.privateKeyToAccount("0x" + newAuthorityPK);
+    const authorityUpdateSignature = await signAuthorityUpdate(CONDUCTOR_BYTES32_ADDRESS, saleId, newAuthorityPK);
+
+    await initializedConductor.methods
+      .updateSaleAuthority(saleId, newAuthorityAccount.address, authorityUpdateSignature)
+      .send({
+        from: accounts[0],
+        gasLimit: GAS_LIMIT,
+        value: WORMHOLE_FEE,
+      });
+
+    // grab the message generated by the conductor
+    const log2 = (
+      await WORMHOLE.getPastEvents("LogMessagePublished", {
+        fromBlock: "latest",
+      })
+    )[0].returnValues;
+
+    // create the vaa to initialize the sale
+    const vm2 = await signAndEncodeVM(
+      1,
+      1,
+      TEST_CHAIN_ID,
+      "0x000000000000000000000000" + TokenSaleConductor.address.substr(2),
+      0,
+      log2.payload.toString(),
+      [testSigner1PK],
+      0,
+      0
+    );
+
+    // set the new authority key on the contributor
+    await initializedContributor.methods.saleAuthorityUpdated("0x" + vm2).send({
+      from: SELLER,
+      gasLimit: GAS_LIMIT,
+    });
+
+    // check the authority on the conductor and contributor after updating it
+    const contributorAuthorityAfter = await initializedContributor.methods.authority(saleId).call();
+    const conductorAuthorityAfter = await initializedConductor.methods.sales(saleId).call();
+
+    assert.equal(contributorAuthorityAfter, newAuthorityAccount.address);
+    assert.equal(conductorAuthorityAfter.authority, newAuthorityAccount.address);
+
+    // try to update the authority again
+    let failed = false;
+    try {
+      // set the new authority key on the contributor
+      await initializedContributor.methods.saleAuthorityUpdated("0x" + vm2).send({
+        from: SELLER,
+        gasLimit: GAS_LIMIT,
+      });
+    } catch (e) {
+      assert.equal(
+        e.message,
+        "Returned error: VM Exception while processing transaction: revert newAuthority already set"
+      );
+      failed = true;
+    }
+
+    assert.ok(failed);
+
+    // attempt to contribute with the old key
+    failed = false;
+    try {
+      // perform "kyc" and contribute tokens to the sale for BUYER_ONE (starting authority)
+      const kycSig2 = await signContribution(
+        CONDUCTOR_BYTES32_ADDRESS,
+        saleId,
+        TOKEN_ONE_INDEX,
+        contributionAmount,
+        BUYER_ONE,
+        kycSignerPK
+      );
+      await initializedContributor.methods
+        .contribute(saleId, TOKEN_ONE_INDEX, parseInt(contributionAmount), kycSig2)
+        .send({
+          from: BUYER_ONE,
+          gasLimit: GAS_LIMIT,
+        });
+    } catch (e) {
+      assert.equal(
+        e.message,
+        "Returned error: VM Exception while processing transaction: revert unauthorized contributor"
+      );
+      failed = true;
+    }
+
+    assert.ok(failed);
+
+    // now contribute with the new key
+    const kycSig3 = await signContribution(
+      CONDUCTOR_BYTES32_ADDRESS,
+      saleId,
+      TOKEN_ONE_INDEX,
+      contributionAmount,
+      BUYER_ONE,
+      testSigner1PK
+    );
+    await initializedContributor.methods
+      .contribute(saleId, TOKEN_ONE_INDEX, parseInt(contributionAmount), kycSig3)
+      .send({
+        from: BUYER_ONE,
+        gasLimit: GAS_LIMIT,
+      });
+  });
+
   it("conductor should sanity check addresses in Raise parameters", async function() {
     // test variables
     const current_block = await web3.eth.getBlock("latest");
@@ -5798,6 +6045,28 @@ async function normalizeConversionRate(
     return normalizedConversionRate.mul(ethers.utils.parseUnits("1", conductorDecimals - acceptedTokenDecimals));
   }
 }
+
+const signAuthorityUpdate = async function(conductorAddress, saleId, signer) {
+  const body = [
+    web3.eth.abi.encodeParameter("bytes32", conductorAddress).substring(2),
+    web3.eth.abi.encodeParameter("uint256", saleId).substring(2),
+  ];
+
+  // compute the hash
+  const hash = web3.utils.soliditySha3("0x" + body.join(""));
+
+  const ec = new elliptic.ec("secp256k1");
+  const key = ec.keyFromPrivate(signer);
+  const signature = key.sign(hash.substr(2), { canonical: true });
+
+  const packSig = [
+    zeroPadBytes(signature.r.toString(16), 32),
+    zeroPadBytes(signature.s.toString(16), 32),
+    web3.eth.abi.encodeParameter("uint8", signature.recoveryParam).substr(2 + (64 - 2)),
+  ];
+
+  return "0x" + packSig.join("");
+};
 
 const signContribution = async function(conductorAddress, saleId, tokenIndex, amount, buyerAddress, signer) {
   // query for total contributed amount by this contributor

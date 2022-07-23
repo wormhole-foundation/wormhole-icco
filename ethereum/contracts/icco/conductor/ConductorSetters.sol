@@ -15,6 +15,10 @@ contract ConductorSetters is ConductorState, Context {
         _state.pendingOwner = newOwner;
     }
 
+    function setNewAuthority(uint256 saleId, address newAuthority) internal {
+        _state.sales[saleId].authority = newAuthority;
+    }
+
     function setContributor(uint16 chainId, bytes32 emitter) internal {
         _state.contributorImplementations[chainId] = emitter;
     }

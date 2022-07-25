@@ -10,6 +10,7 @@ pub const PAYLOAD_SALE_INIT_SOLANA: u8 = 5; // 1 for everyone else
 pub const PAYLOAD_ATTEST_CONTRIBUTIONS: u8 = 2;
 pub const PAYLOAD_SALE_SEALED: u8 = 3;
 pub const PAYLOAD_SALE_ABORTED: u8 = 4;
+pub const PAYLOAD_SALE_UPDATE_AUTHORITY: u8 = 6;
 
 // universal
 pub const PAYLOAD_HEADER_LEN: usize = 33; // payload + sale id

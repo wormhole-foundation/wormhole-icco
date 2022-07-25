@@ -383,6 +383,26 @@ impl Sale {
         Ok(())
     }
 
+    pub fn set_kyc_authority(
+        &mut self,
+        block_time: i64,
+        payload: &[u8]
+    ) -> Result<()> {
+        require!(self.is_active(block_time), ContributorError::SaleEnded);
+    
+        // check that the payload has the correct size
+        // payload type + sale id
+        require!(
+            payload.len() == PAYLOAD_HEADER_LEN + 20_usize,
+            ContributorError::InvalidVaaPayload
+        );
+    
+        // finally set new kyc_authority.
+        self.kyc_authority.copy_from_slice(&payload[PAYLOAD_HEADER_LEN..PAYLOAD_HEADER_LEN+20]);
+    
+        Ok(())
+    }
+    
     pub fn verify_kyc_authority(
         &self,
         token_index: u8,

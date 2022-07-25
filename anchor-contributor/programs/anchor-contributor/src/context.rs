@@ -451,7 +451,6 @@ pub struct BridgeSealedContribution<'info> {
 ///
 /// Mutable
 /// * `sale`
-/// * `owner` (signer)
 #[derive(Accounts)]
 pub struct AbortSale<'info> {
     #[account(
@@ -697,4 +696,44 @@ pub struct ClaimExcesses<'info> {
     pub owner: Signer<'info>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
+}
+
+/// Context provides all accounts required for someone 
+/// to change a sale KYC authority with a signed VAA
+/// sent by the conductor.
+/// See `sale_authority_updated` instruction in lib.rs.
+///
+/// Immutable
+/// * `custodian`
+/// * `core_bridge_vaa`
+///
+/// Mutable
+/// * `sale`
+#[derive(Accounts)]
+pub struct SaleAuthorityUpdated<'info> {
+    #[account(
+        seeds = [
+            SEED_PREFIX_CUSTODIAN.as_bytes(),
+        ],
+        bump,
+    )]
+    pub custodian: Account<'info, Custodian>,
+
+    #[account(
+        mut,
+        seeds = [
+            SEED_PREFIX_SALE.as_bytes(),
+            &sale.id,
+        ],
+        bump,
+    )]
+    pub sale: Account<'info, Sale>,
+
+    #[account(
+        constraint = core_bridge_vaa.owner.key() == Custodian::wormhole()?
+    )]
+    /// CHECK: This account is owned by Core Bridge so we trust it
+    pub core_bridge_vaa: AccountInfo<'info>,
+
+    pub system_program: Program<'info, System>,
 }

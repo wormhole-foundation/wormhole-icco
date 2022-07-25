@@ -1103,6 +1103,146 @@ describe("anchor-contributor", () => {
     });
   });
 
+  //   describe("Miscellanious sale tests", () => {
+  //     // global contributions for test
+  //     const contributions = new Map<number, string[]>();
+
+  //     it("Orchestrator Initialize Sale with Signed VAA", async () => {
+  //       const startTime = 8 + (await getBlockTime(connection));
+  //       const duration = 8; // seconds after sale starts
+  //       const lockPeriod = 12; // seconds after sale ended
+  //       const initSaleVaa = dummyConductor.createSale(startTime, duration, saleTokenAccount.address, lockPeriod);
+  //       const tx = await contributor.initSale(orchestrator, initSaleVaa);
+
+  //       {
+  //         const saleId = dummyConductor.getSaleId();
+  //         const saleState = await contributor.getSale(saleId);
+
+  //         // verify
+  //         expect(Uint8Array.from(saleState.id)).to.deep.equal(saleId);
+  //         expect(saleState.saleTokenMint.toString()).to.equal(dummyConductor.saleTokenOnSolana);
+  //         expect(saleState.tokenChain).to.equal(dummyConductor.tokenChain);
+  //         expect(saleState.tokenDecimals).to.equal(dummyConductor.tokenDecimals);
+  //         expect(saleState.nativeTokenDecimals).to.equal(dummyConductor.nativeTokenDecimals);
+  //         expect(saleState.times.start.toString()).to.equal(dummyConductor.saleStart.toString());
+  //         expect(saleState.times.end.toString()).to.equal(dummyConductor.saleEnd.toString());
+  //         expect(saleState.times.unlockAllocation.toString()).to.equal(dummyConductor.saleUnlock.toString());
+  //         expect(Uint8Array.from(saleState.recipient)).to.deep.equal(Buffer.from(dummyConductor.recipient, "hex"));
+  //         expect(Uint8Array.from(saleState.kycAuthority)).to.deep.equal(Buffer.from(dummyConductor.kycAuthority, "hex"));
+  //         expect(saleState.status).has.key("active");
+
+  //         // check totals
+  //         const totals: any = saleState.totals;
+  //         const numAccepted = dummyConductor.acceptedTokens.length;
+  //         expect(totals.length).to.equal(numAccepted);
+
+  //         for (let i = 0; i < numAccepted; ++i) {
+  //           const total = totals[i];
+  //           const acceptedToken = dummyConductor.acceptedTokens[i];
+
+  //           expect(total.tokenIndex).to.equal(acceptedToken.index);
+  //           expect(tryNativeToHexString(total.mint.toString(), CHAIN_ID_SOLANA)).to.equal(acceptedToken.address);
+  //           expect(total.contributions.toString()).to.equal("0");
+  //           expect(total.allocations.toString()).to.equal("0");
+  //           expect(total.excessContributions.toString()).to.equal("0");
+  //         }
+  //       }
+  //     });
+
+  //     it("User Contributes to Sale", async () => {
+  //       // wait for sale to start here
+  //       const saleStart = dummyConductor.saleStart;
+  //       await waitUntilBlock(connection, saleStart);
+
+  //       // prep contributions info
+  //       const acceptedTokens = dummyConductor.acceptedTokens;
+  //       const contributedTokenIndices = [acceptedTokens[0].index, acceptedTokens[3].index];
+  //       contributions.set(contributedTokenIndices[0], ["1200000000", "3400000000"]);
+  //       contributions.set(contributedTokenIndices[1], ["5600000000", "7800000000"]);
+
+  //       contributedTokenIndices.forEach((tokenIndex) => {
+  //         const amounts = contributions.get(tokenIndex);
+  //       });
+
+  //       // now go about your business
+  //       // contribute multiple times
+  //       const saleId = dummyConductor.getSaleId();
+  //       for (const tokenIndex of contributedTokenIndices) {
+  //         for (const amount of contributions.get(tokenIndex).map((value) => new BN(value))) {
+  //           const tx = await contributor.contribute(
+  //             buyer,
+  //             saleId,
+  //             tokenIndex,
+  //             amount,
+  //             await kyc.signContribution(saleId, tokenIndex, amount, buyer.publicKey)
+  //           );
+  //         }
+  //       }
+  //     });
+
+  //     it("Orchestrator Changes Sale KYC authority with Signed VAA", async () => {
+  //       const newKycAuthority = BigNumber.from(128855258);
+  //       const saleChangeKycAuthorityVaa = dummyConductor.changeKycAuthority(
+  //         await getBlockTime(connection),
+  //         newKycAuthority
+  //       );
+  //       const tx = await contributor.changeKycAuthority(orchestrator, saleChangeKycAuthorityVaa);
+
+  //       {
+  //         const saleId = dummyConductor.getSaleId();
+  //         const saleState = await contributor.getSale(saleId);
+  //         const r = BigNumber.from(saleState.kycAuthority);
+  //         expect(r.eq(newKycAuthority)).to.equal(true);
+  //       }
+  //     });
+
+  //     it("User Attmpts to contribute to Sale after KYC authority change using old authority", async () => {
+  //       // We are past sale start already
+  //       // Prep contributions info
+  //       const acceptedTokens = dummyConductor.acceptedTokens;
+  //       const contributedTokenIndices = [acceptedTokens[0].index, acceptedTokens[3].index];
+  //       contributions.clear();
+  //       contributions.set(contributedTokenIndices[0], ["200000000"]);
+
+  //       contributedTokenIndices.forEach((tokenIndex) => {
+  //         const amounts = contributions.get(tokenIndex);
+  //       });
+
+  //       // contribute
+  //       let caughtError = false;
+  //       try {
+  //         const saleId = dummyConductor.getSaleId();
+  //         for (const tokenIndex of contributedTokenIndices) {
+  //           for (const amount of contributions.get(tokenIndex).map((value) => new BN(value))) {
+  //             const tx = await contributor.contribute(
+  //               buyer,
+  //               saleId,
+  //               tokenIndex,
+  //               amount,
+  //               await kyc.signContribution(saleId, tokenIndex, amount, buyer.publicKey)
+  //             );
+  //           }
+  //         }
+  //       } catch (e) {
+  //         caughtError = verifyErrorMsg(e, "InvalidKycSignature");
+  //       }
+  //       if (!caughtError) {
+  //         throw Error("did not catch expected error");
+  //       }
+  //     });
+
+  //     it("Orchestrator Aborts Sale with Signed VAA", async () => {
+  //       const saleAbortedVaa = dummyConductor.abortSale(await getBlockTime(connection));
+  //       const tx = await contributor.abortSale(orchestrator, saleAbortedVaa);
+
+  //       {
+  //         const saleId = dummyConductor.getSaleId();
+  //         const saleState = await contributor.getSale(saleId);
+  //         expect(saleState.status).has.key("aborted");
+  //       }
+  //     });
+  //   });
+
   describe("Conduct Blocked Sale", () => {
     it("Orchestrator Initialized Blocked Sale By Using Non-Existent Sale Token", async () => {
       const startTime = 8 + (await getBlockTime(connection));

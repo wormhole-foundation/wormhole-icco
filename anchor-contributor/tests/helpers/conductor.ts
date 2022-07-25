@@ -174,6 +174,18 @@ export class DummyConductor {
     );
   }
 
+  changeKycAuthority(blockTime: number, newAuthority: BigNumber): Buffer {
+    ++this.wormholeSequence;
+    return signAndEncodeVaa(
+      blockTime,
+      this.nonce,
+      this.chainId,
+      this.address,
+      this.wormholeSequence,
+      encodeChangeKycAuthority(this.saleId, newAuthority)
+    );
+  }
+
   // sale parameters that won't change for the test
   //associatedTokenAddress = "00000000000000000000000083752ecafebf4707258dedffbd9c7443148169db";
   recipient = tryNativeToHexString("0x22d491bde2303f2f43325b2108d26f1eaba1e32b", CHAIN_ID_ETH);
@@ -286,5 +298,13 @@ export function encodeSaleAborted(saleId: number): Buffer {
   const encoded = Buffer.alloc(33);
   encoded.writeUInt8(4, 0); // saleSealed payload = 4
   encoded.write(toBigNumberHex(saleId, 32), 1, "hex");
+  return encoded;
+}
+
+export function encodeChangeKycAuthority(saleId: number, newAuthority: BigNumber): Buffer {
+  const encoded = Buffer.alloc(53);
+  encoded.writeUInt8(6, 0); // ChangeKycAuthority payload = 6
+  encoded.write(toBigNumberHex(saleId, 32), 1, "hex");
+  encoded.write(toBigNumberHex(newAuthority, 20), 33, "hex");
   return encoded;
 }

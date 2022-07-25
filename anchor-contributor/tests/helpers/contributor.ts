@@ -349,6 +349,28 @@ export class IccoContributor {
       .rpc();
   }
 
+  async changeKycAuthority(payer: web3.Keypair, saleChangeKycAuthorityVaa: Buffer): Promise<string> {
+    const program = this.program;
+    const custodian = this.custodian;
+
+    // first post signed vaa to wormhole
+    await this.postVaa(payer, saleChangeKycAuthorityVaa);
+    const coreBridgeVaa = this.deriveSignedVaaAccount(saleChangeKycAuthorityVaa);
+
+    const saleId = await parseSaleId(saleChangeKycAuthorityVaa);
+    const sale = this.deriveSaleAccount(saleId);
+
+    return program.methods
+      .saleAuthorityUpdated()
+      .accounts({
+        custodian,
+        sale,
+        coreBridgeVaa,
+        systemProgram: web3.SystemProgram.programId,
+      })
+      .rpc();
+  }
+
   async claimRefunds(payer: web3.Keypair, saleId: Buffer): Promise<string> {
     const saleState = await this.getSale(saleId);
     const totals: any = saleState.totals;

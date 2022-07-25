@@ -841,4 +841,31 @@ pub mod anchor_contributor {
         // Finish instruction.
         Ok(())
     }
+    
+    /// Instruction to change sale KYC authority.
+    /// This parses an inbound signed VAA sent by the conductor.
+    ///
+    /// VAA layout:
+    /// PAYLOAD_SALE_UPDATE_AUTHORITY = 6: u8 
+    /// newAuthority: [u8;20]
+    /// saleID [u8; 32]
+    pub fn sale_authority_updated(ctx: Context<AbortSale>) -> Result<()> {
+        // We verify that the signed VAA has the same sale information as the Sale
+        // account we pass into the context. It also needs to be emitted from the
+        // conductor we know.
+        let sale = &mut ctx.accounts.sale;
+        let msg = ctx
+            .accounts
+            .custodian
+            .parse_and_verify_conductor_vaa_and_sale(
+                &ctx.accounts.core_bridge_vaa,
+                PAYLOAD_SALE_UPDATE_AUTHORITY,
+                sale.id,
+            )?;
+
+        // Finish the instruction by changing the status of the sale to Aborted.
+        let clock = Clock::get()?;
+        sale.set_kyc_authority(clock.unix_timestamp, &msg.payload)
+    }
+
 }

@@ -57,8 +57,6 @@ library ICCOStructs {
         address recipient;
         /// refund recipient in case the sale is aborted
         address refundRecipient;
-        /// sale token ATA for Solana
-        bytes32 solanaTokenAccount;
         /// public key of kyc authority 
         address authority; 
     }
@@ -93,8 +91,8 @@ library ICCOStructs {
         uint8 payloadID;
         /// sale ID
         uint256 saleID;
-        /// sale token ATA for solana
-        bytes32 solanaTokenAccount;
+        /// address of the token - left-zero-padded if shorter than 32 bytes
+        bytes32 tokenAddress;
         /// chain ID of the token
         uint16 tokenChain;
         /// token decimals 
@@ -120,6 +118,8 @@ library ICCOStructs {
         uint256 saleID;
         /// chain ID
         uint16 chainID;
+        /// solana ATA (bytes32(0) from contributors that aren't on Solana)
+        bytes32 solanaTokenAccount;
         /// sealed contributions for this sale
         Contribution[] contributions;
     }
@@ -192,7 +192,7 @@ library ICCOStructs {
         return abi.encodePacked(
             uint8(5),
             solanaSaleInit.saleID,
-            solanaSaleInit.solanaTokenAccount,
+            solanaSaleInit.tokenAddress,
             solanaSaleInit.tokenChain,
             solanaSaleInit.tokenDecimals,
             solanaSaleInit.saleStart,
@@ -295,6 +295,7 @@ library ICCOStructs {
             uint8(2),
             cs.saleID,
             cs.chainID,
+            cs.solanaTokenAccount,
             encodeContributions(cs.contributions)
         );
     }
@@ -312,6 +313,9 @@ library ICCOStructs {
 
         consSealed.chainID = encoded.toUint16(index);
         index += 2;
+
+        consSealed.solanaTokenAccount = encoded.toBytes32(index);
+        index += 32;
 
         uint256 len = 1 + 33 * uint256(uint8(encoded[index]));
         consSealed.contributions = parseContributions(encoded.slice(index, len));

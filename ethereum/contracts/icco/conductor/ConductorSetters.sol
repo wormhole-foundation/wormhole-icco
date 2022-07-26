@@ -43,6 +43,10 @@ contract ConductorSetters is ConductorState, Context {
         _state.consistencyLevel = level;
     }
 
+    function setSolanaTokenAccount(uint256 saleId, bytes32 solanaTokenAccount) internal {
+        _state.sales[saleId].solanaTokenAccount = solanaTokenAccount;
+    }
+
     function setSale(uint256 saleId, ConductorStructs.Sale memory sale) internal {
         _state.sales[saleId] = sale;
     }

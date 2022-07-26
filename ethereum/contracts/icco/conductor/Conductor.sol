@@ -112,11 +112,10 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
         require(raise.minRaise > 0, "11");
         require(raise.maxRaise >= raise.minRaise, "12");
         require(raise.token != bytes32(0), "13");
-        require(raise.solanaTokenAccount != bytes32(0), "14");
-        require(raise.recipient != address(0), "15");
-        require(raise.refundRecipient != address(0), "16");
+        require(raise.recipient != address(0), "14");
+        require(raise.refundRecipient != address(0), "15");
         /// confirm that sale authority is set properly
-        require(raise.authority != address(0) && raise.authority != owner(), "17");
+        require(raise.authority != address(0) && raise.authority != owner(), "16");
 
         /// cache wormhole instance 
         IWormhole wormhole = wormhole();
@@ -127,7 +126,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
         feeAccounting.valueSent = msg.value;
 
         /// make sure the caller has sent enough eth to cover message fees
-        require(feeAccounting.valueSent >= 2 * feeAccounting.messageFee, "18");
+        require(feeAccounting.valueSent >= 2 * feeAccounting.messageFee, "17");
 
         /// @dev take custody of sale token and fetch decimal/address info for the sale token
         (address localTokenAddress, uint8 localTokenDecimals) = receiveSaleToken(raise);
@@ -143,8 +142,9 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
             tokenAddress : raise.token,
             tokenChain : raise.tokenChain,
             localTokenDecimals: localTokenDecimals,
-            localTokenAddress: localTokenAddress,    
-            solanaTokenAccount: raise.solanaTokenAccount,
+            localTokenAddress: localTokenAddress, 
+            /// @dev placeholder for solana ATA - this is sent from the Solana contributor   
+            solanaTokenAccount: bytes32(0),
             tokenAmount : raise.tokenAmount,
             minRaise: raise.minRaise,
             maxRaise: raise.maxRaise,
@@ -177,14 +177,14 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
                 require(
                     sale.acceptedTokensChains[j] != acceptedTokens[i].tokenChain || 
                     sale.acceptedTokensAddresses[j] != acceptedTokens[i].tokenAddress, 
-                    "19"
+                    "18"
                 );
                 unchecked { j += 1; }
             }
 
             /// @dev sanity check accepted tokens
-            require(acceptedTokens[i].conversionRate > 0, "20");
-            require(acceptedTokens[i].tokenAddress != bytes32(0), "21");
+            require(acceptedTokens[i].conversionRate > 0, "19");
+            require(acceptedTokens[i].tokenAddress != bytes32(0), "20");
 
             /// add the unique accepted token information
             sale.acceptedTokensChains[i] = acceptedTokens[i].tokenChain;
@@ -198,7 +198,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
                     tokenAddress: acceptedTokens[i].tokenAddress
                 });
                 /// only allow 8 accepted tokens for the Solana Contributor
-                require(_state.solanaAcceptedTokens.length < 8, "22");
+                require(_state.solanaAcceptedTokens.length < 8, "21");
                 /// save in contract storage
                 _state.solanaAcceptedTokens.push(solanaToken);
             }
@@ -251,8 +251,8 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
                 payloadID : 5,
                 /// sale ID
                 saleID : saleId,
-                /// sale token ATA for solana 
-                solanaTokenAccount: raise.solanaTokenAccount,
+                /// address of the token, left-zero-padded if shorter than 32 bytes 
+                tokenAddress: raise.token,
                 /// chain ID of the token
                 tokenChain : raise.tokenChain,
                 /// token decimals
@@ -300,16 +300,16 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
      * - it refunds the sale tokens to the refundRecipient
      */    
     function abortSaleBeforeStartTime(uint256 saleId) public payable returns (uint256 wormholeSequence) {
-        require(saleExists(saleId), "23");
+        require(saleExists(saleId), "22");
 
         ConductorStructs.Sale memory sale = sales(saleId);
 
         /// confirm that caller is the sale initiator
-        require(sale.initiator == msg.sender, "24");
+        require(sale.initiator == msg.sender, "23");
 
         /// make sure that the sale is still valid and hasn't started yet
-        require(!sale.isSealed && !sale.isAborted, "25");
-        require(block.timestamp < sale.saleStart, "26");
+        require(!sale.isSealed && !sale.isAborted, "24");
+        require(block.timestamp < sale.saleStart, "25");
 
         /// set saleAborted
         setSaleAborted(sale.saleID);   
@@ -320,7 +320,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
         ICCOStructs.WormholeFees memory feeAccounting;
         feeAccounting.messageFee = wormhole.messageFee();
         feeAccounting.valueSent = msg.value;
-        require(feeAccounting.valueSent >= feeAccounting.messageFee, "27");
+        require(feeAccounting.valueSent >= feeAccounting.messageFee, "26");
 
         /// @dev send encoded SaleAborted struct to Contributor contracts        
         wormholeSequence = wormhole.publishMessage{
@@ -348,34 +348,40 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
     /**
      * @dev collectContribution serves to accept contribution information
      * disseminated by each registered Contributor contract.
+     * - it sets the solanaTokenAccount when consuming contributions from the Solana contributor
      */ 
     function collectContribution(bytes memory encodedVm) public {
         /// validate encodedVm and emitter
         (IWormhole.VM memory vm, bool valid, string memory reason) = wormhole().parseAndVerifyVM(encodedVm);
 
         require(valid, reason);
-        require(verifyContributorVM(vm), "28");
+        require(verifyContributorVM(vm), "27");
 
         /// parse the ContributionsSealed struct emitted by a Contributor contract
         ICCOStructs.ContributionsSealed memory conSealed = ICCOStructs.parseContributionsSealed(vm.payload);
 
-        require(conSealed.chainID == vm.emitterChainId, "29");
+        require(conSealed.chainID == vm.emitterChainId, "28");
 
         /// make sure the sale has ended before accepting contribution information
         ConductorStructs.Sale memory sale = sales(conSealed.saleID);
 
-        require(!sale.isAborted, "30");
-        require(block.timestamp > sale.saleEnd, "31");
+        require(!sale.isAborted, "29");
+        require(block.timestamp > sale.saleEnd, "30");
 
         /// cache because it's referenced several times
         uint256 contributionsLength = conSealed.contributions.length; 
 
         // confirm that contribution information is valid and that it hasn't been collected for this Contributor
-        require(contributionsLength > 0, "32");
+        require(contributionsLength > 0, "31");
         require(!saleContributionIsCollected(
             conSealed.saleID, conSealed.contributions[0].tokenIndex), 
-            "33"
+            "32"
         );
+
+        /// @dev set the solanaTokenAccount when consuming a Solana ContributionsSealed
+        if (conSealed.chainID == 1) {
+            setSolanaTokenAccount(conSealed.saleID, conSealed.solanaTokenAccount);
+        }
 
         /// save the total contribution amount for each accepted token 
         for (uint256 i = 0; i < contributionsLength;) {
@@ -398,12 +404,12 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
      * - it refunds the refundRecipient if the sale is aborted or the maxRaise is not met (partial refund)
      */
     function sealSale(uint256 saleId) public payable returns (uint256 wormholeSequence, uint256 wormholeSequence2) {
-        require(saleExists(saleId), "34");
+        require(saleExists(saleId), "33");
 
         ConductorStructs.Sale memory sale = sales(saleId);
 
         /// make sure the sale hasn't been aborted or sealed already
-        require(!sale.isSealed && !sale.isAborted, "35");
+        require(!sale.isSealed && !sale.isAborted, "34");
 
         ConductorStructs.SealSaleAccounting memory accounting;       
         ICCOStructs.WormholeFees memory feeAccounting; 
@@ -411,7 +417,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
         /// cache accepted tokens length, it will be used in several for loops
         uint256 acceptedTokensLength = sale.acceptedTokensAddresses.length;
         for (uint256 i = 0; i < acceptedTokensLength;) {
-            require(saleContributionIsCollected(saleId, i), "36");
+            require(saleContributionIsCollected(saleId, i), "35");
             /**
             * @dev This calculates the total contribution for each accepted token.
             * - it uses the conversion rate to convert contributions into the minRaise denomination
@@ -432,7 +438,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
         feeAccounting.valueSent = msg.value;
 
         /// @dev msg.value must cover all token bridge transfer fees + two saleSealed messages
-        require(feeAccounting.valueSent >= feeAccounting.messageFee * (feeAccounting.bridgeCount + 2), "37");
+        require(feeAccounting.valueSent >= feeAccounting.messageFee * (feeAccounting.bridgeCount + 2), "36");
 
         /// check to see if the sale was successful
         if (accounting.totalContribution >= sale.minRaise) {
@@ -652,8 +658,8 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
         address newAuthority,
         bytes memory sig
     ) public payable onlyOwner returns (uint256 wormholeSequence) {
-        require(saleExists(saleId), "38");
-        require(newAuthority != address(0) && newAuthority != owner(), "39");
+        require(saleExists(saleId), "37");
+        require(newAuthority != address(0) && newAuthority != owner(), "38");
 
         /// @dev verify new authority signature (proves ownership of keys)
         bytes memory encodedHashData = abi.encodePacked(
@@ -661,11 +667,11 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
             address(this),
             saleId
         );
-        require(ICCOStructs.verifySignature(encodedHashData, sig, newAuthority), "40");
+        require(ICCOStructs.verifySignature(encodedHashData, sig, newAuthority), "39");
 
         /// @dev make sure the sale hasn't been sealed/aborted (don't want to rewrite history)
         ConductorStructs.Sale memory sale = sales(saleId);
-        require(!sale.isSealed && !sale.isAborted, "41");
+        require(!sale.isSealed && !sale.isAborted, "40");
 
         /// @dev set new authority for the sale and send VAA
         setNewAuthority(saleId, newAuthority);
@@ -674,15 +680,15 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
         IWormhole wormhole = wormhole();
         uint256 messageFee = wormhole.messageFee();
 
-        require(messageFee == msg.value, "42"); 
+        require(messageFee == msg.value, "41"); 
 
         /// @dev send encoded AuthorityUpdated message to Contributor contracts
         wormholeSequence = wormhole.publishMessage{
             value : messageFee
         }(0, ICCOStructs.encodeAuthorityUpdated(ICCOStructs.AuthorityUpdated({
             payloadID : 6,
-            newAuthority: newAuthority,
-            saleID : saleId
+            saleID : saleId,
+            newAuthority: newAuthority
         })), consistencyLevel());
     }
 

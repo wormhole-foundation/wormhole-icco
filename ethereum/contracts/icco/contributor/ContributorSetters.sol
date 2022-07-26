@@ -41,7 +41,7 @@ contract ContributorSetters is ContributorState, Context {
 
     function setTokenBridge(address tb) internal {
         _state.provider.tokenBridge = payable(tb);
-    }
+    } 
 
     function setConsistencyLevel(uint8 level) internal {
         _state.consistencyLevel = level;

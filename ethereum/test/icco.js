@@ -690,7 +690,6 @@ contract("ICCO", function(accounts) {
       SALE_END, // unlock timestamp
       saleRecipient,
       refundRecipient,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -712,13 +711,10 @@ contract("ICCO", function(accounts) {
     assert.equal(eventCreateSale["saleId"], SALE_ID);
     assert.equal(eventCreateSale["creatorAddress"], SELLER);
 
-    // verify contributorWallets getter
+    // verify contributorWallets getter for solana
     const solanaWallet = await initialized.methods.contributorWallets(SALE_ID, solanaChainId).call();
 
-    assert.equal(
-      solanaWallet,
-      web3.eth.abi.encodeParameter("address", "0x" + SOLD_TOKEN_BYTES32_ADDRESS.substring(26))
-    );
+    assert.equal(solanaWallet, ZERO_BYTES32);
 
     // verify payload sent to contributor
     const log = (
@@ -1222,6 +1218,10 @@ contract("ICCO", function(accounts) {
     assert.equal(log.payload.substr(index, 4), web3.eth.abi.encodeParameter("uint16", 2).substring(2 + 64 - 4));
     index += 4;
 
+    // the solanaTokenAcount should be bytes32(0) since this sale only accepts EVM contributions
+    assert.equal(log.payload.substr(index, 64), ZERO_BYTES32.substring(2));
+    index += 64;
+
     // tokens length
     assert.equal(parseInt(log.payload.substr(index, 2), 16), acceptedTokenLength);
     index += 2;
@@ -1328,7 +1328,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 33");
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 32");
       failed = true;
     }
 
@@ -1348,7 +1348,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 34");
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 33");
       failed = true;
     }
 
@@ -1691,7 +1691,6 @@ contract("ICCO", function(accounts) {
       SALE_2_END, // unlock timestamp
       saleRecipient,
       refundRecipient,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -2088,6 +2087,10 @@ contract("ICCO", function(accounts) {
     assert.equal(log.payload.substr(index, 4), web3.eth.abi.encodeParameter("uint16", 2).substring(2 + 64 - 4));
     index += 4;
 
+    // the solanaTokenAcount should be bytes32(0) since this sale only accepts EVM contributions
+    assert.equal(log.payload.substr(index, 64), ZERO_BYTES32.substring(2));
+    index += 64;
+
     // tokens length
     assert.equal(parseInt(log.payload.substr(index, 2), 16), acceptedTokenLength);
     index += 2;
@@ -2442,7 +2445,6 @@ contract("ICCO", function(accounts) {
       SALE_3_END, // unlock timestamp
       saleRecipient,
       refundRecipient,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -2684,7 +2686,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 24");
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 23");
       failed = true;
     }
 
@@ -3018,7 +3020,6 @@ contract("ICCO", function(accounts) {
       SALE_4_END, // unlock timestamp
       saleRecipient,
       refundRecipient,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -3399,6 +3400,10 @@ contract("ICCO", function(accounts) {
     // chain id
     assert.equal(log.payload.substr(index, 4), web3.eth.abi.encodeParameter("uint16", 2).substring(2 + 64 - 4));
     index += 4;
+
+    // the solanaTokenAcount should be bytes32(0) since this sale only accepts EVM contributions
+    assert.equal(log.payload.substr(index, 64), ZERO_BYTES32.substring(2));
+    index += 64;
 
     // tokens length
     assert.equal(parseInt(log.payload.substr(index, 2), 16), acceptedTokenLength);
@@ -3861,7 +3866,6 @@ contract("ICCO", function(accounts) {
       SALE_5_END, // unlock timestamp
       saleRecipient,
       refundRecipient,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -3890,7 +3894,7 @@ contract("ICCO", function(accounts) {
           gasLimit: GAS_LIMIT,
         });
       } catch (e) {
-        assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 22");
+        assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 21");
         failed = true;
       }
       assert.ok(failed);
@@ -3942,7 +3946,7 @@ contract("ICCO", function(accounts) {
           gasLimit: GAS_LIMIT,
         });
       } catch (e) {
-        assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 18");
+        assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 17");
         failed = true;
       }
       assert.ok(failed);
@@ -3975,7 +3979,7 @@ contract("ICCO", function(accounts) {
     assert.equal(parseInt(log.payload.substr(index, 64), 16), SALE_5_ID);
     index += 64;
 
-    // solana ATA for sale token
+    // native token address for the token being sold
     assert.equal(
       log.payload.substr(index, 64),
       web3.eth.abi.encodeParameter("address", SOLD_TOKEN.address).substring(2)
@@ -4066,12 +4070,18 @@ contract("ICCO", function(accounts) {
       web3.eth.abi.encodeParameter("uint8", payloadIdType2).substring(2 + (64 - 2)),
       web3.eth.abi.encodeParameter("uint256", SALE_5_ID).substring(2),
       web3.eth.abi.encodeParameter("uint16", SOLANA_CHAIN_ID).substring(2 + (64 - 4)),
+      web3.eth.abi.encodeParameter("bytes32", "0x000000000000000000000000" + accounts[6].substr(2)).substr(2),
       web3.eth.abi.encodeParameter("uint8", acceptedTokensLengthSolana).substring(2 + (64 - 2)),
       web3.eth.abi.encodeParameter("uint8", SOLANA_TOKEN_INDEX_ONE).substring(2 + (64 - 2)),
       web3.eth.abi.encodeParameter("uint256", solanaTokenContribution).substring(2),
       web3.eth.abi.encodeParameter("uint8", SOLANA_TOKEN_INDEX_TWO).substring(2 + (64 - 2)),
       web3.eth.abi.encodeParameter("uint256", solanaTokenTwoContribution).substring(2),
     ];
+
+    // check the solana token account on the conductor before collecting the contribution
+    const solanaTokenAccountBefore = await initialized.methods.contributorWallets(SALE_5_ID, SOLANA_CHAIN_ID).call();
+
+    assert.equal(solanaTokenAccountBefore, ZERO_BYTES32);
 
     const vm = await signAndEncodeVM(
       1,
@@ -4091,11 +4101,20 @@ contract("ICCO", function(accounts) {
       gasLimit: GAS_LIMIT,
     });
 
+    // check the solana token account on the conductor after collecting the contribution
+    const solanaTokenAccountAfter = await initialized.methods.contributorWallets(SALE_5_ID, SOLANA_CHAIN_ID).call();
+
+    assert.equal(
+      solanaTokenAccountAfter,
+      web3.eth.abi.encodeParameter("bytes32", "0x000000000000000000000000" + accounts[6].substr(2))
+    );
+
     // construct contributions payload coming from ethereum contributor
     const ethereumContributionsSealed = [
       web3.eth.abi.encodeParameter("uint8", payloadIdType2).substring(2 + (64 - 2)),
       web3.eth.abi.encodeParameter("uint256", SALE_5_ID).substring(2),
       web3.eth.abi.encodeParameter("uint16", TEST_CHAIN_ID).substring(2 + (64 - 4)),
+      web3.eth.abi.encodeParameter("bytes32", ZERO_BYTES32).substring(2),
       web3.eth.abi.encodeParameter("uint8", acceptedTokensLengthEthereum).substring(2 + (64 - 2)),
       web3.eth.abi.encodeParameter("uint8", ETH_TOKEN_INDEX).substring(2 + (64 - 2)),
       web3.eth.abi.encodeParameter("uint256", ethereumTokenContribution).substring(2),
@@ -4302,7 +4321,6 @@ contract("ICCO", function(accounts) {
       SALE_6_UNLOCK_TIMESTAMP,
       saleRecipient,
       SALE_6_REFUND_RECIPIENT,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -4646,7 +4664,6 @@ contract("ICCO", function(accounts) {
       SALE_7_UNLOCK_TIMESTAMP,
       saleRecipient,
       SALE_7_REFUND_RECIPIENT,
-      MALICIOUS_SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -4863,7 +4880,6 @@ contract("ICCO", function(accounts) {
       saleEnd,
       saleRecipient,
       refundRecipient,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -4891,14 +4907,14 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 26");
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 25");
       failed = true;
     }
 
     assert.ok(failed);
   });
 
-  it("contributor should not initialize a sale with non-ERC20 tokens", async function() {
+  it("contributor should disable contributions for non-ERC20 tokens", async function() {
     // test variables
     const current_block = await web3.eth.getBlock("latest");
     const saleStart = current_block.timestamp + 5;
@@ -4908,6 +4924,7 @@ contract("ICCO", function(accounts) {
     const maximumTokenRaise = "30000";
     const tokenOneConversionRate = "1000000000000000000";
     const tokenTwoConversionRate = "2000000000000000000";
+    const contributionAmount = "2000";
     const saleRecipient = accounts[0];
     const refundRecipient = accounts[0];
     const SOLD_TOKEN_DECIMALS = 18;
@@ -4922,6 +4939,9 @@ contract("ICCO", function(accounts) {
       ContributorImplementationFullABI,
       TokenSaleContributor.address
     );
+
+    // grab saleId for upcoming sale
+    const saleId = await initializedConductor.methods.getNextSaleId().call();
 
     // create sale token again
     const saleTokenMintAmount = "2000";
@@ -4955,7 +4975,6 @@ contract("ICCO", function(accounts) {
       saleEnd,
       saleRecipient,
       refundRecipient,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -4996,19 +5015,64 @@ contract("ICCO", function(accounts) {
       0
     );
 
+    // try to initialize with a bad accepted token address
+    await initializedContributor.methods.initSale("0x" + vm).send({
+      from: SELLER,
+      gasLimit: GAS_LIMIT,
+    });
+
+    // confirm "bad" token was disabled in the sale state
+    const tokenZeroStatus = await initializedContributor.methods.isTokenDisabled(saleId, 0).call();
+    const tokenOneStatus = await initializedContributor.methods.isTokenDisabled(saleId, 1).call();
+
+    assert.ok(!tokenZeroStatus);
+    assert.ok(tokenOneStatus);
+
+    wait(10);
+
+    // try to contribute disabled tokens to the sale
     let failed = false;
     try {
-      // try to initialize with a bad accepted token address
-      await initializedContributor.methods.initSale("0x" + vm).send({
-        from: SELLER,
-        gasLimit: GAS_LIMIT,
-      });
+      const kycSig1 = await signContribution(
+        CONDUCTOR_BYTES32_ADDRESS,
+        saleId,
+        TOKEN_TWO_INDEX,
+        contributionAmount,
+        BUYER_ONE,
+        kycSignerPK
+      );
+      await initializedContributor.methods
+        .contribute(saleId, TOKEN_TWO_INDEX, parseInt(contributionAmount), kycSig1)
+        .send({
+          from: BUYER_ONE,
+          gasLimit: GAS_LIMIT,
+        });
     } catch (e) {
-      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert non-existent ERC20");
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert token is disabled");
       failed = true;
     }
 
     assert.ok(failed);
+
+    // approve and contribute tokens
+    await CONTRIBUTED_TOKEN_ONE.mint(BUYER_ONE, contributionAmount);
+    await CONTRIBUTED_TOKEN_ONE.approve(TokenSaleContributor.address, contributionAmount, {
+      from: BUYER_ONE,
+    });
+    const kycSig1 = await signContribution(
+      CONDUCTOR_BYTES32_ADDRESS,
+      saleId,
+      TOKEN_ONE_INDEX,
+      contributionAmount,
+      BUYER_ONE,
+      kycSignerPK
+    );
+    await initializedContributor.methods
+      .contribute(saleId, TOKEN_ONE_INDEX, parseInt(contributionAmount), kycSig1)
+      .send({
+        from: BUYER_ONE,
+        gasLimit: GAS_LIMIT,
+      });
   });
 
   it("conductor should only accept tokens with non-zero conversion rates", async function() {
@@ -5064,7 +5128,6 @@ contract("ICCO", function(accounts) {
       saleEnd,
       saleRecipient,
       refundRecipient,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -5087,7 +5150,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 20");
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 19");
       failed = true;
     }
 
@@ -5146,7 +5209,6 @@ contract("ICCO", function(accounts) {
       saleEnd,
       saleRecipient,
       refundRecipient,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -5168,7 +5230,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 19");
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 18");
       failed = true;
     }
 
@@ -5220,7 +5282,6 @@ contract("ICCO", function(accounts) {
       saleUnlockTime,
       saleRecipient,
       refundRecipient,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -5310,7 +5371,6 @@ contract("ICCO", function(accounts) {
       saleEnd,
       saleRecipient,
       refundRecipient,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -5520,7 +5580,6 @@ contract("ICCO", function(accounts) {
       saleEnd,
       saleRecipient,
       refundRecipient,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -5734,7 +5793,6 @@ contract("ICCO", function(accounts) {
       saleEnd,
       ZERO_ADDRESS, // change the recipient address to address(0)
       refundRecipient,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -5752,7 +5810,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 15");
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 14");
       failed = true;
     }
 
@@ -5770,7 +5828,6 @@ contract("ICCO", function(accounts) {
       saleEnd,
       recipient,
       refundRecipient,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -5801,7 +5858,6 @@ contract("ICCO", function(accounts) {
       saleEnd,
       recipient,
       refundRecipient,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       ZERO_ADDRESS, // change the authority to address(0)
     ];
 
@@ -5814,7 +5870,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 17");
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 16");
       failed = true;
     }
 
@@ -5852,7 +5908,6 @@ contract("ICCO", function(accounts) {
       saleUnlockTime,
       recipient,
       refundRecipient,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 

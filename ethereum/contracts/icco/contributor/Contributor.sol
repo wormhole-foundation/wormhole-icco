@@ -61,6 +61,7 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
             acceptedTokensChains : new uint16[](acceptedTokensLength),
             acceptedTokensAddresses : new bytes32[](acceptedTokensLength),
             acceptedTokensConversionRates : new uint128[](acceptedTokensLength),
+            disabledAcceptedTokens: new bool[](acceptedTokensLength),
             recipient : saleInit.recipient,
             authority : saleInit.authority,
             isSealed : false,
@@ -80,7 +81,10 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
                 (, bytes memory queriedTotalSupply) = tokenAddress.staticcall(
                     abi.encodeWithSelector(IERC20.totalSupply.selector)
                 );
-                require(queriedTotalSupply.length > 0, "non-existent ERC20");
+                /// @dev mark the accepted token as disabled if it's not a real erc20
+                if (queriedTotalSupply.length == 0) {
+                    sale.disabledAcceptedTokens[i] = true;
+                }
             }
             sale.acceptedTokensChains[i] = saleInit.acceptedTokens[i].tokenChain;
             sale.acceptedTokensAddresses[i] = saleInit.acceptedTokens[i].tokenAddress;
@@ -149,8 +153,11 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
             (uint256 start, uint256 end, ) = getSaleTimeframe(saleId);
 
             require(block.timestamp >= start, "sale not yet started");
-            require(block.timestamp <= end, "sale has ended");
+            require(block.timestamp <= end, "sale has ended"); 
         }
+
+        /// @dev make sure the token is enabled (still accepted by the sale)
+        require(!isTokenDisabled(saleId, tokenIndex), "token is disabled");
 
         /// query information for the passed tokendIndex
         (uint16 tokenChain, bytes32 tokenAddressBytes,) = getSaleAcceptedTokenInfo(saleId, tokenIndex);
@@ -242,6 +249,7 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
             payloadID : 2,
             saleID : saleId,
             chainID : uint16(chainId),
+            solanaTokenAccount : bytes32(0),
             contributions : new ICCOStructs.Contribution[](nativeTokens)
         });
 

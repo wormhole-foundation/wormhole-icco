@@ -23,6 +23,7 @@ contract ContributorStructs {
         uint16[] acceptedTokensChains;
         bytes32[] acceptedTokensAddresses;
         uint128[] acceptedTokensConversionRates;
+        bool[] disabledAcceptedTokens;
 
         /// recipient of proceeds
         bytes32 recipient;

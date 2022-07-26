@@ -280,7 +280,7 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
         uint16 thisChainId = chainId(); /// cache from storage
         {
             address saleTokenAddress;
-            if (sale.tokenChain == chainId()) {
+            if (sale.tokenChain == thisChainId) {
                 /// normal token transfer on same chain
                 saleTokenAddress = address(uint160(uint256(sale.tokenAddress)));
             } else {
@@ -432,10 +432,13 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
         /// @dev contributors can only claim after the unlock timestamp
         require(block.timestamp >= unlockTimestamp, "tokens have not been unlocked");
 
+        /// cache to save on gas
+        uint16 thisChainId = chainId();
+
         /// make sure the contributor is claiming on the right chain
         (uint16 contributedTokenChainId, , ) = getSaleAcceptedTokenInfo(saleId, tokenIndex);
 
-        require(contributedTokenChainId == chainId(), "allocation needs to be claimed on a different chain");
+        require(contributedTokenChainId == thisChainId, "allocation needs to be claimed on a different chain");
 
         /// set the allocation claimed - also serves as reentrancy protection
         setAllocationClaimed(saleId, tokenIndex, msg.sender);
@@ -453,7 +456,7 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
         uint256 thisAllocation = (getSaleAllocation(saleId, tokenIndex) * thisContribution) / totalContribution;
 
         address tokenAddress;
-        if (sale.tokenChain == chainId()) {
+        if (sale.tokenChain == thisChainId) {
             /// normal token transfer on same chain
             tokenAddress = address(uint160(uint256(sale.tokenAddress)));
         } else {

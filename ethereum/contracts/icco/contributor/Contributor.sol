@@ -512,6 +512,10 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
         require(isSealed, "token sale is not sealed");
         require(!excessContributionIsClaimed(saleId, tokenIndex, msg.sender), "excess contribution already claimed");
 
+        (uint16 tokenChainId,, ) = getSaleAcceptedTokenInfo(saleId, tokenIndex);
+
+        require(tokenChainId == chainId(), "refund needs to be claimed on another chain");
+ 
         setExcessContributionClaimed(saleId, tokenIndex, msg.sender);
 
         /// calculate how much excess to refund

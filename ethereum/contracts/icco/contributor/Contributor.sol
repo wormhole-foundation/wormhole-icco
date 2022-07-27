@@ -226,12 +226,9 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
         require(block.timestamp > sale.saleEnd, "sale has not yet ended");
 
         IWormhole wormhole = wormhole();
+        uint256 messageFee = wormhole.messageFee();
 
-        /// set up fee accounting 
-        ICCOStructs.WormholeFees memory feeAccounting;
-        feeAccounting.messageFee = wormhole.messageFee();
-        feeAccounting.valueSent = msg.value;
-        require(feeAccounting.valueSent >= feeAccounting.messageFee, "insufficient value");
+        require(msg.value == messageFee, "incorrect value");
 
         /// count accepted tokens for this contract to allocate memory in ContributionsSealed struct 
         uint256 nativeTokens = 0;
@@ -265,12 +262,8 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
 
         /// @dev send encoded ContributionsSealed message to Conductor contract
         wormholeSequence = wormhole.publishMessage{
-            value : feeAccounting.messageFee
+            value : messageFee
         }(0, ICCOStructs.encodeContributionsSealed(consSealed), consistencyLevel());
-
-        /// @dev refund the caller any extra wormhole fees
-        feeAccounting.refundAmount = feeAccounting.valueSent - feeAccounting.messageFee;
-        if (feeAccounting.refundAmount > 0) payable(msg.sender).transfer(feeAccounting.refundAmount);
 
         /// emit EventAttestContribution event.
         emit EventAttestContribution(saleId);

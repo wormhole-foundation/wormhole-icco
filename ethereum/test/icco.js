@@ -3,9 +3,10 @@ const elliptic = require("elliptic");
 const { assert } = require("chai");
 const ethers = require("ethers");
 
-require("@openzeppelin/test-helpers/configure")({ provider: web3.currentProvider, environment: "truffle" });
 const { singletons } = require("@openzeppelin/test-helpers");
 const { ZERO_BYTES32 } = require("@openzeppelin/test-helpers/src/constants");
+const { web3 } = require("@openzeppelin/test-helpers/src/setup");
+require("@openzeppelin/test-helpers/configure")({ provider: web3.currentProvider, environment: "truffle" });
 
 const TokenERC777 = artifacts.require("TokenERC777");
 const MaliciousSeller = artifacts.require("MaliciousSeller");
@@ -2042,29 +2043,13 @@ contract("ICCO", function(accounts) {
 
     const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
 
-    // ether balance of BUYER_ONE before
-    const etherBalanceBeforeCall = await web3.eth.getBalance(BUYER_ONE);
-
     // attest contributions
     // test to make sure the contract returns unused ether
-    const wormholeFeeCount = 1;
-    const extraFeeCount = 1;
     const tx = await initialized.methods.attestContributions(SALE_2_ID).send({
       from: BUYER_ONE,
-      value: WORMHOLE_FEE * (wormholeFeeCount + extraFeeCount),
+      value: WORMHOLE_FEE,
       gasLimit: GAS_LIMIT,
     });
-
-    // ether balance of SELLER before
-    const etherBalanceAfterCall = await web3.eth.getBalance(BUYER_ONE);
-
-    // confirm that the contract returned unused ether
-    const valueSpentAfterGas = await calculateValueSpentLessGas(tx, etherBalanceBeforeCall, etherBalanceAfterCall);
-
-    assert.equal(
-      parseFloat(valueSpentAfterGas).toFixed(2),
-      parseFloat(ethers.utils.formatEther((WORMHOLE_FEE * wormholeFeeCount).toString())).toFixed(2)
-    );
 
     const log = (
       await WORMHOLE.getPastEvents("LogMessagePublished", {
@@ -2196,11 +2181,34 @@ contract("ICCO", function(accounts) {
     assert.equal(actualContributorBalanceBefore, expectedContributorBalance);
     assert.equal(actualConductorBalanceBefore, expectedConductorBalanceBefore);
 
+    // ether balance of SELLER before
+    const etherBalanceBeforeCall = await web3.eth.getBalance(SELLER);
+
+    // abort the sale
+    // test to make sure the contract returns unused ether
+    const wormholeFeeCount = 1;
+    const extraFeeCount = 1;
+
     const sealAbortTx = await initialized.methods.sealSale(SALE_2_ID).send({
+      value: WORMHOLE_FEE * (wormholeFeeCount + extraFeeCount),
       from: SELLER,
-      value: WORMHOLE_FEE * 2,
       gasLimit: GAS_LIMIT,
     });
+
+    // ether balance of SELLER before
+    const etherBalanceAfterCall = await web3.eth.getBalance(SELLER);
+
+    // confirm that the contract returned unused ether
+    const valueSpentAfterGas = await calculateValueSpentLessGas(
+      sealAbortTx,
+      etherBalanceBeforeCall,
+      etherBalanceAfterCall
+    );
+
+    assert.equal(
+      parseFloat(valueSpentAfterGas).toFixed(2),
+      parseFloat(ethers.utils.formatEther((WORMHOLE_FEE * wormholeFeeCount).toString())).toFixed(2)
+    );
 
     // confirm that the EventAbortSale event was emitted
     const eventSealAbort = sealAbortTx["events"]["EventAbortSale"]["returnValues"];
@@ -4747,7 +4755,7 @@ contract("ICCO", function(accounts) {
     });
   });
 
-  it("sale should be aborted after attempted reentrancy attack with ERC777 token transfer", async function() {
+  it("sealSale should revert due to an attempted reentrancy attack", async function() {
     await wait(10);
 
     const initializedConductor = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
@@ -4789,61 +4797,96 @@ contract("ICCO", function(accounts) {
       gasLimit: GAS_LIMIT,
     });
 
-    // confirm that saleAborted was set to true
-    const conductorStatusBefore = await initializedConductor.methods.sales(SALE_7_ID).call();
+    let failed = false;
+    try {
+      // attempt to seal the sale, but will fail due to nonreentrant modifier
+      await initializedConductor.methods.sealSale(SALE_7_ID).send({
+        from: SELLER,
+        value: WORMHOLE_FEE * 2,
+        gasLimit: GAS_LIMIT,
+      });
+    } catch (e) {
+      assert.equal(
+        e.message,
+        "Returned error: VM Exception while processing transaction: revert ReentrancyGuard: reentrant call"
+      );
+      failed = true;
+    }
 
-    assert.ok(!conductorStatusBefore.isAborted);
-    assert.ok(!conductorStatusBefore.isSealed);
+    assert.ok(failed);
+  });
 
-    // attempt to seal the sale
-    await initializedConductor.methods.sealSale(SALE_7_ID).send({
+  it("should abort the bricked sale on the conductor", async function() {
+    const initializedConductor = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+    const initializedContributor = new web3.eth.Contract(
+      ContributorImplementationFullABI,
+      TokenSaleContributor.address
+    );
+
+    let failed = false;
+    try {
+      // attempt to abort the bricked sale bofore the 7 day weight period has elapsed
+      await initializedConductor.methods.abortBrickedSale(SALE_7_ID).send({
+        from: SELLER,
+        value: WORMHOLE_FEE * 2,
+        gasLimit: GAS_LIMIT,
+      });
+    } catch (e) {
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert sale not old enough");
+      failed = true;
+    }
+
+    assert.ok(failed);
+
+    // wait for 2 years to pass
+    await wait(604801);
+
+    // fetch the status of the sale on the contributor and conductor
+    const contributorAbortedStateBefore = await initializedContributor.methods.getSaleStatus(SALE_7_ID).call();
+    const conductorAbortedStateBefore = await initializedConductor.methods.sales(SALE_7_ID).call();
+
+    assert.ok(!contributorAbortedStateBefore.isAborted);
+    assert.ok(!conductorAbortedStateBefore.isAborted);
+
+    /// abort the bricked sale after 7 days
+    await initializedConductor.methods.abortBrickedSale(SALE_7_ID).send({
       from: SELLER,
-      value: WORMHOLE_FEE * 2,
+      value: WORMHOLE_FEE * 1,
       gasLimit: GAS_LIMIT,
     });
 
-    // confirm that saleAborted was set to true
-    const conductorStatusAfter = await initializedConductor.methods.sales(SALE_7_ID).call();
-
-    // both sealed and aborted since the ERC777 contract tried to cross-call the contract again
-    assert.ok(conductorStatusAfter.isAborted);
-    assert.ok(conductorStatusAfter.isSealed);
-
-    const log2 = (
+    // grab the message generated by the conductor
+    const log = (
       await WORMHOLE.getPastEvents("LogMessagePublished", {
         fromBlock: "latest",
       })
     )[0].returnValues;
 
-    // verify getSaleStatus before aborting in contributor
-    const contributorStatusBefore = await initializedContributor.methods.getSaleStatus(SALE_7_ID).call();
-
-    assert.ok(!contributorStatusBefore.isAborted);
-    assert.ok(!contributorStatusBefore.isSealed);
-
-    const vm2 = await signAndEncodeVM(
+    // create the vaa to initialize the sale
+    const vm = await signAndEncodeVM(
       1,
       1,
       TEST_CHAIN_ID,
       "0x000000000000000000000000" + TokenSaleConductor.address.substr(2),
       0,
-      log2.payload,
+      log.payload.toString(),
       [testSigner1PK],
       0,
       0
     );
 
     // abort the sale
-    await initializedContributor.methods.saleAborted("0x" + vm2).send({
+    await initializedContributor.methods.saleAborted("0x" + vm).send({
       from: BUYER_ONE,
       gasLimit: GAS_LIMIT,
     });
 
-    // confirm that saleAborted was set to true
-    const contributorStatusAfter = await initializedContributor.methods.getSaleStatus(SALE_2_ID).call();
+    // fetch the status of the sale on the contributor and conductor
+    const contributorAbortedStateAfter = await initializedContributor.methods.getSaleStatus(SALE_7_ID).call();
+    const conductorAbortedStateAfter = await initializedConductor.methods.sales(SALE_7_ID).call();
 
-    assert.ok(contributorStatusAfter.isAborted);
-    assert.ok(!contributorStatusAfter.isSealed);
+    assert.ok(contributorAbortedStateAfter.isAborted);
+    assert.ok(conductorAbortedStateAfter.isAborted);
   });
 
   it("conductor should not allow a sale to abort after the sale start time", async function() {

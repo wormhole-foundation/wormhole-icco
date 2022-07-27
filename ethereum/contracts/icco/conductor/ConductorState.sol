@@ -4,6 +4,7 @@
 pragma solidity ^0.8.0;
 
 import "./ConductorStructs.sol";
+import "../shared/ICCOStructs.sol";
 
 contract ConductorEvents {
     event EventCreateSale (
@@ -54,6 +55,12 @@ contract ConductorStorage {
 
         /// next sale id
         uint256 nextSaleId;
+
+        /// dynamic storage for accepted solana tokens
+        ICCOStructs.SolanaToken[] solanaAcceptedTokens;
+
+        /// @dev storage gap
+        uint256[50] ______gap;
     }
 }
 

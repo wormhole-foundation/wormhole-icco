@@ -109,4 +109,8 @@ contract ContributorGetters is ContributorState {
     function excessContributionIsClaimed(uint256 saleId, uint256 tokenIndex, address contributor) public view returns (bool){
         return _state.excessContributionIsClaimed[saleId][tokenIndex][contributor];
     }
+
+    function isTokenDisabled(uint256 saleId, uint256 tokenIndex) public view returns (bool) {
+        return _state.sales[saleId].disabledAcceptedTokens[tokenIndex];
+    }
 }

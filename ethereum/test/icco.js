@@ -5,6 +5,7 @@ const ethers = require("ethers");
 
 require("@openzeppelin/test-helpers/configure")({ provider: web3.currentProvider, environment: "truffle" });
 const { singletons } = require("@openzeppelin/test-helpers");
+const { ZERO_BYTES32 } = require("@openzeppelin/test-helpers/src/constants");
 
 const TokenERC777 = artifacts.require("TokenERC777");
 const MaliciousSeller = artifacts.require("MaliciousSeller");
@@ -45,7 +46,7 @@ contract("ICCO", function(accounts) {
   const CONDUCTOR_BYTES32_ADDRESS = "0x000000000000000000000000" + TokenSaleConductor.address.substr(2);
   const KYC_AUTHORITY = "0x1dF62f291b2E969fB0849d99D9Ce41e2F137006e";
   const ZERO_ADDRESS = ethers.constants.AddressZero;
-  const WORMHOLE_FEE = 1000;
+  const WORMHOLE_FEE = 10000000000000000;
 
   it("should set wormhole fee", async function() {
     console.log("\n       -------------------------- Set Wormhole Messaging Fee --------------------------");
@@ -66,7 +67,7 @@ contract("ICCO", function(accounts) {
       // ChainID
       web3.eth.abi.encodeParameter("uint16", "2").substring(2 + (64 - 4)),
       // Message Fee
-      web3.eth.abi.encodeParameter("uint256", newMessageFee).substring(2),
+      web3.eth.abi.encodeParameter("uint256", newMessageFee.toString()).substring(2),
     ].join("");
 
     const vm = await signAndEncodeVM(timestamp, nonce, emitterChainId, emitterAddress, 0, data, [testSigner1PK], 0, 2);
@@ -145,10 +146,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert caller is not the owner"
-      );
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 9");
       failed = true;
     }
 
@@ -173,10 +171,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert chain already registered"
-      );
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 2");
       failed = true;
     }
   });
@@ -198,10 +193,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert caller is not the owner"
-      );
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 9");
       failed = true;
     }
 
@@ -383,10 +375,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert caller is not the owner"
-      );
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 9");
       conductorFailed = true;
     }
 
@@ -433,10 +422,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert caller is not the owner"
-      );
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 9");
       conductorFailed = true;
     }
 
@@ -457,10 +443,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert caller must be pendingOwner"
-      );
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 8");
       conductorFailed = true;
     }
 
@@ -707,7 +690,6 @@ contract("ICCO", function(accounts) {
       SALE_END, // unlock timestamp
       saleRecipient,
       refundRecipient,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -719,7 +701,7 @@ contract("ICCO", function(accounts) {
 
     // create the sale
     const createSaleTx = await initialized.methods.createSale(saleParams, acceptedTokens).send({
-      value: WORMHOLE_FEE,
+      value: WORMHOLE_FEE * 2,
       from: SELLER,
       gasLimit: GAS_LIMIT,
     });
@@ -729,13 +711,10 @@ contract("ICCO", function(accounts) {
     assert.equal(eventCreateSale["saleId"], SALE_ID);
     assert.equal(eventCreateSale["creatorAddress"], SELLER);
 
-    // verify contributorWallets getter
+    // verify contributorWallets getter for solana
     const solanaWallet = await initialized.methods.contributorWallets(SALE_ID, solanaChainId).call();
 
-    assert.equal(
-      solanaWallet,
-      web3.eth.abi.encodeParameter("address", "0x" + SOLD_TOKEN_BYTES32_ADDRESS.substring(26))
-    );
+    assert.equal(solanaWallet, ZERO_BYTES32);
 
     // verify payload sent to contributor
     const log = (
@@ -1239,6 +1218,10 @@ contract("ICCO", function(accounts) {
     assert.equal(log.payload.substr(index, 4), web3.eth.abi.encodeParameter("uint16", 2).substring(2 + 64 - 4));
     index += 4;
 
+    // the solanaTokenAcount should be bytes32(0) since this sale only accepts EVM contributions
+    assert.equal(log.payload.substr(index, 64), ZERO_BYTES32.substring(2));
+    index += 64;
+
     // tokens length
     assert.equal(parseInt(log.payload.substr(index, 2), 16), acceptedTokenLength);
     index += 2;
@@ -1345,10 +1328,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert already collected contribution"
-      );
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 32");
       failed = true;
     }
 
@@ -1368,7 +1348,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert sale not initiated");
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 33");
       failed = true;
     }
 
@@ -1399,7 +1379,7 @@ contract("ICCO", function(accounts) {
 
     // seal the sale
     const sealSaleTx = await initialized.methods.sealSale(SALE_ID).send({
-      value: WORMHOLE_FEE,
+      value: WORMHOLE_FEE * 2,
       from: SELLER,
       gasLimit: GAS_LIMIT,
     });
@@ -1474,11 +1454,33 @@ contract("ICCO", function(accounts) {
       0
     );
 
+    // ether balance of SELLER before
+    const etherBalanceBeforeCall = await web3.eth.getBalance(SELLER);
+
     // seal the sale
+    // test to make sure the contract returns unused ether
+    const wormholeFeeCount = 0;
+    const extraFeeCount = 4;
     const saleSealedTx = await initialized.methods.saleSealed("0x" + vm).send({
       from: BUYER_ONE,
+      value: WORMHOLE_FEE * (wormholeFeeCount + extraFeeCount),
       gasLimit: GAS_LIMIT,
     });
+
+    // ether balance of SELLER before
+    const etherBalanceAfterCall = await web3.eth.getBalance(SELLER);
+
+    // confirm that the contract returned unused ether
+    const valueSpentAfterGas = await calculateValueSpentLessGas(
+      saleSealedTx,
+      etherBalanceBeforeCall,
+      etherBalanceAfterCall
+    );
+
+    assert.equal(
+      Math.abs(parseFloat(valueSpentAfterGas).toFixed(2)),
+      parseFloat(ethers.utils.formatEther((WORMHOLE_FEE * wormholeFeeCount).toString())).toFixed(2)
+    );
 
     // confirm that the EventSealSale event was emitted
     let eventSeal = saleSealedTx["events"]["EventSaleSealed"]["returnValues"];
@@ -1689,7 +1691,6 @@ contract("ICCO", function(accounts) {
       SALE_2_END, // unlock timestamp
       saleRecipient,
       refundRecipient,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -1701,7 +1702,7 @@ contract("ICCO", function(accounts) {
 
     // create a second sale
     await initialized.methods.createSale(saleParams, acceptedTokens).send({
-      value: WORMHOLE_FEE,
+      value: WORMHOLE_FEE * 2,
       from: SELLER,
       gasLimit: GAS_LIMIT,
     });
@@ -2041,12 +2042,29 @@ contract("ICCO", function(accounts) {
 
     const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
 
+    // ether balance of BUYER_ONE before
+    const etherBalanceBeforeCall = await web3.eth.getBalance(BUYER_ONE);
+
     // attest contributions
-    await initialized.methods.attestContributions(SALE_2_ID).send({
+    // test to make sure the contract returns unused ether
+    const wormholeFeeCount = 1;
+    const extraFeeCount = 1;
+    const tx = await initialized.methods.attestContributions(SALE_2_ID).send({
       from: BUYER_ONE,
-      value: WORMHOLE_FEE,
+      value: WORMHOLE_FEE * (wormholeFeeCount + extraFeeCount),
       gasLimit: GAS_LIMIT,
     });
+
+    // ether balance of SELLER before
+    const etherBalanceAfterCall = await web3.eth.getBalance(BUYER_ONE);
+
+    // confirm that the contract returned unused ether
+    const valueSpentAfterGas = await calculateValueSpentLessGas(tx, etherBalanceBeforeCall, etherBalanceAfterCall);
+
+    assert.equal(
+      parseFloat(valueSpentAfterGas).toFixed(2),
+      parseFloat(ethers.utils.formatEther((WORMHOLE_FEE * wormholeFeeCount).toString())).toFixed(2)
+    );
 
     const log = (
       await WORMHOLE.getPastEvents("LogMessagePublished", {
@@ -2068,6 +2086,10 @@ contract("ICCO", function(accounts) {
     // chain id
     assert.equal(log.payload.substr(index, 4), web3.eth.abi.encodeParameter("uint16", 2).substring(2 + 64 - 4));
     index += 4;
+
+    // the solanaTokenAcount should be bytes32(0) since this sale only accepts EVM contributions
+    assert.equal(log.payload.substr(index, 64), ZERO_BYTES32.substring(2));
+    index += 64;
 
     // tokens length
     assert.equal(parseInt(log.payload.substr(index, 2), 16), acceptedTokenLength);
@@ -2176,7 +2198,7 @@ contract("ICCO", function(accounts) {
 
     const sealAbortTx = await initialized.methods.sealSale(SALE_2_ID).send({
       from: SELLER,
-      value: WORMHOLE_FEE,
+      value: WORMHOLE_FEE * 2,
       gasLimit: GAS_LIMIT,
     });
 
@@ -2423,7 +2445,6 @@ contract("ICCO", function(accounts) {
       SALE_3_END, // unlock timestamp
       saleRecipient,
       refundRecipient,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -2435,7 +2456,7 @@ contract("ICCO", function(accounts) {
 
     // create a third sale
     await initialized.methods.createSale(saleParams, acceptedTokens).send({
-      value: WORMHOLE_FEE,
+      value: WORMHOLE_FEE * 2,
       from: SELLER,
       gasLimit: GAS_LIMIT,
     });
@@ -2665,10 +2686,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert only initiator can abort the sale early"
-      );
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 23");
       failed = true;
     }
 
@@ -3002,7 +3020,6 @@ contract("ICCO", function(accounts) {
       SALE_4_END, // unlock timestamp
       saleRecipient,
       refundRecipient,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -3014,7 +3031,7 @@ contract("ICCO", function(accounts) {
 
     // create the sale
     await initialized.methods.createSale(saleParams, acceptedTokens).send({
-      value: WORMHOLE_FEE,
+      value: WORMHOLE_FEE * 2,
       from: SELLER,
       gasLimit: GAS_LIMIT,
     });
@@ -3384,6 +3401,10 @@ contract("ICCO", function(accounts) {
     assert.equal(log.payload.substr(index, 4), web3.eth.abi.encodeParameter("uint16", 2).substring(2 + 64 - 4));
     index += 4;
 
+    // the solanaTokenAcount should be bytes32(0) since this sale only accepts EVM contributions
+    assert.equal(log.payload.substr(index, 64), ZERO_BYTES32.substring(2));
+    index += 64;
+
     // tokens length
     assert.equal(parseInt(log.payload.substr(index, 2), 16), acceptedTokenLength);
     index += 2;
@@ -3488,7 +3509,7 @@ contract("ICCO", function(accounts) {
     // seal the sale
     const sealSuccessTx = await initialized.methods.sealSale(SALE_4_ID).send({
       from: SELLER,
-      value: WORMHOLE_FEE,
+      value: WORMHOLE_FEE * 2,
       gasLimit: GAS_LIMIT,
     });
 
@@ -3845,7 +3866,6 @@ contract("ICCO", function(accounts) {
       SALE_5_END, // unlock timestamp
       saleRecipient,
       refundRecipient,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -3874,10 +3894,7 @@ contract("ICCO", function(accounts) {
           gasLimit: GAS_LIMIT,
         });
       } catch (e) {
-        assert.equal(
-          e.message,
-          "Returned error: VM Exception while processing transaction: revert too many solana tokens"
-        );
+        assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 21");
         failed = true;
       }
       assert.ok(failed);
@@ -3919,6 +3936,22 @@ contract("ICCO", function(accounts) {
       ],
     ];
 
+    {
+      // try to create the sale w/o enough value to pay for both wormhole messages
+      let failed = false;
+      try {
+        await initialized.methods.createSale(saleParams, acceptedTokens).send({
+          value: WORMHOLE_FEE, // should be > 1 wormhole fee
+          from: SELLER,
+          gasLimit: GAS_LIMIT,
+        });
+      } catch (e) {
+        assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 17");
+        failed = true;
+      }
+      assert.ok(failed);
+    }
+
     // create the sale
     await initialized.methods.createSale(saleParams, acceptedTokens).send({
       value: WORMHOLE_FEE * 2,
@@ -3946,7 +3979,7 @@ contract("ICCO", function(accounts) {
     assert.equal(parseInt(log.payload.substr(index, 64), 16), SALE_5_ID);
     index += 64;
 
-    // solana ATA for sale token
+    // native token address for the token being sold
     assert.equal(
       log.payload.substr(index, 64),
       web3.eth.abi.encodeParameter("address", SOLD_TOKEN.address).substring(2)
@@ -4037,12 +4070,18 @@ contract("ICCO", function(accounts) {
       web3.eth.abi.encodeParameter("uint8", payloadIdType2).substring(2 + (64 - 2)),
       web3.eth.abi.encodeParameter("uint256", SALE_5_ID).substring(2),
       web3.eth.abi.encodeParameter("uint16", SOLANA_CHAIN_ID).substring(2 + (64 - 4)),
+      web3.eth.abi.encodeParameter("bytes32", "0x000000000000000000000000" + accounts[6].substr(2)).substr(2),
       web3.eth.abi.encodeParameter("uint8", acceptedTokensLengthSolana).substring(2 + (64 - 2)),
       web3.eth.abi.encodeParameter("uint8", SOLANA_TOKEN_INDEX_ONE).substring(2 + (64 - 2)),
       web3.eth.abi.encodeParameter("uint256", solanaTokenContribution).substring(2),
       web3.eth.abi.encodeParameter("uint8", SOLANA_TOKEN_INDEX_TWO).substring(2 + (64 - 2)),
       web3.eth.abi.encodeParameter("uint256", solanaTokenTwoContribution).substring(2),
     ];
+
+    // check the solana token account on the conductor before collecting the contribution
+    const solanaTokenAccountBefore = await initialized.methods.contributorWallets(SALE_5_ID, SOLANA_CHAIN_ID).call();
+
+    assert.equal(solanaTokenAccountBefore, ZERO_BYTES32);
 
     const vm = await signAndEncodeVM(
       1,
@@ -4062,11 +4101,20 @@ contract("ICCO", function(accounts) {
       gasLimit: GAS_LIMIT,
     });
 
+    // check the solana token account on the conductor after collecting the contribution
+    const solanaTokenAccountAfter = await initialized.methods.contributorWallets(SALE_5_ID, SOLANA_CHAIN_ID).call();
+
+    assert.equal(
+      solanaTokenAccountAfter,
+      web3.eth.abi.encodeParameter("bytes32", "0x000000000000000000000000" + accounts[6].substr(2))
+    );
+
     // construct contributions payload coming from ethereum contributor
     const ethereumContributionsSealed = [
       web3.eth.abi.encodeParameter("uint8", payloadIdType2).substring(2 + (64 - 2)),
       web3.eth.abi.encodeParameter("uint256", SALE_5_ID).substring(2),
       web3.eth.abi.encodeParameter("uint16", TEST_CHAIN_ID).substring(2 + (64 - 4)),
+      web3.eth.abi.encodeParameter("bytes32", ZERO_BYTES32).substring(2),
       web3.eth.abi.encodeParameter("uint8", acceptedTokensLengthEthereum).substring(2 + (64 - 2)),
       web3.eth.abi.encodeParameter("uint8", ETH_TOKEN_INDEX).substring(2 + (64 - 2)),
       web3.eth.abi.encodeParameter("uint256", ethereumTokenContribution).substring(2),
@@ -4110,12 +4158,29 @@ contract("ICCO", function(accounts) {
 
     const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
 
+    // ether balance of SELLER before
+    const etherBalanceBeforeCall = await web3.eth.getBalance(SELLER);
+
     // seal the sale
-    await initialized.methods.sealSale(SALE_5_ID).send({
-      value: WORMHOLE_FEE * 3,
+    // test to make sure the contract returns unused ether
+    const wormholeFeeCount = 3;
+    const extraFeeCount = 3;
+    const tx = await initialized.methods.sealSale(SALE_5_ID).send({
+      value: WORMHOLE_FEE * (wormholeFeeCount + extraFeeCount),
       from: SELLER,
       gasLimit: GAS_LIMIT,
     });
+
+    // ether balance of SELLER before
+    const etherBalanceAfterCall = await web3.eth.getBalance(SELLER);
+
+    // confirm that the contract returned unused ether
+    const valueSpentAfterGas = await calculateValueSpentLessGas(tx, etherBalanceBeforeCall, etherBalanceAfterCall);
+
+    assert.equal(
+      parseFloat(valueSpentAfterGas).toFixed(2),
+      parseFloat(ethers.utils.formatEther((WORMHOLE_FEE * wormholeFeeCount).toString())).toFixed(2)
+    );
 
     const log = await WORMHOLE.getPastEvents("LogMessagePublished", {
       fromBlock: "latest",
@@ -4256,7 +4321,6 @@ contract("ICCO", function(accounts) {
       SALE_6_UNLOCK_TIMESTAMP,
       saleRecipient,
       SALE_6_REFUND_RECIPIENT,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -4268,7 +4332,7 @@ contract("ICCO", function(accounts) {
 
     // create the sale
     await initializedConductor.methods.createSale(saleParams, acceptedTokens).send({
-      value: WORMHOLE_FEE * 1,
+      value: WORMHOLE_FEE * 2,
       from: SELLER,
       gasLimit: GAS_LIMIT,
     });
@@ -4411,7 +4475,7 @@ contract("ICCO", function(accounts) {
     // seal the sale in the conductor and check allocation details
     await initializedConductor.methods.sealSale(SALE_6_ID).send({
       from: SELLER,
-      value: WORMHOLE_FEE,
+      value: WORMHOLE_FEE * 2,
       gasLimit: GAS_LIMIT,
     });
 
@@ -4563,8 +4627,8 @@ contract("ICCO", function(accounts) {
 
     await singletons.ERC1820Registry(accounts[0]);
 
-    SOLD_TOKEN = await TokenERC777.deployed();
-    SOLD_TOKEN_BYTES32_ADDRESS = "0x000000000000000000000000" + SOLD_TOKEN.address.substr(2);
+    MALICIOUS_SOLD_TOKEN = await TokenERC777.deployed();
+    MALICIOUS_SOLD_TOKEN_BYTES32_ADDRESS = "0x000000000000000000000000" + MALICIOUS_SOLD_TOKEN.address.substr(2);
 
     const initializedConductor = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
     const initializedContributor = new web3.eth.Contract(
@@ -4574,23 +4638,23 @@ contract("ICCO", function(accounts) {
 
     MALICIOUS_SELLER = await MaliciousSeller.deployed();
     SALE_7_REFUND_RECIPIENT = MALICIOUS_SELLER.address;
-    await MALICIOUS_SELLER.setToken(SOLD_TOKEN.address);
+    await MALICIOUS_SELLER.setToken(MALICIOUS_SOLD_TOKEN.address);
     await MALICIOUS_SELLER.setConductor(initializedConductor._address);
-    await MALICIOUS_SELLER.setWormholeFee(WORMHOLE_FEE);
+    await MALICIOUS_SELLER.setWormholeFee(WORMHOLE_FEE.toString());
 
     // mint some more sale tokens
-    await SOLD_TOKEN.mint(SELLER, saleTokenAmount);
-    await SOLD_TOKEN.approve(TokenSaleConductor.address, saleTokenAmount);
+    await MALICIOUS_SOLD_TOKEN.mint(SELLER, saleTokenAmount);
+    await MALICIOUS_SOLD_TOKEN.approve(TokenSaleConductor.address, saleTokenAmount);
 
     // Simulate SOLD_TOKEN from previously created sales (testing purposes)
-    await SOLD_TOKEN.transfer(initializedConductor._address, "120000");
+    await MALICIOUS_SOLD_TOKEN.transfer(initializedConductor._address, "120000");
 
     web3.eth.sendTransaction({ to: SALE_7_REFUND_RECIPIENT, from: SELLER, value: web3.utils.toWei("1") });
 
     // create array (struct) for sale params
     const saleParams = [
       isFixedPriceSale,
-      SOLD_TOKEN_BYTES32_ADDRESS,
+      MALICIOUS_SOLD_TOKEN_BYTES32_ADDRESS,
       TEST_CHAIN_ID,
       saleTokenAmount,
       minimumTokenRaise,
@@ -4600,7 +4664,6 @@ contract("ICCO", function(accounts) {
       SALE_7_UNLOCK_TIMESTAMP,
       saleRecipient,
       SALE_7_REFUND_RECIPIENT,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -4611,7 +4674,7 @@ contract("ICCO", function(accounts) {
 
     // create the sale
     await initializedConductor.methods.createSale(saleParams, acceptedTokens).send({
-      value: WORMHOLE_FEE * 1,
+      value: WORMHOLE_FEE * 2,
       from: SELLER,
       gasLimit: GAS_LIMIT,
     });
@@ -4735,7 +4798,7 @@ contract("ICCO", function(accounts) {
     // attempt to seal the sale
     await initializedConductor.methods.sealSale(SALE_7_ID).send({
       from: SELLER,
-      value: WORMHOLE_FEE,
+      value: WORMHOLE_FEE * 2,
       gasLimit: GAS_LIMIT,
     });
 
@@ -4817,7 +4880,6 @@ contract("ICCO", function(accounts) {
       saleEnd,
       saleRecipient,
       refundRecipient,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -4829,7 +4891,7 @@ contract("ICCO", function(accounts) {
 
     // create another sale
     await initialized.methods.createSale(saleParams, acceptedTokens).send({
-      value: WORMHOLE_FEE,
+      value: WORMHOLE_FEE * 2,
       from: SELLER,
       gasLimit: GAS_LIMIT,
     });
@@ -4845,17 +4907,14 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert sale cannot be aborted once it has started"
-      );
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 25");
       failed = true;
     }
 
     assert.ok(failed);
   });
 
-  it("contributor should not initialize a sale with non-ERC20 tokens", async function() {
+  it("contributor should disable contributions for non-ERC20 tokens", async function() {
     // test variables
     const current_block = await web3.eth.getBlock("latest");
     const saleStart = current_block.timestamp + 5;
@@ -4865,6 +4924,7 @@ contract("ICCO", function(accounts) {
     const maximumTokenRaise = "30000";
     const tokenOneConversionRate = "1000000000000000000";
     const tokenTwoConversionRate = "2000000000000000000";
+    const contributionAmount = "2000";
     const saleRecipient = accounts[0];
     const refundRecipient = accounts[0];
     const SOLD_TOKEN_DECIMALS = 18;
@@ -4879,6 +4939,9 @@ contract("ICCO", function(accounts) {
       ContributorImplementationFullABI,
       TokenSaleContributor.address
     );
+
+    // grab saleId for upcoming sale
+    const saleId = await initializedConductor.methods.getNextSaleId().call();
 
     // create sale token again
     const saleTokenMintAmount = "2000";
@@ -4912,7 +4975,6 @@ contract("ICCO", function(accounts) {
       saleEnd,
       saleRecipient,
       refundRecipient,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -4928,7 +4990,7 @@ contract("ICCO", function(accounts) {
 
     // create another sale
     await initializedConductor.methods.createSale(saleParams, acceptedTokens).send({
-      value: WORMHOLE_FEE,
+      value: WORMHOLE_FEE * 2,
       from: SELLER,
       gasLimit: GAS_LIMIT,
     });
@@ -4953,19 +5015,64 @@ contract("ICCO", function(accounts) {
       0
     );
 
+    // try to initialize with a bad accepted token address
+    await initializedContributor.methods.initSale("0x" + vm).send({
+      from: SELLER,
+      gasLimit: GAS_LIMIT,
+    });
+
+    // confirm "bad" token was disabled in the sale state
+    const tokenZeroStatus = await initializedContributor.methods.isTokenDisabled(saleId, 0).call();
+    const tokenOneStatus = await initializedContributor.methods.isTokenDisabled(saleId, 1).call();
+
+    assert.ok(!tokenZeroStatus);
+    assert.ok(tokenOneStatus);
+
+    wait(10);
+
+    // try to contribute disabled tokens to the sale
     let failed = false;
     try {
-      // try to initialize with a bad accepted token address
-      await initializedContributor.methods.initSale("0x" + vm).send({
-        from: SELLER,
-        gasLimit: GAS_LIMIT,
-      });
+      const kycSig1 = await signContribution(
+        CONDUCTOR_BYTES32_ADDRESS,
+        saleId,
+        TOKEN_TWO_INDEX,
+        contributionAmount,
+        BUYER_ONE,
+        kycSignerPK
+      );
+      await initializedContributor.methods
+        .contribute(saleId, TOKEN_TWO_INDEX, parseInt(contributionAmount), kycSig1)
+        .send({
+          from: BUYER_ONE,
+          gasLimit: GAS_LIMIT,
+        });
     } catch (e) {
-      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert non-existent ERC20");
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert token is disabled");
       failed = true;
     }
 
     assert.ok(failed);
+
+    // approve and contribute tokens
+    await CONTRIBUTED_TOKEN_ONE.mint(BUYER_ONE, contributionAmount);
+    await CONTRIBUTED_TOKEN_ONE.approve(TokenSaleContributor.address, contributionAmount, {
+      from: BUYER_ONE,
+    });
+    const kycSig1 = await signContribution(
+      CONDUCTOR_BYTES32_ADDRESS,
+      saleId,
+      TOKEN_ONE_INDEX,
+      contributionAmount,
+      BUYER_ONE,
+      kycSignerPK
+    );
+    await initializedContributor.methods
+      .contribute(saleId, TOKEN_ONE_INDEX, parseInt(contributionAmount), kycSig1)
+      .send({
+        from: BUYER_ONE,
+        gasLimit: GAS_LIMIT,
+      });
   });
 
   it("conductor should only accept tokens with non-zero conversion rates", async function() {
@@ -5021,7 +5128,6 @@ contract("ICCO", function(accounts) {
       saleEnd,
       saleRecipient,
       refundRecipient,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -5039,15 +5145,12 @@ contract("ICCO", function(accounts) {
     try {
       // try to create a sale with a token with zero multiplier
       await initialized.methods.createSale(saleParams, acceptedTokens).send({
-        value: WORMHOLE_FEE,
+        value: WORMHOLE_FEE * 2,
         from: SELLER,
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert conversion rate cannot be zero"
-      );
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 19");
       failed = true;
     }
 
@@ -5106,7 +5209,6 @@ contract("ICCO", function(accounts) {
       saleEnd,
       saleRecipient,
       refundRecipient,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -5123,15 +5225,12 @@ contract("ICCO", function(accounts) {
     try {
       // try to create a sale with duplicate tokens (w/ same chainId)
       await initialized.methods.createSale(saleParams, acceptedTokens).send({
-        value: WORMHOLE_FEE,
+        value: WORMHOLE_FEE * 2,
         from: SELLER,
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert duplicate tokens not allowed"
-      );
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 18");
       failed = true;
     }
 
@@ -5149,64 +5248,40 @@ contract("ICCO", function(accounts) {
 
     // successfully create a sale with duplicate tokens (w/ different chainIds)
     await initialized.methods.createSale(saleParams, acceptedTokens2).send({
-      value: WORMHOLE_FEE,
+      value: WORMHOLE_FEE * 2,
       from: SELLER,
       gasLimit: GAS_LIMIT,
     });
   });
 
-  it("conductor should not accept sale start/end times larger than uint64", async function() {
+  it("conductor should not accept sale timestamps larger than uint64", async function() {
     // test variables
     const saleStart = "100000000000000000000000";
     const saleEnd = "100000000000000000000001";
+    const saleUnlockTime = "100000000000000000000002";
     const saleTokenAmount = "10";
     const minimumTokenRaise = "2000";
     const maximumTokenRaise = "30000";
     const tokenOneConversionRate = "1000000000000000000";
     const saleRecipient = accounts[0];
     const refundRecipient = accounts[0];
-    const SOLD_TOKEN_DECIMALS = 18;
-    const mintAccount = SELLER;
-    const tokenSequence = 0; // set to 0 for the test
-    const tokenChainId = 0; // set to 0 for the test
-    const nativeContractAddress = "0x00"; // set to 0 for the test
     const isFixedPriceSale = false;
 
     const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
 
-    // create sale token again
-    const saleTokenMintAmount = "2000";
-    const soldToken = await TokenImplementation.new();
-    const soldTokenName = "Sold Token";
-    const soldTokenSymbol = "SOLD";
-    const soldTokenBytes32 = "0x000000000000000000000000" + soldToken.address.substr(2);
-
-    await soldToken.initialize(
-      soldTokenName,
-      soldTokenSymbol,
-      SOLD_TOKEN_DECIMALS,
-      tokenSequence,
-      mintAccount,
-      tokenChainId,
-      nativeContractAddress
-    );
-    await soldToken.mint(SELLER, saleTokenMintAmount);
-    await soldToken.approve(TokenSaleConductor.address, saleTokenAmount);
-
     // create array (solidity struct) for sale params
     const saleParams = [
       isFixedPriceSale,
-      soldTokenBytes32,
+      SOLD_TOKEN_BYTES32_ADDRESS,
       TEST_CHAIN_ID,
       saleTokenAmount,
       minimumTokenRaise,
       maximumTokenRaise,
       saleStart,
       saleEnd,
-      saleEnd,
+      saleUnlockTime,
       saleRecipient,
       refundRecipient,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -5217,17 +5292,14 @@ contract("ICCO", function(accounts) {
 
     let failed = false;
     try {
-      // try to create a sale with sale start/end times larger than uint64
+      // try to create a sale with sale unlock timestamp larger than uint64
       await initialized.methods.createSale(saleParams, acceptedTokens).send({
-        value: WORMHOLE_FEE,
+        value: WORMHOLE_FEE * 2,
         from: SELLER,
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(
-        e.message,
-        "Returned error: VM Exception while processing transaction: revert saleStart too far in the future"
-      );
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 7");
       failed = true;
     }
 
@@ -5299,7 +5371,6 @@ contract("ICCO", function(accounts) {
       saleEnd,
       saleRecipient,
       refundRecipient,
-      SOLD_TOKEN_BYTES32_ADDRESS,
       KYC_AUTHORITY,
     ];
 
@@ -5310,7 +5381,7 @@ contract("ICCO", function(accounts) {
 
     // create another sale
     await initializedConductor.methods.createSale(saleParams, acceptedTokens).send({
-      value: WORMHOLE_FEE,
+      value: WORMHOLE_FEE * 2,
       from: SELLER,
       gasLimit: GAS_LIMIT,
     });
@@ -5407,7 +5478,7 @@ contract("ICCO", function(accounts) {
     // seal the sale in the conductor and check allocation details
     await initializedConductor.methods.sealSale(saleId).send({
       from: SELLER,
-      value: WORMHOLE_FEE,
+      value: WORMHOLE_FEE * 2,
       gasLimit: GAS_LIMIT,
     });
 
@@ -5445,6 +5516,420 @@ contract("ICCO", function(accounts) {
 
     assert.equal(actualAllocation, expectedAllocation);
     assert.equal(actualExcessContribution, expectedExcessContribution);
+  });
+
+  it("conductor and contributor should allow the owner to update the authority", async function() {
+    // test variables
+    const current_block = await web3.eth.getBlock("latest");
+    const saleStart = current_block.timestamp + 5;
+    const saleEnd = saleStart + 8;
+    const saleTokenAmount = "1000";
+    const minimumTokenRaise = "2000";
+    const maximumTokenRaise = "2000";
+    const tokenOneConversionRate = "1000000000000000000";
+    const contributionAmount = "1000";
+    const saleRecipient = accounts[0];
+    const refundRecipient = accounts[0];
+    const SOLD_TOKEN_DECIMALS = 18;
+    const mintAccount = SELLER;
+    const tokenSequence = 0; // set to 0 for the test
+    const tokenChainId = 0; // set to 0 for the test
+    const nativeContractAddress = "0x00"; // set to 0 for the test
+    const isFixedPriceSale = false;
+
+    // create sale token again
+    const saleTokenMintAmount = "2000";
+    const soldToken = await TokenImplementation.new();
+    const soldTokenName = "Sold Token";
+    const soldTokenSymbol = "SOLD";
+    const soldTokenBytes32 = "0x000000000000000000000000" + soldToken.address.substr(2);
+
+    await soldToken.initialize(
+      soldTokenName,
+      soldTokenSymbol,
+      SOLD_TOKEN_DECIMALS,
+      tokenSequence,
+      mintAccount,
+      tokenChainId,
+      nativeContractAddress
+    );
+    await soldToken.mint(SELLER, saleTokenMintAmount);
+    await soldToken.approve(TokenSaleConductor.address, saleTokenAmount);
+
+    // setup smart contracts
+    const initializedConductor = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+    const initializedContributor = new web3.eth.Contract(
+      ContributorImplementationFullABI,
+      TokenSaleContributor.address
+    );
+
+    const saleId = await initializedConductor.methods.getNextSaleId().call();
+
+    await soldToken.approve(TokenSaleConductor.address, saleTokenAmount);
+
+    // create array (solidity struct) for sale params
+    const saleParams = [
+      isFixedPriceSale,
+      soldTokenBytes32,
+      TEST_CHAIN_ID,
+      saleTokenAmount,
+      minimumTokenRaise,
+      maximumTokenRaise,
+      saleStart,
+      saleEnd,
+      saleEnd,
+      saleRecipient,
+      refundRecipient,
+      KYC_AUTHORITY,
+    ];
+
+    // create accepted tokens array
+    const acceptedTokens = [
+      [TEST_CHAIN_ID, "0x000000000000000000000000" + CONTRIBUTED_TOKEN_ONE.address.substr(2), tokenOneConversionRate],
+    ];
+
+    // create another sale
+    await initializedConductor.methods.createSale(saleParams, acceptedTokens).send({
+      value: WORMHOLE_FEE * 2,
+      from: SELLER,
+      gasLimit: GAS_LIMIT,
+    });
+
+    // grab the message generated by the conductor
+    const log = (
+      await WORMHOLE.getPastEvents("LogMessagePublished", {
+        fromBlock: "latest",
+      })
+    )[0].returnValues;
+
+    // create the vaa to initialize the sale
+    const vm = await signAndEncodeVM(
+      1,
+      1,
+      TEST_CHAIN_ID,
+      "0x000000000000000000000000" + TokenSaleConductor.address.substr(2),
+      0,
+      log.payload.toString(),
+      [testSigner1PK],
+      0,
+      0
+    );
+
+    // initialize the sale
+    await initializedContributor.methods.initSale("0x" + vm).send({
+      from: SELLER,
+      gasLimit: GAS_LIMIT,
+    });
+
+    // wait for sale to start
+    await wait(5);
+
+    // approve the contribution amount for BUYER_ONE
+    await CONTRIBUTED_TOKEN_ONE.approve(TokenSaleContributor.address, maximumTokenRaise, {
+      from: BUYER_ONE,
+    });
+
+    // mint some more tokens to contribute with
+    await CONTRIBUTED_TOKEN_ONE.mint(BUYER_ONE, maximumTokenRaise);
+
+    // perform "kyc" and contribute tokens to the sale for BUYER_ONE (starting authority)
+    const kycSig1 = await signContribution(
+      CONDUCTOR_BYTES32_ADDRESS,
+      saleId,
+      TOKEN_ONE_INDEX,
+      contributionAmount,
+      BUYER_ONE,
+      kycSignerPK
+    );
+    await initializedContributor.methods
+      .contribute(saleId, TOKEN_ONE_INDEX, parseInt(contributionAmount), kycSig1)
+      .send({
+        from: BUYER_ONE,
+        gasLimit: GAS_LIMIT,
+      });
+
+    // check the authority on the conductor and contributor before updating it
+    const contributorAuthorityBefore = await initializedContributor.methods.authority(saleId).call();
+    const conductorAuthorityBefore = await initializedConductor.methods.sales(saleId).call();
+
+    assert.equal(contributorAuthorityBefore, KYC_AUTHORITY);
+    assert.equal(conductorAuthorityBefore.authority, KYC_AUTHORITY);
+
+    // now update the authority to the new key
+    const newAuthorityPK = testSigner1PK;
+    const newAuthorityAccount = web3.eth.accounts.privateKeyToAccount("0x" + newAuthorityPK);
+    const authorityUpdateSignature = await signAuthorityUpdate(CONDUCTOR_BYTES32_ADDRESS, saleId, newAuthorityPK);
+
+    await initializedConductor.methods
+      .updateSaleAuthority(saleId, newAuthorityAccount.address, authorityUpdateSignature)
+      .send({
+        from: accounts[0],
+        gasLimit: GAS_LIMIT,
+        value: WORMHOLE_FEE,
+      });
+
+    // grab the message generated by the conductor
+    const log2 = (
+      await WORMHOLE.getPastEvents("LogMessagePublished", {
+        fromBlock: "latest",
+      })
+    )[0].returnValues;
+
+    // create the vaa to initialize the sale
+    const vm2 = await signAndEncodeVM(
+      1,
+      1,
+      TEST_CHAIN_ID,
+      "0x000000000000000000000000" + TokenSaleConductor.address.substr(2),
+      0,
+      log2.payload.toString(),
+      [testSigner1PK],
+      0,
+      0
+    );
+
+    // set the new authority key on the contributor
+    await initializedContributor.methods.saleAuthorityUpdated("0x" + vm2).send({
+      from: SELLER,
+      gasLimit: GAS_LIMIT,
+    });
+
+    // check the authority on the conductor and contributor after updating it
+    const contributorAuthorityAfter = await initializedContributor.methods.authority(saleId).call();
+    const conductorAuthorityAfter = await initializedConductor.methods.sales(saleId).call();
+
+    assert.equal(contributorAuthorityAfter, newAuthorityAccount.address);
+    assert.equal(conductorAuthorityAfter.authority, newAuthorityAccount.address);
+
+    // try to update the authority again
+    let failed = false;
+    try {
+      // set the new authority key on the contributor
+      await initializedContributor.methods.saleAuthorityUpdated("0x" + vm2).send({
+        from: SELLER,
+        gasLimit: GAS_LIMIT,
+      });
+    } catch (e) {
+      assert.equal(
+        e.message,
+        "Returned error: VM Exception while processing transaction: revert newAuthority already set"
+      );
+      failed = true;
+    }
+
+    assert.ok(failed);
+
+    // attempt to contribute with the old key
+    failed = false;
+    try {
+      // perform "kyc" and contribute tokens to the sale for BUYER_ONE (starting authority)
+      const kycSig2 = await signContribution(
+        CONDUCTOR_BYTES32_ADDRESS,
+        saleId,
+        TOKEN_ONE_INDEX,
+        contributionAmount,
+        BUYER_ONE,
+        kycSignerPK
+      );
+      await initializedContributor.methods
+        .contribute(saleId, TOKEN_ONE_INDEX, parseInt(contributionAmount), kycSig2)
+        .send({
+          from: BUYER_ONE,
+          gasLimit: GAS_LIMIT,
+        });
+    } catch (e) {
+      assert.equal(
+        e.message,
+        "Returned error: VM Exception while processing transaction: revert unauthorized contributor"
+      );
+      failed = true;
+    }
+
+    assert.ok(failed);
+
+    // now contribute with the new key
+    const kycSig3 = await signContribution(
+      CONDUCTOR_BYTES32_ADDRESS,
+      saleId,
+      TOKEN_ONE_INDEX,
+      contributionAmount,
+      BUYER_ONE,
+      testSigner1PK
+    );
+    await initializedContributor.methods
+      .contribute(saleId, TOKEN_ONE_INDEX, parseInt(contributionAmount), kycSig3)
+      .send({
+        from: BUYER_ONE,
+        gasLimit: GAS_LIMIT,
+      });
+  });
+
+  it("conductor should sanity check addresses in Raise parameters", async function() {
+    // test variables
+    const current_block = await web3.eth.getBlock("latest");
+    const saleStart = current_block.timestamp + 5;
+    const saleEnd = saleStart + 8;
+    const saleTokenAmount = "1000";
+    const minimumTokenRaise = "2000";
+    const maximumTokenRaise = "2000";
+    const tokenOneConversionRate = "1000000000000000000";
+    const recipient = accounts[0]; // make zero address for the test
+    const refundRecipient = accounts[0];
+    const isFixedPriceSale = false;
+
+    // setup smart contracts
+    const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+
+    // create array (solidity struct) for sale params
+    const saleParams1 = [
+      isFixedPriceSale,
+      SOLD_TOKEN_BYTES32_ADDRESS,
+      TEST_CHAIN_ID,
+      saleTokenAmount,
+      minimumTokenRaise,
+      maximumTokenRaise,
+      saleStart,
+      saleEnd,
+      saleEnd,
+      ZERO_ADDRESS, // change the recipient address to address(0)
+      refundRecipient,
+      KYC_AUTHORITY,
+    ];
+
+    // create accepted tokens array
+    const acceptedTokens = [
+      [TEST_CHAIN_ID, "0x000000000000000000000000" + CONTRIBUTED_TOKEN_ONE.address.substr(2), tokenOneConversionRate],
+    ];
+
+    let failed = false;
+    try {
+      // try to create a sale with the zero address for recipient
+      await initialized.methods.createSale(saleParams1, acceptedTokens).send({
+        value: WORMHOLE_FEE * 2,
+        from: SELLER,
+        gasLimit: GAS_LIMIT,
+      });
+    } catch (e) {
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 14");
+      failed = true;
+    }
+
+    assert.ok(failed);
+
+    const saleParams2 = [
+      isFixedPriceSale,
+      ZERO_BYTES32, // change the sale token address to bytes32(0)
+      TEST_CHAIN_ID,
+      saleTokenAmount,
+      minimumTokenRaise,
+      maximumTokenRaise,
+      saleStart,
+      saleEnd,
+      saleEnd,
+      recipient,
+      refundRecipient,
+      KYC_AUTHORITY,
+    ];
+
+    failed = false;
+    try {
+      // try to create a sale with a zero bytes32 for the sale token
+      await initialized.methods.createSale(saleParams2, acceptedTokens).send({
+        value: WORMHOLE_FEE * 2,
+        from: SELLER,
+        gasLimit: GAS_LIMIT,
+      });
+    } catch (e) {
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 13");
+      failed = true;
+    }
+
+    assert.ok(failed);
+
+    const saleParams3 = [
+      isFixedPriceSale,
+      SOLD_TOKEN_BYTES32_ADDRESS,
+      TEST_CHAIN_ID,
+      saleTokenAmount,
+      minimumTokenRaise,
+      maximumTokenRaise,
+      saleStart,
+      saleEnd,
+      saleEnd,
+      recipient,
+      refundRecipient,
+      ZERO_ADDRESS, // change the authority to address(0)
+    ];
+
+    failed = false;
+    try {
+      // try to create a sale that bypasses the KYC check
+      await initialized.methods.createSale(saleParams3, acceptedTokens).send({
+        value: WORMHOLE_FEE * 2,
+        from: SELLER,
+        gasLimit: GAS_LIMIT,
+      });
+    } catch (e) {
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 16");
+      failed = true;
+    }
+
+    assert.ok(failed);
+  });
+
+  it("conductor should not allow a token vesting period greater than 2 years", async function() {
+    // test variables
+    const current_block = await web3.eth.getBlock("latest");
+    const saleStart = current_block.timestamp + 5;
+    const saleEnd = saleStart + 8;
+    const saleUnlockTime = saleEnd + 63072001;
+    const saleTokenAmount = "1000";
+    const minimumTokenRaise = "2000";
+    const maximumTokenRaise = "2000";
+    const tokenOneConversionRate = "1000000000000000000";
+    const recipient = accounts[0]; // make zero address for the test
+    const refundRecipient = accounts[0];
+    const isFixedPriceSale = true;
+    const soldTokenBytes32 = "0x000000000000000000000000" + SOLD_TOKEN.address.substr(2);
+
+    // setup smart contracts
+    const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+
+    // create array (solidity struct) for sale params
+    const saleParams = [
+      isFixedPriceSale,
+      soldTokenBytes32,
+      TEST_CHAIN_ID,
+      saleTokenAmount,
+      minimumTokenRaise,
+      maximumTokenRaise,
+      saleStart,
+      saleEnd,
+      saleUnlockTime,
+      recipient,
+      refundRecipient,
+      KYC_AUTHORITY,
+    ];
+
+    // create accepted tokens array
+    const acceptedTokens = [
+      [TEST_CHAIN_ID, "0x000000000000000000000000" + CONTRIBUTED_TOKEN_ONE.address.substr(2), tokenOneConversionRate],
+    ];
+
+    let failed = false;
+    try {
+      // try to create a sale where the unlock period begins > 2 years in the future
+      await initialized.methods.createSale(saleParams, acceptedTokens).send({
+        value: WORMHOLE_FEE * 2,
+        from: SELLER,
+        gasLimit: GAS_LIMIT,
+      });
+    } catch (e) {
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 6");
+      failed = true;
+    }
+
+    assert.ok(failed);
   });
 
   it("sdk should correctly convert conversion rates based on the saleToken decimals", async function() {
@@ -5588,6 +6073,15 @@ contract("ICCO Library Upgrade", function(accounts) {
   });
 });
 
+async function calculateValueSpentLessGas(tx, balanceBefore, balanceAfter) {
+  // obtain gas used from the receipt
+  const gasUsed = tx.gasUsed;
+  const txReceipt = await web3.eth.getTransaction(tx.transactionHash);
+  const gasInWei = (gasUsed * txReceipt.gasPrice).toString();
+  const etherDifferenceLessGas = balanceBefore - balanceAfter - gasInWei;
+  return ethers.utils.formatEther(etherDifferenceLessGas.toString());
+}
+
 async function normalizeConversionRate(
   denominationDecimals,
   acceptedTokenDecimals,
@@ -5606,6 +6100,28 @@ async function normalizeConversionRate(
     return normalizedConversionRate.mul(ethers.utils.parseUnits("1", conductorDecimals - acceptedTokenDecimals));
   }
 }
+
+const signAuthorityUpdate = async function(conductorAddress, saleId, signer) {
+  const body = [
+    web3.eth.abi.encodeParameter("bytes32", conductorAddress).substring(2),
+    web3.eth.abi.encodeParameter("uint256", saleId).substring(2),
+  ];
+
+  // compute the hash
+  const hash = web3.utils.soliditySha3("0x" + body.join(""));
+
+  const ec = new elliptic.ec("secp256k1");
+  const key = ec.keyFromPrivate(signer);
+  const signature = key.sign(hash.substr(2), { canonical: true });
+
+  const packSig = [
+    zeroPadBytes(signature.r.toString(16), 32),
+    zeroPadBytes(signature.s.toString(16), 32),
+    web3.eth.abi.encodeParameter("uint8", signature.recoveryParam).substr(2 + (64 - 2)),
+  ];
+
+  return "0x" + packSig.join("");
+};
 
 const signContribution = async function(conductorAddress, saleId, tokenIndex, amount, buyerAddress, signer) {
   // query for total contributed amount by this contributor

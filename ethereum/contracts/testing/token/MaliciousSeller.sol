@@ -58,7 +58,7 @@ contract MaliciousSeller is IERC777Recipient {
        
        if (_counter < _numTimes) {
         _counter++;
-        Conductor(_conductor).sealSale{value:_wormholeFee}(_saleId);
+        Conductor(payable(_conductor)).sealSale{value:_wormholeFee}(_saleId);
        }
        
     }

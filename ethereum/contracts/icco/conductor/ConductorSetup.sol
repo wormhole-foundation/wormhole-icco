@@ -16,6 +16,10 @@ contract ConductorSetup is ConductorSetters, ERC1967Upgrade {
         address tokenBridge,
         uint8 consistencyLevel
     ) public {
+        require(wormhole != address(0), "1");
+        require(tokenBridge != address(0), "2");
+        require(implementation != address(0), "3");
+        
         setOwner(_msgSender());
 
         setChainId(chainId);
@@ -27,5 +31,9 @@ contract ConductorSetup is ConductorSetters, ERC1967Upgrade {
         setConsistencyLevel(consistencyLevel);
 
         _upgradeTo(implementation);
+
+        /// @dev call initialize function of the new implementation
+        (bool success, bytes memory reason) = implementation.delegatecall(abi.encodeWithSignature("initialize()"));
+        require(success, string(reason));
     }
 }

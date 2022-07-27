@@ -22,14 +22,14 @@ contract ConductorGovernance is ConductorGetters, ConductorSetters, ERC1967Upgra
 
     /// @dev registerChain serves to save Contributor contract addresses in Conductor state
     function registerChain(uint16 contributorChainId, bytes32 contributorAddress) public onlyOwner {
-        require(contributorAddress != bytes32(0), "address not valid");
-        require(contributorContracts(contributorChainId) == bytes32(0), "chain already registered");
+        require(contributorAddress != bytes32(0), "1");
+        require(contributorContracts(contributorChainId) == bytes32(0), "2");
         setContributor(contributorChainId, contributorAddress);
     }   
 
     /// @dev upgrade serves to upgrade contract implementations
     function upgrade(uint16 conductorChainId, address newImplementation) public onlyOwner {
-        require(conductorChainId == chainId(), "wrong chain id");
+        require(conductorChainId == chainId(), "3");
 
         address currentImplementation = _getImplementation();
 
@@ -45,8 +45,8 @@ contract ConductorGovernance is ConductorGetters, ConductorSetters, ERC1967Upgra
 
     /// @dev updateConsisencyLevel serves to change the wormhole messaging consistencyLevel
     function updateConsistencyLevel(uint16 conductorChainId, uint8 newConsistencyLevel) public onlyOwner {
-        require(conductorChainId == chainId(), "wrong chain id");
-        require(newConsistencyLevel > 0, "newConsistencyLevel must be > 0");
+        require(conductorChainId == chainId(), "4");
+        require(newConsistencyLevel > 0, "5");
 
         uint8 currentConsistencyLevel = consistencyLevel();
 
@@ -60,8 +60,8 @@ contract ConductorGovernance is ConductorGetters, ConductorSetters, ERC1967Upgra
      * - it saves an address for the new owner in the pending state
      */
     function submitOwnershipTransferRequest(uint16 conductorChainId, address newOwner) public onlyOwner {
-        require(conductorChainId == chainId(), "wrong chain id"); 
-        require(newOwner != address(0), "new owner cannot be the zero address");
+        require(conductorChainId == chainId(), "6");
+        require(newOwner != address(0), "7");
 
         setPendingOwner(newOwner); 
     }
@@ -75,7 +75,7 @@ contract ConductorGovernance is ConductorGetters, ConductorSetters, ERC1967Upgra
         /// cache the new owner address
         address newOwner = pendingOwner();
 
-        require(msg.sender == newOwner, "caller must be pendingOwner");
+        require(msg.sender == newOwner, "8");
 
         /// cache currentOwner for Event
         address currentOwner = owner();
@@ -88,7 +88,7 @@ contract ConductorGovernance is ConductorGetters, ConductorSetters, ERC1967Upgra
     }
 
     modifier onlyOwner() {
-        require(owner() == _msgSender(), "caller is not the owner");
+        require(owner() == _msgSender(), "9");
         _;
     }
 }

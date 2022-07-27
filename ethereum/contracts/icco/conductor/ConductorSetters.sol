@@ -15,6 +15,10 @@ contract ConductorSetters is ConductorState, Context {
         _state.pendingOwner = newOwner;
     }
 
+    function setNewAuthority(uint256 saleId, address newAuthority) internal {
+        _state.sales[saleId].authority = newAuthority;
+    }
+
     function setContributor(uint16 chainId, bytes32 emitter) internal {
         _state.contributorImplementations[chainId] = emitter;
     }
@@ -37,6 +41,10 @@ contract ConductorSetters is ConductorState, Context {
 
     function setConsistencyLevel(uint8 level) internal {
         _state.consistencyLevel = level;
+    }
+
+    function setSolanaTokenAccount(uint256 saleId, bytes32 solanaTokenAccount) internal {
+        _state.sales[saleId].solanaTokenAccount = solanaTokenAccount;
     }
 
     function setSale(uint256 saleId, ConductorStructs.Sale memory sale) internal {

@@ -4,7 +4,11 @@ Build the contracts by running `make build`.
 
 ### Testing
 
-Run the tests by running `make test`. The tests can be found [here](tests/icco.js).
+Run the tests by running `make test`. The tests can be found [here](test/icco.js).
+
+### Conductor Error Codes
+
+The Conductor's revert strings are codified, please see CONDUCTOR_ERROR_CODES.md [here](CONDUCTOR_ERROR_CODES.md).
 
 ### Deploying ICCO to EVM testnets
 

@@ -611,29 +611,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
 
         /// emit EventAbortSale event.
         emit EventAbortSale(saleId);
-    }
-
-    /** 
-     * @dev abortBrickedSale serves to abort sales that have not been aborted or sealed
-     * within a specified (harcoded value in the contract state) amount of time. A 
-     * - it checks that a sale has not been sealed or aborted
-     * - it checks that the sale ended greater than 7 days ago
-     * - it calls abortSale and sends a SaleAborted VAA
-    */
-    function abortBrickedSale(uint256 saleId) public payable returns (uint256) {
-        require(saleExists(saleId), "sale not initiated");
-
-        ConductorStructs.Sale memory sale = sales(saleId);
-        /** 
-         * Make sure the sale hasn't been aborted or sealed already
-         * Make sure the sale ended greater than 7 days ago
-        */
-        require(!sale.isSealed && !sale.isAborted, "already sealed / aborted");
-        require(block.timestamp > sale.saleEnd + 604800, "sale not old enough");
-        require(msg.value == wormhole().messageFee(), "incorrect value");
-
-        return abortSale(saleId, false);
-    }
+    } 
 
     /**
      * @dev updateSaleAuthority serves to change the KYC authority during a sale
@@ -679,6 +657,28 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
             saleID : saleId,
             newAuthority: newAuthority
         })), consistencyLevel());
+    }
+
+    /** 
+     * @dev abortBrickedSale serves to abort sales that have not been aborted or sealed
+     * within a specified (harcoded value in the contract state) amount of time. A 
+     * - it checks that a sale has not been sealed or aborted
+     * - it checks that the sale ended greater than 7 days ago
+     * - it calls abortSale and sends a SaleAborted VAA
+    */
+    function abortBrickedSale(uint256 saleId) public payable returns (uint256) {
+        require(saleExists(saleId), "42");
+
+        ConductorStructs.Sale memory sale = sales(saleId);
+        /** 
+         * Make sure the sale hasn't been aborted or sealed already
+         * Make sure the sale ended greater than 7 days ago
+        */
+        require(!sale.isSealed && !sale.isAborted, "43");
+        require(block.timestamp > sale.saleEnd + 604800, "44");
+        require(msg.value == wormhole().messageFee(), "45");
+
+        return abortSale(saleId, false);
     }
 
     /// @dev useSaleId serves to update the current saleId in the Conductor state

@@ -4818,7 +4818,7 @@ contract("ICCO", function(accounts) {
 
   it("should abort the bricked sale on the conductor", async function() {
     // amount contributed - should be refunded
-    const tokenOneContributionAmount = "8000";
+    const tokenContributionAmount = "8000";
 
     const initializedConductor = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
     const initializedContributor = new web3.eth.Contract(
@@ -4835,7 +4835,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert sale not old enough");
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 44");
       failed = true;
     }
 
@@ -4891,10 +4891,19 @@ contract("ICCO", function(accounts) {
     assert.ok(contributorAbortedStateAfter.isAborted);
     assert.ok(conductorAbortedStateAfter.isAborted);
 
-    await initializedContributor.claimRefund(SALE_7_ID, 0).snd({
+    // balance check the contributor before claiming refund
+    const recipientBalanceBefore = await CONTRIBUTED_TOKEN_ONE.balanceOf(BUYER_ONE);
+
+    await initializedContributor.methods.claimRefund(SALE_7_ID, 0).send({
       from: BUYER_ONE,
       gasLimit: GAS_LIMIT,
     });
+
+    // balance check after contributor after claiming refund
+    const recipientBalanceAfter = await CONTRIBUTED_TOKEN_ONE.balanceOf(BUYER_ONE);
+
+    assert.equal(parseInt(recipientBalanceAfter) - parseInt(recipientBalanceBefore), tokenContributionAmount);
+    _;
   });
 
   it("conductor should not allow a sale to abort after the sale start time", async function() {

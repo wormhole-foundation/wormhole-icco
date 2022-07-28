@@ -4817,6 +4817,9 @@ contract("ICCO", function(accounts) {
   });
 
   it("should abort the bricked sale on the conductor", async function() {
+    // amount contributed - should be refunded
+    const tokenOneContributionAmount = "8000";
+
     const initializedConductor = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
     const initializedContributor = new web3.eth.Contract(
       ContributorImplementationFullABI,
@@ -4828,7 +4831,7 @@ contract("ICCO", function(accounts) {
       // attempt to abort the bricked sale bofore the 7 day weight period has elapsed
       await initializedConductor.methods.abortBrickedSale(SALE_7_ID).send({
         from: SELLER,
-        value: WORMHOLE_FEE * 2,
+        value: WORMHOLE_FEE,
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
@@ -4887,6 +4890,11 @@ contract("ICCO", function(accounts) {
 
     assert.ok(contributorAbortedStateAfter.isAborted);
     assert.ok(conductorAbortedStateAfter.isAborted);
+
+    await initializedContributor.claimRefund(SALE_7_ID, 0).snd({
+      from: BUYER_ONE,
+      gasLimit: GAS_LIMIT,
+    });
   });
 
   it("conductor should not allow a sale to abort after the sale start time", async function() {

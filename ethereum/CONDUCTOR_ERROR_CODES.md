@@ -41,6 +41,10 @@
 | 39   | Conductor           | updateSaleAuthority             | unauthorized authority key                         |
 | 40   | Conductor           | updateSaleAuthority             | already sealed / aborted                           |
 | 41   | Conductor           | updateSaleAuthority             | incorrect value for messageFee                     |
+| 42   | Conductor           | abortBrickedSale                | sale not initiated                                 |
+| 43   | Conductor           | abortBrickedSale                | already sealed / aborted"                          |
+| 44   | Conductor           | abortBrickedSale                | sale not old enough                                |
+| 45   | Conductor           | abortBrickedSale                | incorrect value                                    |
 | 1    | ConductorSetup      | setup                           | wormhole address must not be address(0)            |
 | 2    | ConductorSetup      | setup                           | tokenBridge's address must not be address(0)       |
 | 3    | ConductorSetup      | setup                           | implementation's address must not be address(0)    |

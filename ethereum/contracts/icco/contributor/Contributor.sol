@@ -226,12 +226,9 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
         require(block.timestamp > sale.saleEnd, "sale has not yet ended");
 
         IWormhole wormhole = wormhole();
+        uint256 messageFee = wormhole.messageFee();
 
-        /// set up fee accounting 
-        ICCOStructs.WormholeFees memory feeAccounting;
-        feeAccounting.messageFee = wormhole.messageFee();
-        feeAccounting.valueSent = msg.value;
-        require(feeAccounting.valueSent >= feeAccounting.messageFee, "insufficient value");
+        require(msg.value == messageFee, "incorrect value");
 
         /// count accepted tokens for this contract to allocate memory in ContributionsSealed struct 
         uint256 nativeTokens = 0;
@@ -265,12 +262,8 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
 
         /// @dev send encoded ContributionsSealed message to Conductor contract
         wormholeSequence = wormhole.publishMessage{
-            value : feeAccounting.messageFee
+            value : messageFee
         }(0, ICCOStructs.encodeContributionsSealed(consSealed), consistencyLevel());
-
-        /// @dev refund the caller any extra wormhole fees
-        feeAccounting.refundAmount = feeAccounting.valueSent - feeAccounting.messageFee;
-        if (feeAccounting.refundAmount > 0) payable(msg.sender).transfer(feeAccounting.refundAmount);
 
         /// emit EventAttestContribution event.
         emit EventAttestContribution(saleId);
@@ -303,15 +296,17 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
         require(!sale.isSealed && !sale.isAborted, "already sealed / aborted");
 
         /// confirm that the allocated sale tokens are in custody of this contract
-        uint16 thisChainId = chainId(); /// cache from storage
+        /// cache variables to save on gas
+        uint16 thisChainId = chainId(); 
+        ITokenBridge tknBridge = tokenBridge();
         {
             address saleTokenAddress;
-            if (sale.tokenChain == chainId()) {
+            if (sale.tokenChain == thisChainId) {
                 /// normal token transfer on same chain
                 saleTokenAddress = address(uint160(uint256(sale.tokenAddress)));
             } else {
                 /// identify wormhole token bridge wrapper
-                saleTokenAddress = tokenBridge().wrappedAsset(sale.tokenChain, sale.tokenAddress);
+                saleTokenAddress = tknBridge.wrappedAsset(sale.tokenChain, sale.tokenAddress);
                 require(saleTokenAddress != address(0), "sale token is not attested");
             }
 
@@ -349,12 +344,6 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
             require(feeAccounting.valueSent >= feeAccounting.messageFee * feeAccounting.bridgeCount, "insufficient value");
         }
         
-        /** 
-         * @dev Initialize token bridge interface in case the contributions
-         * are being sent to a recipient on a different chain.
-         */
-        ITokenBridge tknBridge = tokenBridge();
-
         /**
          * @dev Cache the conductorChainId from storage to save on gas.
          * We will check each acceptedToken to see if it's from this chain.
@@ -466,10 +455,13 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
         /// @dev contributors can only claim after the unlock timestamp
         require(block.timestamp >= unlockTimestamp, "tokens have not been unlocked");
 
+        /// cache to save on gas
+        uint16 thisChainId = chainId();
+
         /// make sure the contributor is claiming on the right chain
         (uint16 contributedTokenChainId, , ) = getSaleAcceptedTokenInfo(saleId, tokenIndex);
 
-        require(contributedTokenChainId == chainId(), "allocation needs to be claimed on a different chain");
+        require(contributedTokenChainId == thisChainId, "allocation needs to be claimed on a different chain");
 
         /// set the allocation claimed - also serves as reentrancy protection
         setAllocationClaimed(saleId, tokenIndex, msg.sender);
@@ -487,7 +479,7 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
         uint256 thisAllocation = (getSaleAllocation(saleId, tokenIndex) * thisContribution) / totalContribution;
 
         address tokenAddress;
-        if (sale.tokenChain == chainId()) {
+        if (sale.tokenChain == thisChainId) {
             /// normal token transfer on same chain
             tokenAddress = address(uint160(uint256(sale.tokenAddress)));
         } else {
@@ -520,6 +512,10 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
         require(isSealed, "token sale is not sealed");
         require(!excessContributionIsClaimed(saleId, tokenIndex, msg.sender), "excess contribution already claimed");
 
+        (uint16 tokenChainId,, ) = getSaleAcceptedTokenInfo(saleId, tokenIndex);
+
+        require(tokenChainId == chainId(), "refund needs to be claimed on another chain");
+ 
         setExcessContributionClaimed(saleId, tokenIndex, msg.sender);
 
         /// calculate how much excess to refund

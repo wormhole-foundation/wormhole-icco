@@ -315,16 +315,12 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
         setSaleAborted(sale.saleID);   
 
         IWormhole wormhole = wormhole();
-
-        /// set up fee accounting 
-        ICCOStructs.WormholeFees memory feeAccounting;
-        feeAccounting.messageFee = wormhole.messageFee();
-        feeAccounting.valueSent = msg.value;
-        require(feeAccounting.valueSent >= feeAccounting.messageFee, "26");
+        uint256 messageFee = wormhole.messageFee();
+        require(msg.value == messageFee, "26");
 
         /// @dev send encoded SaleAborted struct to Contributor contracts        
         wormholeSequence = wormhole.publishMessage{
-            value : feeAccounting.messageFee
+            value : messageFee
         }(0, ICCOStructs.encodeSaleAborted(ICCOStructs.SaleAborted({
             payloadID : 4,
             saleID : saleId
@@ -336,10 +332,6 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
             address(uint160(uint256(sale.refundRecipient))), 
             sale.tokenAmount 
         );
-
-        /// @dev refund the caller any extra wormhole fees
-        feeAccounting.refundAmount = feeAccounting.valueSent - feeAccounting.messageFee;
-        if (feeAccounting.refundAmount > 0) payable(msg.sender).transfer(feeAccounting.refundAmount);
 
         /// emit EventAbortSaleBeforeStart event.
         emit EventAbortSaleBeforeStart(saleId);
@@ -403,7 +395,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
      * - it bridges the sale tokens to the contributor contracts if sealed
      * - it refunds the refundRecipient if the sale is aborted or the maxRaise is not met (partial refund)
      */
-    function sealSale(uint256 saleId) public payable returns (uint256 wormholeSequence, uint256 wormholeSequence2) {
+    function sealSale(uint256 saleId) public payable nonReentrant returns (uint256 wormholeSequence, uint256 wormholeSequence2) {
         require(saleExists(saleId), "33");
 
         ConductorStructs.Sale memory sale = sales(saleId);
@@ -528,27 +520,12 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
 
             /// @dev transfer dust and partial refund (if applicable) back to refund recipient
             accounting.saleTokenRefund = sale.tokenAmount - accounting.totalAllocated;
-
             if (accounting.saleTokenRefund > 0) {
-                /// @dev using low-level call instead of safeTransfer to fetch success boolean
-                (bool success, ) = sale.localTokenAddress.call(
-                    abi.encodeWithSelector(
-                        IERC20(sale.localTokenAddress).transfer.selector,
-                        address(uint160(uint256(sale.refundRecipient))), 
-                        accounting.saleTokenRefund
-                    )
+                SafeERC20.safeTransfer(
+                    IERC20(sale.localTokenAddress),
+                    address(uint160(uint256(sale.refundRecipient))),
+                    accounting.saleTokenRefund
                 );
-
-                /**
-                 * @dev If the success boolean value is false, someone is attempting a reentrancy attack
-                 * - the contract will emit a saleAborted VAA so contributor contracts will allow
-                 * contributors to claim a refund
-                 * regardless of the sale outcome, the sale will be aborted
-                 */
-                if (!success) {
-                    wormholeSequence = abortSale(saleId, false, feeAccounting);
-                    return (wormholeSequence, 0);
-                } 
             } 
 
             /// @dev send encoded SaleSealed message to Contributor contracts
@@ -585,16 +562,15 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
                 }
             }
 
-            /// @dev refund the caller any extra wormhole fees
-            feeAccounting.refundAmount = feeAccounting.valueSent - feeAccounting.accumulatedFees; 
-            if (feeAccounting.refundAmount > 0) payable(msg.sender).transfer(feeAccounting.refundAmount);
-
             /// emit EventSealSale event.
             emit EventSealSale(saleId); 
         } else {
-            wormholeSequence = abortSale(saleId, true, feeAccounting);
-            return (wormholeSequence, 0);
+            wormholeSequence = abortSale(saleId, true);
+            feeAccounting.accumulatedFees += feeAccounting.messageFee;
         }
+        /// @dev refund the caller any extra wormhole fees
+        feeAccounting.refundAmount = feeAccounting.valueSent - feeAccounting.accumulatedFees; 
+        if (feeAccounting.refundAmount > 0) payable(msg.sender).transfer(feeAccounting.refundAmount);
     }
 
     /**
@@ -607,8 +583,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
      */
     function abortSale(
         uint256 saleId,
-        bool sendRefund,
-        ICCOStructs.WormholeFees memory feeAccounting
+        bool sendRefund
     ) internal returns (uint256 wormholeSequence) {
         /// set saleAborted
         setSaleAborted(saleId);
@@ -622,29 +597,21 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
         }(0, ICCOStructs.encodeSaleAborted(ICCOStructs.SaleAborted({
             payloadID : 4,
             saleID : saleId
-        })), consistencyLevel());
-
-        /// uptick fee counter
-        feeAccounting.accumulatedFees += feeAccounting.messageFee;
+        })), consistencyLevel());    
 
         /// @dev refund the sale tokens to refund recipient if sendRefund is true
         if (sendRefund) {
             ConductorStructs.Sale memory sale = sales(saleId);
-
             SafeERC20.safeTransfer(
                 IERC20(sale.localTokenAddress), 
                 address(uint160(uint256(sale.refundRecipient))), 
                 sale.tokenAmount 
             );
-        }
-
-        /// @dev refund the caller any extra wormhole fees
-        feeAccounting.refundAmount = feeAccounting.valueSent - feeAccounting.accumulatedFees;        
-        if (feeAccounting.refundAmount > 0) payable(msg.sender).transfer(feeAccounting.refundAmount);
+        } 
 
         /// emit EventAbortSale event.
         emit EventAbortSale(saleId);
-    }
+    } 
 
     /**
      * @dev updateSaleAuthority serves to change the KYC authority during a sale
@@ -690,6 +657,28 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
             saleID : saleId,
             newAuthority: newAuthority
         })), consistencyLevel());
+    }
+
+    /** 
+     * @dev abortBrickedSale serves to abort sales that have not been aborted or sealed
+     * within a specified (harcoded value in the contract state) amount of time. A 
+     * - it checks that a sale has not been sealed or aborted
+     * - it checks that the sale ended greater than 7 days ago
+     * - it calls abortSale and sends a SaleAborted VAA
+    */
+    function abortBrickedSale(uint256 saleId) public payable returns (uint256) {
+        require(saleExists(saleId), "42");
+
+        ConductorStructs.Sale memory sale = sales(saleId);
+        /** 
+         * Make sure the sale hasn't been aborted or sealed already
+         * Make sure the sale ended greater than 7 days ago
+        */
+        require(!sale.isSealed && !sale.isAborted, "43");
+        require(block.timestamp > sale.saleEnd + 604800, "44");
+        require(msg.value == wormhole().messageFee(), "45");
+
+        return abortSale(saleId, false);
     }
 
     /// @dev useSaleId serves to update the current saleId in the Conductor state

@@ -4903,7 +4903,6 @@ contract("ICCO", function(accounts) {
     const recipientBalanceAfter = await CONTRIBUTED_TOKEN_ONE.balanceOf(BUYER_ONE);
 
     assert.equal(parseInt(recipientBalanceAfter) - parseInt(recipientBalanceBefore), tokenContributionAmount);
-    _;
   });
 
   it("conductor should not allow a sale to abort after the sale start time", async function() {

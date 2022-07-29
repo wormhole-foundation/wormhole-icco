@@ -2,6 +2,7 @@ const TokenSaleConductor = artifacts.require("TokenSaleConductor");
 const ConductorImplementation = artifacts.require("ConductorImplementation");
 const ConductorSetup = artifacts.require("ConductorSetup");
 const ICCOStructs = artifacts.require("ICCOStructs");
+const ErrorCodes = artifacts.require("ICCOErrorCodes");
 
 const ethereumRootPath = `${__dirname}/..`;
 const DeploymentConfig = require(`${ethereumRootPath}/icco_deployment_config.js`);
@@ -13,6 +14,9 @@ module.exports = async function(deployer, network) {
   if (!config) {
     throw Error("deployment config undefined");
   }
+
+  // deploy the ICCO Error codes contract
+  await deployer.deploy(ErrorCodes);
 
   // deploy ICCOStructs library
   await deployer.deploy(ICCOStructs);
@@ -26,10 +30,7 @@ module.exports = async function(deployer, network) {
     await deployer.deploy(ConductorSetup);
 
     // encode initialisation data
-    const conductorSetup = new web3.eth.Contract(
-      ConductorSetup.abi,
-      ConductorSetup.address
-    );
+    const conductorSetup = new web3.eth.Contract(ConductorSetup.abi, ConductorSetup.address);
     const conductorInitData = conductorSetup.methods
       .setup(
         ConductorImplementation.address,
@@ -41,11 +42,7 @@ module.exports = async function(deployer, network) {
       .encodeABI();
 
     // deploy conductor proxy
-    await deployer.deploy(
-      TokenSaleConductor,
-      ConductorSetup.address,
-      conductorInitData
-    );
+    await deployer.deploy(TokenSaleConductor, ConductorSetup.address, conductorInitData);
   }
 
   // cache address depending on whether contract
@@ -59,11 +56,10 @@ module.exports = async function(deployer, network) {
   if (network == "eth_devnet") {
     const fp = `${ethereumRootPath}/../tilt.json`;
 
-    const contents = fs.existsSync(fp)
-      ? JSON.parse(fs.readFileSync(fp, "utf8"))
-      : {};
+    const contents = fs.existsSync(fp) ? JSON.parse(fs.readFileSync(fp, "utf8")) : {};
     contents.conductorAddress = TokenSaleConductor.address;
     contents.conductorChain = parseInt(config.conductorChainId);
+    contents.errorCodesAddress = ErrorCodes.address;
     fs.writeFileSync(fp, JSON.stringify(contents, null, 2), "utf8");
   }
 
@@ -71,9 +67,9 @@ module.exports = async function(deployer, network) {
   if (network == "goerli") {
     const fp = `${ethereumRootPath}/../testnet.json`;
 
-    const contents = fs.existsSync(fp)
-      ? JSON.parse(fs.readFileSync(fp, "utf8"))
-      : {};
+    const contents = fs.existsSync(fp) ? JSON.parse(fs.readFileSync(fp, "utf8")) : {};
+    // add the ErrorCodes contract address to the testnet.json file
+    contents.errorCodesAddress = ErrorCodes.address;
     if (!config.deployImplementationOnly) {
       contents.conductorAddress = TokenSaleConductor.address;
       contents.conductorChain = parseInt(config.conductorChainId);

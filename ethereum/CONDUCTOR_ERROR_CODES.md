@@ -7,7 +7,7 @@
 | 5    | Conductor           | createSale                      | unlock timestamp should be >= saleEnd              |
 | 6    | Conductor           | createSale                      | unlock timestamp must be <= 2 years in the future  |
 | 7    | Conductor           | createSale                      | timestamp too large                                |
-| 8    | Conductor           | createSale                      | sale token amount must be > 0                      |
+| 8    | Conductor           | createSale                      | sale token amount must be > 0 and <= 2^63-1        |
 | 9    | Conductor           | createSale                      | must accept at least one token                     |
 | 10   | Conductor           | createSale                      | too many tokens                                    |
 | 11   | Conductor           | createSale                      | minRaise must be > 0                               |

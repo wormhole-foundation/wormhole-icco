@@ -106,7 +106,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
         /// set timestamp cap for non-evm Contributor contracts
         require(raise.unlockTimestamp <= 2**63-1, "7");
         /// sanity check other raise parameters
-        require(raise.tokenAmount > 0, "8");
+        require(raise.tokenAmount > 0 && raise.tokenAmount <= 2**63-1, "8");
         require(acceptedTokens.length > 0, "9");
         require(acceptedTokens.length < 255, "10");
         require(raise.minRaise > 0, "11");

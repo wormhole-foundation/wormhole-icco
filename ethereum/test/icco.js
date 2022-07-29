@@ -26,6 +26,10 @@ const MockICCOStructs = artifacts.require("MockICCOStructs");
 const MockConductorImplementation2 = artifacts.require("MockConductorImplementation2");
 const MockContributorImplementation2 = artifacts.require("MockContributorImplementation2");
 
+// error code contract
+const ErrorCodes = artifacts.require("ICCOErrorCodes");
+const ErrorCodesABI = jsonfile.readFileSync("build/contracts/ICCOErrorCodes.json").abi;
+
 const testSigner1PK = "cfb12303a19cde580bb4dd771639b0d26bc68353645571a8cff516ab2ee113a0";
 const kycSignerPK = "b0057716d5917badaf911b193b12b910811c1497b5bada8d7711f758981c3773";
 
@@ -44,6 +48,7 @@ const config = require(`${ethereumRootPath}/icco_deployment_config.js`).developm
 
 contract("ICCO", function(accounts) {
   const WORMHOLE = new web3.eth.Contract(WormholeImplementationFullABI, config.wormhole);
+  const ERRORS = new web3.eth.Contract(ErrorCodesABI, ErrorCodes.address);
   const CONDUCTOR_BYTES32_ADDRESS = "0x000000000000000000000000" + TokenSaleConductor.address.substr(2);
   const KYC_AUTHORITY = "0x1dF62f291b2E969fB0849d99D9Ce41e2F137006e";
   const ZERO_ADDRESS = ethers.constants.AddressZero;
@@ -152,6 +157,10 @@ contract("ICCO", function(accounts) {
     }
 
     assert.ok(failed);
+
+    // confirm that the error codes contract returns an error
+    const result = await ERRORS.methods.createSale("9").call();
+    assert.equal(result, "must accept at least one token");
 
     const tx = await initialized.methods.registerChain(TEST_CHAIN_ID, contributorAddress).send({
       value: 0,

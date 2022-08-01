@@ -75,14 +75,25 @@ pub struct InitSale<'info> {
     #[account(
         constraint = core_bridge_vaa.owner.key() ==  Custodian::wormhole()?
     )]
-    /// CHECK: This account is owned by Core Bridge so we trust it
+    /// CHECK: Posted VAA Message Data
     pub core_bridge_vaa: AccountInfo<'info>,
-    pub sale_token_mint: Account<'info, Mint>,
+
+    /// CHECK: This can be a non-existent token. We need to check this in
+    /// the init_sale instruction to allow a Sale account to be created.
+    /// When a non-existent mint is provided, we need to allow the program
+    /// to send an Attest Contributions VAA (payload 2). See init_sale for
+    /// more details.
+    pub sale_token_mint: AccountInfo<'info>,
+
+    #[account(
+        constraint = token_bridge.key() == Custodian::token_bridge()?
+    )]
+    /// CHECK: Token Bridge Program
+    pub token_bridge: AccountInfo<'info>,
 
     #[account(mut)]
     pub payer: Signer<'info>,
     pub system_program: Program<'info, System>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
 /// Context provides all accounts required for user to send contribution
@@ -188,9 +199,7 @@ pub struct AttestContributions<'info> {
 
     #[account(
         mut,
-        seeds = [
-            b"Bridge".as_ref()
-        ],
+        seeds = [b"Bridge"],
         bump,
         seeds::program =  Custodian::wormhole()?
     )]
@@ -199,9 +208,7 @@ pub struct AttestContributions<'info> {
 
     #[account(
         mut,
-        seeds = [
-            b"fee_collector".as_ref()
-        ],
+        seeds = [b"fee_collector"],
         bump,
         seeds::program = Custodian::wormhole()?
     )]
@@ -210,9 +217,7 @@ pub struct AttestContributions<'info> {
 
     #[account(
         mut,
-        seeds = [
-            b"emitter".as_ref(),
-        ],
+        seeds = [b"emitter"],
         bump
     )]
     /// CHECK: Wormhole Emitter is this program
@@ -221,7 +226,7 @@ pub struct AttestContributions<'info> {
     #[account(
         mut,
         seeds = [
-            b"Sequence".as_ref(),
+            b"Sequence",
             wormhole_emitter.key().as_ref()
         ],
         bump,
@@ -233,7 +238,7 @@ pub struct AttestContributions<'info> {
     #[account(
         mut,
         seeds = [
-            b"attest-contributions".as_ref(),
+            b"attest-contributions",
             &sale.id,
         ],
         bump,
@@ -359,9 +364,7 @@ pub struct BridgeSealedContribution<'info> {
 
     #[account(
         mut,
-        seeds = [
-            b"config".as_ref()
-        ],
+        seeds = [b"config"],
         bump,
         seeds::program = Custodian::token_bridge()?
     )]
@@ -376,9 +379,7 @@ pub struct BridgeSealedContribution<'info> {
 
     #[account(
         mut,
-        seeds = [
-            b"Bridge".as_ref()
-        ],
+        seeds = [b"Bridge"],
         bump,
         seeds::program = Custodian::wormhole()?
     )]
@@ -387,9 +388,7 @@ pub struct BridgeSealedContribution<'info> {
 
     #[account(
         mut,
-        seeds = [
-            b"fee_collector".as_ref()
-        ],
+        seeds = [b"fee_collector"],
         bump,
         seeds::program = Custodian::wormhole()?
     )]
@@ -398,9 +397,7 @@ pub struct BridgeSealedContribution<'info> {
 
     #[account(
         mut,
-        seeds = [
-            b"emitter".as_ref(),
-        ],
+        seeds = [b"emitter"],
         bump,
         seeds::program = Custodian::token_bridge()?
     )]
@@ -410,7 +407,7 @@ pub struct BridgeSealedContribution<'info> {
     #[account(
         mut,
         seeds = [
-            b"Sequence".as_ref(),
+            b"Sequence",
             wormhole_emitter.key().as_ref()
         ],
         bump,
@@ -422,7 +419,7 @@ pub struct BridgeSealedContribution<'info> {
     #[account(
         mut,
         seeds = [
-            b"bridge-sealed".as_ref(),
+            b"bridge-sealed",
             &sale.id,
             &accepted_mint.key().as_ref(),
         ],
@@ -478,7 +475,7 @@ pub struct AbortSale<'info> {
     #[account(
         constraint = core_bridge_vaa.owner.key() == Custodian::wormhole()?
     )]
-    /// CHECK: This account is owned by Core Bridge so we trust it
+    /// CHECK: Posted VAA Message Data
     pub core_bridge_vaa: AccountInfo<'info>,
 
     pub system_program: Program<'info, System>,
@@ -519,12 +516,19 @@ pub struct SealSale<'info> {
     #[account(
         constraint = core_bridge_vaa.owner.key() == Custodian::wormhole()?
     )]
-    /// CHECK: This account is owned by Core Bridge so we trust it
+    /// CHECK: Posted VAA Message Data
     pub core_bridge_vaa: AccountInfo<'info>,
 
     #[account(
+        constraint = custodian_sale_token_acct.key() == sale.sale_token_ata
     )]
     /// This must be an associated token account
+    ///
+    /// Prior to sealing the sale, the sale token needed to be bridged to the custodian's
+    /// associated token account. We need to make sure that there are enough allocations
+    /// in the custodian's associated token account for distribution to all of the
+    /// participants of the sale. If there aren't, we cannot allow the instruction to
+    /// continue.
     pub custodian_sale_token_acct: Account<'info, TokenAccount>,
 
     pub system_program: Program<'info, System>,
@@ -576,6 +580,7 @@ pub struct ClaimAllocation<'info> {
 
     #[account(
         mut,
+        constraint = custodian_sale_token_acct.key() == sale.sale_token_ata
     )]
     /// This must be an associated token account
     pub custodian_sale_token_acct: Account<'info, TokenAccount>,

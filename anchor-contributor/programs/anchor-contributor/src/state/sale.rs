@@ -55,7 +55,7 @@ pub struct Sale {
     pub native_sale_token_mint: [u8; 32], // 32    Native for sale token chain.
     pub token_chain: u16,                 // 2
     pub token_decimals: u8,               // 1
-    pub times: SaleTimes,                 // SaleStatus::LEN
+    pub times: SaleTimes,                 // SaleTimes::LEN
     pub recipient: [u8; 32],              // 32
     pub status: SaleStatus,               // 1
     pub kyc_authority: [u8; 20],          // 20 (this is an evm pubkey)
@@ -121,12 +121,24 @@ impl AssetTotal {
         &self,
         token_acct_info: &AccountInfo,
         authority: &Pubkey,
-    ) -> Result<TokenAccount> {
-        require!(
-            get_associated_token_address(authority, &self.mint) == token_acct_info.key(),
-            ContributorError::InvalidAccount
-        );
-        AssetTotal::deserialize_token_account_unchecked(token_acct_info)
+    ) -> Result<Option<TokenAccount>> {
+        Ok(
+            match AssetTotal::deserialize_token_account_unchecked(token_acct_info) {
+                Ok(account) => {
+                    // If we successfully deserialize TokenAccount, we require
+                    // that it is an associated token account
+                    require!(
+                        get_associated_token_address(authority, &self.mint)
+                            == token_acct_info.key(),
+                        ContributorError::InvalidAccount
+                    );
+                    Some(account)
+                }
+                // Otherwise (in the case of an invalid remaining account),
+                // we will return None.
+                Err(_) => None,
+            },
+        )
     }
 
     fn deserialize_token_account_unchecked(token_acct_info: &AccountInfo) -> Result<TokenAccount> {
@@ -164,7 +176,6 @@ impl Sale {
 
         let num_accepted = payload[INDEX_SALE_INIT_ACCEPTED_TOKENS_START] as usize;
 
-        //      msg!("payloadlen: {}, exp: {}", payload.len(), INDEX_SALE_INIT_ACCEPTED_TOKENS_START + 1 + ACCEPTED_TOKEN_NUM_BYTES * num_accepted + SALE_INIT_TAIL);
         require!(
             payload.len()
                 == INDEX_SALE_INIT_ACCEPTED_TOKENS_START
@@ -190,7 +201,6 @@ impl Sale {
         self.id = Sale::get_id(payload);
 
         // deserialize other things
-
         self.native_sale_token_mint.copy_from_slice(
             &payload[INDEX_SALE_INIT_TOKEN_ADDRESS..(INDEX_SALE_INIT_TOKEN_ADDRESS + 32)],
         );
@@ -222,29 +232,11 @@ impl Sale {
         Ok(())
     }
 
-    pub fn derive_wrapped_mint_pda(&self, token_bridge: &Pubkey) -> (Pubkey, u8) {
-        // For reference: wrapped mint derivation code from token bridge:
-        // fn seeds(data: &WrappedDerivationData) -> Vec<Vec<u8>> {
-        // vec![
-        //     String::from("wrapped").as_bytes().to_vec(),
-        //     data.token_chain.to_be_bytes().to_vec(),
-        //     data.token_address.to_vec(),
-        // ]
-        Pubkey::find_program_address(
-            &[
-                b"wrapped", // ? b"wrapped".as_ref()
-                &self.token_chain.to_be_bytes(),
-                &self.native_sale_token_mint,
-            ],
-            token_bridge,
-        )
-    }
-
     pub fn set_sale_token_mint_info(
         &mut self,
         mint: &Pubkey,
         mint_info: &Mint,
-        ata: &Pubkey,
+        custodian: &Pubkey,
     ) -> Result<()> {
         let decimals = mint_info.decimals;
         require!(
@@ -253,7 +245,8 @@ impl Sale {
         );
         self.native_token_decimals = decimals;
         self.sale_token_mint = *mint;
-        self.sale_token_ata = *ata;
+        // Derive sale_token_ata and store it in this sale for later verification and to send it to the conductor in attest VAA.
+        self.sale_token_ata = get_associated_token_address(custodian, &self.sale_token_mint);
         Ok(())
     }
 
@@ -300,6 +293,7 @@ impl Sale {
         let mut attested: Vec<u8> = Vec::with_capacity(
             PAYLOAD_HEADER_LEN
                 + size_of_val(&CHAIN_ID)
+                + size_of_val(&self.sale_token_ata)
                 + size_of_val(&contributions_len)
                 + totals.len() * ATTEST_CONTRIBUTIONS_ELEMENT_LEN,
         );
@@ -456,6 +450,12 @@ impl Sale {
     }
 
     pub fn block_contributions(&mut self) {
+        msg!(
+            "contributions are blocked for sale {}",
+            hex::encode(&self.id)
+        );
+        self.sale_token_mint = Pubkey::new_from_array([0u8; 32]);
+        self.sale_token_ata = Pubkey::new_from_array([0u8; 32]);
         self.contributions_blocked = true;
     }
 

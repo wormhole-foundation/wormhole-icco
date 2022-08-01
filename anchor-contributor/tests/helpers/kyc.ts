@@ -32,7 +32,7 @@ export class KycAuthority {
 
       const idx = totals.findIndex((item) => item.tokenIndex == tokenIndex);
       if (idx < 0) {
-        throw Error("tokenIndex not found");
+        throw new Error("tokenIndex not found");
       }
 
       const state = await this.getBuyer(saleId, buyer);

@@ -2,13 +2,12 @@ import { web3, BN } from "@project-serum/anchor";
 import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey";
 import { getAssociatedTokenAddress, getAccount } from "@solana/spl-token";
 import { tryHexToNativeString, CHAIN_ID_SOLANA } from "@certusone/wormhole-sdk";
-import { BigNumber, BigNumberish } from "ethers";
 
-export function toBigNumberHex(value: BigNumberish, numBytes: number): string {
-  return BigNumber.from(value)
-    .toHexString()
-    .substring(2)
-    .padStart(numBytes * 2, "0");
+export function toBigNumberHex(value: string | number, numBytes: number): string {
+  const valueBytes = new BN(value).toBuffer();
+  const buffer = Buffer.alloc(numBytes);
+  buffer.write(valueBytes.toString("hex"), numBytes - valueBytes.length, "hex");
+  return buffer.toString("hex");
 }
 
 export async function wait(timeInSeconds: number): Promise<void> {
@@ -21,15 +20,17 @@ export async function getBlockTime(connection: web3.Connection): Promise<number>
 }
 
 export async function getSplBalance(connection: web3.Connection, mint: web3.PublicKey, owner: web3.PublicKey) {
-  const tokenAccount = await getAssociatedTokenAddress(mint, owner);
-  const account = await getAccount(connection, tokenAccount);
-  return new BN(account.amount.toString());
+  return getAssociatedTokenAddress(mint, owner)
+    .then(async (addr) => getAccount(connection, addr))
+    .catch((_) => null)
+    .then((account) => new BN(account == null ? 0 : account.amount.toString()));
 }
 
 export async function getPdaSplBalance(connection: web3.Connection, mint: web3.PublicKey, owner: web3.PublicKey) {
-  const tokenAccount = await getPdaAssociatedTokenAddress(mint, owner);
-  const account = await getAccount(connection, tokenAccount);
-  return new BN(account.amount.toString());
+  return getPdaAssociatedTokenAddress(mint, owner)
+    .then(async (addr) => getAccount(connection, addr))
+    .catch((_) => null)
+    .then((account) => new BN(account == null ? 0 : account.amount.toString()));
 }
 
 export function hexToPublicKey(hexlified: string): web3.PublicKey {

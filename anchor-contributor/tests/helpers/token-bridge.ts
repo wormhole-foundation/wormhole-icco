@@ -29,15 +29,15 @@ export function encodeAttestMeta(
   name: string
 ) {
   if (tokenAddress.length != 32) {
-    throw Error("tokenAddress.length != 32");
+    throw new Error("tokenAddress.length != 32");
   }
 
   if (symbol.length > 64) {
-    throw Error("symbol.length > 64");
+    throw new Error("symbol.length > 64");
   }
 
   if (name.length > 64) {
-    throw Error("name.length > 64");
+    throw new Error("name.length > 64");
   }
   const encoded = Buffer.alloc(100);
   encoded.writeUint8(2, 0);

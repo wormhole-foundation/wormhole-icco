@@ -11,7 +11,6 @@ import * as byteify from "byteify";
 import { deriveAddress, getPdaAssociatedTokenAddress, makeReadOnlyAccountMeta, makeWritableAccountMeta } from "./utils";
 import { PostVaaMethod } from "./types";
 import keccak256 from "keccak256";
-import { TOKEN_BRIDGE_ADDRESS } from "./consts";
 
 const INDEX_SALE_INIT_NATIVE_MINT_ADDRESS = 33;
 const INDEX_SALE_INIT_TOKEN_CHAIN_START = 65; // u16
@@ -82,7 +81,7 @@ export class IccoContributor {
 
       return deriveAddress(
         [Buffer.from("wrapped"), byteify.serializeUint16(saleTokenChainId), saleTokenAddress],
-        TOKEN_BRIDGE_ADDRESS
+        this.tokenBridge
       );
     })();
 
@@ -349,19 +348,19 @@ export class IccoContributor {
       .rpc();
   }
 
-  async changeKycAuthority(payer: web3.Keypair, saleChangeKycAuthorityVaa: Buffer): Promise<string> {
+  async updateKycAuthority(payer: web3.Keypair, authorityUpdatedVaa: Buffer): Promise<string> {
     const program = this.program;
     const custodian = this.custodian;
 
     // first post signed vaa to wormhole
-    await this.postVaa(payer, saleChangeKycAuthorityVaa);
-    const coreBridgeVaa = this.deriveSignedVaaAccount(saleChangeKycAuthorityVaa);
+    await this.postVaa(payer, authorityUpdatedVaa);
+    const coreBridgeVaa = this.deriveSignedVaaAccount(authorityUpdatedVaa);
 
-    const saleId = await parseSaleId(saleChangeKycAuthorityVaa);
+    const saleId = await parseSaleId(authorityUpdatedVaa);
     const sale = this.deriveSaleAccount(saleId);
 
     return program.methods
-      .saleAuthorityUpdated()
+      .updateKycAuthority()
       .accounts({
         custodian,
         sale,

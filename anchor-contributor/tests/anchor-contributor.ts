@@ -32,7 +32,10 @@ import {
   CONDUCTOR_ADDRESS,
   CONDUCTOR_CHAIN,
   CORE_BRIDGE_ADDRESS,
-  KYC_PRIVATE,
+  KYC_PRIVATE_NEW,
+  KYC_PRIVATE_OLD,
+  KYC_PUBLIC_NEW,
+  KYC_PUBLIC_OLD,
   TOKEN_BRIDGE_ADDRESS,
 } from "./helpers/consts";
 import { encodeAttestMeta, encodeTokenTransfer, parseTokenTransfer } from "./helpers/token-bridge";
@@ -64,7 +67,7 @@ describe("anchor-contributor", () => {
   const contributor = new IccoContributor(program, CORE_BRIDGE_ADDRESS, TOKEN_BRIDGE_ADDRESS, postVaaSolanaWithRetry);
 
   // kyc for signing contributions
-  const kyc = new KycAuthority(KYC_PRIVATE, CONDUCTOR_ADDRESS, contributor);
+  const kyc = new KycAuthority(KYC_PRIVATE_OLD, CONDUCTOR_ADDRESS, contributor);
 
   // Mock Token Bridge on Ethereum. Used when we attest tokens on Solana.
   const ethTokenBridge = Buffer.from(
@@ -249,7 +252,8 @@ describe("anchor-contributor", () => {
         lockPeriod,
         dummyConductor.saleTokenOnSolana,
         CHAIN_ID_SOLANA,
-        saleTokenDecimals
+        saleTokenDecimals,
+        KYC_PUBLIC_OLD
       );
       const tx = await contributor.initSale(orchestrator, initSaleVaa);
 
@@ -267,7 +271,7 @@ describe("anchor-contributor", () => {
         expect(saleState.times.end.toString()).to.equal(dummyConductor.saleEnd.toString());
         expect(saleState.times.unlockAllocation.toString()).to.equal(dummyConductor.saleUnlock.toString());
         expect(Uint8Array.from(saleState.recipient)).to.deep.equal(Buffer.from(dummyConductor.recipient, "hex"));
-        expect(Uint8Array.from(saleState.kycAuthority)).to.deep.equal(Buffer.from(dummyConductor.kycAuthority, "hex"));
+        expect(Uint8Array.from(saleState.kycAuthority)).to.deep.equal(Buffer.from(KYC_PUBLIC_OLD, "hex"));
         expect(saleState.status).has.key("active");
         expect(saleState.contributionsBlocked).to.equal(false);
 
@@ -396,8 +400,8 @@ describe("anchor-contributor", () => {
       // prep contributions info
       const acceptedTokens = dummyConductor.acceptedTokens;
       const contributedTokenIndices = [acceptedTokens[0].index, acceptedTokens[3].index];
-      contributions.set(contributedTokenIndices[0], ["1200000000", "3400000000"]);
-      contributions.set(contributedTokenIndices[1], ["5600000000", "7800000000"]);
+      contributions.set(contributedTokenIndices[0], ["200000000", "400000000"]);
+      contributions.set(contributedTokenIndices[1], ["600000000", "800000000"]);
 
       contributedTokenIndices.forEach((tokenIndex) => {
         const amounts = contributions.get(tokenIndex);
@@ -470,7 +474,167 @@ describe("anchor-contributor", () => {
           );
 
           let item = totals[i];
-          const expectedState = contribution.eq(new BN("0")) ? "inactive" : "active";
+          const expectedState = contribution.eq(new BN(0)) ? "inactive" : "active";
+          expect(item.status).has.key(expectedState);
+          expect(item.amount.toString()).to.equal(contribution.toString());
+          expect(item.excess.toString()).to.equal("0");
+        }
+      }
+
+      // check sale state
+      {
+        const saleState = await contributor.getSale(saleId);
+        const totals = saleState.totals as any[];
+        expect(totals.length).to.equal(numExpected);
+
+        for (let i = 0; i < numExpected; ++i) {
+          const total = totals[i];
+          expect(total.contributions.toString()).to.equal(expectedContributedAmounts[i].toString());
+          expect(total.allocations.toString()).to.equal("0");
+          expect(total.excessContributions.toString()).to.equal("0");
+        }
+      }
+    });
+
+    it("Orchestrator Updates Sale's KYC Authority with Signed VAA", async () => {
+      const kycAuthorityUpdatedVaa = dummyConductor.updateKycAuthority(await getBlockTime(connection), KYC_PUBLIC_NEW);
+      const tx = await contributor.updateKycAuthority(orchestrator, kycAuthorityUpdatedVaa);
+
+      {
+        const saleId = dummyConductor.getSaleId();
+        const saleState = await contributor.getSale(saleId);
+        expect(Uint8Array.from(saleState.kycAuthority)).to.deep.equal(Buffer.from(KYC_PUBLIC_NEW, "hex"));
+      }
+    });
+
+    it("User Cannot Contribute with Old KYC Authority", async () => {
+      const saleId = dummyConductor.getSaleId();
+      const tokenIndex = 2;
+      const amount = new BN("1000000000"); // 1,000,000,000 lamports
+
+      let caughtError = false;
+      try {
+        const tx = await contributor.contribute(
+          buyer,
+          saleId,
+          tokenIndex,
+          amount,
+          await kyc.signContribution(saleId, tokenIndex, amount, buyer.publicKey)
+        );
+        throw new Error(`should not happen: ${tx}`);
+      } catch (e) {
+        caughtError = verifyErrorMsg(e, "InvalidKycSignature");
+      }
+
+      if (!caughtError) {
+        throw new Error("did not catch expected error");
+      }
+    });
+
+    it("User Contributes More with New KYC Signatures", async () => {
+      // update KYC authority
+      kyc.updatePrivateKey(KYC_PRIVATE_NEW);
+
+      // prep contributions info
+      const acceptedTokens = dummyConductor.acceptedTokens;
+      const contributedTokenIndices = [acceptedTokens[0].index, acceptedTokens[3].index];
+      const moreContributions = new Map<number, string[]>();
+      moreContributions.set(contributedTokenIndices[0], ["1000000000", "3000000000"]);
+      moreContributions.set(contributedTokenIndices[1], ["5000000000", "7000000000"]);
+
+      const thisRoundTotalContributions: BN[] = [];
+      totalContributions.splice(0);
+
+      contributedTokenIndices.forEach((tokenIndex) => {
+        const moreAmounts = moreContributions.get(tokenIndex);
+        thisRoundTotalContributions.push(moreAmounts.map((x) => new BN(x)).reduce((prev, curr) => prev.add(curr)));
+
+        const amounts = contributions.get(tokenIndex);
+        amounts.push(...moreContributions.get(tokenIndex));
+        totalContributions.push(amounts.map((x) => new BN(x)).reduce((prev, curr) => prev.add(curr)));
+      });
+
+      const acceptedMints = acceptedTokens.map((token) => hexToPublicKey(token.address));
+
+      const startingBalanceBuyer = await Promise.all(
+        acceptedMints.map(async (mint) => {
+          return getSplBalance(connection, mint, buyer.publicKey);
+        })
+      );
+      const startingBalanceCustodian = await Promise.all(
+        acceptedMints.map(async (mint) => {
+          return getPdaSplBalance(connection, mint, contributor.custodian);
+        })
+      );
+
+      // now go about your business
+      // contribute multiple times
+      const saleId = dummyConductor.getSaleId();
+      for (const tokenIndex of contributedTokenIndices) {
+        for (const amount of moreContributions.get(tokenIndex).map((value) => new BN(value))) {
+          const tx = await contributor.contribute(
+            buyer,
+            saleId,
+            tokenIndex,
+            amount,
+            await kyc.signContribution(saleId, tokenIndex, amount, buyer.publicKey)
+          );
+        }
+      }
+
+      const endingBalanceBuyer = await Promise.all(
+        acceptedMints.map(async (mint) => {
+          return getSplBalance(connection, mint, buyer.publicKey);
+        })
+      );
+      const endingBalanceCustodian = await Promise.all(
+        acceptedMints.map(async (mint) => {
+          return getPdaSplBalance(connection, mint, contributor.custodian);
+        })
+      );
+
+      const expectedThisRoundContributedAmounts = [
+        thisRoundTotalContributions[0],
+        new BN(0),
+        new BN(0),
+        thisRoundTotalContributions[1],
+        new BN(0),
+        new BN(0),
+        new BN(0),
+        new BN(0),
+      ];
+
+      const expectedContributedAmounts = [
+        totalContributions[0],
+        new BN(0),
+        new BN(0),
+        totalContributions[1],
+        new BN(0),
+        new BN(0),
+        new BN(0),
+        new BN(0),
+      ];
+      const numExpected = expectedContributedAmounts.length;
+
+      // check buyer state
+      {
+        const buyerState = await contributor.getBuyer(saleId, buyer.publicKey);
+        const totals = buyerState.contributions as any[];
+        expect(totals.length).to.equal(numExpected);
+
+        // check balance changes and state
+        for (let i = 0; i < numExpected; ++i) {
+          let thisRoundContribution = expectedThisRoundContributedAmounts[i];
+          expect(startingBalanceBuyer[i].sub(thisRoundContribution).toString()).to.equal(
+            endingBalanceBuyer[i].toString()
+          );
+          expect(startingBalanceCustodian[i].add(thisRoundContribution).toString()).to.equal(
+            endingBalanceCustodian[i].toString()
+          );
+
+          let item = totals[i];
+          let contribution = expectedContributedAmounts[i];
+          const expectedState = contribution.eq(new BN(0)) ? "inactive" : "active";
           expect(item.status).has.key(expectedState);
           expect(item.amount.toString()).to.equal(contribution.toString());
           expect(item.excess.toString()).to.equal("0");
@@ -924,7 +1088,8 @@ describe("anchor-contributor", () => {
         lockPeriod,
         dummyConductor.tokenAddress,
         dummyConductor.tokenChain,
-        dummyConductor.tokenDecimals
+        dummyConductor.tokenDecimals,
+        KYC_PUBLIC_NEW
       );
       const tx = await contributor.initSale(orchestrator, initSaleVaa);
 
@@ -942,7 +1107,7 @@ describe("anchor-contributor", () => {
         expect(saleState.times.end.toString()).to.equal(dummyConductor.saleEnd.toString());
         expect(saleState.times.unlockAllocation.toString()).to.equal(dummyConductor.saleUnlock.toString());
         expect(Uint8Array.from(saleState.recipient)).to.deep.equal(Buffer.from(dummyConductor.recipient, "hex"));
-        expect(Uint8Array.from(saleState.kycAuthority)).to.deep.equal(Buffer.from(dummyConductor.kycAuthority, "hex"));
+        expect(Uint8Array.from(saleState.kycAuthority)).to.deep.equal(Buffer.from(KYC_PUBLIC_NEW, "hex"));
         expect(saleState.status).has.key("active");
         expect(saleState.contributionsBlocked).to.equal(false);
 
@@ -1103,146 +1268,6 @@ describe("anchor-contributor", () => {
     });
   });
 
-  //   describe("Miscellanious sale tests", () => {
-  //     // global contributions for test
-  //     const contributions = new Map<number, string[]>();
-
-  //     it("Orchestrator Initialize Sale with Signed VAA", async () => {
-  //       const startTime = 8 + (await getBlockTime(connection));
-  //       const duration = 8; // seconds after sale starts
-  //       const lockPeriod = 12; // seconds after sale ended
-  //       const initSaleVaa = dummyConductor.createSale(startTime, duration, saleTokenAccount.address, lockPeriod);
-  //       const tx = await contributor.initSale(orchestrator, initSaleVaa);
-
-  //       {
-  //         const saleId = dummyConductor.getSaleId();
-  //         const saleState = await contributor.getSale(saleId);
-
-  //         // verify
-  //         expect(Uint8Array.from(saleState.id)).to.deep.equal(saleId);
-  //         expect(saleState.saleTokenMint.toString()).to.equal(dummyConductor.saleTokenOnSolana);
-  //         expect(saleState.tokenChain).to.equal(dummyConductor.tokenChain);
-  //         expect(saleState.tokenDecimals).to.equal(dummyConductor.tokenDecimals);
-  //         expect(saleState.nativeTokenDecimals).to.equal(dummyConductor.nativeTokenDecimals);
-  //         expect(saleState.times.start.toString()).to.equal(dummyConductor.saleStart.toString());
-  //         expect(saleState.times.end.toString()).to.equal(dummyConductor.saleEnd.toString());
-  //         expect(saleState.times.unlockAllocation.toString()).to.equal(dummyConductor.saleUnlock.toString());
-  //         expect(Uint8Array.from(saleState.recipient)).to.deep.equal(Buffer.from(dummyConductor.recipient, "hex"));
-  //         expect(Uint8Array.from(saleState.kycAuthority)).to.deep.equal(Buffer.from(dummyConductor.kycAuthority, "hex"));
-  //         expect(saleState.status).has.key("active");
-
-  //         // check totals
-  //         const totals: any = saleState.totals;
-  //         const numAccepted = dummyConductor.acceptedTokens.length;
-  //         expect(totals.length).to.equal(numAccepted);
-
-  //         for (let i = 0; i < numAccepted; ++i) {
-  //           const total = totals[i];
-  //           const acceptedToken = dummyConductor.acceptedTokens[i];
-
-  //           expect(total.tokenIndex).to.equal(acceptedToken.index);
-  //           expect(tryNativeToHexString(total.mint.toString(), CHAIN_ID_SOLANA)).to.equal(acceptedToken.address);
-  //           expect(total.contributions.toString()).to.equal("0");
-  //           expect(total.allocations.toString()).to.equal("0");
-  //           expect(total.excessContributions.toString()).to.equal("0");
-  //         }
-  //       }
-  //     });
-
-  //     it("User Contributes to Sale", async () => {
-  //       // wait for sale to start here
-  //       const saleStart = dummyConductor.saleStart;
-  //       await waitUntilBlock(connection, saleStart);
-
-  //       // prep contributions info
-  //       const acceptedTokens = dummyConductor.acceptedTokens;
-  //       const contributedTokenIndices = [acceptedTokens[0].index, acceptedTokens[3].index];
-  //       contributions.set(contributedTokenIndices[0], ["1200000000", "3400000000"]);
-  //       contributions.set(contributedTokenIndices[1], ["5600000000", "7800000000"]);
-
-  //       contributedTokenIndices.forEach((tokenIndex) => {
-  //         const amounts = contributions.get(tokenIndex);
-  //       });
-
-  //       // now go about your business
-  //       // contribute multiple times
-  //       const saleId = dummyConductor.getSaleId();
-  //       for (const tokenIndex of contributedTokenIndices) {
-  //         for (const amount of contributions.get(tokenIndex).map((value) => new BN(value))) {
-  //           const tx = await contributor.contribute(
-  //             buyer,
-  //             saleId,
-  //             tokenIndex,
-  //             amount,
-  //             await kyc.signContribution(saleId, tokenIndex, amount, buyer.publicKey)
-  //           );
-  //         }
-  //       }
-  //     });
-
-  //     it("Orchestrator Changes Sale KYC authority with Signed VAA", async () => {
-  //       const newKycAuthority = BigNumber.from(128855258);
-  //       const saleChangeKycAuthorityVaa = dummyConductor.changeKycAuthority(
-  //         await getBlockTime(connection),
-  //         newKycAuthority
-  //       );
-  //       const tx = await contributor.changeKycAuthority(orchestrator, saleChangeKycAuthorityVaa);
-
-  //       {
-  //         const saleId = dummyConductor.getSaleId();
-  //         const saleState = await contributor.getSale(saleId);
-  //         const r = BigNumber.from(saleState.kycAuthority);
-  //         expect(r.eq(newKycAuthority)).to.equal(true);
-  //       }
-  //     });
-
-  //     it("User Attmpts to contribute to Sale after KYC authority change using old authority", async () => {
-  //       // We are past sale start already
-  //       // Prep contributions info
-  //       const acceptedTokens = dummyConductor.acceptedTokens;
-  //       const contributedTokenIndices = [acceptedTokens[0].index, acceptedTokens[3].index];
-  //       contributions.clear();
-  //       contributions.set(contributedTokenIndices[0], ["200000000"]);
-
-  //       contributedTokenIndices.forEach((tokenIndex) => {
-  //         const amounts = contributions.get(tokenIndex);
-  //       });
-
-  //       // contribute
-  //       let caughtError = false;
-  //       try {
-  //         const saleId = dummyConductor.getSaleId();
-  //         for (const tokenIndex of contributedTokenIndices) {
-  //           for (const amount of contributions.get(tokenIndex).map((value) => new BN(value))) {
-  //             const tx = await contributor.contribute(
-  //               buyer,
-  //               saleId,
-  //               tokenIndex,
-  //               amount,
-  //               await kyc.signContribution(saleId, tokenIndex, amount, buyer.publicKey)
-  //             );
-  //           }
-  //         }
-  //       } catch (e) {
-  //         caughtError = verifyErrorMsg(e, "InvalidKycSignature");
-  //       }
-  //       if (!caughtError) {
-  //         throw Error("did not catch expected error");
-  //       }
-  //     });
-
-  //     it("Orchestrator Aborts Sale with Signed VAA", async () => {
-  //       const saleAbortedVaa = dummyConductor.abortSale(await getBlockTime(connection));
-  //       const tx = await contributor.abortSale(orchestrator, saleAbortedVaa);
-
-  //       {
-  //         const saleId = dummyConductor.getSaleId();
-  //         const saleState = await contributor.getSale(saleId);
-  //         expect(saleState.status).has.key("aborted");
-  //       }
-  //     });
-  //   });
-
   describe("Conduct Blocked Sale", () => {
     it("Orchestrator Initialized Blocked Sale By Using Non-Existent Sale Token", async () => {
       const startTime = 8 + (await getBlockTime(connection));
@@ -1256,7 +1281,8 @@ describe("anchor-contributor", () => {
         lockPeriod,
         orchestrator.publicKey.toString(), // obviously not an SPL token
         CHAIN_ID_SOLANA,
-        7
+        7,
+        KYC_PUBLIC_NEW
       );
       const tx = await contributor.initSale(orchestrator, initSaleVaa);
 
@@ -1276,7 +1302,7 @@ describe("anchor-contributor", () => {
         expect(saleState.times.end.toString()).to.equal(dummyConductor.saleEnd.toString());
         expect(saleState.times.unlockAllocation.toString()).to.equal(dummyConductor.saleUnlock.toString());
         expect(Uint8Array.from(saleState.recipient)).to.deep.equal(Buffer.from(dummyConductor.recipient, "hex"));
-        expect(Uint8Array.from(saleState.kycAuthority)).to.deep.equal(Buffer.from(dummyConductor.kycAuthority, "hex"));
+        expect(Uint8Array.from(saleState.kycAuthority)).to.deep.equal(Buffer.from(KYC_PUBLIC_NEW, "hex"));
         expect(saleState.status).has.key("active");
         expect(saleState.contributionsBlocked).to.equal(true);
 
@@ -1408,7 +1434,8 @@ describe("anchor-contributor", () => {
         lockPeriod,
         "0x" + foreignSaleTokenAddress.subarray(12, 32).toString("hex"),
         CHAIN_ID_ETH,
-        18
+        18,
+        KYC_PUBLIC_NEW
       );
 
       let caughtError = false;
@@ -1489,7 +1516,7 @@ describe("anchor-contributor", () => {
         expect(saleState.times.end.toString()).to.equal(dummyConductor.saleEnd.toString());
         expect(saleState.times.unlockAllocation.toString()).to.equal(dummyConductor.saleUnlock.toString());
         expect(Uint8Array.from(saleState.recipient)).to.deep.equal(Buffer.from(dummyConductor.recipient, "hex"));
-        expect(Uint8Array.from(saleState.kycAuthority)).to.deep.equal(Buffer.from(dummyConductor.kycAuthority, "hex"));
+        expect(Uint8Array.from(saleState.kycAuthority)).to.deep.equal(Buffer.from(KYC_PUBLIC_NEW, "hex"));
         expect(saleState.status).has.key("active");
         expect(saleState.contributionsBlocked).to.equal(false);
 
@@ -1596,7 +1623,7 @@ describe("anchor-contributor", () => {
           );
 
           let item = totals[i];
-          const expectedState = contribution.eq(new BN("0")) ? "inactive" : "active";
+          const expectedState = contribution.eq(new BN(0)) ? "inactive" : "active";
           expect(item.status).has.key(expectedState);
           expect(item.amount.toString()).to.equal(contribution.toString());
           expect(item.excess.toString()).to.equal("0");
@@ -1743,7 +1770,7 @@ describe("anchor-contributor", () => {
         )
           .then((transaction) => {
             transaction.partialSign(orchestrator);
-            return connection.sendRawTransaction(transaction.serialize(), { skipPreflight: true });
+            return connection.sendRawTransaction(transaction.serialize());
           })
           .then((tx) => connection.confirmTransaction(tx));
       }

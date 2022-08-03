@@ -26,6 +26,7 @@ export class DummyConductor {
   tokenChain: number;
   tokenDecimals: number;
   nativeTokenDecimals: number;
+  kycAuthority: string;
 
   initSaleVaa: Buffer;
 
@@ -83,12 +84,9 @@ export class DummyConductor {
     lockPeriod: number,
     tokenAddress: string,
     tokenChain: number,
-    tokenDecimals: number
+    tokenDecimals: number,
+    kycAuthority: string
   ): Buffer {
-    // uptick saleId for every new sale
-    ++this.saleId;
-    ++this.wormholeSequence;
-
     // set up sale time based on block time
     this.saleStart = startTime;
     this.saleEnd = this.saleStart + duration;
@@ -100,14 +98,16 @@ export class DummyConductor {
 
     this.nativeTokenDecimals = this.tokenChain == 1 ? this.tokenDecimals : 8;
 
+    this.kycAuthority = kycAuthority;
+
     this.initSaleVaa = signAndEncodeVaa(
       startTime,
       this.nonce,
       this.chainId,
       this.address,
-      this.wormholeSequence,
+      ++this.wormholeSequence,
       encodeSaleInit(
-        this.saleId,
+        ++this.saleId,
         tryNativeToHexString(this.tokenAddress, this.tokenChain as ChainId),
         this.tokenChain,
         this.tokenDecimals,
@@ -128,7 +128,6 @@ export class DummyConductor {
   }
 
   sealSale(blockTime: number, contributions: Map<number, string[]>): Buffer {
-    ++this.wormholeSequence;
     this.allocations = [];
 
     const allocationMultiplier = new BN(this.getAllocationMultiplier());
@@ -157,39 +156,36 @@ export class DummyConductor {
       this.nonce,
       this.chainId,
       this.address,
-      this.wormholeSequence,
+      ++this.wormholeSequence,
       encodeSaleSealed(this.saleId, this.allocations)
     );
   }
 
   abortSale(blockTime: number): Buffer {
-    ++this.wormholeSequence;
     return signAndEncodeVaa(
       blockTime,
       this.nonce,
       this.chainId,
       this.address,
-      this.wormholeSequence,
+      ++this.wormholeSequence,
       encodeSaleAborted(this.saleId)
     );
   }
 
-  changeKycAuthority(blockTime: number, newAuthority: BigNumber): Buffer {
-    ++this.wormholeSequence;
+  updateKycAuthority(blockTime: number, kycAuthority: string): Buffer {
+    this.kycAuthority = kycAuthority;
     return signAndEncodeVaa(
       blockTime,
       this.nonce,
       this.chainId,
       this.address,
-      this.wormholeSequence,
-      encodeChangeKycAuthority(this.saleId, newAuthority)
+      ++this.wormholeSequence,
+      encodeKycAuthorityUpdated(this.saleId, kycAuthority)
     );
   }
 
   // sale parameters that won't change for the test
-  //associatedTokenAddress = "00000000000000000000000083752ecafebf4707258dedffbd9c7443148169db";
   recipient = tryNativeToHexString("0x22d491bde2303f2f43325b2108d26f1eaba1e32b", CHAIN_ID_ETH);
-  kycAuthority = "1df62f291b2e969fb0849d99d9ce41e2f137006e";
 
   // we won't use all of these, but these are purely to verify decimal shift
   expectedAllocations = [
@@ -301,10 +297,13 @@ export function encodeSaleAborted(saleId: number): Buffer {
   return encoded;
 }
 
-export function encodeChangeKycAuthority(saleId: number, newAuthority: BigNumber): Buffer {
+export function encodeKycAuthorityUpdated(
+  saleId: number,
+  kycAuthority: string // 20 bytes (ethereum address)
+): Buffer {
   const encoded = Buffer.alloc(53);
-  encoded.writeUInt8(6, 0); // ChangeKycAuthority payload = 6
+  encoded.writeUInt8(6, 0); // AuthorityUpdated payload = 6
   encoded.write(toBigNumberHex(saleId, 32), 1, "hex");
-  encoded.write(toBigNumberHex(newAuthority, 20), 33, "hex");
+  encoded.write(kycAuthority, 33, "hex");
   return encoded;
 }

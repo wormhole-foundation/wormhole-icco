@@ -698,7 +698,7 @@ pub struct ClaimExcesses<'info> {
     pub token_program: Program<'info, Token>,
 }
 
-/// Context provides all accounts required for someone 
+/// Context provides all accounts required for someone
 /// to change a sale KYC authority with a signed VAA
 /// sent by the conductor.
 /// See `sale_authority_updated` instruction in lib.rs.
@@ -710,7 +710,7 @@ pub struct ClaimExcesses<'info> {
 /// Mutable
 /// * `sale`
 #[derive(Accounts)]
-pub struct SaleAuthorityUpdated<'info> {
+pub struct UpdateKycAuthority<'info> {
     #[account(
         seeds = [
             SEED_PREFIX_CUSTODIAN.as_bytes(),
@@ -732,7 +732,7 @@ pub struct SaleAuthorityUpdated<'info> {
     #[account(
         constraint = core_bridge_vaa.owner.key() == Custodian::wormhole()?
     )]
-    /// CHECK: This account is owned by Core Bridge so we trust it
+    /// CHECK: Posted VAA Message Data
     pub core_bridge_vaa: AccountInfo<'info>,
 
     pub system_program: Program<'info, System>,

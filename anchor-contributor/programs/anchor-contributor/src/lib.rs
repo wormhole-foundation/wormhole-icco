@@ -139,44 +139,42 @@ pub mod anchor_contributor {
 
         // We need to verify that the accepted tokens are actual mints.
         // We set status to invalid on bad ones.
-        {
-            let assets = &mut sale.totals;
-            let accepted_mints = &ctx.remaining_accounts[..];
+        let assets = &mut sale.totals;
+        let accepted_mints = &ctx.remaining_accounts[..];
+        require!(
+            assets.len() == accepted_mints.len(),
+            ContributorError::InvalidRemainingAccounts
+        );
+        for (asset, accepted_mint_acct_info) in izip!(assets, accepted_mints) {
+            // If the remaining account does not match the key of the accepted asset's mint,
+            // throw because wrong account is passed into instruction.
             require!(
-                assets.len() == accepted_mints.len(),
-                ContributorError::InvalidRemainingAccounts
+                accepted_mint_acct_info.key() == asset.mint,
+                ContributorError::InvalidRemainingAccounts,
             );
-            for (asset, accepted_mint_acct_info) in izip!(assets, accepted_mints) {
-                // If the remaining account does not match the key of the accepted asset's mint,
-                // throw because wrong account is passed into instruction.
-                require!(
-                    accepted_mint_acct_info.key() == asset.mint,
-                    ContributorError::InvalidRemainingAccounts,
-                );
 
-                // Check whether we should invalidate the accepted asset.
-                match *accepted_mint_acct_info.owner == token::ID {
-                    false => {
-                        // If the remaining account is not owned by token program, it is invalid.
-                        asset.invalidate();
-                    }
-                    _ => {
-                        match accepted_mint_acct_info.try_borrow_data() {
-                            Err(_) => {
-                                // If the remaining account is not a real account, it is invalid.
+            // Check whether we should invalidate the accepted asset.
+            match *accepted_mint_acct_info.owner == token::ID {
+                false => {
+                    // If the remaining account is not owned by token program, it is invalid.
+                    asset.invalidate();
+                }
+                _ => {
+                    match accepted_mint_acct_info.try_borrow_data() {
+                        Err(_) => {
+                            // If the remaining account is not a real account, it is invalid.
+                            asset.invalidate();
+                        }
+                        Ok(data) => {
+                            // If the remaining account does not deserialize to Mint account, it is invalid.
+                            let mut bf: &[u8] = &data;
+                            if token::Mint::try_deserialize(&mut bf).is_err() {
                                 asset.invalidate();
-                            }
-                            Ok(data) => {
-                                // If the remaining account does not deserialize to Mint account, it is invalid.
-                                let mut bf: &[u8] = &data;
-                                if token::Mint::try_deserialize(&mut bf).is_err() {
-                                    asset.invalidate();
-                                }
                             }
                         }
                     }
-                };
-            }
+                }
+            };
         }
 
         // Write sale id in program log for reference.
@@ -697,9 +695,6 @@ pub mod anchor_contributor {
                 }
                 _ => return Err(ContributorError::InvalidAccount.into()),
             };
-
-            // And verify the buyer's token account
-            asset.deserialize_associated_token_account(buyer_token_acct, &owner.key())?;
         }
 
         // Finish instruction.
@@ -730,12 +725,6 @@ pub mod anchor_contributor {
 
         let custodian_sale_token_acct = &ctx.accounts.custodian_sale_token_acct;
         let buyer_sale_token_acct = &ctx.accounts.buyer_sale_token_acct;
-
-        // Confirm custodian_sale_token_acct is same as the one stored in sale
-        require!(
-            custodian_sale_token_acct.key() == sale.sale_token_ata,
-            ContributorError::InvalidAcceptedTokenATA
-        );
 
         // compute allocation
         let totals = &sale.totals;

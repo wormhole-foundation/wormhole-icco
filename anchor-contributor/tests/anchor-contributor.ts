@@ -408,12 +408,12 @@ describe("anchor-contributor", () => {
 
       const startingBalanceBuyer = await Promise.all(
         acceptedMints.map(async (mint) => {
-          return getSplBalance(connection, mint, buyer.publicKey).catch((_) => new BN(0));
+          return getSplBalance(connection, mint, buyer.publicKey);
         })
       );
       const startingBalanceCustodian = await Promise.all(
         acceptedMints.map(async (mint) => {
-          return getPdaSplBalance(connection, mint, contributor.custodian).catch((_) => new BN(0));
+          return getPdaSplBalance(connection, mint, contributor.custodian);
         })
       );
 

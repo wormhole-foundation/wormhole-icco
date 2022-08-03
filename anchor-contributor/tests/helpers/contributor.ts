@@ -251,7 +251,7 @@ export class IccoContributor {
         systemProgram: web3.SystemProgram.programId,
       })
       .remainingAccounts(remainingAccounts)
-      .rpc({ skipPreflight: true });
+      .rpc();
   }
 
   async bridgeSealedContribution(payer: web3.Keypair, saleId: Buffer, acceptedMint: web3.PublicKey) {

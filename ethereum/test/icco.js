@@ -1079,8 +1079,6 @@ contract("ICCO", function(accounts) {
 
     assert.ok(pauseStatus);
   
-    console.log('==== DONE pause')
-
     let failed = false;
     try {
       // try to init the sale
@@ -1091,7 +1089,7 @@ contract("ICCO", function(accounts) {
     } catch (error) {
       assert.equal(
         error.message,
-        "Returned error: VM Excception while processing transaction: revert Pausable: paused"
+        "Returned error: VM Exception while processing transaction: revert Pausable: paused"
       );
       failed = true;
     }

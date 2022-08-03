@@ -173,7 +173,7 @@ impl Sale {
             payload.len() > INDEX_SALE_INIT_ACCEPTED_TOKENS_START,
             ContributorError::InvalidVaaPayload
         );
-
+        
         let num_accepted = payload[INDEX_SALE_INIT_ACCEPTED_TOKENS_START] as usize;
 
         require!(
@@ -462,6 +462,7 @@ impl Sale {
     pub fn is_blocked_contributions(&self) -> bool {
         self.contributions_blocked
     }
+
 
     pub fn allocation_unlocked(&self, block_time: i64) -> bool {
         block_time as u64 >= self.times.unlock_allocation

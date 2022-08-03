@@ -6,6 +6,7 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Upgrade.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
 
 import "../../libraries/external/BytesLib.sol";
 
@@ -15,7 +16,7 @@ import "./ContributorStructs.sol";
 
 import "../../interfaces/IWormhole.sol";
 
-contract ContributorGovernance is ContributorGetters, ContributorSetters, ERC1967Upgrade {
+contract ContributorGovernance is ContributorGetters, ContributorSetters, ERC1967Upgrade, Pausable {
     event ContractUpgraded(address indexed oldContract, address indexed newContract);
     event ConsistencyLevelUpdated(uint8 indexed oldLevel, uint8 indexed newLevel);
     event OwnershipTransfered(address indexed oldOwner, address indexed newOwner);
@@ -36,6 +37,16 @@ contract ContributorGovernance is ContributorGetters, ContributorSetters, ERC196
 
         emit ContractUpgraded(currentImplementation, newImplementation);
     } 
+
+    /// @dev pause contributor operations
+    function pause() public onlyOwner {
+        _pause();
+    }
+
+    /// @dev unpause contributor operations
+    function unPause() public onlyOwner {
+        _unpause();
+    }
 
     /// @dev updateConsisencyLevel serves to change the wormhole messaging consistencyLevel
     function updateConsistencyLevel(uint16 contributorChainId, uint8 newConsistencyLevel) public onlyOwner {

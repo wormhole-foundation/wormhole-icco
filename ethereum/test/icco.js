@@ -393,6 +393,74 @@ contract("ICCO", function(accounts) {
     assert.ok(conductorFailed);
   });
 
+  it("conductor should allow the owner to toggle pause/unPause operations.", async function() {
+
+    const conductorContract = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+
+    await conductorContract.methods.pause().send({
+      value: "0",
+      from: accounts[0], // contract owner
+      gasLimit: GAS_LIMIT,
+    });
+
+    // check getters after the action
+    let pauseStatus = await conductorContract.methods.paused().call();
+
+    assert.ok(pauseStatus);
+
+    // toggle to unpause
+    await conductorContract.methods.unPause().send({
+      value: "0",
+      from: accounts[0], // contract owner
+      gasLimit: GAS_LIMIT,
+    });
+
+    // check getters after the action
+    pauseStatus = await conductorContract.methods.paused().call();
+
+    assert.ok(!pauseStatus);
+  });
+
+  it("conductor should not allow the non owner to toggle pause/unPause operations.", async function() {
+
+    const conductorContract = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+    let failed = false;
+    try {
+      // toggle try to pause
+      await conductorContract.methods.pause().send({
+        value: "0",
+        from: accounts[1], // contract owner
+        gasLimit: GAS_LIMIT,
+      });
+    } catch (error) {
+      assert.equal(
+        error.message,
+        "Returned error: VM Exception while processing transaction: revert 9"
+      );
+      failed = true;
+    }
+    
+    assert.ok(failed);
+
+    try {
+      failed = false;
+      // toggle try to unpause
+      await conductorContract.methods.unPause().send({
+        value: "0",
+        from: accounts[1], // contract owner
+        gasLimit: GAS_LIMIT,
+      });
+    } catch (error) {
+      assert.equal(
+        error.message,
+        "Returned error: VM Exception while processing transaction: revert 9"
+      );
+      failed = true;
+    }
+    
+    assert.ok(failed);
+  });
+
   it("conductor should allow the owner to transfer ownership", async function() {
     // test variables
     const currentOwner = accounts[0];
@@ -481,6 +549,74 @@ contract("ICCO", function(accounts) {
     const pendingOwner = await conductorContract.methods.pendingOwner().call();
 
     assert.equal(pendingOwner, ZERO_ADDRESS);
+  });
+
+  it("contributor should allow the owner to toggle pause/unPause operations.", async function() {
+
+    const contributorContract = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
+
+    await contributorContract.methods.pause().send({
+      value: "0",
+      from: accounts[0], // contract owner
+      gasLimit: GAS_LIMIT,
+    });
+
+    // check getters after the action
+    let pauseStatus = await contributorContract.methods.paused().call();
+
+    assert.ok(pauseStatus);
+
+    // toggle to unpause
+    await contributorContract.methods.unPause().send({
+      value: "0",
+      from: accounts[0], // contract owner
+      gasLimit: GAS_LIMIT,
+    });
+
+    // check getters after the action
+    pauseStatus = await contributorContract.methods.paused().call();
+
+    assert.ok(!pauseStatus);
+  });
+
+  it("contributor should not allow the non owner to toggle pause/unPause operations.", async function() {
+
+    const contributorContract = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
+    let failed = false;
+    try {
+      // toggle try to pause
+      await contributorContract.methods.pause().send({
+        value: "0",
+        from: accounts[1], // contract owner
+        gasLimit: GAS_LIMIT,
+      });
+    } catch (error) {
+      assert.equal(
+        error.message,
+        "Returned error: VM Exception while processing transaction: revert caller is not the owner"
+      );
+      failed = true;
+    }
+    
+    assert.ok(failed);
+
+    try {
+      failed = false;
+      // toggle try to unpause
+      await contributorContract.methods.unPause().send({
+        value: "0",
+        from: accounts[1], // contract owner
+        gasLimit: GAS_LIMIT,
+      });
+    } catch (error) {
+      assert.equal(
+        error.message,
+        "Returned error: VM Exception while processing transaction: revert caller is not the owner"
+      );
+      failed = true;
+    }
+    
+    assert.ok(failed);
   });
 
   it("contributor should allow the owner to transfer ownership", async function() {
@@ -662,6 +798,87 @@ contract("ICCO", function(accounts) {
     await CONTRIBUTED_TOKEN_TWO.mint(BUYER_ONE, extraContributedTokensToMint);
   });
 
+  it("should not create sale of conductor when pause enable by owner", async function() {
+    
+    // test variables
+    const owner = accounts[0];
+
+    const current_block = await web3.eth.getBlock("latest");
+    SALE_START = current_block.timestamp + 5;
+    SALE_END = SALE_START + 8;
+
+    const saleTokenAmount = "1000";
+    const minimumTokenRaise = "2000";
+    const maximumTokenRaise = "30000";
+    const tokenOneConversionRate = "1000000000000000000";
+    const tokenTwoConversionRate = "2000000000000000000";
+    const saleRecipient = accounts[0];
+    const refundRecipient = accounts[0];
+    const isFixedPriceSale = false;
+
+    const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+
+    await initialized.methods.pause().send({
+      value: "0",
+      from: owner, // contract owner
+      gasLimit: GAS_LIMIT,
+    });
+  
+    // check getters after the action
+    let pauseStatus = await initialized.methods.paused().call();
+
+    assert.ok(pauseStatus);
+    // create array (struct) for sale params
+    const saleParams = [
+      isFixedPriceSale,
+      SOLD_TOKEN_BYTES32_ADDRESS,
+      TEST_CHAIN_ID,
+      saleTokenAmount,
+      minimumTokenRaise,
+      maximumTokenRaise,
+      SALE_START,
+      SALE_END,
+      SALE_END, // unlock timestamp
+      saleRecipient,
+      refundRecipient,
+      KYC_AUTHORITY,
+    ];
+
+    // create accepted tokens array
+    const acceptedTokens = [
+      [TEST_CHAIN_ID, "0x000000000000000000000000" + CONTRIBUTED_TOKEN_ONE.address.substr(2), tokenOneConversionRate],
+      [TEST_CHAIN_ID, "0x000000000000000000000000" + CONTRIBUTED_TOKEN_TWO.address.substr(2), tokenTwoConversionRate],
+    ];
+    let failed = false;
+    try {
+      // try to create the sale
+      await initialized.methods.createSale(saleParams, acceptedTokens).send({
+        value: WORMHOLE_FEE * 2,
+        from: SELLER,
+        gasLimit: GAS_LIMIT,
+      });
+    } catch (error) {
+      assert.equal(
+        error.message,
+        "Returned error: VM Exception while processing transaction: revert Pausable: paused"
+      );
+      failed = true;
+    }
+    
+    assert.ok(failed);
+
+    await initialized.methods.unPause().send({
+      value: "0",
+      from: owner, // contract owner
+      gasLimit: GAS_LIMIT,
+    });
+
+    // check getters after the action
+    pauseStatus = await initialized.methods.paused().call();
+
+    assert.ok(!pauseStatus);
+  });
+
   it("create a sale correctly and attest over wormhole", async function() {
     console.log("\n       -------------------------- Sale Test #1 (Successful) --------------------------");
 
@@ -841,6 +1058,57 @@ contract("ICCO", function(accounts) {
   });
 
   let INIT_SALE_VM;
+
+  it("should not init a sale in the contributor when pause enable by owner", async function() {
+    
+    // test variables
+    const owner = accounts[0];
+
+    // test variables
+    const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
+
+    await initialized.methods.pause().send({
+      value: "0",
+      from: owner, // contract owner
+      gasLimit: GAS_LIMIT,
+    });
+  
+
+    // check getters after the action
+    let pauseStatus = await initialized.methods.paused().call();
+
+    assert.ok(pauseStatus);
+  
+    console.log('==== DONE pause')
+
+    let failed = false;
+    try {
+      // try to init the sale
+      await initialized.methods.initSale("0x00").send({
+        from: SELLER,
+        gasLimit: GAS_LIMIT,
+      });
+    } catch (error) {
+      assert.equal(
+        error.message,
+        "Returned error: VM Excception while processing transaction: revert Pausable: paused"
+      );
+      failed = true;
+    }
+    
+    assert.ok(failed);
+
+    await initialized.methods.unPause().send({
+      value: "0",
+      from: owner, // contract owner
+      gasLimit: GAS_LIMIT,
+    });
+
+    // check getters after the action
+    pauseStatus = await initialized.methods.paused().call();
+
+    assert.ok(!pauseStatus);
+  });
 
   it("should init a sale in the contributor", async function() {
     // test variables

@@ -6,6 +6,7 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Upgrade.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
 
 import "../../libraries/external/BytesLib.sol";
 
@@ -15,7 +16,7 @@ import "./ConductorStructs.sol";
 
 import "../../interfaces/IWormhole.sol";
 
-contract ConductorGovernance is ConductorGetters, ConductorSetters, ERC1967Upgrade {
+contract ConductorGovernance is ConductorGetters, ConductorSetters, ERC1967Upgrade, Pausable {
     event ContractUpgraded(address indexed oldContract, address indexed newContract);
     event ConsistencyLevelUpdated(uint8 indexed oldLevel, uint8 indexed newLevel);
     event OwnershipTransfered(address indexed oldOwner, address indexed newOwner);
@@ -26,6 +27,15 @@ contract ConductorGovernance is ConductorGetters, ConductorSetters, ERC1967Upgra
         require(contributorContracts(contributorChainId) == bytes32(0), "2");
         setContributor(contributorChainId, contributorAddress);
     }   
+
+    /// @dev pause conductor operations
+    function pause() public onlyOwner {
+        _pause();
+    }
+    /// @dev unpause conductor operations
+    function unPause() public onlyOwner {
+        _unpause();
+    }
 
     /// @dev upgrade serves to upgrade contract implementations
     function upgrade(uint16 conductorChainId, address newImplementation) public onlyOwner {

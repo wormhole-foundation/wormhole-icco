@@ -1,18 +1,20 @@
 import { BN, Program, web3 } from "@project-serum/anchor";
 import { AnchorContributor } from "../../target/types/anchor_contributor";
 import {
-  getAccount,
   getAssociatedTokenAddress,
   getMint,
   getOrCreateAssociatedTokenAccount,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
+import * as byteify from "byteify";
 
 import { deriveAddress, getPdaAssociatedTokenAddress, makeReadOnlyAccountMeta, makeWritableAccountMeta } from "./utils";
 import { PostVaaMethod } from "./types";
 import keccak256 from "keccak256";
+import { TOKEN_BRIDGE_ADDRESS } from "./consts";
 
-const INDEX_SALE_INIT_TOKEN_ADDRESS = 33;
+const INDEX_SALE_INIT_NATIVE_MINT_ADDRESS = 33;
+const INDEX_SALE_INIT_TOKEN_CHAIN_START = 65; // u16
 const INDEX_SALE_INIT_ACCEPTED_TOKENS_START = 132;
 
 const ACCEPTED_TOKEN_NUM_BYTES = 33;
@@ -55,6 +57,7 @@ export class IccoContributor {
 
   async initSale(payer: web3.Keypair, initSaleVaa: Buffer): Promise<string> {
     const program = this.program;
+    const connection = program.provider.connection;
 
     const custodian = this.custodian;
 
@@ -62,14 +65,30 @@ export class IccoContributor {
     await this.postVaa(payer, initSaleVaa);
     const coreBridgeVaa = this.deriveSignedVaaAccount(initSaleVaa);
 
-    const saleId = await parseSaleId(initSaleVaa);
+    const saleId = parseSaleId(initSaleVaa);
     const sale = this.deriveSaleAccount(saleId);
 
     const payload = getVaaBody(initSaleVaa);
-    const tokenAccount = await getAccount(
-      program.provider.connection,
-      new web3.PublicKey(payload.subarray(INDEX_SALE_INIT_TOKEN_ADDRESS, INDEX_SALE_INIT_TOKEN_ADDRESS + 32))
+
+    const saleTokenChainId = payload.readInt16BE(INDEX_SALE_INIT_TOKEN_CHAIN_START);
+    const saleTokenAddress = payload.subarray(
+      INDEX_SALE_INIT_NATIVE_MINT_ADDRESS,
+      INDEX_SALE_INIT_NATIVE_MINT_ADDRESS + 32
     );
+    const saleTokenMint = (() => {
+      if (saleTokenChainId == 1) {
+        return new web3.PublicKey(saleTokenAddress);
+      }
+
+      return deriveAddress(
+        [Buffer.from("wrapped"), byteify.serializeUint16(saleTokenChainId), saleTokenAddress],
+        TOKEN_BRIDGE_ADDRESS
+      );
+    })();
+
+    await getOrCreateAssociatedTokenAccount(connection, payer, saleTokenMint, custodian, true).catch((_) => {
+      // error because of invalid token
+    });
 
     const numAccepted = payload.at(INDEX_SALE_INIT_ACCEPTED_TOKENS_START);
     const remainingAccounts: web3.AccountMeta[] = [];
@@ -78,6 +97,11 @@ export class IccoContributor {
         INDEX_SALE_INIT_ACCEPTED_TOKENS_START + 1 + ACCEPTED_TOKEN_NUM_BYTES * i + INDEX_ACCEPTED_TOKEN_ADDRESS;
       const mint = new web3.PublicKey(payload.subarray(start, start + 32));
       remainingAccounts.push(makeReadOnlyAccountMeta(mint));
+
+      // create ATAs
+      await getOrCreateAssociatedTokenAccount(connection, payer, mint, custodian, true).catch((_) => {
+        // error because of invalid token
+      });
     }
 
     return program.methods
@@ -86,9 +110,9 @@ export class IccoContributor {
         custodian,
         sale,
         coreBridgeVaa,
-        saleTokenMint: tokenAccount.mint,
-        custodianSaleTokenAcct: tokenAccount.address,
+        saleTokenMint,
         payer: payer.publicKey,
+        tokenBridge: this.tokenBridge,
         systemProgram: web3.SystemProgram.programId,
       })
       .remainingAccounts(remainingAccounts)
@@ -108,19 +132,33 @@ export class IccoContributor {
     const totals: any = state.totals;
     const found = totals.find((item) => item.tokenIndex == tokenIndex);
     if (found == undefined) {
-      throw "tokenIndex not found";
+      throw new Error("tokenIndex not found");
     }
 
     const mint = found.mint;
 
     // now prepare instruction
     const program = this.program;
+    const connection = program.provider.connection;
 
     const custodian = this.custodian;
 
     const buyer = this.deriveBuyerAccount(saleId, payer.publicKey);
     const sale = this.deriveSaleAccount(saleId);
-    const buyerTokenAcct = await getAssociatedTokenAddress(mint, payer.publicKey);
+
+    const buyerTokenAcct = await getOrCreateAssociatedTokenAccount(connection, payer, mint, payer.publicKey)
+      .catch((_) => {
+        // illegimate accepted token... don't throw and derive address anyway
+        return null;
+      })
+      .then(async (account) => {
+        if (account != null) {
+          return new web3.PublicKey(account.address);
+        }
+
+        // we still want to generate an address here
+        return getAssociatedTokenAddress(mint, payer.publicKey);
+      });
     const custodianTokenAcct = await getPdaAssociatedTokenAddress(mint, custodian);
 
     return program.methods
@@ -257,6 +295,7 @@ export class IccoContributor {
       units: 420690,
       additionalFee: 0,
     });
+
     return program.methods
       .bridgeSealedContribution()
       .accounts({

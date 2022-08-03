@@ -1,11 +1,9 @@
-import { web3 } from "@project-serum/anchor";
-import { CHAIN_ID_ETH, CHAIN_ID_SOLANA, tryNativeToHexString } from "@certusone/wormhole-sdk";
-import { createMint, mintTo } from "@solana/spl-token";
-import { BigNumber, BigNumberish } from "ethers";
+import { web3, BN } from "@project-serum/anchor";
+import { ChainId, CHAIN_ID_ETH, CHAIN_ID_SOLANA, tryNativeToHexString } from "@certusone/wormhole-sdk";
+import { mintTo } from "@solana/spl-token";
 
 import { getPdaAssociatedTokenAddress, toBigNumberHex } from "./utils";
 import { signAndEncodeVaa } from "./wormhole";
-import { BN } from "bn.js";
 import { SolanaAcceptedToken } from "./types";
 
 // sale struct info
@@ -24,11 +22,17 @@ export class DummyConductor {
   saleEnd: number;
   saleUnlock: number;
 
+  tokenAddress: string;
+  tokenChain: number;
+  tokenDecimals: number;
+  nativeTokenDecimals: number;
+
   initSaleVaa: Buffer;
 
   saleTokenOnSolana: string;
   acceptedTokens: SolanaAcceptedToken[];
   allocations: Allocation[];
+  totalAllocations: BN;
 
   constructor(chainId: number, address: string) {
     this.chainId = chainId;
@@ -45,10 +49,8 @@ export class DummyConductor {
     this.allocations = [];
   }
 
-  async attestSaleToken(connection: web3.Connection, payer: web3.Keypair): Promise<void> {
-    const mint = await createMint(connection, payer, payer.publicKey, payer.publicKey, this.nativeTokenDecimals);
+  saveSaleTokenMint(mint: web3.PublicKey) {
     this.saleTokenOnSolana = mint.toString();
-    return;
   }
 
   async redeemAllocationsOnSolana(
@@ -56,18 +58,10 @@ export class DummyConductor {
     payer: web3.Keypair,
     custodian: web3.PublicKey
   ): Promise<void> {
-    const mint = new web3.PublicKey(this.saleTokenOnSolana);
+    const mint = this.getSaleTokenOnSolana();
     const custodianTokenAcct = await getPdaAssociatedTokenAddress(mint, custodian);
-    const amount = this.allocations.map((item) => new BN(item.allocation)).reduce((prev, curr) => prev.add(curr));
 
-    await mintTo(
-      connection,
-      payer,
-      mint,
-      custodianTokenAcct,
-      payer,
-      BigInt(amount.toString()) // 20,000,000,000 lamports
-    );
+    await mintTo(connection, payer, mint, custodianTokenAcct, payer, BigInt(this.totalAllocations.toString()));
     return;
   }
 
@@ -86,8 +80,10 @@ export class DummyConductor {
   createSale(
     startTime: number,
     duration: number,
-    associatedSaleTokenAddress: web3.PublicKey,
-    lockPeriod: number
+    lockPeriod: number,
+    tokenAddress: string,
+    tokenChain: number,
+    tokenDecimals: number
   ): Buffer {
     // uptick saleId for every new sale
     ++this.saleId;
@@ -98,6 +94,12 @@ export class DummyConductor {
     this.saleEnd = this.saleStart + duration;
     this.saleUnlock = this.saleEnd + lockPeriod;
 
+    this.tokenAddress = tokenAddress;
+    this.tokenChain = tokenChain;
+    this.tokenDecimals = tokenDecimals;
+
+    this.nativeTokenDecimals = this.tokenChain == 1 ? this.tokenDecimals : 8;
+
     this.initSaleVaa = signAndEncodeVaa(
       startTime,
       this.nonce,
@@ -106,7 +108,7 @@ export class DummyConductor {
       this.wormholeSequence,
       encodeSaleInit(
         this.saleId,
-        tryNativeToHexString(associatedSaleTokenAddress.toString(), CHAIN_ID_SOLANA),
+        tryNativeToHexString(this.tokenAddress, this.tokenChain as ChainId),
         this.tokenChain,
         this.tokenDecimals,
         this.saleStart,
@@ -121,31 +123,33 @@ export class DummyConductor {
   }
 
   getAllocationMultiplier(): string {
-    const decimalDifference = this.tokenDecimals - this.nativeTokenDecimals;
-    return BigNumber.from("10").pow(decimalDifference).toString();
+    const decimalDifference = new BN(this.tokenDecimals - this.nativeTokenDecimals);
+    return new BN("10").pow(decimalDifference).toString();
   }
 
   sealSale(blockTime: number, contributions: Map<number, string[]>): Buffer {
     ++this.wormholeSequence;
     this.allocations = [];
 
-    const allocationMultiplier = this.getAllocationMultiplier();
+    const allocationMultiplier = new BN(this.getAllocationMultiplier());
 
     // make up allocations and excess contributions
-    const excessContributionDivisor = BigNumber.from("5");
+    const excessContributionDivisor = new BN("5");
 
     const acceptedTokens = this.acceptedTokens;
+    this.totalAllocations = new BN(0);
     for (let i = 0; i < acceptedTokens.length; ++i) {
       const tokenIndex = acceptedTokens[i].index;
       const contributionSubset = contributions.get(tokenIndex);
       if (contributionSubset === undefined) {
         this.allocations.push(makeAllocation(tokenIndex, "0", "0"));
       } else {
-        const total = contributionSubset.map((x) => BigNumber.from(x)).reduce((prev, curr) => prev.add(curr));
+        const total = contributionSubset.map((x) => new BN(x)).reduce((prev, curr) => prev.add(curr));
         const excessContribution = total.div(excessContributionDivisor).toString();
 
-        const allocation = BigNumber.from(this.expectedAllocations[i]).mul(allocationMultiplier).toString();
-        this.allocations.push(makeAllocation(tokenIndex, allocation, excessContribution));
+        const allocation = new BN(this.expectedAllocations[i]).mul(allocationMultiplier);
+        this.allocations.push(makeAllocation(tokenIndex, allocation.toString(), excessContribution));
+        this.totalAllocations = this.totalAllocations.add(allocation);
       }
     }
     return signAndEncodeVaa(
@@ -172,9 +176,6 @@ export class DummyConductor {
 
   // sale parameters that won't change for the test
   //associatedTokenAddress = "00000000000000000000000083752ecafebf4707258dedffbd9c7443148169db";
-  tokenChain = CHAIN_ID_ETH as number;
-  tokenDecimals = 18;
-  nativeTokenDecimals = 7;
   recipient = tryNativeToHexString("0x22d491bde2303f2f43325b2108d26f1eaba1e32b", CHAIN_ID_ETH);
   kycAuthority = "1df62f291b2e969fb0849d99d9ce41e2f137006e";
 
@@ -214,9 +215,9 @@ export function encodeAcceptedTokens(acceptedTokens: SolanaAcceptedToken[]): Buf
   return encoded;
 }
 
-export function encodeSaleInit(
+function encodeSaleInit(
   saleId: number,
-  associatedTokenAddress: string, // 32 bytes
+  saleTokenMint: string, // 32 bytes, left-padded with 0 if needed
   tokenChain: number,
   tokenDecimals: number,
   saleStart: number,
@@ -231,7 +232,7 @@ export function encodeSaleInit(
 
   encoded.writeUInt8(5, 0); // initSale payload for solana = 5
   encoded.write(toBigNumberHex(saleId, 32), 1, "hex");
-  encoded.write(associatedTokenAddress, 33, "hex");
+  encoded.write(saleTokenMint, 33, "hex");
   encoded.writeUint16BE(tokenChain, 65);
   encoded.writeUint8(tokenDecimals, 67);
   encoded.write(toBigNumberHex(saleStart, 32), 68, "hex");

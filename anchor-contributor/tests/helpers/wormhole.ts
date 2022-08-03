@@ -12,7 +12,7 @@ export function signAndEncodeVaa(
   data: Buffer
 ): Buffer {
   if (emitterAddress.length != 32) {
-    throw Error("emitterAddress != 32 bytes");
+    throw new Error("emitterAddress != 32 bytes");
   }
 
   // wormhole initialized with only one guardian in devnet

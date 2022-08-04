@@ -5950,7 +5950,7 @@ contract("ICCO", function(accounts) {
     const current_block = await web3.eth.getBlock("latest");
     const saleStart = current_block.timestamp + 5;
     const saleEnd = saleStart + 8;
-    const saleTokenAmount = "184467440737100000000000000000"; // max number of tokens allowed with 18 decimals
+    const saleTokenAmount = "184467440737100000000000000000"; 
     const minimumTokenRaise = "2000";
     const maximumTokenRaise = "2000";
     const tokenOneConversionRate = "1000000000000000000";

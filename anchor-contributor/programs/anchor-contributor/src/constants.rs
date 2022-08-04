@@ -10,6 +10,7 @@ pub const PAYLOAD_SALE_INIT_SOLANA: u8 = 5; // 1 for everyone else
 pub const PAYLOAD_ATTEST_CONTRIBUTIONS: u8 = 2;
 pub const PAYLOAD_SALE_SEALED: u8 = 3;
 pub const PAYLOAD_SALE_ABORTED: u8 = 4;
+pub const PAYLOAD_KYC_AUTHORITY_UPDATED: u8 = 6;
 
 // universal
 pub const PAYLOAD_HEADER_LEN: usize = 33; // payload + sale id
@@ -22,7 +23,7 @@ pub const INDEX_SALE_INIT_TOKEN_DECIMALS: usize = 67;
 pub const INDEX_SALE_INIT_SALE_START: usize = 68;
 pub const INDEX_SALE_INIT_SALE_END: usize = 100;
 pub const INDEX_SALE_INIT_ACCEPTED_TOKENS_START: usize = 132;
-pub const SALE_INIT_TAIL:  usize = 84;
+pub const SALE_INIT_TAIL: usize = 84;
 
 pub const ACCEPTED_TOKEN_NUM_BYTES: usize = 33;
 pub const ACCEPTED_TOKENS_MAX: usize = 8;

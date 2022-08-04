@@ -109,4 +109,19 @@ pub enum ContributorError {
 
     #[msg("InvalidAcceptedTokenATA")]
     InvalidAcceptedTokenATA,
+
+    #[msg("InvalidWormholeMessageAccount")]
+    InvalidWormholeMessageAccount,
+
+    #[msg("InvalidTokenBridgeProgram")]
+    InvalidTokenBridgeProgram,
+
+    #[msg("InvalidWormholeProgram")]
+    InvalidWormholeProgram,
+
+    #[msg("InvalidSystemProgram")]
+    InvalidSystemProgram,
+
+    #[msg("InvalidSaleTokenATA")]
+    InvalidSaleTokenATA,
 }

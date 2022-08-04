@@ -215,7 +215,7 @@ pub mod anchor_contributor {
         // Find indices used for contribution accounting
         // We need to use the buyer's associated token account to help us find the token index
         // for this particular mint he wishes to contribute.
-        let (idx, asset) = sale.get_total_info(&buyer_token_acct.mint)?;
+        let (idx, asset) = sale.get_total_info(&ctx.accounts.accepted_mint.key())?;
 
         // This should never happen because the ATA will not deserialize correctly,
         // but we have this here just in case.
@@ -840,5 +840,32 @@ pub mod anchor_contributor {
 
         // Finish instruction.
         Ok(())
+    }
+
+    /// Instruction to change a sale's KYC authority. This parses an inbound signed VAA
+    /// sent by the conductor.
+    ///
+    /// Once the VAA is parsed and verified, we deserialize the new KYC authority
+    /// public key and save it to the sale account.
+    ///
+    /// Users can continue using the `contribute` instruction to contribute accepted
+    /// tokens to the sale, but they must now be signed by the new KYC authority.
+    pub fn update_kyc_authority(ctx: Context<UpdateKycAuthority>) -> Result<()> {
+        // We verify that the signed VAA has the same sale information as the Sale
+        // account we pass into the context. It also needs to be emitted from the
+        // conductor we know.
+        let sale = &mut ctx.accounts.sale;
+        let msg = ctx
+            .accounts
+            .custodian
+            .parse_and_verify_conductor_vaa_and_sale(
+                &ctx.accounts.core_bridge_vaa,
+                PAYLOAD_KYC_AUTHORITY_UPDATED,
+                sale.id,
+            )?;
+
+        // Finish the instruction by updating the KYC authority if the sale is still active.
+        let clock = Clock::get()?;
+        sale.parse_kyc_authority_updated(clock.unix_timestamp, &msg.payload)
     }
 }

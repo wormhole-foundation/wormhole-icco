@@ -173,7 +173,7 @@ impl Sale {
             payload.len() > INDEX_SALE_INIT_ACCEPTED_TOKENS_START,
             ContributorError::InvalidVaaPayload
         );
-        
+
         let num_accepted = payload[INDEX_SALE_INIT_ACCEPTED_TOKENS_START] as usize;
 
         require!(
@@ -383,6 +383,23 @@ impl Sale {
         Ok(())
     }
 
+    pub fn parse_kyc_authority_updated(&mut self, block_time: i64, payload: &[u8]) -> Result<()> {
+        require!(self.is_active(block_time), ContributorError::SaleEnded);
+
+        // check that the payload has the correct size
+        // payload type + sale id + kyc authority ethereum public key
+        require!(
+            payload.len() == PAYLOAD_HEADER_LEN + 20,
+            ContributorError::InvalidVaaPayload
+        );
+
+        // finally set new KYC authority.
+        self.kyc_authority
+            .copy_from_slice(&payload[PAYLOAD_HEADER_LEN..PAYLOAD_HEADER_LEN + 20]);
+
+        Ok(())
+    }
+
     pub fn verify_kyc_authority(
         &self,
         token_index: u8,
@@ -462,7 +479,6 @@ impl Sale {
     pub fn is_blocked_contributions(&self) -> bool {
         self.contributions_blocked
     }
-
 
     pub fn allocation_unlocked(&self, block_time: i64) -> bool {
         block_time as u64 >= self.times.unlock_allocation

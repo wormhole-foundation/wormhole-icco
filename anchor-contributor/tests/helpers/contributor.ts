@@ -11,7 +11,6 @@ import * as byteify from "byteify";
 import { deriveAddress, getPdaAssociatedTokenAddress, makeReadOnlyAccountMeta, makeWritableAccountMeta } from "./utils";
 import { PostVaaMethod } from "./types";
 import keccak256 from "keccak256";
-import { TOKEN_BRIDGE_ADDRESS } from "./consts";
 
 const INDEX_SALE_INIT_NATIVE_MINT_ADDRESS = 33;
 const INDEX_SALE_INIT_TOKEN_CHAIN_START = 65; // u16
@@ -82,7 +81,7 @@ export class IccoContributor {
 
       return deriveAddress(
         [Buffer.from("wrapped"), byteify.serializeUint16(saleTokenChainId), saleTokenAddress],
-        TOKEN_BRIDGE_ADDRESS
+        this.tokenBridge
       );
     })();
 
@@ -135,7 +134,7 @@ export class IccoContributor {
       throw new Error("tokenIndex not found");
     }
 
-    const mint = found.mint;
+    const acceptedMint = found.mint;
 
     // now prepare instruction
     const program = this.program;
@@ -146,7 +145,7 @@ export class IccoContributor {
     const buyer = this.deriveBuyerAccount(saleId, payer.publicKey);
     const sale = this.deriveSaleAccount(saleId);
 
-    const buyerTokenAcct = await getOrCreateAssociatedTokenAccount(connection, payer, mint, payer.publicKey)
+    const buyerTokenAcct = await getOrCreateAssociatedTokenAccount(connection, payer, acceptedMint, payer.publicKey)
       .catch((_) => {
         // illegimate accepted token... don't throw and derive address anyway
         return null;
@@ -157,9 +156,9 @@ export class IccoContributor {
         }
 
         // we still want to generate an address here
-        return getAssociatedTokenAddress(mint, payer.publicKey);
+        return getAssociatedTokenAddress(acceptedMint, payer.publicKey);
       });
-    const custodianTokenAcct = await getPdaAssociatedTokenAddress(mint, custodian);
+    const custodianTokenAcct = await getPdaAssociatedTokenAddress(acceptedMint, custodian);
 
     return program.methods
       .contribute(amount, kycSignature)
@@ -171,6 +170,7 @@ export class IccoContributor {
         systemProgram: web3.SystemProgram.programId,
         buyerTokenAcct,
         custodianTokenAcct,
+        acceptedMint,
       })
       .signers([payer])
       .rpc();
@@ -340,6 +340,28 @@ export class IccoContributor {
 
     return program.methods
       .abortSale()
+      .accounts({
+        custodian,
+        sale,
+        coreBridgeVaa,
+        systemProgram: web3.SystemProgram.programId,
+      })
+      .rpc();
+  }
+
+  async updateKycAuthority(payer: web3.Keypair, authorityUpdatedVaa: Buffer): Promise<string> {
+    const program = this.program;
+    const custodian = this.custodian;
+
+    // first post signed vaa to wormhole
+    await this.postVaa(payer, authorityUpdatedVaa);
+    const coreBridgeVaa = this.deriveSignedVaaAccount(authorityUpdatedVaa);
+
+    const saleId = await parseSaleId(authorityUpdatedVaa);
+    const sale = this.deriveSaleAccount(saleId);
+
+    return program.methods
+      .updateKycAuthority()
       .accounts({
         custodian,
         sale,

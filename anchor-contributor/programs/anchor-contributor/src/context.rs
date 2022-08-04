@@ -9,6 +9,7 @@ use anchor_spl::{
 
 use crate::{
     constants::*,
+    error::ContributorError,
     state::{Buyer, Custodian, Sale},
 };
 
@@ -73,7 +74,7 @@ pub struct InitSale<'info> {
     pub sale: Account<'info, Sale>,
 
     #[account(
-        constraint = core_bridge_vaa.owner.key() ==  Custodian::wormhole()?
+        constraint = core_bridge_vaa.owner.key() ==  Custodian::wormhole()? @ ContributorError::InvalidWormholeMessageAccount
     )]
     /// CHECK: Posted VAA Message Data
     pub core_bridge_vaa: AccountInfo<'info>,
@@ -86,7 +87,7 @@ pub struct InitSale<'info> {
     pub sale_token_mint: AccountInfo<'info>,
 
     #[account(
-        constraint = token_bridge.key() == Custodian::token_bridge()?
+        constraint = token_bridge.key() == Custodian::token_bridge()? @ ContributorError::InvalidTokenBridgeProgram
     )]
     /// CHECK: Token Bridge Program
     pub token_bridge: AccountInfo<'info>,
@@ -142,16 +143,19 @@ pub struct Contribute<'info> {
     )]
     pub buyer: Account<'info, Buyer>,
 
+    pub accepted_mint: Account<'info, Mint>,
+
     #[account(
         mut,
-        constraint = buyer_token_acct.mint == custodian_token_acct.mint,
-        constraint = buyer_token_acct.owner == owner.key(),
+        associated_token::mint = accepted_mint,
+        associated_token::authority = owner,
     )]
+    /// This must be an associated token account
     pub buyer_token_acct: Account<'info, TokenAccount>,
 
     #[account(
         mut,
-        associated_token::mint = buyer_token_acct.mint,
+        associated_token::mint = accepted_mint,
         associated_token::authority = custodian,
     )]
     /// This must be an associated token account
@@ -192,7 +196,7 @@ pub struct AttestContributions<'info> {
     pub sale: Account<'info, Sale>,
 
     #[account(
-        constraint = wormhole.key() == Custodian::wormhole()?
+        constraint = wormhole.key() == Custodian::wormhole()? @ ContributorError::InvalidWormholeProgram
     )]
     /// CHECK: Wormhole Program
     pub wormhole: AccountInfo<'info>,
@@ -247,13 +251,13 @@ pub struct AttestContributions<'info> {
     pub wormhole_message: AccountInfo<'info>,
 
     #[account(
-        constraint = clock.key() == clock::id()
+        constraint = clock.key() == clock::id() @ ContributorError::InvalidSystemProgram
     )]
     /// CHECK: Clock
     pub clock: AccountInfo<'info>,
 
     #[account(
-        constraint = rent.key() == rent::id()
+        constraint = rent.key() == rent::id() @ ContributorError::InvalidSystemProgram
     )]
     /// CHECK: Rent
     pub rent: AccountInfo<'info>,
@@ -329,7 +333,7 @@ pub struct BridgeSealedContribution<'info> {
     pub associated_token_program: Program<'info, AssociatedToken>,
 
     #[account(
-        constraint = token_bridge.key() == Custodian::token_bridge()?
+        constraint = token_bridge.key() == Custodian::token_bridge()? @ ContributorError::InvalidTokenBridgeProgram
     )]
     /// CHECK: Token Bridge Program
     pub token_bridge: AccountInfo<'info>,
@@ -372,7 +376,7 @@ pub struct BridgeSealedContribution<'info> {
     pub token_bridge_config: AccountInfo<'info>,
 
     #[account(
-        constraint = wormhole.key() == Custodian::wormhole()?
+        constraint = wormhole.key() == Custodian::wormhole()? @ ContributorError::InvalidWormholeProgram
     )]
     /// CHECK: Wormhole Program
     pub wormhole: AccountInfo<'info>,
@@ -429,13 +433,13 @@ pub struct BridgeSealedContribution<'info> {
     pub wormhole_message: AccountInfo<'info>,
 
     #[account(
-        constraint = clock.key() == clock::id()
+        constraint = clock.key() == clock::id() @ ContributorError::InvalidSystemProgram
     )]
     /// CHECK: Clock
     pub clock: AccountInfo<'info>,
 
     #[account(
-        constraint = rent.key() == rent::id()
+        constraint = rent.key() == rent::id() @ ContributorError::InvalidSystemProgram
     )]
     /// CHECK: Rent
     pub rent: AccountInfo<'info>,
@@ -451,7 +455,6 @@ pub struct BridgeSealedContribution<'info> {
 ///
 /// Mutable
 /// * `sale`
-/// * `owner` (signer)
 #[derive(Accounts)]
 pub struct AbortSale<'info> {
     #[account(
@@ -473,7 +476,7 @@ pub struct AbortSale<'info> {
     pub sale: Account<'info, Sale>,
 
     #[account(
-        constraint = core_bridge_vaa.owner.key() == Custodian::wormhole()?
+        constraint = core_bridge_vaa.owner.key() == Custodian::wormhole()? @ ContributorError::InvalidWormholeMessageAccount
     )]
     /// CHECK: Posted VAA Message Data
     pub core_bridge_vaa: AccountInfo<'info>,
@@ -514,13 +517,13 @@ pub struct SealSale<'info> {
     pub sale: Account<'info, Sale>,
 
     #[account(
-        constraint = core_bridge_vaa.owner.key() == Custodian::wormhole()?
+        constraint = core_bridge_vaa.owner.key() == Custodian::wormhole()? @ ContributorError::InvalidWormholeMessageAccount
     )]
     /// CHECK: Posted VAA Message Data
     pub core_bridge_vaa: AccountInfo<'info>,
 
     #[account(
-        constraint = custodian_sale_token_acct.key() == sale.sale_token_ata
+        constraint = custodian_sale_token_acct.key() == sale.sale_token_ata @ ContributorError::InvalidSaleTokenATA
     )]
     /// This must be an associated token account
     ///
@@ -580,16 +583,17 @@ pub struct ClaimAllocation<'info> {
 
     #[account(
         mut,
-        constraint = custodian_sale_token_acct.key() == sale.sale_token_ata
+        constraint = custodian_sale_token_acct.key() == sale.sale_token_ata @ ContributorError::InvalidSaleTokenATA
     )]
     /// This must be an associated token account
     pub custodian_sale_token_acct: Account<'info, TokenAccount>,
 
     #[account(
         mut,
-        constraint = buyer_sale_token_acct.mint == sale.sale_token_mint,
-        constraint = buyer_sale_token_acct.owner == owner.key(),
+        associated_token::mint = sale.sale_token_mint,
+        associated_token::authority = owner,
     )]
+    /// This must be an associated token account
     pub buyer_sale_token_acct: Account<'info, TokenAccount>,
 
     #[account(mut)]
@@ -697,4 +701,44 @@ pub struct ClaimExcesses<'info> {
     pub owner: Signer<'info>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
+}
+
+/// Context provides all accounts required for someone
+/// to change a sale KYC authority with a signed VAA
+/// sent by the conductor.
+/// See `sale_authority_updated` instruction in lib.rs.
+///
+/// Immutable
+/// * `custodian`
+/// * `core_bridge_vaa`
+///
+/// Mutable
+/// * `sale`
+#[derive(Accounts)]
+pub struct UpdateKycAuthority<'info> {
+    #[account(
+        seeds = [
+            SEED_PREFIX_CUSTODIAN.as_bytes(),
+        ],
+        bump,
+    )]
+    pub custodian: Account<'info, Custodian>,
+
+    #[account(
+        mut,
+        seeds = [
+            SEED_PREFIX_SALE.as_bytes(),
+            &sale.id,
+        ],
+        bump,
+    )]
+    pub sale: Account<'info, Sale>,
+
+    #[account(
+        constraint = core_bridge_vaa.owner.key() == Custodian::wormhole()? @ ContributorError::InvalidWormholeMessageAccount
+    )]
+    /// CHECK: Posted VAA Message Data
+    pub core_bridge_vaa: AccountInfo<'info>,
+
+    pub system_program: Program<'info, System>,
 }

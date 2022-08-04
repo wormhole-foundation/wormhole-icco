@@ -388,7 +388,9 @@ describe("anchor-contributor", () => {
         );
         throw new Error(`should not happen: ${tx}`);
       } catch (e) {
-        caughtError = verifyErrorMsg(e, "The program expected this account to be already initialized");
+        caughtError =
+          verifyErrorMsg(e, "The program expected this account to be already initialized", false) ||
+          verifyErrorMsg(e, "The given account is owned by a different program than expected");
       }
 
       if (!caughtError) {

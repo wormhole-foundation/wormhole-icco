@@ -59,6 +59,10 @@ pub struct BridgeConfig {
 #[repr(transparent)]
 pub struct PostedMessageData(pub MessageData);
 
+#[derive(Debug)]
+#[repr(transparent)]
+pub struct PostedVAAData(pub MessageData);
+
 #[derive(Debug, Default, BorshDeserialize, BorshSerialize)]
 pub struct MessageData {
     /// Header of the posted VAA
@@ -99,15 +103,31 @@ impl AnchorSerialize for PostedMessageData {
     }
 }
 
-impl AnchorDeserialize for PostedMessageData {
+impl AnchorDeserialize for PostedVAAData {
     fn deserialize(buf: &mut &[u8]) -> std::io::Result<Self> {
+        if buf.len() < 3 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Invalid VAA Message",
+            ));
+        }
+
+        // We accept "vaa", "msg", or "msu" because it's convenient to read all of these as PostedVAAData
+        let expected: [&[u8]; 3] = [b"vaa", b"msg", b"msu"];
+        let magic: &[u8] = &buf[0..3];
+        if !expected.contains(&magic) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Invalid VAA Message",
+            ));
+        };
         *buf = &buf[3..];
-        Ok(PostedMessageData(
+        Ok(PostedVAAData(
             <MessageData as BorshDeserialize>::deserialize(buf)?,
         ))
     }
 }
 
 pub fn get_message_data<'info>(vaa_account: &AccountInfo<'info>) -> Result<MessageData> {
-    Ok(PostedMessageData::try_from_slice(&vaa_account.data.borrow())?.0)
+    Ok(PostedVAAData::try_from_slice(&vaa_account.data.borrow())?.0)
 }

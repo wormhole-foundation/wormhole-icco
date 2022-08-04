@@ -134,7 +134,7 @@ export class IccoContributor {
       throw new Error("tokenIndex not found");
     }
 
-    const mint = found.mint;
+    const acceptedMint = found.mint;
 
     // now prepare instruction
     const program = this.program;
@@ -145,7 +145,7 @@ export class IccoContributor {
     const buyer = this.deriveBuyerAccount(saleId, payer.publicKey);
     const sale = this.deriveSaleAccount(saleId);
 
-    const buyerTokenAcct = await getOrCreateAssociatedTokenAccount(connection, payer, mint, payer.publicKey)
+    const buyerTokenAcct = await getOrCreateAssociatedTokenAccount(connection, payer, acceptedMint, payer.publicKey)
       .catch((_) => {
         // illegimate accepted token... don't throw and derive address anyway
         return null;
@@ -156,9 +156,9 @@ export class IccoContributor {
         }
 
         // we still want to generate an address here
-        return getAssociatedTokenAddress(mint, payer.publicKey);
+        return getAssociatedTokenAddress(acceptedMint, payer.publicKey);
       });
-    const custodianTokenAcct = await getPdaAssociatedTokenAddress(mint, custodian);
+    const custodianTokenAcct = await getPdaAssociatedTokenAddress(acceptedMint, custodian);
 
     return program.methods
       .contribute(amount, kycSignature)
@@ -170,6 +170,7 @@ export class IccoContributor {
         systemProgram: web3.SystemProgram.programId,
         buyerTokenAcct,
         custodianTokenAcct,
+        acceptedMint,
       })
       .signers([payer])
       .rpc();

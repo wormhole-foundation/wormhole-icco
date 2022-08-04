@@ -215,7 +215,7 @@ pub mod anchor_contributor {
         // Find indices used for contribution accounting
         // We need to use the buyer's associated token account to help us find the token index
         // for this particular mint he wishes to contribute.
-        let (idx, asset) = sale.get_total_info(&buyer_token_acct.mint)?;
+        let (idx, asset) = sale.get_total_info(&ctx.accounts.accepted_mint.key())?;
 
         // This should never happen because the ATA will not deserialize correctly,
         // but we have this here just in case.

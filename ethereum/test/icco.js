@@ -159,7 +159,7 @@ contract("ICCO", function(accounts) {
     assert.ok(failed);
 
     // confirm that the error codes contract returns an error
-    const result = await ERRORS.methods.createSale("9").call();
+    const result = await ERRORS.methods.createSale("10").call();
     assert.equal(result, "must accept at least one token");
 
     const tx = await initialized.methods.registerChain(TEST_CHAIN_ID, contributorAddress).send({
@@ -1338,7 +1338,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 32");
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 33");
       failed = true;
     }
 
@@ -1358,7 +1358,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 33");
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 34");
       failed = true;
     }
 
@@ -2703,7 +2703,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 23");
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 24");
       failed = true;
     }
 
@@ -3911,7 +3911,7 @@ contract("ICCO", function(accounts) {
           gasLimit: GAS_LIMIT,
         });
       } catch (e) {
-        assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 21");
+        assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 22");
         failed = true;
       }
       assert.ok(failed);
@@ -3963,7 +3963,7 @@ contract("ICCO", function(accounts) {
           gasLimit: GAS_LIMIT,
         });
       } catch (e) {
-        assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 17");
+        assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 18");
         failed = true;
       }
       assert.ok(failed);
@@ -4844,7 +4844,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 44");
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 45");
       failed = true;
     }
 
@@ -4975,7 +4975,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 25");
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 26");
       failed = true;
     }
 
@@ -5218,7 +5218,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 19");
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 20");
       failed = true;
     }
 
@@ -5298,7 +5298,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 18");
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 19");
       failed = true;
     }
 
@@ -5367,7 +5367,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 7");
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 8");
       failed = true;
     }
 
@@ -5878,7 +5878,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 14");
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 15");
       failed = true;
     }
 
@@ -5908,7 +5908,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 13");
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 14");
       failed = true;
     }
 
@@ -5938,7 +5938,60 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 16");
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 17");
+      failed = true;
+    }
+
+    assert.ok(failed);
+  });
+
+  it("conductor should cap the sale token amount in Raise parameters", async function() {
+    // test variables
+    const current_block = await web3.eth.getBlock("latest");
+    const saleStart = current_block.timestamp + 5;
+    const saleEnd = saleStart + 8;
+    const saleTokenAmount = "184467440737100000000000000000"; // max number of tokens allowed with 18 decimals
+    const minimumTokenRaise = "2000";
+    const maximumTokenRaise = "2000";
+    const tokenOneConversionRate = "1000000000000000000";
+    const recipient = accounts[0]; // make zero address for the test
+    const refundRecipient = accounts[0];
+    const isFixedPriceSale = false;
+
+    // setup smart contracts
+    const initialized = new web3.eth.Contract(ConductorImplementationFullABI, TokenSaleConductor.address);
+
+    // create array (solidity struct) for sale params
+    const saleParams = [
+      isFixedPriceSale,
+      SOLD_TOKEN_BYTES32_ADDRESS,
+      TEST_CHAIN_ID,
+      saleTokenAmount,
+      minimumTokenRaise,
+      maximumTokenRaise,
+      saleStart,
+      saleEnd,
+      saleEnd,
+      recipient,
+      refundRecipient,
+      KYC_AUTHORITY,
+    ];
+
+    // create accepted tokens array
+    const acceptedTokens = [
+      [TEST_CHAIN_ID, "0x000000000000000000000000" + CONTRIBUTED_TOKEN_ONE.address.substr(2), tokenOneConversionRate],
+    ];
+
+    let failed = false;
+    try {
+      // try to create a sale with a sale token amount that is too large
+      await initialized.methods.createSale(saleParams, acceptedTokens).send({
+        value: WORMHOLE_FEE * 2,
+        from: SELLER,
+        gasLimit: GAS_LIMIT,
+      });
+    } catch (e) {
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 2");
       failed = true;
     }
 
@@ -5993,7 +6046,7 @@ contract("ICCO", function(accounts) {
         gasLimit: GAS_LIMIT,
       });
     } catch (e) {
-      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 6");
+      assert.equal(e.message, "Returned error: VM Exception while processing transaction: revert 7");
       failed = true;
     }
 

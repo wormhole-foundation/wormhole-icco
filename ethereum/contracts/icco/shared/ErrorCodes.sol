@@ -8,116 +8,118 @@ contract ICCOErrorCodes {
         if (code == 1) {
             errorString = "wrapped address not found on this chain";
         } else if (code == 2) {
+            errorString = "sale token amount too large";
+        } else if (code == 3) {
             errorString = "fee-on-transfer tokens are not supported";
         }
     } 
 
     function createSale(uint256 code) public pure returns (string memory errorString) {
-        if (code == 3) {
+        if (code == 4) {
             errorString = "sale start must be in the future";
-        } else if (code == 4) {
-            errorString = "sale end must be after sale start";
         } else if (code == 5) {
-            errorString = "unlock timestamp should be >= saleEnd";
+            errorString = "sale end must be after sale start";
         } else if (code == 6) {
-            errorString = "unlock timestamp must be <= 2 years in the future";
+            errorString = "unlock timestamp should be >= saleEnd";
         } else if (code == 7) {
-            errorString = "timestamp too large";
+            errorString = "unlock timestamp must be <= 2 years in the future";
         } else if (code == 8) {
-            errorString = "sale token amount must be > 0 and <= 2^63-1";
+            errorString = "timestamp too large";
         } else if (code == 9) {
-            errorString = "must accept at least one token";
+            errorString = "sale token amount must be > 0";
         } else if (code == 10) {
-            errorString = "too many tokens";
+            errorString = "must accept at least one token";
         } else if (code == 11) {
-            errorString = "minRaise must be > 0";
+            errorString = "too many tokens";
         } else if (code == 12) {
-            errorString = "maxRaise must be >= minRaise ";
+            errorString = "minRaise must be > 0";
         } else if (code == 13) {
-            errorString = "token must not be bytes32(0)"; 
+            errorString = "maxRaise must be >= minRaise ";
         } else if (code == 14) {
-            errorString = "recipient must not be address(0)";
+            errorString = "token must not be bytes32(0)"; 
         } else if (code == 15) {
-            errorString = "refundRecipient must not be address(0)";
+            errorString = "recipient must not be address(0)";
         } else if (code == 16) {
-            errorString = "authority must not be address(0) or the owner";
+            errorString = "refundRecipient must not be address(0)";
         } else if (code == 17) {
-            errorString = "insufficient value";
+            errorString = "authority must not be address(0) or the owner";
         } else if (code == 18) {
-            errorString = "duplicate tokens not allowed"; 
+            errorString = "insufficient value";
         } else if (code == 19) {
-            errorString = "conversion rate cannot be zero";
+            errorString = "duplicate tokens not allowed"; 
         } else if (code == 20) {
-            errorString = "acceptedTokens.tokenAddress must not be bytes32(0)";
+            errorString = "conversion rate cannot be zero";
         } else if (code == 21) {
+            errorString = "acceptedTokens.tokenAddress must not be bytes32(0)";
+        } else if (code == 22) {
             errorString = "too many solana tokens";
         } 
     }
         
     function abortSaleBeforeStartTime(uint256 code) public pure returns (string memory errorString) {
-        if (code == 22) {
+        if (code == 23) {
             errorString = "sale not initiated";
-        } else if (code == 23) {
-            errorString = "only initiator can abort the sale early"; 
         } else if (code == 24) {
-            errorString = "already sealed / aborted";
+            errorString = "only initiator can abort the sale early"; 
         } else if (code == 25) {
-            errorString = "sale cannot be aborted once it has started"; 
+            errorString = "already sealed / aborted";
         } else if (code == 26) {
+            errorString = "sale cannot be aborted once it has started"; 
+        } else if (code == 27) {
             errorString = "insufficient value";
         }
     }
 
     function collectContribution(uint256 code) public pure returns (string memory errorString) {
-        if (code == 27) {
+        if (code == 28) {
             errorString = "invalid emitter";
-        } else if (code == 28) {
-            errorString = "contribution from wrong chain id";
         } else if (code == 29) {
-            errorString = "sale was aborted";
+            errorString = "contribution from wrong chain id";
         } else if (code == 30) {
-            errorString = "sale has not ended yet";
+            errorString = "sale was aborted";
         } else if (code == 31) {
-            errorString = "no contributions";
+            errorString = "sale has not ended yet";
         } else if (code == 32) {
+            errorString = "no contributions";
+        } else if (code == 33) {
             errorString = "contribution already collected";
         }
     }
 
     function sealSale(uint256 code) public pure returns (string memory errorString) {     
-         if (code == 33) {
+         if (code == 34) {
             errorString = "sale not initiated";
-        } else if (code == 34) {
-            errorString = "already sealed / aborted";
         } else if (code == 35) {
-            errorString = "missing contribution info";
+            errorString = "already sealed / aborted";
         } else if (code == 36) {
+            errorString = "missing contribution info";
+        } else if (code == 37) {
             errorString = "insufficient value";
         }
     }
        
     function updateSaleAuthority(uint256 code) public pure returns (string memory errorString) {  
-       if (code == 37) {
+       if (code == 38) {
             errorString = "sale not initiated";
-        } else if (code == 38) {
-            errorString = "new authority must not be address(0) or the owner";
         } else if (code == 39) {
-            errorString = "unauthorized authority key";
+            errorString = "new authority must not be address(0) or the owner";
         } else if (code == 40) {
+            errorString = "unauthorized authority key";
+        } else if (code == 41) {
             errorString = "already sealed / aborted ";
         } 
     }  
         
     function abortBrickedSale(uint256 code) public pure returns (string memory errorString) {  
-        if (code == 41) {
+        if (code == 42) {
             errorString = "incorrect value for messageFee";
-        } else if (code == 42) {
-            errorString = "sale not initiated";
         } else if (code == 43) {
-            errorString = "already sealed / aborted";
+            errorString = "sale not initiated";
         } else if (code == 44) {
-            errorString = "sale not old enough";
+            errorString = "already sealed / aborted";
         } else if (code == 45) {
+            errorString = "sale not old enough";
+        } else if (code == 46) {
             errorString = "incorrect value";
         }
     }

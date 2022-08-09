@@ -29,11 +29,11 @@ There are two programs needed to model this.
 - A `TokenSaleConductor`, which lives on one chain (It can exist on all chains, however it only needs to be invoked on one to initiate a sale).
   - It holds the tokens that are up for sale and maintains and collects the state around the sale.
 - `TokenSaleContributor` contracts live on all chains.
-  - Collects contributions, distributes tokens to contributors after the sale has ended and the token allocation has been bridged.
+  - Collects contributions, distributes tokens to `TokenSalecontributor` contracts after the sale has ended and the token allocation has been bridged.
 
 ## Detailed Design
 
-To create a sale, a user invokes the `createSale()` method on the sale conductor. It takes the following set or arguments:
+To create a sale, a user invokes the `createSale()` method on the sale `TokenSaleConductor`. It takes the following set or arguments:
 
 - A `Raise` struct with the following arguments:
   - Boolean to determine if the sale is a fixed-price sale
@@ -47,32 +47,31 @@ To create a sale, a user invokes the `createSale()` method on the sale conductor
   - A maximum USD amount to raise
   - The address that can claim the proceeds of the sale
   - The address that should receive the offered tokens in case the minimum raise amount is not met
-  - The ATA on the Solana contributor where offered tokens will be sent
   - The KYC authority public key
 - An array of accepted tokens on each chain + the USD conversion rate which they are accepted at
 
 The `createSale()` method deposits the offered tokens, assigns an ID which identifies the sale and attests a `SaleInit` packet over the wormhole. This packet contains all the information from above. It will also attest a `SolanaSaleInit` packet over the wormhole if any Solana tokens are accepted as collateral in the sale.
 The sale information is also stored locally.
 
-The attested `SaleInit` packet (or the `SolanaSaleInit`) is submitted to the `TokenSaleContributor` contracts. The contributor contracts stores the sale information locally which is relevant to its chain.
+The attested `SaleInit` packet (or the `SolanaSaleInit`) is submitted to the `TokenSaleContributor` contracts. The `TokenSaleContributor` contracts stores the sale information locally which is relevant to its chain.
 
 The `TokenSaleConductor` contract can terminate the sale by calling `abortSaleBeforeStartTime()` before the sale period begins. Only the wallet that called `createSale()` can invoke this method.
 
-During the start and end timestamp the `TokenSaleContributor` contracts accept contributions in the specified tokens. The `contribute()` method takes an argument `bytes memory sig` which is a third party signature stating that KYC was performed for a particular contribution. The `TokenSaleContributor` calls `verifySignature` to recover a public key from the passed signature. If the public key matches the `authority` address in the `TokenSaleContributor` state, the contribution is permitted.
+During the start and end timestamp the `TokenSaleContributor` contracts accept contributions in the specified tokens. The `contribute()` method takes an argument `bytes memory sig` which is a third party signature stating that KYC was performed for a particular contribution. The `TokenSaleContributor` calls `verifySignature` to recover a public key from the passed signature. If the public key matches the `authority` address in the `TokenSaleContributor` state, the contribution is permitted. In the case where the KYC `authority` key is compromised, the contract deployer can invoke the `updateSaleAuthority()` method on the `TokenSaleConductor`. An `AuthorityUpdated` packet will be attested over the wormhole, and the `TokensSaleContributor` contracts will update the known `authority` for the specified sale by calling `saleAuthorityUpdated()`.
 
-After the sale duration anyone can call the `attestContributions()` method on the contributor, which attests a `Contribution` packet over the wormhole.
+After the sale duration, anyone can call the `attestContributions()` method on the `TokenSaleContributor`, which attests a `ContributionsSealed` packet over the wormhole. If the sale accepts Solana tokens, the Solana `TokenSaleContributor` will send the `solanaTokenAccount` in the `ContributionsSealed` packet. This tells the `TokenSaleConductor` which account to send the sale tokens to on Solana after the sale is completed.
 
 The `TokenSaleConductor` now collects the `Contributions` packets from all chains & tokens.
 
-After all contributions have been collected, anyone can call the `sealSale()` method on the Conductor.
-The method evaluates whether the minimum raise amount has been met using the conversion rates specified initially (a later version could use rates from an oracle at closing). The conversion rates are scaled based on the accepted token decimals on the conductor chain relative to the token decimals on the native chain. It is crucial that the conversion rates are scaled properly in order to correctly calculate token allocations. In case it was successful it:
+After all contributions have been collected, anyone can call the `sealSale()` method on the `TokenSaleConductor`.
+The method evaluates whether the minimum raise amount has been met using the conversion rates specified initially (a later version could use rates from an oracle at closing). The conversion rates are scaled based on the accepted token decimals on the `TokenSaleConductor` chain relative to the token decimals on the native chain. It is crucial that the conversion rates are scaled properly in order to correctly calculate token allocations. In case it was successful it:
 
 - Calculates allocations and excess contributions (if total contributions sum to a value larger than the maximum raise amount)
   - Excess contributions are calculated by taking the difference between the maximum raise amount and the total contributions.
     Each contributor receives excess contributions proportional to their contribution amount (individualContribution / totalContributions \* totalExcessContributions)
-- Emits a `SaleSealed` packet - indicated to the Contributor contracts that the sale was successful
+- Emits a `SaleSealed` packet - indicated to the `TokenSaleContributor` contracts that the sale was successful
 - Emits another `SaleSealed` packet if the sale accepts Solana tokens as collateral. The message is in the same format as the original `SaleSealed` packet, but only contains information regarding Solana token allocations. This is necessary due to VAA size contraints on Solana.
-- Bridges the relevant share of offered tokens to the Contributor contracts.
+- Bridges the relevant share of offered tokens to the `TokenSaleContributor` contracts.
 - Refunds the `refundRecipient` sale tokens during a fixed-price sale if the maxRaise parameter is not exceeded.
 
 Or in case the goal was not met, it:
@@ -80,7 +79,7 @@ Or in case the goal was not met, it:
 - Emits a `SaleAborted` packet.
 - Refunds the sale tokens to the `refundRecipient`
 
-The Contributor contracts has two functions to consume the relevant attestations:
+The `TokenSaleContributor` contracts has two functions to consume the relevant attestations:
 
 - `saleSealed()`
   - Starts to accept claims of users acquired tokens via `claimAllocation()`
@@ -94,36 +93,41 @@ The Contributor contracts has two functions to consume the relevant attestations
 **TokenSaleConductor**:
 
 - `createSale(ICCOStructs.Raise memory raise, ICCOStructs.Token[] acceptedTokens)`
-- `collectContributions(vaa Contributions)`
-- `abortSaleBeforeStartTime(uint saleId)`
-- `sealSale(uint saleId)`
-- `saleExists(uint saleId)`
+- `abortSaleBeforeStartTime(uint256 saleId)`
+- `collectContribution(vaa ContributionsSealed)`
+- `sealSale(uint256 saleId)`
+- `abortBrickedSale(uint256 saleId)`
+- `saleExists(uint256 saleId)`
 
 Owner Only:
 
+- `updateSaleAuthority(uint256 saleId, address newAuthority, bytes memory sig)`
 - `registerChain(uint16 contributorChainId, bytes32 contributorAddress)`
 - `upgrade(uint16 conductorChainId, address newImplementation)`
 - `updateConsistencyLevel(uint16 conductorChainId, uint8 newConsistencyLevel)`
-- `transferOwnership(uint16 conductorChainId, address newOwner)`
+- `submitOwnershipTransferRequest(uint16 conductorChainId, address newOwner)`
+- `confirmOwnershipTransferRequest()`
 
 **TokenSaleContributor**:
 
 - `initSale(vaa SaleInit)`
 - `verifySignature(bytes memory encodedHashData, bytes memory sig, address authority)`
-- `contribute(uint saleId, uint tokenIndex, uint amount, bytes memory sig)`
-- `attestContributions(uint saleId)`
+- `contribute(uint256 saleId, uint256 tokenIndex, uint256 amount, bytes memory sig)`
+- `attestContributions(uint256 saleId)`
 - `saleSealed(vaa SaleSealed)`
 - `saleAborted(vaa SaleAborted)`
-- `claimAllocation(uint saleId, uint tokenIndex)`
-- `claimExcessContribution(uint saleId, uint tokenIndex)`
-- `claimRefund(uint saleId, uint tokenIndex)`
-- `saleExists(uint saleId)`
+- `claimAllocation(uint256 saleId, uint256 tokenIndex)`
+- `claimExcessContribution(uint256 saleId, uint256 tokenIndex)`
+- `claimRefund(uint256 saleId, uint256 tokenIndex)`
+- `saleAuthorityUpdated(vaa authorityUpdatedVaa)`
+- `saleExists(uint256 saleId)`
 
 Owner Only:
 
 - `upgrade(uint16 contributorChainId, address newImplementation)`
 - `updateConsistencyLevel(uint16 contributorChainId, uint8 newConsistencyLevel)`
-- `transferOwnership(uint16 contributorChainId, address newOwner)`
+- `submitOwnershipTransferRequest(uint16 conductorChainId, address newOwner)`
+- `confirmOwnershipTransferRequest()`
 
 ---
 
@@ -141,8 +145,10 @@ Owner Only:
   - bytes32 tokenAddress
 
 - Contribution
+
   - uint8 tokenIndex (index in accepted tokens array)
   - uint256 contributed
+
 - Allocation
 
   - uint8 tokenIndex (index in accepted tokens array)
@@ -150,6 +156,7 @@ Owner Only:
   - uint256 excessContribution (excess contributions refunded to contributors on this chain)
 
 - Raise
+
   - bool isFixedPrice (fixed-price sale boolean which determines the sale type)
   - bytes32 token (sale token native address)
   - uint16 tokenChain (sale token native chainId)
@@ -161,7 +168,6 @@ Owner Only:
   - uint256 unlockTimestamp (timestamp that determines when sale tokens can be claimed)
   - address recipient (recipient of sale proceeds)
   - address refundRecipient (refund recipient in case the sale is aborted)
-  - bytes32 solanaTokenAccount (sale token ATA for Solana)
   - address authority (KYC authority public key)
 
 ---
@@ -213,8 +219,9 @@ uint8 payloadID;
 uint256 saleID;
 // Chain ID
 uint16 chainID;
-
-// local contributions length
+// Solana ATA (bytes32(0) on non-Solana contributor contracts)
+bytes32 solanaTokenAccount;
+// Local contributions length
 uint8 contributionsLen;
 
 // repeated for tokensLen times, Struct 'Contribution'
@@ -231,13 +238,12 @@ SaleSealed:
 uint8 payloadID;
 // Sale ID
 uint256 saleID;
-
 // local allocations length
 uint8 allocationsLen;
 
 // repeated for allocationsLen times, Struct 'Allocation'
   // index in acceptedTokens array
-  uint8 index
+  uint8 index;
   // amount of sold tokens allocated to contributors on this chain
   uint256 allocation;
   // excess contributions refunded to contributors on this chain
@@ -260,8 +266,8 @@ SolanaSaleInit:
 uint8 payloadID;
 // sale ID
 uint256 saleID;
-// sale token ATA for solana
-bytes32 solanaTokenAccount;
+// address of the token - left-zero-padded if shorter than 32 bytes
+bytes32 tokenAddress;
 // chain ID of the token
 uint16 tokenChain;
 // token decimals
@@ -285,4 +291,15 @@ bytes32 recipient;
 address authority;
 // unlock timestamp (when tokens can be claimed)
 uint256 unlockTimestamp
+```
+
+AuthorityUpdated:
+
+```
+// PayloadID uint8 = 6
+uint8 payloadID;
+// Sale ID
+uint256 saleID;
+// Address of new authority
+address newAuthority;
 ```

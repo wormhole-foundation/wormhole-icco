@@ -319,7 +319,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
 
         /// make sure that the sale is still valid and hasn't started yet
         require(!sale.isSealed && !sale.isAborted, "25");
-        require(block.timestamp < sale.saleStart, "26");
+        require(block.timestamp < sale.saleStart - 1200, "26");
 
         /// set saleAborted
         setSaleAborted(sale.saleID);   

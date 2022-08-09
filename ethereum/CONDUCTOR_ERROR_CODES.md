@@ -25,7 +25,7 @@
 | 23   | Conductor           | abortSaleBeforeStartTime        | sale not initiated                                 |
 | 24   | Conductor           | abortSaleBeforeStartTime        | only initiator can abort the sale early            |
 | 25   | Conductor           | abortSaleBeforeStartTime        | already sealed / aborted                           |
-| 26   | Conductor           | abortSaleBeforeStartTime        | sale cannot be aborted once it has started         |
+| 26   | Conductor           | abortSaleBeforeStartTime        | sale must be aborted 20 minutes before saleStart   |
 | 27   | Conductor           | abortSaleBeforeStartTime        | insufficient value                                 |
 | 28   | Conductor           | collectContribution             | invalid emitter                                    |
 | 29   | Conductor           | collectContribution             | contribution from wrong chain id                   |

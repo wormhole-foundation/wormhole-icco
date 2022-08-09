@@ -70,6 +70,9 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
             excessContributions : new uint256[](acceptedTokensLength)
         });
 
+        /// make sure the VAA is for an active sale
+        require(saleInit.saleEnd >= block.timestamp, "sale has already ended");
+
         /**
          * @dev This saves accepted token info for only the relevant tokens
          * on this Contributor chain.
@@ -429,6 +432,8 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
         require(verifyConductorVM(vm), "invalid emitter");
 
         ICCOStructs.SaleAborted memory abortedSale = ICCOStructs.parseSaleAborted(vm.payload);
+
+        require(saleExists(abortedSale.saleID), "sale not initiated");
 
         /// set the sale aborted
         setSaleAborted(abortedSale.saleID);

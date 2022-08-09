@@ -64,7 +64,7 @@ contract ICCOErrorCodes {
         } else if (code == 25) {
             errorString = "already sealed / aborted";
         } else if (code == 26) {
-            errorString = "sale cannot be aborted once it has started"; 
+            errorString = "sale must be aborted 20 minutes before saleStart"; 
         } else if (code == 27) {
             errorString = "insufficient value";
         }

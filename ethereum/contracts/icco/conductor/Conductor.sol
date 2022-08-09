@@ -309,7 +309,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
      * - it encodes and disseminates a saleAborted message to the Contributor contracts
      * - it refunds the sale tokens to the refundRecipient
      */    
-    function abortSaleBeforeStartTime(uint256 saleId) public payable returns (uint256 wormholeSequence) {
+    function abortSaleBeforeStartTime(uint256 saleId) public payable nonReentrant returns (uint256 wormholeSequence) {
         require(saleExists(saleId), "23");
 
         ConductorStructs.Sale memory sale = sales(saleId);

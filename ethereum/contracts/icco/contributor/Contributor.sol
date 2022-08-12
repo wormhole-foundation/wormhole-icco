@@ -35,7 +35,7 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
      * - it validates messages sent via wormhole containing sale information
      * - it saves a copy of the sale in contract storage
      */
-    function initSale(bytes memory saleInitVaa) public {
+    function initSale(bytes memory saleInitVaa) public whenNotPaused {
         /// @dev confirms that the message is from the Conductor and valid
         (IWormhole.VM memory vm, bool valid, string memory reason) = wormhole().parseAndVerifyVM(saleInitVaa);
 
@@ -141,7 +141,7 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
      * - it takes custody of contributed funds
      * - it stores information about the contribution and contributor 
      */  
-    function contribute(uint256 saleId, uint256 tokenIndex, uint256 amount, bytes memory sig) public nonReentrant { 
+    function contribute(uint256 saleId, uint256 tokenIndex, uint256 amount, bytes memory sig) public nonReentrant whenNotPaused { 
         require(saleExists(saleId), "sale not initiated");
 
         {/// bypass stack too deep
@@ -216,7 +216,7 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
      * - it calculates the total contributions for each accepted token
      * - it disseminates a ContributionSealed struct via wormhole
      */ 
-    function attestContributions(uint256 saleId) public payable returns (uint256 wormholeSequence) {
+    function attestContributions(uint256 saleId) public payable whenNotPaused returns (uint256 wormholeSequence) {
         require(saleExists(saleId), "sale not initiated");
 
         /// confirm that the sale period has ended
@@ -275,7 +275,7 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
      * - it determines if all the sale tokens are in custody of this contract
      * - it send the contributed funds to the token sale recipient
      */
-    function saleSealed(bytes memory saleSealedVaa) public payable {
+    function saleSealed(bytes memory saleSealedVaa) public payable whenNotPaused {
         /// @dev confirms that the message is from the Conductor and valid
         (IWormhole.VM memory vm, bool valid, string memory reason) = wormhole().parseAndVerifyVM(saleSealedVaa);
 
@@ -422,7 +422,7 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
     }
 
     /// @dev saleAborted serves to mark the sale unnsuccessful or canceled 
-    function saleAborted(bytes memory saleAbortedVaa) public {
+    function saleAborted(bytes memory saleAbortedVaa) public whenNotPaused {
         (IWormhole.VM memory vm, bool valid, string memory reason) = wormhole().parseAndVerifyVM(saleAbortedVaa);
 
         require(valid, reason);
@@ -441,7 +441,7 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
      * - it marks the allocation as claimed to prevent multiple claims for the same allocation
      * - it only distributes tokens once the unlock period has ended
      */
-    function claimAllocation(uint256 saleId, uint256 tokenIndex) public {
+    function claimAllocation(uint256 saleId, uint256 tokenIndex) public whenNotPaused {
         require(saleExists(saleId), "sale not initiated");
 
         /// make sure the sale is sealed and not aborted
@@ -499,7 +499,7 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
      * - it marks the excessContribution as claimed to prevent multiple claims for the same refund
      * - it transfers the excessContribution to the contributor's wallet
      */
-    function claimExcessContribution(uint256 saleId, uint256 tokenIndex) public {
+    function claimExcessContribution(uint256 saleId, uint256 tokenIndex) public whenNotPaused {
         require(saleExists(saleId), "sale not initiated");
 
         /// return any excess contributions 
@@ -538,7 +538,7 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
      * - it confirms that the sale was aborted
      * - it transfers the contributed funds back to the contributor's wallet
      */
-    function claimRefund(uint256 saleId, uint256 tokenIndex) public {
+    function claimRefund(uint256 saleId, uint256 tokenIndex) public whenNotPaused {
         require(saleExists(saleId), "sale not initiated");
 
         (, bool isAborted) = getSaleStatus(saleId);
@@ -568,7 +568,7 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
     }
 
     /// @dev saleAuthorityUpdated serves to consume an AuthorityUpdated VAA and change a sale's kyc authority
-    function saleAuthorityUpdated(bytes memory authorityUpdatedVaa) public {
+    function saleAuthorityUpdated(bytes memory authorityUpdatedVaa) public whenNotPaused {
         /// @dev confirms that the message is from the Conductor and valid
         (IWormhole.VM memory vm, bool valid, string memory reason) = wormhole().parseAndVerifyVM(authorityUpdatedVaa);
 

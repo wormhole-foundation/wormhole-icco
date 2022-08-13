@@ -1059,57 +1059,6 @@ contract("ICCO", function(accounts) {
 
   let INIT_SALE_VM;
 
-  it("should not init a sale in the contributor when pause enable by owner", async function() {
-    
-    // test variables
-    const owner = accounts[0];
-
-    // test variables
-    const initialized = new web3.eth.Contract(ContributorImplementationFullABI, TokenSaleContributor.address);
-
-    await initialized.methods.pause().send({
-      value: "0",
-      from: owner, // contract owner
-      gasLimit: GAS_LIMIT,
-    });
-  
-
-    // check getters after the action
-    let pauseStatus = await initialized.methods.paused().call();
-
-    assert.ok(pauseStatus);
-  
-    console.log('==== DONE pause')
-
-    let failed = false;
-    try {
-      // try to init the sale
-      await initialized.methods.initSale("0x00").send({
-        from: SELLER,
-        gasLimit: GAS_LIMIT,
-      });
-    } catch (error) {
-      assert.equal(
-        error.message,
-        "Returned error: VM Excception while processing transaction: revert Pausable: paused"
-      );
-      failed = true;
-    }
-    
-    assert.ok(failed);
-
-    await initialized.methods.unPause().send({
-      value: "0",
-      from: owner, // contract owner
-      gasLimit: GAS_LIMIT,
-    });
-
-    // check getters after the action
-    pauseStatus = await initialized.methods.paused().call();
-
-    assert.ok(!pauseStatus);
-  });
-
   it("should init a sale in the contributor", async function() {
     // test variables
     const tokenOneConversionRate = "1000000000000000000";

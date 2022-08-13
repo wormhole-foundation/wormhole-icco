@@ -309,7 +309,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
      * - it encodes and disseminates a saleAborted message to the Contributor contracts
      * - it refunds the sale tokens to the refundRecipient
      */    
-    function abortSaleBeforeStartTime(uint256 saleId) public payable whenNotPaused returns (uint256 wormholeSequence) {
+    function abortSaleBeforeStartTime(uint256 saleId) public payable returns (uint256 wormholeSequence) {
         require(saleExists(saleId), "23");
 
         ConductorStructs.Sale memory sale = sales(saleId);
@@ -405,7 +405,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
      * - it bridges the sale tokens to the contributor contracts if sealed
      * - it refunds the refundRecipient if the sale is aborted or the maxRaise is not met (partial refund)
      */
-    function sealSale(uint256 saleId) public payable nonReentrant whenNotPaused returns (uint256 wormholeSequence, uint256 wormholeSequence2) {
+    function sealSale(uint256 saleId) public payable nonReentrant returns (uint256 wormholeSequence, uint256 wormholeSequence2) {
         require(saleExists(saleId), "34");
 
         ConductorStructs.Sale memory sale = sales(saleId);
@@ -676,7 +676,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
      * - it checks that the sale ended greater than 7 days ago
      * - it calls abortSale and sends a SaleAborted VAA
     */
-    function abortBrickedSale(uint256 saleId) public payable whenNotPaused returns (uint256) {
+    function abortBrickedSale(uint256 saleId) public payable returns (uint256) {
         require(saleExists(saleId), "43");
 
         ConductorStructs.Sale memory sale = sales(saleId);

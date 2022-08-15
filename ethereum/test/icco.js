@@ -2432,7 +2432,7 @@ contract("ICCO", function(accounts) {
 
     // test variables
     const current_block = await web3.eth.getBlock("latest");
-    SALE_3_START = current_block.timestamp + 5;
+    SALE_3_START = current_block.timestamp + 1205;
     SALE_3_END = SALE_3_START + 8;
     const saleTokenAmount = "1000";
     const minimumTokenRaise = "2000";
@@ -2760,7 +2760,7 @@ contract("ICCO", function(accounts) {
 
   it("should accept contributions after sale period starts and before aborting the sale (block timestamps out of sync test)", async function() {
     // this test simulates block timestamps being out of sync cross-chain
-    await wait(5);
+    await wait(1205);
 
     // test variables
     const tokenOneContributionAmount = "100";

@@ -70,6 +70,9 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
             excessContributions : new uint256[](acceptedTokensLength)
         });
 
+        /// make sure the VAA is for an active sale
+        require(saleInit.saleEnd >= block.timestamp, "sale has already ended");
+
         /**
          * @dev This saves accepted token info for only the relevant tokens
          * on this Contributor chain.
@@ -275,7 +278,7 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
      * - it determines if all the sale tokens are in custody of this contract
      * - it send the contributed funds to the token sale recipient
      */
-    function saleSealed(bytes memory saleSealedVaa) public payable {
+    function saleSealed(bytes memory saleSealedVaa) public payable nonReentrant {
         /// @dev confirms that the message is from the Conductor and valid
         (IWormhole.VM memory vm, bool valid, string memory reason) = wormhole().parseAndVerifyVM(saleSealedVaa);
 
@@ -430,6 +433,8 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
 
         ICCOStructs.SaleAborted memory abortedSale = ICCOStructs.parseSaleAborted(vm.payload);
 
+        require(saleExists(abortedSale.saleID), "sale not initiated");
+
         /// set the sale aborted
         setSaleAborted(abortedSale.saleID);
     }
@@ -441,7 +446,7 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
      * - it marks the allocation as claimed to prevent multiple claims for the same allocation
      * - it only distributes tokens once the unlock period has ended
      */
-    function claimAllocation(uint256 saleId, uint256 tokenIndex) public {
+    function claimAllocation(uint256 saleId, uint256 tokenIndex) public nonReentrant {
         require(saleExists(saleId), "sale not initiated");
 
         /// make sure the sale is sealed and not aborted
@@ -499,7 +504,7 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
      * - it marks the excessContribution as claimed to prevent multiple claims for the same refund
      * - it transfers the excessContribution to the contributor's wallet
      */
-    function claimExcessContribution(uint256 saleId, uint256 tokenIndex) public {
+    function claimExcessContribution(uint256 saleId, uint256 tokenIndex) public nonReentrant {
         require(saleExists(saleId), "sale not initiated");
 
         /// return any excess contributions 
@@ -538,7 +543,7 @@ contract Contributor is ContributorGovernance, ContributorEvents, ReentrancyGuar
      * - it confirms that the sale was aborted
      * - it transfers the contributed funds back to the contributor's wallet
      */
-    function claimRefund(uint256 saleId, uint256 tokenIndex) public {
+    function claimRefund(uint256 saleId, uint256 tokenIndex) public nonReentrant {
         require(saleExists(saleId), "sale not initiated");
 
         (, bool isAborted) = getSaleStatus(saleId);

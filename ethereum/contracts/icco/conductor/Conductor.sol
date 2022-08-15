@@ -309,7 +309,7 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
      * - it encodes and disseminates a saleAborted message to the Contributor contracts
      * - it refunds the sale tokens to the refundRecipient
      */    
-    function abortSaleBeforeStartTime(uint256 saleId) public payable returns (uint256 wormholeSequence) {
+    function abortSaleBeforeStartTime(uint256 saleId) public payable nonReentrant returns (uint256 wormholeSequence) {
         require(saleExists(saleId), "23");
 
         ConductorStructs.Sale memory sale = sales(saleId);
@@ -319,7 +319,8 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
 
         /// make sure that the sale is still valid and hasn't started yet
         require(!sale.isSealed && !sale.isAborted, "25");
-        require(block.timestamp < sale.saleStart, "26");
+        /// sale must be aborted 20 minutes before saleStart
+        require(block.timestamp < sale.saleStart - 1200, "26");
 
         /// set saleAborted
         setSaleAborted(sale.saleID);   

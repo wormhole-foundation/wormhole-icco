@@ -29,7 +29,7 @@ There are two programs needed to model this.
 - A `TokenSaleConductor`, which lives on one chain (It can exist on all chains, however it only needs to be invoked on one to initiate a sale).
   - It holds the tokens that are up for sale and maintains and collects the state around the sale.
 - `TokenSaleContributor` contracts live on all chains.
-  - Collects contributions, distributes tokens to `TokenSalecontributor` contracts after the sale has ended and the token allocation has been bridged.
+  - Collects contributions, distributes tokens to `TokenSaleContributor` contracts after the sale has ended and the token allocation has been bridged.
 
 ## Detailed Design
 
@@ -41,7 +41,7 @@ To create a sale, a user invokes the `createSale()` method on the sale `TokenSal
   - Offered token native chain
   - Offered token amount
   - A start time for when contributions can be accepted
-  - An end time for when contributions will no loner be accepted
+  - An end time for when contributions will no longer be accepted
   - A time for when allocations can be distributed to contributors
   - A minimum USD amount to raise
   - A maximum USD amount to raise
@@ -53,7 +53,7 @@ To create a sale, a user invokes the `createSale()` method on the sale `TokenSal
 The `createSale()` method deposits the offered tokens, assigns an ID which identifies the sale and attests a `SaleInit` packet over the wormhole. This packet contains all the information from above. It will also attest a `SolanaSaleInit` packet over the wormhole if any Solana tokens are accepted as collateral in the sale.
 The sale information is also stored locally.
 
-The attested `SaleInit` packet (or the `SolanaSaleInit`) is submitted to the `TokenSaleContributor` contracts. The `TokenSaleContributor` contracts stores the sale information locally which is relevant to its chain.
+The attested `SaleInit` packet (or the `SolanaSaleInit`) is submitted to the `TokenSaleContributor` contracts. The `TokenSaleContributor` contract stores the sale information locally which is relevant to its chain.
 
 The `TokenSaleConductor` contract can terminate the sale by calling `abortSaleBeforeStartTime()` before the sale period begins. Only the wallet that called `createSale()` can invoke this method.
 

@@ -1,0 +1,64 @@
+{
+  "conductorNetwork": "fuji",
+  "authority": "ADD AUTHORITY PRIVATE KEY",
+  "denominationDecimals": 6,
+  "raiseParams": {
+    "isFixedPrice": true,
+    "token": "uusd",
+    "localTokenAddress": "0x36Ed51Afc79619b299b238898E72ce482600568a",
+    "tokenChain": 3,
+    "tokenAmount": "1",
+    "minRaise": "5",
+    "maxRaise": "40",
+    "recipient": "ADD RECIPIENT PUBLIC KEY",
+    "refundRecipient": "ADD REFUND RECIPIENT PUBLIC KEY",
+    "saleDurationSeconds": 200,
+    "lockUpDurationSeconds": 40,
+    "saleStartTimer": 50,
+    "authority": "ADD KYC AUTHORITY PUBLIC KEY"
+  },
+  "acceptedTokens": [
+    {
+      "chainId": 2,
+      "address": "0x36Ed51Afc79619b299b238898E72ce482600568a",
+      "conversionRate": "1"
+    },
+    {
+      "chainId": 6,
+      "address": "0xe09Ed38E5Cd1014444846f62376ac88C5232cDe9",
+      "conversionRate": "1"
+    },
+    {
+      "chainId": 6,
+      "address": "0x1D308089a2D1Ced3f1Ce36B1FcaF815b07217be3",
+      "conversionRate": "50"
+    },
+    {
+      "chainId": 2,
+      "address": "0x71d553Edd3261Ad94765Ad42EB0be8934896f501",
+      "conversionRate": "50"
+    }
+  ],
+  "initiatorWallet": {
+    "goerli": {
+      "rpc": "ADD RPC",
+      "key": "ADD PRIVATE KEY"
+    },
+    "fuji": {
+      "rpc": "https://api.avax-test.network/ext/bc/C/rpc",
+      "key": "ADD PRIVATE KEY"
+    },
+    "binance_testnet": {
+      "rpc": "https://data-seed-prebsc-2-s1.binance.org:8545/",
+      "key": "ADD PRIVATE KEY"
+    },
+    "mumbai": {
+      "rpc": "ADD RPC",
+      "key": "ADD PRIVATE KEY"
+    },
+    "fantom_testnet": {
+      "rpc": "https://rpc.testnet.fantom.network/",
+      "key": "ADD PRIVATE KEY"
+    }
+  }
+}

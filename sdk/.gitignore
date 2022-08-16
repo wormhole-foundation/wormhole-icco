@@ -1,0 +1,7 @@
+node_modules
+evm-contracts
+target
+src/ethers-contracts
+src/anchor
+cfg/testnet/contributors.json
+cfg/testnet/saleConfig.json

@@ -86,13 +86,19 @@ pub mod anchor_contributor {
                             sale.block_contributions();
                         }
                         Ok(mint_info) => {
+                            // Mint account passed into context needs to be correct
+                            require!(
+                                mint_acct_info.key().to_bytes() == sale.token_address,
+                                ContributorError::InvalidSaleToken
+                            );
+
                             // We want to save the sale token's mint information in the Sale struct. Most
                             // important of which is the number of decimals for this SPL token. The sale
                             // token that lives on the conductor chain can have a different number of decimals.
                             // Given how Portal works in attesting tokens, the foreign decimals will always
                             // be at least the amount found here.
                             sale.set_sale_token_mint_info(
-                                &ctx.accounts.sale_token_mint.key(),
+                                &mint_acct_info.key(),
                                 &mint_info,
                                 &ctx.accounts.custodian.key(),
                             )?;
@@ -117,24 +123,23 @@ pub mod anchor_contributor {
                 &[
                     b"wrapped",
                     &sale.token_chain.to_be_bytes(),
-                    &sale.native_sale_token_mint,
+                    &sale.token_address,
                 ],
                 &ctx.accounts.token_bridge.key(),
             );
-            if mint != ctx.accounts.sale_token_mint.key() {
-                sale.block_contributions();
-            }
+
+            // Mint account passed into context needs to be correct
+            require!(
+                mint_acct_info.key() == mint,
+                ContributorError::InvalidSaleToken
+            );
 
             // We want to save the sale token's mint information in the Sale struct. Most
             // important of which is the number of decimals for this SPL token. The sale
             // token that lives on the conductor chain can have a different number of decimals.
             // Given how Portal works in attesting tokens, the foreign decimals will always
             // be at least the amount found here.
-            sale.set_sale_token_mint_info(
-                &ctx.accounts.sale_token_mint.key(),
-                &mint_info,
-                &ctx.accounts.custodian.key(),
-            )?;
+            sale.set_sale_token_mint_info(&mint, &mint_info, &ctx.accounts.custodian.key())?;
         }
 
         // We need to verify that the accepted tokens are actual mints.

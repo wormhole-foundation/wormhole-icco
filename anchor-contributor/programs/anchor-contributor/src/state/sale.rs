@@ -51,15 +51,15 @@ pub enum SaleStatus {
 
 #[account]
 pub struct Sale {
-    pub id: [u8; 32],                     // 32
-    pub native_sale_token_mint: [u8; 32], // 32    Native for sale token chain.
-    pub token_chain: u16,                 // 2
-    pub token_decimals: u8,               // 1
-    pub times: SaleTimes,                 // SaleTimes::LEN
-    pub recipient: [u8; 32],              // 32
-    pub status: SaleStatus,               // 1
-    pub kyc_authority: [u8; 20],          // 20 (this is an evm pubkey)
-    pub initialized: bool,                // 1
+    pub id: [u8; 32],            // 32
+    pub token_address: [u8; 32], // 32    Native for sale token chain.
+    pub token_chain: u16,        // 2
+    pub token_decimals: u8,      // 1
+    pub times: SaleTimes,        // SaleTimes::LEN
+    pub recipient: [u8; 32],     // 32
+    pub status: SaleStatus,      // 1
+    pub kyc_authority: [u8; 20], // 20 (this is an evm pubkey)
+    pub initialized: bool,       // 1
 
     pub totals: Vec<AssetTotal>, // 4 + AssetTotal::LEN * ACCEPTED_TOKENS_MAX
     pub native_token_decimals: u8, // 1
@@ -201,7 +201,7 @@ impl Sale {
         self.id = Sale::get_id(payload);
 
         // deserialize other things
-        self.native_sale_token_mint.copy_from_slice(
+        self.token_address.copy_from_slice(
             &payload[INDEX_SALE_INIT_TOKEN_ADDRESS..(INDEX_SALE_INIT_TOKEN_ADDRESS + 32)],
         );
         self.token_chain = to_u16_be(payload, INDEX_SALE_INIT_TOKEN_CHAIN);

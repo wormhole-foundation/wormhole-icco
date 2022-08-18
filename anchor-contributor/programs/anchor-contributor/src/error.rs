@@ -124,4 +124,7 @@ pub enum ContributorError {
 
     #[msg("InvalidSaleTokenATA")]
     InvalidSaleTokenATA,
+
+    #[msg("InvalidSaleToken")]
+    InvalidSaleToken,
 }

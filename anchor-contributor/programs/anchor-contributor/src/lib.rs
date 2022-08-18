@@ -72,6 +72,12 @@ pub mod anchor_contributor {
         // We assume that the conductor is sending a legitimate token, whether it is
         // a Solana native token or minted by the token bridge program.
         if sale.token_chain == CHAIN_ID {
+            // Mint account passed into context needs to be correct
+            require!(
+                mint_acct_info.key().to_bytes() == sale.token_address,
+                ContributorError::InvalidSaleToken
+            );
+
             // In the case that the token chain is Solana, we will attempt to deserialize the Mint
             // account and be on our way. If for any reason we cannot, we will block the sale
             // as a precaution.
@@ -86,12 +92,6 @@ pub mod anchor_contributor {
                             sale.block_contributions();
                         }
                         Ok(mint_info) => {
-                            // Mint account passed into context needs to be correct
-                            require!(
-                                mint_acct_info.key().to_bytes() == sale.token_address,
-                                ContributorError::InvalidSaleToken
-                            );
-
                             // We want to save the sale token's mint information in the Sale struct. Most
                             // important of which is the number of decimals for this SPL token. The sale
                             // token that lives on the conductor chain can have a different number of decimals.

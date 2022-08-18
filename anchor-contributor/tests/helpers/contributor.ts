@@ -170,6 +170,7 @@ export class IccoContributor {
         systemProgram: web3.SystemProgram.programId,
         buyerTokenAcct,
         custodianTokenAcct,
+        rent: web3.SYSVAR_RENT_PUBKEY,
         acceptedMint,
       })
       .signers([payer])
@@ -430,13 +431,7 @@ export class IccoContributor {
     const buyer = this.deriveBuyerAccount(saleId, payer.publicKey);
     const sale = this.deriveSaleAccount(saleId);
 
-    const buyerTokenAccount = await getOrCreateAssociatedTokenAccount(
-      program.provider.connection,
-      payer,
-      saleTokenMint,
-      payer.publicKey
-    );
-    const buyerSaleTokenAcct = buyerTokenAccount.address;
+    const buyerSaleTokenAcct = await getAssociatedTokenAddress(saleTokenMint, payer.publicKey);
     const custodianSaleTokenAcct = await getPdaAssociatedTokenAddress(saleTokenMint, custodian);
 
     return program.methods
@@ -446,6 +441,8 @@ export class IccoContributor {
         sale,
         buyer,
         buyerSaleTokenAcct,
+        saleTokenMint,
+        rent: web3.SYSVAR_RENT_PUBKEY,
         custodianSaleTokenAcct,
         owner: payer.publicKey,
         systemProgram: web3.SystemProgram.programId,

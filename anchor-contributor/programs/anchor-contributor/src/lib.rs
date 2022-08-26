@@ -72,34 +72,45 @@ pub mod anchor_contributor {
         // We assume that the conductor is sending a legitimate token, whether it is
         // a Solana native token or minted by the token bridge program.
         if sale.token_chain == CHAIN_ID {
-            // In the case that the token chain is Solana, we will attempt to deserialize the Mint
-            // account and be on our way. If for any reason we cannot, we will block the sale
-            // as a precaution.
-            match mint_acct_info.try_borrow_data() {
-                Err(_) => {
-                    sale.block_contributions();
-                }
-                Ok(data) => {
-                    let mut bf: &[u8] = &data;
-                    match token::Mint::try_deserialize(&mut bf) {
-                        Err(_) => {
-                            sale.block_contributions();
-                        }
-                        Ok(mint_info) => {
-                            // We want to save the sale token's mint information in the Sale struct. Most
-                            // important of which is the number of decimals for this SPL token. The sale
-                            // token that lives on the conductor chain can have a different number of decimals.
-                            // Given how Portal works in attesting tokens, the foreign decimals will always
-                            // be at least the amount found here.
-                            sale.set_sale_token_mint_info(
-                                &ctx.accounts.sale_token_mint.key(),
-                                &mint_info,
-                                &ctx.accounts.custodian.key(),
-                            )?;
+            // Mint account passed into context needs to be correct
+            require!(
+                mint_acct_info.key().to_bytes() == sale.token_address,
+                ContributorError::InvalidSaleToken
+            );
+
+            if *mint_acct_info.owner != token::ID {
+                // If the Mint account is not owned by the SPL Token Program, do not trust it
+                sale.block_contributions();
+            } else {
+                // In the case that the token chain is Solana, we will attempt to deserialize the Mint
+                // account and be on our way. If for any reason we cannot, we will block the sale
+                // as a precaution.
+                match mint_acct_info.try_borrow_data() {
+                    Err(_) => {
+                        sale.block_contributions();
+                    }
+                    Ok(data) => {
+                        let mut bf: &[u8] = &data;
+                        match token::Mint::try_deserialize(&mut bf) {
+                            Err(_) => {
+                                sale.block_contributions();
+                            }
+                            Ok(mint_info) => {
+                                // We want to save the sale token's mint information in the Sale struct. Most
+                                // important of which is the number of decimals for this SPL token. The sale
+                                // token that lives on the conductor chain can have a different number of decimals.
+                                // Given how Portal works in attesting tokens, the foreign decimals will always
+                                // be at least the amount found here.
+                                sale.set_sale_token_mint_info(
+                                    &mint_acct_info.key(),
+                                    &mint_info,
+                                    &ctx.accounts.custodian.key(),
+                                )?;
+                            }
                         }
                     }
-                }
-            };
+                };
+            }
         } else {
             // In the case that the token chain isn't Solana, we will assume that the token
             // has not been attestd yet if there is no account found.
@@ -117,24 +128,23 @@ pub mod anchor_contributor {
                 &[
                     b"wrapped",
                     &sale.token_chain.to_be_bytes(),
-                    &sale.native_sale_token_mint,
+                    &sale.token_address,
                 ],
                 &ctx.accounts.token_bridge.key(),
             );
-            if mint != ctx.accounts.sale_token_mint.key() {
-                sale.block_contributions();
-            }
+
+            // Mint account passed into context needs to be correct
+            require!(
+                mint_acct_info.key() == mint,
+                ContributorError::InvalidSaleToken
+            );
 
             // We want to save the sale token's mint information in the Sale struct. Most
             // important of which is the number of decimals for this SPL token. The sale
             // token that lives on the conductor chain can have a different number of decimals.
             // Given how Portal works in attesting tokens, the foreign decimals will always
             // be at least the amount found here.
-            sale.set_sale_token_mint_info(
-                &ctx.accounts.sale_token_mint.key(),
-                &mint_info,
-                &ctx.accounts.custodian.key(),
-            )?;
+            sale.set_sale_token_mint_info(&mint, &mint_info, &ctx.accounts.custodian.key())?;
         }
 
         // We need to verify that the accepted tokens are actual mints.

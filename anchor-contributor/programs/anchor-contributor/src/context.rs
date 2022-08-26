@@ -154,12 +154,19 @@ pub struct Contribute<'info> {
     pub buyer_token_acct: Account<'info, TokenAccount>,
 
     #[account(
-        mut,
+        init_if_needed,
+        payer = owner,
         associated_token::mint = accepted_mint,
         associated_token::authority = custodian,
     )]
     /// This must be an associated token account
     pub custodian_token_acct: Account<'info, TokenAccount>,
+
+    #[account(
+        constraint = rent.key() == rent::id() @ ContributorError::InvalidSystemProgram
+    )]
+    /// CHECK: Rent
+    pub rent: AccountInfo<'info>,
 
     #[account(mut)]
     pub owner: Signer<'info>,
@@ -589,12 +596,24 @@ pub struct ClaimAllocation<'info> {
     pub custodian_sale_token_acct: Account<'info, TokenAccount>,
 
     #[account(
-        mut,
-        associated_token::mint = sale.sale_token_mint,
+        init_if_needed,
+        payer = owner,
+        associated_token::mint = sale_token_mint,
         associated_token::authority = owner,
     )]
     /// This must be an associated token account
     pub buyer_sale_token_acct: Account<'info, TokenAccount>,
+
+    #[account(
+        constraint = sale_token_mint.key() == sale.sale_token_mint @ ContributorError::InvalidSaleToken
+    )]
+    pub sale_token_mint: Account<'info, Mint>,
+
+    #[account(
+        constraint = rent.key() == rent::id() @ ContributorError::InvalidSystemProgram
+    )]
+    /// CHECK: Rent
+    pub rent: AccountInfo<'info>,
 
     #[account(mut)]
     pub owner: Signer<'info>,

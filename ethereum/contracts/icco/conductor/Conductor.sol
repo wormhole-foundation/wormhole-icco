@@ -440,11 +440,11 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
         feeAccounting.messageFee = wormhole.messageFee();
         feeAccounting.valueSent = msg.value;
 
-        /// @dev msg.value must cover all token bridge transfer fees + two saleSealed messages
-        require(feeAccounting.valueSent >= feeAccounting.messageFee * (feeAccounting.bridgeCount + 2), "37");
-
         /// check to see if the sale was successful
         if (accounting.totalContribution >= sale.minRaise) {
+            /// @dev msg.value must cover all token bridge transfer fees + two saleSealed messages
+            require(feeAccounting.valueSent >= feeAccounting.messageFee * (feeAccounting.bridgeCount + 2), "37");
+
             /// set saleSealed
             setSaleSealed(saleId);
 
@@ -572,16 +572,16 @@ contract Conductor is ConductorGovernance, ConductorEvents, ReentrancyGuard {
                     feeAccounting.accumulatedFees += feeAccounting.messageFee;
                 }
             }
+            /// @dev refund the caller any extra wormhole fees
+            feeAccounting.refundAmount = feeAccounting.valueSent - feeAccounting.accumulatedFees;
+            if (feeAccounting.refundAmount > 0) payable(msg.sender).transfer(feeAccounting.refundAmount);
 
             /// emit EventSealSale event.
             emit EventSealSale(saleId); 
         } else {
+            require(feeAccounting.valueSent == feeAccounting.messageFee, "46");
             wormholeSequence = abortSale(saleId, true);
-            feeAccounting.accumulatedFees += feeAccounting.messageFee;
         }
-        /// @dev refund the caller any extra wormhole fees
-        feeAccounting.refundAmount = feeAccounting.valueSent - feeAccounting.accumulatedFees; 
-        if (feeAccounting.refundAmount > 0) payable(msg.sender).transfer(feeAccounting.refundAmount);
     }
 
     /**

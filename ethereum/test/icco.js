@@ -1,12 +1,12 @@
 const jsonfile = require("jsonfile");
 const elliptic = require("elliptic");
-const { assert } = require("chai");
+const {assert} = require("chai");
 const ethers = require("ethers");
 
-const { singletons } = require("@openzeppelin/test-helpers");
-const { ZERO_BYTES32 } = require("@openzeppelin/test-helpers/src/constants");
-const { web3 } = require("@openzeppelin/test-helpers/src/setup");
-require("@openzeppelin/test-helpers/configure")({ provider: web3.currentProvider, environment: "truffle" });
+const {singletons} = require("@openzeppelin/test-helpers");
+const {ZERO_BYTES32} = require("@openzeppelin/test-helpers/src/constants");
+const {web3} = require("@openzeppelin/test-helpers/src/setup");
+require("@openzeppelin/test-helpers/configure")({provider: web3.currentProvider, environment: "truffle"});
 
 const TokenERC777 = artifacts.require("TokenERC777");
 const MaliciousSeller = artifacts.require("MaliciousSeller");
@@ -2194,30 +2194,11 @@ contract("ICCO", function(accounts) {
     const etherBalanceBeforeCall = await web3.eth.getBalance(SELLER);
 
     // abort the sale
-    // test to make sure the contract returns unused ether
-    const wormholeFeeCount = 1;
-    const extraFeeCount = 1;
-
     const sealAbortTx = await initialized.methods.sealSale(SALE_2_ID).send({
-      value: WORMHOLE_FEE * (wormholeFeeCount + extraFeeCount),
+      value: WORMHOLE_FEE,
       from: SELLER,
       gasLimit: GAS_LIMIT,
     });
-
-    // ether balance of SELLER before
-    const etherBalanceAfterCall = await web3.eth.getBalance(SELLER);
-
-    // confirm that the contract returned unused ether
-    const valueSpentAfterGas = await calculateValueSpentLessGas(
-      sealAbortTx,
-      etherBalanceBeforeCall,
-      etherBalanceAfterCall
-    );
-
-    assert.equal(
-      parseFloat(valueSpentAfterGas).toFixed(2),
-      parseFloat(ethers.utils.formatEther((WORMHOLE_FEE * wormholeFeeCount).toString())).toFixed(2)
-    );
 
     // confirm that the EventAbortSale event was emitted
     const eventSealAbort = sealAbortTx["events"]["EventAbortSale"]["returnValues"];
@@ -4666,7 +4647,7 @@ contract("ICCO", function(accounts) {
     // Simulate SOLD_TOKEN from previously created sales (testing purposes)
     await MALICIOUS_SOLD_TOKEN.transfer(initializedConductor._address, "120000");
 
-    web3.eth.sendTransaction({ to: SALE_7_REFUND_RECIPIENT, from: SELLER, value: web3.utils.toWei("1") });
+    web3.eth.sendTransaction({to: SALE_7_REFUND_RECIPIENT, from: SELLER, value: web3.utils.toWei("1")});
 
     // create array (struct) for sale params
     const saleParams = [
@@ -5950,7 +5931,7 @@ contract("ICCO", function(accounts) {
     const current_block = await web3.eth.getBlock("latest");
     const saleStart = current_block.timestamp + 5;
     const saleEnd = saleStart + 8;
-    const saleTokenAmount = "184467440737100000000000000000"; 
+    const saleTokenAmount = "184467440737100000000000000000";
     const minimumTokenRaise = "2000";
     const maximumTokenRaise = "2000";
     const tokenOneConversionRate = "1000000000000000000";
@@ -6233,7 +6214,7 @@ const signAuthorityUpdate = async function(conductorAddress, saleId, signer) {
 
   const ec = new elliptic.ec("secp256k1");
   const key = ec.keyFromPrivate(signer);
-  const signature = key.sign(hash.substr(2), { canonical: true });
+  const signature = key.sign(hash.substr(2), {canonical: true});
 
   const packSig = [
     zeroPadBytes(signature.r.toString(16), 32),
@@ -6263,7 +6244,7 @@ const signContribution = async function(conductorAddress, saleId, tokenIndex, am
 
   const ec = new elliptic.ec("secp256k1");
   const key = ec.keyFromPrivate(signer);
-  const signature = key.sign(hash.substr(2), { canonical: true });
+  const signature = key.sign(hash.substr(2), {canonical: true});
 
   const packSig = [
     zeroPadBytes(signature.r.toString(16), 32),
@@ -6302,7 +6283,7 @@ const signAndEncodeVM = async function(
   for (let i in signers) {
     const ec = new elliptic.ec("secp256k1");
     const key = ec.keyFromPrivate(signers[i]);
-    const signature = key.sign(hash.substr(2), { canonical: true });
+    const signature = key.sign(hash.substr(2), {canonical: true});
 
     const packSig = [
       web3.eth.abi.encodeParameter("uint8", i).substring(2 + (64 - 2)),

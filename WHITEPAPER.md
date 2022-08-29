@@ -31,6 +31,8 @@ There are two programs needed to model this.
 - `TokenSaleContributor` contracts live on all chains.
   - Collects contributions, distributes tokens to `TokenSaleContributor` contracts after the sale has ended and the token allocation has been bridged.
 
+These contracts are upgradable with a single key (see **Owner Only** section of each program for relevant methods). We encourage the implementor to use a multisig wallet for deployment at the very least.
+
 ## Detailed Design
 
 To create a sale, a user invokes the `createSale()` method on the sale `TokenSaleConductor`. It takes the following set or arguments:
